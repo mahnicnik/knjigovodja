@@ -4,169 +4,371 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
+const STEPS = [
+  {
+    id: 'tip',
+    label: 'Korak 1 od 5',
+    title: 'Kakšna je vaša pravna oblika?',
+    sub: 'To določi katere davčne obveznosti imate.',
+    type: 'single' as const,
+    options: [
+      { icon: '👤', label: 'Samostojni podjetnik (s.p.)', desc: 'Normirani ali dejanski stroški', value: 'sp' },
+      { icon: '🏢', label: 'd.o.o. / d.n.o.', desc: 'Kapitalska družba', value: 'doo' },
+      { icon: '🤝', label: 'Zavod / društvo', desc: 'Nepridobitna organizacija', value: 'zavod' },
+    ],
+  },
+  {
+    id: 'ddv',
+    label: 'Korak 2 od 5',
+    title: 'Ali ste DDV zavezanec?',
+    sub: 'Zavezanec postanete pri prometu nad 50.000 € letno ali prostovoljno.',
+    type: 'single' as const,
+    options: [
+      { icon: '✅', label: 'Da, sem DDV zavezanec', desc: 'Oddajam DDV-O obrazce', value: 'yes' },
+      { icon: '❌', label: 'Ne, nisem zavezanec', desc: 'Manjši promet ali s.p. normiranec', value: 'no' },
+      { icon: '🔄', label: 'Bom kmalu postal', desc: 'Blizu mejnika 50.000 €', value: 'soon' },
+    ],
+  },
+  {
+    id: 'dejavnost',
+    label: 'Korak 3 od 5',
+    title: 'Katera področja pokriva vaše poslovanje?',
+    sub: 'Izberite vse kar velja. Na podlagi tega aktiviramo prave module.',
+    type: 'multi' as const,
+    options: [
+      { icon: '💼', label: 'Storitve', desc: 'Svetovanje, IT, marketing, pravo...', value: 'storitve' },
+      { icon: '🛍️', label: 'Prodaja blaga', desc: 'Maloprodaja, veleprodaja, splet', value: 'blago' },
+      { icon: '🍽️', label: 'Gostinstvo / turizem', desc: 'Restavracija, hotel, catering', value: 'gostinstvo' },
+      { icon: '🏗️', label: 'Gradbeništvo / obrt', desc: 'Gradbena dela, rokodelstvo', value: 'gradnja' },
+      { icon: '🚗', label: 'Transport / dostava', desc: 'Prevozi, kurirska služba', value: 'transport' },
+      { icon: '💻', label: 'Digitalni produkti', desc: 'SaaS, licence, aplikacije', value: 'digital' },
+    ],
+  },
+  {
+    id: 'zaposleni',
+    label: 'Korak 4 od 5',
+    title: 'Ali imate zaposlene?',
+    sub: 'Modul za plače, REK-1 in dopust aktiviramo samo če jih potrebujete.',
+    type: 'single' as const,
+    options: [
+      { icon: '👥', label: 'Da, imam zaposlene', desc: 'Potrebujem obračun plač in REK-1', value: 'yes' },
+      { icon: '👤', label: 'Samo jaz (lastnik)', desc: 'Brez zaposlenih', value: 'solo' },
+      { icon: '🔜', label: 'Načrtujem zaposlovanje', desc: 'V kratkem bom zaposlil', value: 'soon' },
+    ],
+  },
+  {
+    id: 'extras',
+    label: 'Korak 5 od 5',
+    title: 'Kaj še uporabljate?',
+    sub: 'Aktiviramo samo module ki jih dejansko potrebujete.',
+    type: 'multi' as const,
+    options: [
+      { icon: '🚗', label: 'Službeni avto', desc: 'Kilometrina, stroški avta', value: 'avto' },
+      { icon: '✈️', label: 'Potni stroški', desc: 'Dnevnice, potni nalogi', value: 'potni' },
+      { icon: '📦', label: 'Zaloga', desc: 'Upravljanje zalog in artiklov', value: 'zaloga' },
+      { icon: '📉', label: 'Osnovna sredstva', desc: 'Amortizacija opreme', value: 'amort' },
+      { icon: '🏧', label: 'Blagajna / POS', desc: 'Fizična prodaja na blagajni', value: 'blagajna' },
+      { icon: '🍷', label: 'Reprezentanca', desc: 'Poslovne gostitve', value: 'repr' },
+    ],
+  },
+]
+
+type Answers = Record<string, string | string[]>
+
+function computeHiddenNav(answers: Answers): string[] {
+  const hidden: string[] = []
+  const d = (answers.dejavnost as string[]) || []
+  const e = (answers.extras as string[]) || []
+  const tip = answers.tip as string
+  const ddv = answers.ddv as string
+  const zap = answers.zaposleni as string
+
+  if (!e.includes('zaloga') && !d.includes('blago') && !d.includes('gostinstvo')) hidden.push('/zaloga')
+  if (!e.includes('amort')) hidden.push('/amortizacija')
+  if (!e.includes('avto') && !d.includes('transport')) { hidden.push('/kilometrina'); hidden.push('/avto') }
+  if (!e.includes('potni')) hidden.push('/potni-stroski')
+  if (!e.includes('repr')) hidden.push('/reprezentanca')
+  if (!e.includes('blagajna') && !d.includes('gostinstvo')) hidden.push('/blagajna')
+  if (zap !== 'yes' && zap !== 'soon') { hidden.push('/place'); hidden.push('/rek1'); hidden.push('/dopust') }
+  if (ddv !== 'yes' && ddv !== 'soon') { hidden.push('/ddv'); hidden.push('/ddv/evidenca') }
+  if (tip !== 'sp') { hidden.push('/normirani'); hidden.push('/prispevki'); hidden.push('/kpo') }
+  if (!d.includes('storitve') && !d.includes('digital')) hidden.push('/eslog')
+
+  return hidden
+}
+
+function computeQuickActions(answers: Answers): string[] {
+  const d = (answers.dejavnost as string[]) || []
+  const e = (answers.extras as string[]) || []
+  const ddv = answers.ddv as string
+  const tip = answers.tip as string
+
+  const qa = ['/invoices/new', '/expenses']
+  if (d.includes('blago') || d.includes('gostinstvo') || e.includes('blagajna')) qa.push('/blagajna')
+  if (ddv === 'yes' || ddv === 'soon') qa.push('/ddv')
+  if (tip === 'sp') qa.push('/prispevki')
+  qa.push('/scan')
+  if (d.includes('storitve') || d.includes('digital')) qa.push('/ai')
+  return qa.slice(0, 6)
+}
+
 export default function OnboardingPage() {
-  const [step, setStep] = useState(1)
-  const [loading, setLoading] = useState(false)
-  const [data, setData] = useState({
-    name: '',
-    tax_number: '',
-    vat_registered: false,
-    iban: '',
-    address: '',
-    city: '',
-    post_code: '',
-  })
   const router = useRouter()
   const supabase = createClient()
+  const [step, setStep] = useState(0)
+  const [answers, setAnswers] = useState<Answers>({})
+  const [saving, setSaving] = useState(false)
+  const [orgName, setOrgName] = useState('')
+  const [showNameStep, setShowNameStep] = useState(true)
 
-  async function handleFinish() {
-    setLoading(true)
+  function getSelected(stepId: string): string[] {
+    const s = STEPS[step]
+    if (!s) return []
+    if (s.type === 'single') return answers[stepId] ? [answers[stepId] as string] : []
+    return (answers[stepId] as string[]) || []
+  }
+
+  function toggleOption(stepId: string, value: string, type: 'single' | 'multi') {
+    if (type === 'single') {
+      setAnswers(prev => ({ ...prev, [stepId]: value }))
+    } else {
+      const cur = (answers[stepId] as string[]) || []
+      setAnswers(prev => ({
+        ...prev,
+        [stepId]: cur.includes(value) ? cur.filter(v => v !== value) : [...cur, value],
+      }))
+    }
+  }
+
+  function canNext(): boolean {
+    if (showNameStep) return orgName.trim().length > 2
+    const s = STEPS[step]
+    if (!s) return true
+    return getSelected(s.id).length > 0
+  }
+
+  async function finish() {
+    setSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      alert('Niste prijavljeni.')
-      setLoading(false)
-      return
-    }
-    const { data: org, error: orgError } = await supabase
-      .from('organizations')
-      .insert({
-        name: data.name,
-        tax_number: data.tax_number,
-        vat_registered: data.vat_registered,
-        iban: data.iban,
-        address: data.address,
-        city: data.city,
-        post_code: data.post_code,
+    if (!user) { router.push('/login'); return }
+
+    // Ustvari organizacijo
+    const { data: org } = await supabase.from('organizations').insert({
+      name: orgName,
+      vat_registered: answers.ddv === 'yes',
+    }).select().single()
+
+    if (org) {
+      await supabase.from('org_members').insert({
+        org_id: org.id,
+        user_id: user.id,
+        role: 'owner',
       })
-      .select()
-      .single()
-    if (orgError) {
-      alert('Napaka: ' + orgError.message)
-      setLoading(false)
-      return
     }
-    await supabase.from('org_members').insert({
-      org_id: org.id,
+
+    // Shrani preferences
+    const hiddenNav = computeHiddenNav(answers)
+    const quickActions = computeQuickActions(answers)
+
+    await supabase.from('user_preferences').upsert({
       user_id: user.id,
-      role: 'owner',
-    })
+      nav_hidden: hiddenNav,
+      nav_order: ['Pregled', 'Poslovanje', 'Davki', 'Zaposleni', 'Evidenca', 'Blagajna'],
+      quick_actions: quickActions,
+      onboarding_answers: answers,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' })
+
     router.push('/dashboard')
   }
 
+  const totalSteps = STEPS.length + 2 // ime + 5 vprašanj + rezultat
+  const currentDot = showNameStep ? 0 : step + 1
+
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 w-full max-w-md">
-        <div className="flex gap-2 mb-8">
-          {[1,2,3].map(i => (
-            <div key={i} className={`flex-1 h-1.5 rounded-full ${i <= step ? 'bg-gray-900' : 'bg-gray-100'}`} />
+    <div style={{ minHeight: '100vh', background: '#F7F6F2', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 16px' }}>
+      <div style={{ width: '100%', maxWidth: '480px' }}>
+
+        {/* Logo */}
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <div style={{ fontSize: '18px', fontWeight: '500', color: '#0D1F12' }}>Knjigovodja.si</div>
+          <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>Nastavimo vašo aplikacijo</div>
+        </div>
+
+        {/* Progress */}
+        <div style={{ display: 'flex', gap: '5px', marginBottom: '28px' }}>
+          {Array.from({ length: totalSteps }).map((_, i) => (
+            <div key={i} style={{
+              height: '3px', flex: 1, borderRadius: '2px',
+              background: i < currentDot ? '#1D9E75' : i === currentDot ? '#0D1F12' : 'rgba(0,0,0,0.12)',
+              transition: 'background .3s',
+            }} />
           ))}
         </div>
 
-        {step === 1 && (
-          <div>
-            <h2 className="text-xl font-semibold mb-1">Podatki s.p.</h2>
-            <p className="text-gray-500 text-sm mb-6">Osnovni podatki vašega podjetja</p>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm text-gray-600 block mb-1">Ime s.p.</label>
-                <input type="text" placeholder="Ana Kovač s.p." value={data.name}
-                  onChange={e => setData({...data, name: e.target.value})}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-              </div>
-              <div>
-                <label className="text-sm text-gray-600 block mb-1">Davčna številka</label>
-                <input type="text" placeholder="12345678" value={data.tax_number}
-                  onChange={e => setData({...data, tax_number: e.target.value})}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-              </div>
-              <div className="flex items-center gap-3 p-3 border border-gray-200 rounded-xl cursor-pointer"
-                onClick={() => setData({...data, vat_registered: !data.vat_registered})}>
-                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${data.vat_registered ? 'bg-gray-900 border-gray-900' : 'border-gray-300'}`}>
-                  {data.vat_registered && <span className="text-white text-xs">✓</span>}
-                </div>
-                <div>
-                  <div className="text-sm font-medium">DDV zavezanec</div>
-                  <div className="text-xs text-gray-500">Imam ID za DDV (SI...)</div>
-                </div>
-              </div>
-            </div>
-            <button onClick={() => setStep(2)} disabled={!data.name || !data.tax_number}
-              className="w-full bg-gray-900 text-white rounded-xl py-3 text-sm font-medium mt-6 disabled:opacity-40">
-              Naprej →
-            </button>
-          </div>
-        )}
+        <div style={{ background: '#fff', borderRadius: '16px', border: '0.5px solid rgba(0,0,0,0.08)', padding: '28px 24px' }}>
 
-        {step === 2 && (
-          <div>
-            <h2 className="text-xl font-semibold mb-1">Naslov in banka</h2>
-            <p className="text-gray-500 text-sm mb-6">Za UPN naloge in račune</p>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm text-gray-600 block mb-1">Naslov</label>
-                <input type="text" placeholder="Dunajska cesta 5" value={data.address}
-                  onChange={e => setData({...data, address: e.target.value})}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+          {/* IME PODJETJA */}
+          {showNameStep && (
+            <div>
+              <div style={{ fontSize: '11px', color: '#888', letterSpacing: '.05em', marginBottom: '8px' }}>KORAK 1 OD 6</div>
+              <div style={{ fontSize: '22px', fontWeight: '500', color: '#0D1F12', marginBottom: '6px', lineHeight: 1.3 }}>
+                Kako se imenuje vaše podjetje?
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-sm text-gray-600 block mb-1">Poštna</label>
-                  <input type="text" placeholder="1000" value={data.post_code}
-                    onChange={e => setData({...data, post_code: e.target.value})}
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600 block mb-1">Kraj</label>
-                  <input type="text" placeholder="Ljubljana" value={data.city}
-                    onChange={e => setData({...data, city: e.target.value})}
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-                </div>
+              <div style={{ fontSize: '13px', color: '#888', marginBottom: '24px', lineHeight: 1.5 }}>
+                To ime bo prikazano v aplikaciji in na računih.
               </div>
-              <div>
-                <label className="text-sm text-gray-600 block mb-1">IBAN (TRR)</label>
-                <input type="text" placeholder="SI56 1234 5678 9012 345" value={data.iban}
-                  onChange={e => setData({...data, iban: e.target.value})}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              <input
+                type="text"
+                value={orgName}
+                onChange={e => setOrgName(e.target.value)}
+                placeholder="npr. Kovač Consulting s.p."
+                autoFocus
+                style={{
+                  width: '100%', padding: '12px 14px', borderRadius: '10px',
+                  border: '0.5px solid rgba(0,0,0,0.15)', fontSize: '14px',
+                  outline: 'none', color: '#0D1F12', background: '#fff',
+                }}
+                onKeyDown={e => { if (e.key === 'Enter' && canNext()) setShowNameStep(false) }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+                <button
+                  onClick={() => setShowNameStep(false)}
+                  disabled={!canNext()}
+                  style={{
+                    background: '#0D1F12', color: '#fff', border: 'none', borderRadius: '8px',
+                    padding: '10px 24px', fontSize: '13px', fontWeight: '500', cursor: 'pointer',
+                    opacity: canNext() ? 1 : 0.4,
+                  }}
+                >
+                  Naprej →
+                </button>
               </div>
             </div>
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setStep(1)} className="flex-1 border border-gray-200 rounded-xl py-3 text-sm">← Nazaj</button>
-              <button onClick={() => setStep(3)} className="flex-1 bg-gray-900 text-white rounded-xl py-3 text-sm font-medium">Naprej →</button>
-            </div>
-          </div>
-        )}
+          )}
 
-        {step === 3 && (
-          <div>
-            <h2 className="text-xl font-semibold mb-1">Vse je pripravljeno!</h2>
-            <p className="text-gray-500 text-sm mb-6">Preverite vaše podatke</p>
-            <div className="bg-gray-50 rounded-xl p-4 space-y-2 mb-6">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Ime s.p.</span>
-                <span className="font-medium">{data.name}</span>
+          {/* VPRAŠANJA */}
+          {!showNameStep && step < STEPS.length && (() => {
+            const s = STEPS[step]
+            const selected = getSelected(s.id)
+            return (
+              <div>
+                <div style={{ fontSize: '11px', color: '#888', letterSpacing: '.05em', marginBottom: '8px' }}>{s.label.toUpperCase()}</div>
+                <div style={{ fontSize: '20px', fontWeight: '500', color: '#0D1F12', marginBottom: '6px', lineHeight: 1.3 }}>{s.title}</div>
+                <div style={{ fontSize: '13px', color: '#888', marginBottom: s.type === 'multi' ? '8px' : '20px', lineHeight: 1.5 }}>{s.sub}</div>
+                {s.type === 'multi' && (
+                  <div style={{ fontSize: '11px', color: '#aaa', marginBottom: '12px' }}>Izberite vse kar velja</div>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                  {s.options.map(o => (
+                    <div
+                      key={o.value}
+                      onClick={() => toggleOption(s.id, o.value, s.type)}
+                      style={{
+                        border: selected.includes(o.value) ? '2px solid #1D9E75' : '0.5px solid rgba(0,0,0,0.12)',
+                        borderRadius: '10px', padding: '11px 14px', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: '12px',
+                        background: selected.includes(o.value) ? '#E1F5EE' : '#fff',
+                        transition: 'all .15s',
+                      }}
+                    >
+                      <span style={{ fontSize: '20px', flexShrink: 0, width: '28px', textAlign: 'center' }}>{o.icon}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '13px', fontWeight: '500', color: '#0D1F12' }}>{o.label}</div>
+                        <div style={{ fontSize: '11px', color: '#888', marginTop: '1px' }}>{o.desc}</div>
+                      </div>
+                      <div style={{
+                        width: '18px', height: '18px', borderRadius: '50%', flexShrink: 0,
+                        border: selected.includes(o.value) ? 'none' : '0.5px solid rgba(0,0,0,0.15)',
+                        background: selected.includes(o.value) ? '#1D9E75' : 'transparent',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '11px', color: '#fff',
+                      }}>
+                        {selected.includes(o.value) ? '✓' : ''}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px' }}>
+                  <button
+                    onClick={() => step === 0 ? setShowNameStep(true) : setStep(s => s - 1)}
+                    style={{ background: 'none', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', color: '#666', cursor: 'pointer' }}
+                  >
+                    ← Nazaj
+                  </button>
+                  <button
+                    onClick={() => { if (canNext()) setStep(s => s + 1) }}
+                    disabled={!canNext()}
+                    style={{
+                      background: '#0D1F12', color: '#fff', border: 'none', borderRadius: '8px',
+                      padding: '10px 24px', fontSize: '13px', fontWeight: '500', cursor: 'pointer',
+                      opacity: canNext() ? 1 : 0.4,
+                    }}
+                  >
+                    {step === STEPS.length - 1 ? 'Prikaži rezultat →' : 'Naprej →'}
+                  </button>
+                </div>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Davčna št.</span>
-                <span className="font-medium">{data.tax_number}</span>
+            )
+          })()}
+
+          {/* REZULTAT */}
+          {!showNameStep && step >= STEPS.length && (() => {
+            const hidden = computeHiddenNav(answers)
+            const activeCount = 18 - hidden.length
+            return (
+              <div>
+                <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                  <div style={{ fontSize: '32px', marginBottom: '8px' }}>🎉</div>
+                  <div style={{ fontSize: '20px', fontWeight: '500', color: '#0D1F12' }}>Aplikacija je pripravljena!</div>
+                  <div style={{ fontSize: '13px', color: '#888', marginTop: '6px' }}>
+                    Aktivirali smo <strong>{activeCount} modulov</strong> ki ustrezajo vašemu poslovanju.
+                    Ostale smo skrili — jih lahko kadarkoli vključite.
+                  </div>
+                </div>
+
+                <div style={{ background: '#F7F6F2', borderRadius: '10px', padding: '14px', marginBottom: '16px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: '500', color: '#888', marginBottom: '10px', letterSpacing: '.04em' }}>VAŠA KONFIGURACIJA</div>
+                  {[
+                    { label: 'Pravna oblika', value: answers.tip === 'sp' ? 'Samostojni podjetnik' : answers.tip === 'doo' ? 'd.o.o.' : 'Zavod/društvo' },
+                    { label: 'DDV', value: answers.ddv === 'yes' ? 'Zavezanec' : answers.ddv === 'soon' ? 'Kmalu zavezanec' : 'Ni zavezanec' },
+                    { label: 'Zaposleni', value: answers.zaposleni === 'yes' ? 'Da' : answers.zaposleni === 'soon' ? 'Kmalu' : 'Ne' },
+                    { label: 'Aktivni moduli', value: `${activeCount} od 18` },
+                  ].map(item => (
+                    <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '0.5px solid rgba(0,0,0,0.06)', fontSize: '13px' }}>
+                      <span style={{ color: '#666' }}>{item.label}</span>
+                      <span style={{ fontWeight: '500', color: '#0D1F12' }}>{item.value}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <button
+                    onClick={() => setStep(STEPS.length - 1)}
+                    style={{ background: 'none', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', color: '#666', cursor: 'pointer' }}
+                  >
+                    ← Nazaj
+                  </button>
+                  <button
+                    onClick={finish}
+                    disabled={saving}
+                    style={{
+                      background: '#1D9E75', color: '#fff', border: 'none', borderRadius: '8px',
+                      padding: '10px 28px', fontSize: '13px', fontWeight: '500', cursor: 'pointer',
+                      opacity: saving ? 0.7 : 1,
+                    }}
+                  >
+                    {saving ? 'Shranjujem...' : 'Začnimo! →'}
+                  </button>
+                </div>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">DDV</span>
-                <span className="font-medium">{data.vat_registered ? 'Zavezanec' : 'Ni zavezanec'}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Kraj</span>
-                <span className="font-medium">{data.city || '—'}</span>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => setStep(2)} className="flex-1 border border-gray-200 rounded-xl py-3 text-sm">← Nazaj</button>
-              <button onClick={handleFinish} disabled={loading}
-                className="flex-1 bg-gray-900 text-white rounded-xl py-3 text-sm font-medium disabled:opacity-50">
-                {loading ? 'Shranjujem...' : 'Začnimo! 🚀'}
-              </button>
-            </div>
-          </div>
-        )}
+            )
+          })()}
+        </div>
+
+        <div style={{ textAlign: 'center', marginTop: '16px', fontSize: '11px', color: '#aaa' }}>
+          Nastavitve lahko kadarkoli spremenite v aplikaciji
+        </div>
       </div>
     </div>
   )
