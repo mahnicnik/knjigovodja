@@ -89,12 +89,23 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
 
       if (!org) {
         const { data: member } = await supabase
-          .from('org_members').select('organizations(*)')
-          .eq('user_id', user.id).single()
-        if (member) { setOrgData((member as any).organizations) } else { if (typeof window !== "undefined" && !window.location.pathname.startsWith("/onboarding")) { router.push("/onboarding") }; return }
-      }
-
-      const { data: prefs } = await supabase
+  .from('org_members').select('organizations(*)')
+  .eq('user_id', user.id).single()
+  if (member) {
+    setOrgData((member as any).organizations)
+  } else {
+    const path = window.location.pathname
+    if (!path.startsWith('/onboarding') && !path.startsWith('/login') && !path.startsWith('/register')) {
+      router.push('/onboarding')
+    }
+    return
+  }
+  } else {
+    router.push('/onboarding')
+    return
+  }
+  
+  const { data: prefs } = await supabase
         .from('user_preferences')
         .select('*')
         .eq('user_id', user.id)
@@ -109,7 +120,7 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
     load()
   }, [])
 
-  async function savePrefs() {
+ async function savePrefs() {
     if (!userId) return
     setSaving(true)
     await supabase.from('user_preferences').upsert({
