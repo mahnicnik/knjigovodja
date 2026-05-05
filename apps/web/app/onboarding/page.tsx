@@ -4,13 +4,13 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
-const STEPS = [
+const ALL_STEPS = [
   {
     id: 'tip',
-    label: 'Korak 1 od 5',
     title: 'Kakšna je vaša pravna oblika?',
     sub: 'To določi katere davčne obveznosti imate.',
     type: 'single' as const,
+    showIf: (_a: any) => true,
     options: [
       { icon: '👤', label: 'Samostojni podjetnik (s.p.)', desc: 'Normirani ali dejanski stroški', value: 'sp' },
       { icon: '🏢', label: 'd.o.o. / d.n.o.', desc: 'Kapitalska družba', value: 'doo' },
@@ -19,22 +19,22 @@ const STEPS = [
   },
   {
     id: 'ddv',
-    label: 'Korak 2 od 5',
     title: 'Ali ste DDV zavezanec?',
     sub: 'Zavezanec postanete pri prometu nad 50.000 € letno ali prostovoljno.',
     type: 'single' as const,
+    showIf: (_a: any) => true,
     options: [
       { icon: '✅', label: 'Da, sem DDV zavezanec', desc: 'Oddajam DDV-O obrazce', value: 'yes' },
-      { icon: '❌', label: 'Ne, nisem zavezanec', desc: 'Manjši promet ali s.p. normiranec', value: 'no' },
+      { icon: '❌', label: 'Ne, nisem zavezanec', desc: 'Manjši promet ali normiranec', value: 'no' },
       { icon: '🔄', label: 'Bom kmalu postal', desc: 'Blizu mejnika 50.000 €', value: 'soon' },
     ],
   },
   {
     id: 'dejavnost',
-    label: 'Korak 3 od 5',
     title: 'Katera področja pokriva vaše poslovanje?',
-    sub: 'Izberite vse kar velja. Na podlagi tega aktiviramo prave module.',
+    sub: 'Izberite vse kar velja.',
     type: 'multi' as const,
+    showIf: (_a: any) => true,
     options: [
       { icon: '💼', label: 'Storitve', desc: 'Svetovanje, IT, marketing, pravo...', value: 'storitve' },
       { icon: '🛍️', label: 'Prodaja blaga', desc: 'Maloprodaja, veleprodaja, splet', value: 'blago' },
@@ -46,10 +46,15 @@ const STEPS = [
   },
   {
     id: 'zaposleni',
-    label: 'Korak 4 od 5',
     title: 'Ali imate zaposlene?',
     sub: 'Modul za plače, REK-1 in dopust aktiviramo samo če jih potrebujete.',
     type: 'single' as const,
+    // Pokaži samo če je d.o.o. ali zavod, ali če dejavnost vključuje gostinstvo/gradnjo/transport
+    showIf: (a: any) => {
+      if (a.tip === 'doo' || a.tip === 'zavod') return true
+      const d = (a.dejavnost as string[]) || []
+      return d.includes('gostinstvo') || d.includes('gradnja') || d.includes('transport') || d.includes('blago')
+    },
     options: [
       { icon: '👥', label: 'Da, imam zaposlene', desc: 'Potrebujem obračun plač in REK-1', value: 'yes' },
       { icon: '👤', label: 'Samo jaz (lastnik)', desc: 'Brez zaposlenih', value: 'solo' },
@@ -58,10 +63,10 @@ const STEPS = [
   },
   {
     id: 'extras',
-    label: 'Korak 5 od 5',
     title: 'Kaj še uporabljate?',
     sub: 'Aktiviramo samo module ki jih dejansko potrebujete.',
     type: 'multi' as const,
+    showIf: (_a: any) => true,
     options: [
       { icon: '🚗', label: 'Službeni avto', desc: 'Kilometrina, stroški avta', value: 'avto' },
       { icon: '✈️', label: 'Potni stroški', desc: 'Dnevnice, potni nalogi', value: 'potni' },
@@ -74,6 +79,10 @@ const STEPS = [
 ]
 
 type Answers = Record<string, string | string[]>
+
+function getVisibleSteps(answers: Answers) {
+  return ALL_STEPS.filter(s => s.showIf(answers))
+}
 
 function computeHiddenNav(answers: Answers): string[] {
   const hidden: string[] = []
@@ -89,6 +98,7 @@ function computeHiddenNav(answers: Answers): string[] {
   if (!e.includes('potni')) hidden.push('/potni-stroski')
   if (!e.includes('repr')) hidden.push('/reprezentanca')
   if (!e.includes('blagajna') && !d.includes('gostinstvo')) hidden.push('/blagajna')
+  // Zaposleni — skrij če ni bilo vprašanja (sp + storitve) ali je odgovoril solo
   if (zap !== 'yes' && zap !== 'soon') { hidden.push('/place'); hidden.push('/rek1'); hidden.push('/dopust') }
   if (ddv !== 'yes' && ddv !== 'soon') { hidden.push('/ddv'); hidden.push('/ddv/evidenca') }
   if (tip !== 'sp') { hidden.push('/normirani'); hidden.push('/prispevki'); hidden.push('/kpo') }
@@ -121,8 +131,12 @@ export default function OnboardingPage() {
   const [orgName, setOrgName] = useState('')
   const [showNameStep, setShowNameStep] = useState(true)
 
+  const visibleSteps = getVisibleSteps(answers)
+  const totalDots = visibleSteps.length + 2
+  const currentDot = showNameStep ? 0 : step + 1
+
   function getSelected(stepId: string): string[] {
-    const s = STEPS[step]
+    const s = visibleSteps[step]
     if (!s) return []
     if (s.type === 'single') return answers[stepId] ? [answers[stepId] as string] : []
     return (answers[stepId] as string[]) || []
@@ -142,9 +156,23 @@ export default function OnboardingPage() {
 
   function canNext(): boolean {
     if (showNameStep) return orgName.trim().length > 2
-    const s = STEPS[step]
+    const s = visibleSteps[step]
     if (!s) return true
-    return getSelected(s.id).length > 0
+    // Single select zahteva izbiro, multi-select lahko gre naprej brez izbire
+    if (s.type === 'single') return getSelected(s.id).length > 0
+    return true
+  }
+
+  function goNext() {
+    if (!canNext()) return
+    const newStep = step + 1
+    // Recalculate visible steps with current answers to handle dynamic filtering
+    const nextVisible = getVisibleSteps(answers)
+    if (newStep >= nextVisible.length) {
+      setStep(newStep) // show results
+    } else {
+      setStep(newStep)
+    }
   }
 
   async function finish() {
@@ -152,10 +180,14 @@ export default function OnboardingPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
 
-    // Ustvari organizacijo
+    // Za s.p. ki ni šel skozi zaposleni korak — nastavi default
+    const finalAnswers = { ...answers }
+    if (!finalAnswers.zaposleni) finalAnswers.zaposleni = 'solo'
+    if (!finalAnswers.extras) finalAnswers.extras = []
+
     const { data: org } = await supabase.from('organizations').insert({
       name: orgName,
-      vat_registered: answers.ddv === 'yes',
+      vat_registered: finalAnswers.ddv === 'yes',
     }).select().single()
 
     if (org) {
@@ -166,30 +198,27 @@ export default function OnboardingPage() {
       })
     }
 
-    // Shrani preferences
-    const hiddenNav = computeHiddenNav(answers)
-    const quickActions = computeQuickActions(answers)
+    const hiddenNav = computeHiddenNav(finalAnswers)
+    const quickActions = computeQuickActions(finalAnswers)
 
     await supabase.from('user_preferences').upsert({
       user_id: user.id,
       nav_hidden: hiddenNav,
       nav_order: ['Pregled', 'Poslovanje', 'Davki', 'Zaposleni', 'Evidenca', 'Blagajna'],
       quick_actions: quickActions,
-      onboarding_answers: answers,
+      onboarding_answers: finalAnswers,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id' })
 
     router.push('/dashboard')
   }
 
-  const totalSteps = STEPS.length + 2 // ime + 5 vprašanj + rezultat
-  const currentDot = showNameStep ? 0 : step + 1
+  const isResult = !showNameStep && step >= visibleSteps.length
 
   return (
     <div style={{ minHeight: '100vh', background: '#F7F6F2', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 16px' }}>
       <div style={{ width: '100%', maxWidth: '480px' }}>
 
-        {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <div style={{ fontSize: '18px', fontWeight: '500', color: '#0D1F12' }}>Knjigovodja.si</div>
           <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>Nastavimo vašo aplikacijo</div>
@@ -197,7 +226,7 @@ export default function OnboardingPage() {
 
         {/* Progress */}
         <div style={{ display: 'flex', gap: '5px', marginBottom: '28px' }}>
-          {Array.from({ length: totalSteps }).map((_, i) => (
+          {Array.from({ length: totalDots }).map((_, i) => (
             <div key={i} style={{
               height: '3px', flex: 1, borderRadius: '2px',
               background: i < currentDot ? '#1D9E75' : i === currentDot ? '#0D1F12' : 'rgba(0,0,0,0.12)',
@@ -208,10 +237,10 @@ export default function OnboardingPage() {
 
         <div style={{ background: '#fff', borderRadius: '16px', border: '0.5px solid rgba(0,0,0,0.08)', padding: '28px 24px' }}>
 
-          {/* IME PODJETJA */}
+          {/* IME */}
           {showNameStep && (
             <div>
-              <div style={{ fontSize: '11px', color: '#888', letterSpacing: '.05em', marginBottom: '8px' }}>KORAK 1 OD 6</div>
+              <div style={{ fontSize: '11px', color: '#888', letterSpacing: '.05em', marginBottom: '8px' }}>KORAK 1</div>
               <div style={{ fontSize: '22px', fontWeight: '500', color: '#0D1F12', marginBottom: '6px', lineHeight: 1.3 }}>
                 Kako se imenuje vaše podjetje?
               </div>
@@ -232,46 +261,39 @@ export default function OnboardingPage() {
                 onKeyDown={e => { if (e.key === 'Enter' && canNext()) setShowNameStep(false) }}
               />
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
-                <button
-                  onClick={() => setShowNameStep(false)}
-                  disabled={!canNext()}
-                  style={{
-                    background: '#0D1F12', color: '#fff', border: 'none', borderRadius: '8px',
-                    padding: '10px 24px', fontSize: '13px', fontWeight: '500', cursor: 'pointer',
-                    opacity: canNext() ? 1 : 0.4,
-                  }}
-                >
-                  Naprej →
-                </button>
+                <button onClick={() => setShowNameStep(false)} disabled={!canNext()} style={{
+                  background: '#0D1F12', color: '#fff', border: 'none', borderRadius: '8px',
+                  padding: '10px 24px', fontSize: '13px', fontWeight: '500', cursor: 'pointer',
+                  opacity: canNext() ? 1 : 0.4,
+                }}>Naprej →</button>
               </div>
             </div>
           )}
 
           {/* VPRAŠANJA */}
-          {!showNameStep && step < STEPS.length && (() => {
-            const s = STEPS[step]
+          {!showNameStep && !isResult && (() => {
+            const s = visibleSteps[step]
+            if (!s) return null
             const selected = getSelected(s.id)
             return (
               <div>
-                <div style={{ fontSize: '11px', color: '#888', letterSpacing: '.05em', marginBottom: '8px' }}>{s.label.toUpperCase()}</div>
+                <div style={{ fontSize: '11px', color: '#888', letterSpacing: '.05em', marginBottom: '8px' }}>
+                  KORAK {step + 2} OD {visibleSteps.length + 2}
+                </div>
                 <div style={{ fontSize: '20px', fontWeight: '500', color: '#0D1F12', marginBottom: '6px', lineHeight: 1.3 }}>{s.title}</div>
                 <div style={{ fontSize: '13px', color: '#888', marginBottom: s.type === 'multi' ? '8px' : '20px', lineHeight: 1.5 }}>{s.sub}</div>
                 {s.type === 'multi' && (
-                  <div style={{ fontSize: '11px', color: '#aaa', marginBottom: '12px' }}>Izberite vse kar velja</div>
+                  <div style={{ fontSize: '11px', color: '#aaa', marginBottom: '12px' }}>Izberite vse kar velja — lahko tudi nič</div>
                 )}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                   {s.options.map(o => (
-                    <div
-                      key={o.value}
-                      onClick={() => toggleOption(s.id, o.value, s.type)}
-                      style={{
-                        border: selected.includes(o.value) ? '2px solid #1D9E75' : '0.5px solid rgba(0,0,0,0.12)',
-                        borderRadius: '10px', padding: '11px 14px', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', gap: '12px',
-                        background: selected.includes(o.value) ? '#E1F5EE' : '#fff',
-                        transition: 'all .15s',
-                      }}
-                    >
+                    <div key={o.value} onClick={() => toggleOption(s.id, o.value, s.type)} style={{
+                      border: selected.includes(o.value) ? '2px solid #1D9E75' : '0.5px solid rgba(0,0,0,0.12)',
+                      borderRadius: '10px', padding: '11px 14px', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: '12px',
+                      background: selected.includes(o.value) ? '#E1F5EE' : '#fff',
+                      transition: 'all .15s',
+                    }}>
                       <span style={{ fontSize: '20px', flexShrink: 0, width: '28px', textAlign: 'center' }}>{o.icon}</span>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: '13px', fontWeight: '500', color: '#0D1F12' }}>{o.label}</div>
@@ -283,29 +305,21 @@ export default function OnboardingPage() {
                         background: selected.includes(o.value) ? '#1D9E75' : 'transparent',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontSize: '11px', color: '#fff',
-                      }}>
-                        {selected.includes(o.value) ? '✓' : ''}
-                      </div>
+                      }}>{selected.includes(o.value) ? '✓' : ''}</div>
                     </div>
                   ))}
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px' }}>
-                  <button
-                    onClick={() => step === 0 ? setShowNameStep(true) : setStep(s => s - 1)}
-                    style={{ background: 'none', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', color: '#666', cursor: 'pointer' }}
-                  >
-                    ← Nazaj
-                  </button>
-                  <button
-                    onClick={() => { if (canNext()) setStep(s => s + 1) }}
-                    disabled={!canNext()}
-                    style={{
-                      background: '#0D1F12', color: '#fff', border: 'none', borderRadius: '8px',
-                      padding: '10px 24px', fontSize: '13px', fontWeight: '500', cursor: 'pointer',
-                      opacity: canNext() ? 1 : 0.4,
-                    }}
-                  >
-                    {step === STEPS.length - 1 ? 'Prikaži rezultat →' : 'Naprej →'}
+                  <button onClick={() => step === 0 ? setShowNameStep(true) : setStep(s => s - 1)} style={{
+                    background: 'none', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: '8px',
+                    padding: '9px 18px', fontSize: '13px', color: '#666', cursor: 'pointer',
+                  }}>← Nazaj</button>
+                  <button onClick={goNext} disabled={!canNext()} style={{
+                    background: '#0D1F12', color: '#fff', border: 'none', borderRadius: '8px',
+                    padding: '10px 24px', fontSize: '13px', fontWeight: '500', cursor: 'pointer',
+                    opacity: canNext() ? 1 : 0.4,
+                  }}>
+                    {step === visibleSteps.length - 1 ? 'Prikaži rezultat →' : 'Naprej →'}
                   </button>
                 </div>
               </div>
@@ -313,8 +327,11 @@ export default function OnboardingPage() {
           })()}
 
           {/* REZULTAT */}
-          {!showNameStep && step >= STEPS.length && (() => {
-            const hidden = computeHiddenNav(answers)
+          {isResult && (() => {
+            const finalAnswers = { ...answers }
+            if (!finalAnswers.zaposleni) finalAnswers.zaposleni = 'solo'
+            if (!finalAnswers.extras) finalAnswers.extras = []
+            const hidden = computeHiddenNav(finalAnswers)
             const activeCount = 18 - hidden.length
             return (
               <div>
@@ -323,16 +340,14 @@ export default function OnboardingPage() {
                   <div style={{ fontSize: '20px', fontWeight: '500', color: '#0D1F12' }}>Aplikacija je pripravljena!</div>
                   <div style={{ fontSize: '13px', color: '#888', marginTop: '6px' }}>
                     Aktivirali smo <strong>{activeCount} modulov</strong> ki ustrezajo vašemu poslovanju.
-                    Ostale smo skrili — jih lahko kadarkoli vključite.
                   </div>
                 </div>
-
                 <div style={{ background: '#F7F6F2', borderRadius: '10px', padding: '14px', marginBottom: '16px' }}>
                   <div style={{ fontSize: '11px', fontWeight: '500', color: '#888', marginBottom: '10px', letterSpacing: '.04em' }}>VAŠA KONFIGURACIJA</div>
                   {[
                     { label: 'Pravna oblika', value: answers.tip === 'sp' ? 'Samostojni podjetnik' : answers.tip === 'doo' ? 'd.o.o.' : 'Zavod/društvo' },
                     { label: 'DDV', value: answers.ddv === 'yes' ? 'Zavezanec' : answers.ddv === 'soon' ? 'Kmalu zavezanec' : 'Ni zavezanec' },
-                    { label: 'Zaposleni', value: answers.zaposleni === 'yes' ? 'Da' : answers.zaposleni === 'soon' ? 'Kmalu' : 'Ne' },
+                    { label: 'Zaposleni', value: finalAnswers.zaposleni === 'yes' ? 'Da' : finalAnswers.zaposleni === 'soon' ? 'Kmalu' : 'Ne' },
                     { label: 'Aktivni moduli', value: `${activeCount} od 18` },
                   ].map(item => (
                     <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '0.5px solid rgba(0,0,0,0.06)', fontSize: '13px' }}>
@@ -341,25 +356,16 @@ export default function OnboardingPage() {
                     </div>
                   ))}
                 </div>
-
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <button
-                    onClick={() => setStep(STEPS.length - 1)}
-                    style={{ background: 'none', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', color: '#666', cursor: 'pointer' }}
-                  >
-                    ← Nazaj
-                  </button>
-                  <button
-                    onClick={finish}
-                    disabled={saving}
-                    style={{
-                      background: '#1D9E75', color: '#fff', border: 'none', borderRadius: '8px',
-                      padding: '10px 28px', fontSize: '13px', fontWeight: '500', cursor: 'pointer',
-                      opacity: saving ? 0.7 : 1,
-                    }}
-                  >
-                    {saving ? 'Shranjujem...' : 'Začnimo! →'}
-                  </button>
+                  <button onClick={() => setStep(visibleSteps.length - 1)} style={{
+                    background: 'none', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: '8px',
+                    padding: '9px 18px', fontSize: '13px', color: '#666', cursor: 'pointer',
+                  }}>← Nazaj</button>
+                  <button onClick={finish} disabled={saving} style={{
+                    background: '#1D9E75', color: '#fff', border: 'none', borderRadius: '8px',
+                    padding: '10px 28px', fontSize: '13px', fontWeight: '500', cursor: 'pointer',
+                    opacity: saving ? 0.7 : 1,
+                  }}>{saving ? 'Shranjujem...' : 'Začnimo! →'}</button>
                 </div>
               </div>
             )
