@@ -36,7 +36,6 @@ function getSteps(profile: Profile, org: any, month: number, year: number): Step
   const m = MONTHS[month]
   const steps: Step[] = []
 
-  // 1. Vedno — uvod
   steps.push({
     id: 'uvod',
     icon: '📅',
@@ -51,7 +50,6 @@ function getSteps(profile: Profile, org: any, month: number, year: number): Step
     ],
   })
 
-  // 2. Storitveni računi (fizioterapija, fitnes)
   if (profile.hasServiceInvoices) {
     steps.push({
       id: 'racuni',
@@ -63,21 +61,19 @@ function getSteps(profile: Profile, org: any, month: number, year: number): Step
       href: '/invoices/new',
       hrefLabel: '+ Nov račun',
       checks: [
-        'Vsi fizioterapevtski obiski fakturirani',
-        'Fitnes članarine za mesec izdane',
+        'Vsi računi za storitve fakturirani',
         'Zunanji računi uvoženi (če imaš drug sistem)',
         'Preveriti neplačane iz prejšnjega meseca',
       ],
     })
   }
 
-  // 3. Blagajna — bar / gostilna
   if (profile.hasCashRegister) {
     steps.push({
       id: 'blagajna',
       icon: '🏪',
       title: 'Blagajna — dnevni zaključki',
-      subtitle: 'Z-reporti in gotovinski promet bara',
+      subtitle: 'Z-reporti in gotovinski promet',
       why: 'FURS zahteva dnevno potrjevanje računov. Z-report je obvezen zaključek vsakega delovnega dne — brez tega so kazni do €50.000.',
       urgent: 'Dnevno — ne mesečno!',
       required: true,
@@ -92,14 +88,13 @@ function getSteps(profile: Profile, org: any, month: number, year: number): Step
     })
   }
 
-  // 4. Kartični terminal
   if (profile.hasCardTerminal) {
     steps.push({
       id: 'kartice',
       icon: '💳',
       title: 'Kartični terminal — Worldline / SumUp',
       subtitle: 'Mesečni obračun kartičnih plačil',
-      why: 'Worldline in SumUp pošljeta mesečni obračun — ta mora biti usklajen z bančnim izpiskom. Razlike pomenijo napako.',
+      why: 'Worldline in SumUp pošljeta mesečni obračun — ta mora biti usklajen z bančnim izpiskom.',
       required: true,
       href: '/kartice',
       hrefLabel: 'Uvozi obračun',
@@ -112,13 +107,12 @@ function getSteps(profile: Profile, org: any, month: number, year: number): Step
     })
   }
 
-  // 5. Bančni izpisek — vsi
   steps.push({
     id: 'banka',
     icon: '🏦',
     title: 'Bančni izpisek',
     subtitle: 'Uvoz in uskladitev transakcij',
-    why: 'Bančni izpisek je osnova za KPO knjigo. Vsaka transakcija mora biti kategorizirana — prihodek ali odhodek.',
+    why: 'Bančni izpisek je osnova za KPO knjigo. Vsaka transakcija mora biti kategorizirana.',
     required: true,
     href: '/banka',
     hrefLabel: 'Uvozi izpisek',
@@ -127,39 +121,34 @@ function getSteps(profile: Profile, org: any, month: number, year: number): Step
       'Uvoziti v aplikacijo',
       'Kategorizirati vse transakcije',
       'Uskladiti z izdanimi računi',
-      'Uskladiti s karticami in gotovino',
     ],
   })
 
-  // 6. Prejeti stroški — vsi
   steps.push({
     id: 'stroski',
     icon: '🧾',
     title: 'Prejeti računi in stroški',
     subtitle: 'Dobavitelji, najemnine, režije',
-    why: `Vsak evidentiran strošek zmanjša davčno osnovo. Za bar to pomeni: pijača, hrana, čistila. Za fitnes: oprema, najemnina. Za fizioterapijo: material, oprema.`,
+    why: 'Vsak evidentiran strošek zmanjša davčno osnovo.',
     required: true,
     href: '/expenses',
     hrefLabel: '+ Dodaj strošek',
     checks: [
-      profile.hasCashRegister ? 'Dobaviteljski računi bara (pijača, hrana)' : '',
-      profile.hasDepreciation ? 'Računi za fitnes opremo / vzdrževanje' : '',
       'Najemnina poslovnega prostora',
       'Telefonski in internetni račun',
       'Elektrika, voda, komunala',
       'Računovodski in pravni stroški',
       'Ostali poslovni stroški',
-    ].filter(Boolean),
+    ],
   })
 
-  // 7. Plače + REK-1
   if (profile.hasEmployees) {
     steps.push({
       id: 'place',
       icon: '👥',
       title: 'Plače in REK-1',
       subtitle: 'Izračun in izplačilo plač zaposlenim',
-      why: 'REK-1 mora biti oddan na eDavki PREDEN nakaže plačo. To je zakonska zahteva — zamude pomenijo kazni in težave z inšpekcijo dela.',
+      why: 'REK-1 mora biti oddan na eDavki PREDEN nakažeš plačo. To je zakonska zahteva.',
       urgent: 'REK-1 PRED izplačilom!',
       required: true,
       href: '/place',
@@ -175,13 +164,12 @@ function getSteps(profile: Profile, org: any, month: number, year: number): Step
       ],
     })
 
-    // Potni stroški
     steps.push({
       id: 'potni',
       icon: '✈️',
       title: 'Potni stroški zaposlenih',
       subtitle: 'Dnevnice, km, nočnine',
-      why: 'Povračila stroškov zaposlenim so neobdavčena do zakonskega limita. Nad limitom je obdavčeno kot dohodek.',
+      why: 'Povračila stroškov zaposlenim so neobdavčena do zakonskega limita.',
       required: false,
       href: '/potni-stroski',
       hrefLabel: 'Evidenca potnih stroškov',
@@ -194,13 +182,12 @@ function getSteps(profile: Profile, org: any, month: number, year: number): Step
     })
   }
 
-  // 8. Prispevki s.p. — vsi
   steps.push({
     id: 'prispevki',
     icon: '💰',
     title: 'Prispevki s.p.',
     subtitle: 'ZPIZ + ZZZS — rok 15. v mesecu',
-    why: 'Prispevki za socialno varnost so obvezni vsak mesec do 15. Ne plačevanje povzroči zakonske zamudne obresti in blokado.',
+    why: 'Prispevki za socialno varnost so obvezni vsak mesec do 15.',
     urgent: `Rok: 15. ${m}`,
     required: true,
     href: '/prispevki',
@@ -213,13 +200,12 @@ function getSteps(profile: Profile, org: any, month: number, year: number): Step
     ],
   })
 
-  // 9. Akontacija dohodnine — vsi
   steps.push({
     id: 'akontacija',
     icon: '📊',
     title: 'Akontacija dohodnine',
     subtitle: 'Mesečno predplačilo davka',
-    why: 'Akontacija je mesečno predplačilo dohodnine ki ga določi FURS z odločbo. Ne plačevanje se sešteva in pride kot velik dolg ob letni napovedi.',
+    why: 'Akontacija je mesečno predplačilo dohodnine ki ga določi FURS z odločbo.',
     urgent: `Rok: 15. ${m}`,
     required: true,
     href: '/dohodnina',
@@ -231,16 +217,15 @@ function getSteps(profile: Profile, org: any, month: number, year: number): Step
     ],
   })
 
-  // 10. DDV-O — samo DDV zavezanci, četrtletno
   if (profile.isVatRegistered) {
-    const ddvMonths = [3, 6, 9, 0] // april=3, julij=6, oktober=9, januar=0
+    const ddvMonths = [3, 6, 9, 0]
     const isDdvMonth = ddvMonths.includes(month)
     steps.push({
       id: 'ddv',
       icon: '🏛️',
       title: isDdvMonth ? 'DDV-O obračun — ODDATI!' : 'DDV evidenca',
-      subtitle: isDdvMonth ? `Četrtletni DDV-O za Q${Math.ceil((month+1)/3)} — rok konec ${m}` : 'Sproti voditi DDV evidenco',
-      why: 'Kot DDV zavezanec moraš voditi evidenco DDV vhoda in izhoda. Vsak račun mora biti pravilno knjižen. Četrtletno oddate DDV-O obrazec.',
+      subtitle: isDdvMonth ? `Četrtletni DDV-O — rok konec ${m}` : 'Sproti voditi DDV evidenco',
+      why: 'Kot DDV zavezanec moraš voditi evidenco DDV vhoda in izhoda.',
       urgent: isDdvMonth ? `ODDATI DDV-O do konca ${m}!` : undefined,
       required: true,
       href: isDdvMonth ? '/ddv/evidenca' : '/ddv',
@@ -248,7 +233,6 @@ function getSteps(profile: Profile, org: any, month: number, year: number): Step
       checks: isDdvMonth ? [
         'Preveriti vse izhodne DDV račune',
         'Preveriti vse vhodne DDV račune',
-        'Preveriti razliko DDV',
         'Oddati DDV-O na eDavki',
         'Nakazati DDV dolg (če pozitiven)',
       ] : [
@@ -258,34 +242,31 @@ function getSteps(profile: Profile, org: any, month: number, year: number): Step
     })
   }
 
-  // 11. Zaloga — bar
   if (profile.hasInventory) {
     steps.push({
       id: 'zaloga',
       icon: '📦',
       title: 'Zaloga',
-      subtitle: 'Popis in gibanje zaloge bara',
-      why: 'Zaloga je sredstvo podjetja — njena vrednost vpliva na DDD. Mesečni popis pomaga odkriti razlike (krajo, pokvarjeno blago).',
+      subtitle: 'Popis in gibanje zaloge',
+      why: 'Zaloga je sredstvo podjetja — njena vrednost vpliva na davčno osnovo.',
       required: false,
       href: '/zaloga',
       hrefLabel: 'Evidenca zaloge',
       checks: [
-        'Preveriti stanje pijače in hrane',
+        'Preveriti stanje blaga',
         'Vpisati nove nabave',
         'Preveriti razlike',
-        'December: formalni popis 31.12.',
       ],
     })
   }
 
-  // 12. Amortizacija — fitnes
   if (profile.hasDepreciation) {
     steps.push({
       id: 'amortizacija',
       icon: '⚙️',
       title: 'Amortizacija opreme',
-      subtitle: 'Mesečno vrednotenje fitnes opreme',
-      why: 'Fitnes oprema se amortizira letno (25% = 4 leta). To je odhodek ki zmanjša davčno osnovo brez dejanskega plačila.',
+      subtitle: 'Mesečno vrednotenje opreme',
+      why: 'Oprema se amortizira letno — to je odhodek ki zmanjša davčno osnovo.',
       required: false,
       href: '/amortizacija',
       hrefLabel: 'Razpored amortizacije',
@@ -297,14 +278,13 @@ function getSteps(profile: Profile, org: any, month: number, year: number): Step
     })
   }
 
-  // 13. Kilometrina
   if (profile.usesCar) {
     steps.push({
       id: 'kilometrina',
       icon: '🚗',
       title: 'Kilometrina in potni nalogi',
       subtitle: 'Prevoženi km za poslovne namene',
-      why: 'Vsak km za poslovni namen = €0.21 odhodka. Na letni ravni se to hitro nabere.',
+      why: 'Vsak km za poslovni namen = €0.21 odhodka.',
       required: false,
       href: '/kilometrina',
       hrefLabel: 'Vpiši km',
@@ -316,14 +296,13 @@ function getSteps(profile: Profile, org: any, month: number, year: number): Step
     })
   }
 
-  // 14. Reprezentanca
   if (profile.hasRepresentanca) {
     steps.push({
       id: 'reprezentanca',
       icon: '🍽️',
       title: 'Reprezentanca',
       subtitle: 'Poslovni obroki in darila',
-      why: '50% poslovnih obrokov je davčno priznavnih. Brez evidence = ni odbitka.',
+      why: '50% poslovnih obrokov je davčno priznavnih.',
       required: false,
       href: '/reprezentanca',
       hrefLabel: 'Evidenca reprezentance',
@@ -335,13 +314,12 @@ function getSteps(profile: Profile, org: any, month: number, year: number): Step
     })
   }
 
-  // 15. Opomniki za zamude
   steps.push({
     id: 'opomniki',
     icon: '⚠️',
     title: 'Opomniki za zamude',
     subtitle: 'Neplačani računi — pošlji opomnike',
-    why: 'Vsak dan zamude = zakonske obresti (TOM+8%). Po 30 dneh pošljite 2. opomnik, po 60 dneh pa predajte izterjavi.',
+    why: 'Vsak dan zamude = zakonske obresti (TOM+8%).',
     required: false,
     href: '/opomniki',
     hrefLabel: 'Poglej zamude',
@@ -353,13 +331,12 @@ function getSteps(profile: Profile, org: any, month: number, year: number): Step
     ],
   })
 
-  // 16. Zaključek
   steps.push({
     id: 'zakljucek',
     icon: '✅',
     title: `${m} ${year} — zaključen!`,
     subtitle: 'Povzetek meseca in naslednji roki',
-    why: 'Čestitke! Mesec je računovodsko zaključen. Shranite povzetek za arhiv.',
+    why: 'Čestitke! Mesec je računovodsko zaključen.',
     required: true,
     checks: [
       'Arhivirati vse dokumente',
@@ -372,7 +349,7 @@ function getSteps(profile: Profile, org: any, month: number, year: number): Step
 }
 
 const PROFILE_QUESTIONS = [
-  { key: 'hasServiceInvoices', label: 'Storitve / Fizioterapija / Svetovanje', sub: 'Fakturiraš stranke za storitve', icon: '📋' },
+  { key: 'hasServiceInvoices', label: 'Storitve / Svetovanje', sub: 'Fakturiraš stranke za storitve', icon: '📋' },
   { key: 'hasCashRegister', label: 'Bar / Gostilna / Maloprodaja', sub: 'Sprejemaš gotovinska plačila z blagajno', icon: '🏪' },
   { key: 'hasCardTerminal', label: 'Kartični terminal', sub: 'Worldline, SumUp ali podobno', icon: '💳' },
   { key: 'hasEmployees', label: 'Imam zaposlene', sub: 'En ali več delavcev', icon: '👥' },
@@ -382,6 +359,22 @@ const PROFILE_QUESTIONS = [
   { key: 'usesCar', label: 'Uporabljam avto za posel', sub: 'Kilometrina, potni nalogi', icon: '🚗' },
   { key: 'hasRepresentanca', label: 'Imam poslovne obroke', sub: 'Sestanki, darila strankam', icon: '🍽️' },
 ]
+
+function onboardingToProfile(a: any): Profile {
+  const d = (a.dejavnost as string[]) || []
+  const e = (a.extras as string[]) || []
+  return {
+    hasServiceInvoices: d.includes('storitve') || d.includes('digital') || d.includes('gradnja'),
+    hasCashRegister: d.includes('gostinstvo') || e.includes('blagajna'),
+    hasCardTerminal: d.includes('gostinstvo') || d.includes('blago'),
+    hasEmployees: a.zaposleni === 'yes' || a.zaposleni === 'soon',
+    isVatRegistered: a.ddv === 'yes' || a.ddv === 'soon',
+    hasInventory: d.includes('blago') || d.includes('gostinstvo') || e.includes('zaloga'),
+    hasDepreciation: e.includes('amort'),
+    usesCar: e.includes('avto') || d.includes('transport'),
+    hasRepresentanca: e.includes('repr'),
+  }
+}
 
 export default function VodicPage() {
   const [org, setOrg] = useState<any>(null)
@@ -412,25 +405,34 @@ export default function VodicPage() {
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
+
     const { data: member } = await supabase
       .from('org_members').select('organizations(*)')
       .eq('user_id', user.id).single()
+
     if (member) {
       const o = (member as any).organizations
       setOrg(o)
-      setProfile(prev => ({
-        ...prev,
-        isVatRegistered: o.vat_registered || false,
-      }))
     }
-    // Naloži profil iz localStorage
+
+    // Preberi onboarding odgovore iz user_preferences
+    const { data: prefs } = await supabase
+      .from('user_preferences')
+      .select('onboarding_answers')
+      .eq('user_id', user.id)
+      .single()
+
     const savedProfile = localStorage.getItem('vodic_profile')
     if (savedProfile) {
       setProfile(JSON.parse(savedProfile))
+    } else if (prefs?.onboarding_answers) {
+      const derived = onboardingToProfile(prefs.onboarding_answers)
+      setProfile(derived)
+      localStorage.setItem('vodic_profile', JSON.stringify(derived))
     } else {
       setShowProfileSetup(true)
     }
-    // Naloži napredek
+
     const savedProgress = localStorage.getItem(storageKey)
     if (savedProgress) {
       setCompleted(new Set(JSON.parse(savedProgress)))
@@ -452,12 +454,6 @@ export default function VodicPage() {
     localStorage.setItem(storageKey, JSON.stringify([...newSet]))
   }
 
-  const steps = org ? getSteps(profile, org, month, year) : []
-  const step = steps[currentStep]
-  const progress = steps.length > 0 ? Math.round((completed.size / steps.length) * 100) : 0
-  const requiredSteps = steps.filter(s => s.required)
-  const completedRequired = requiredSteps.filter(s => completed.has(s.id)).length
-
   if (loading) return (
     <AppLayout>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh' }}>
@@ -466,6 +462,24 @@ export default function VodicPage() {
     </AppLayout>
   )
 
+  if (!org) return (
+    <AppLayout>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh' }}>
+        <div style={{ textAlign:'center' }}>
+          <div style={{ fontSize:'32px', marginBottom:'12px' }}>⚠️</div>
+          <div style={{ fontSize:'14px', color:'#888', marginBottom:'12px' }}>Organizacija ni najdena.</div>
+          <a href="/onboarding" style={{ fontSize:'13px', color:'#1D9E75', textDecoration:'none' }}>Dokončaj registracijo →</a>
+        </div>
+      </div>
+    </AppLayout>
+  )
+
+  const steps = getSteps(profile, org, month, year)
+  const step = steps[currentStep]
+  const progress = steps.length > 0 ? Math.round((completed.size / steps.length) * 100) : 0
+  const requiredSteps = steps.filter(s => s.required)
+  const completedRequired = requiredSteps.filter(s => completed.has(s.id)).length
+
   // Profil setup
   if (showProfileSetup) {
     return (
@@ -473,10 +487,10 @@ export default function VodicPage() {
         <div style={{ maxWidth:'600px', margin:'0 auto', padding:'40px 24px' }}>
           <div style={{ marginBottom:'32px' }}>
             <div style={{ fontSize:'24px', fontWeight:'500', color:'#0D1F12', marginBottom:'8px' }}>
-              Nastavi svoj profil
+              Nastavi profil mesečnega vodiča
             </div>
             <div style={{ fontSize:'14px', color:'#888', lineHeight:1.6 }}>
-              Enkrat nastavi kaj delaš — vodič bo vsak mesec pokazal samo korake ki so relevantni za tvoje podjetje.
+              Vodič bo vsak mesec pokazal samo korake ki so relevantni za tvoje podjetje.
             </div>
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'32px' }}>
@@ -526,19 +540,17 @@ export default function VodicPage() {
           <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
             <div style={{ fontSize:'12px', color:'rgba(255,255,255,0.5)' }}>{progress}% opravljeno</div>
             <button
-              onClick={() => setShowProfileSetup(true)}
+              onClick={() => { setTempProfile({...profile}); setShowProfileSetup(true) }}
               style={{ background:'rgba(255,255,255,0.1)', border:'none', color:'rgba(255,255,255,0.6)', fontSize:'11px', padding:'5px 10px', borderRadius:'20px', cursor:'pointer' }}>
               ⚙️ Profil
             </button>
           </div>
         </div>
 
-        {/* Progress bar */}
         <div style={{ height:'4px', background:'rgba(255,255,255,0.1)', borderRadius:'2px', marginBottom:'12px' }}>
           <div style={{ height:'4px', background:'#9FE1CB', borderRadius:'2px', width:`${progress}%`, transition:'width 0.4s' }} />
         </div>
 
-        {/* Step dots */}
         <div style={{ display:'flex', gap:'4px' }}>
           {steps.map((s, i) => (
             <div key={s.id}
@@ -555,7 +567,6 @@ export default function VodicPage() {
       {/* Step content */}
       <div style={{ maxWidth:'700px', margin:'0 auto', padding:'28px 24px' }}>
 
-        {/* Step header */}
         <div style={{ display:'flex', alignItems:'flex-start', gap:'16px', marginBottom:'20px' }}>
           <div style={{ fontSize:'36px', flexShrink:0 }}>{step.icon}</div>
           <div style={{ flex:1 }}>
@@ -572,7 +583,6 @@ export default function VodicPage() {
           )}
         </div>
 
-        {/* Urgent badge */}
         {step.urgent && (
           <div style={{ background:'#FCEBEB', border:'0.5px solid #F7C1C1', borderRadius:'10px', padding:'10px 14px', marginBottom:'16px', display:'flex', alignItems:'center', gap:'8px' }}>
             <span style={{ fontSize:'14px' }}>⏰</span>
@@ -580,13 +590,11 @@ export default function VodicPage() {
           </div>
         )}
 
-        {/* Zakaj box */}
         <div style={{ background:'#EAF3DE', borderRadius:'12px', padding:'14px 16px', marginBottom:'20px' }}>
           <div style={{ fontSize:'10px', color:'#3B6D11', textTransform:'uppercase', letterSpacing:'0.5px', fontWeight:'500', marginBottom:'4px' }}>Zakaj je to pomembno?</div>
           <div style={{ fontSize:'13px', color:'#27500A', lineHeight:1.6 }}>{step.why}</div>
         </div>
 
-        {/* Action button */}
         {step.href && (
           <div style={{ marginBottom:'20px' }}>
             <Link href={step.href} style={{ textDecoration:'none' }}>
@@ -597,7 +605,6 @@ export default function VodicPage() {
           </div>
         )}
 
-        {/* Checklist */}
         <div style={{ background:'#fff', border:'0.5px solid rgba(0,0,0,0.08)', borderRadius:'12px', marginBottom:'24px', overflow:'hidden' }}>
           <div style={{ padding:'12px 16px', borderBottom:'0.5px solid rgba(0,0,0,0.06)', fontSize:'12px', fontWeight:'500', color:'#0D1F12' }}>
             Kontrolni seznam
@@ -610,7 +617,6 @@ export default function VodicPage() {
           ))}
         </div>
 
-        {/* Footer navigation */}
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingTop:'16px', borderTop:'0.5px solid rgba(0,0,0,0.06)' }}>
           <button
             onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
