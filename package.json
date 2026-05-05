@@ -1,0 +1,14 @@
+{
+  "name": "knjigovodja",
+  "private": true,
+  "scripts": {
+    "dev": "cd apps/web && npm run dev",
+    "build": "cd apps/web && npm run build",
+    "test": "cd packages/tax-engine && npm test",
+    "install:all": "npm install && cd packages/tax-engine && npm install && cd ../../apps/web && npm install"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}
