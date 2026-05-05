@@ -7,9 +7,33 @@ import AppLayout from '@/components/AppLayout'
 
 const MONTHS = ['Jan','Feb','Mar','Apr','Maj','Jun','Jul','Avg','Sep','Okt','Nov','Dec']
 
+const ALL_QUICK_ACTIONS = [
+  { href:'/invoices/new', icon:'📄', label:'Nov račun', sub:'Izstavite takoj' },
+  { href:'/scan', icon:'📸', label:'Skeniraj račun', sub:'AI OCR' },
+  { href:'/prispevki', icon:'💳', label:'Prispevki QR', sub:'ZPIZ + ZZZS' },
+  { href:'/expenses', icon:'🧾', label:'Dodaj strošek', sub:'Prejeti računi' },
+  { href:'/ai', icon:'🤖', label:'AI računovodja', sub:'Vprašajte karkoli' },
+  { href:'/statistika', icon:'📊', label:'Statistika', sub:'Pregled leta' },
+  { href:'/blagajna', icon:'🏧', label:'Blagajna', sub:'POS terminal' },
+  { href:'/kpo', icon:'📒', label:'KPO knjiga', sub:'Evidenca' },
+  { href:'/ddv', icon:'🔢', label:'DDV obračun', sub:'Mesečni DDV' },
+  { href:'/invoices', icon:'📋', label:'Vsi računi', sub:'Pregled' },
+  { href:'/rokovnik', icon:'📅', label:'Rokovnik', sub:'Datumi' },
+  { href:'/zaloga', icon:'📦', label:'Zaloga', sub:'Upravljanje' },
+]
+
+const DEFAULT_QA_HREFS = [
+  '/invoices/new', '/scan', '/prispevki', '/expenses', '/ai', '/statistika'
+]
+
 export default function DashboardPage() {
   const [org, setOrg] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [showQAModal, setShowQAModal] = useState(false)
+  const [qaHrefs, setQaHrefs] = useState<string[]>(DEFAULT_QA_HREFS)
+  const [qaHrefsDraft, setQaHrefsDraft] = useState<string[]>(DEFAULT_QA_HREFS)
+  const [savingQA, setSavingQA] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
   const [data, setData] = useState({
     revenue: 0, expenses: 0, vatDue: 0,
     unpaidCount: 0, unpaidAmount: 0,
@@ -34,12 +58,25 @@ export default function DashboardPage() {
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
+    setUserId(user.id)
     const { data: member } = await supabase
       .from('org_members').select('organizations(*)')
       .eq('user_id', user.id).single()
     if (!member) return
     const o = (member as any).organizations
     setOrg(o)
+
+    // Load quick actions prefs
+    const { data: prefs } = await supabase
+      .from('user_preferences')
+      .select('quick_actions')
+      .eq('user_id', user.id)
+      .single()
+    if (prefs?.quick_actions && prefs.quick_actions.length > 0) {
+      setQaHrefs(prefs.quick_actions)
+      setQaHrefsDraft(prefs.quick_actions)
+    }
+
     const [invRes, expRes, empRes] = await Promise.all([
       supabase.from('issued_invoices').select('*').eq('org_id', o.id).neq('status','draft'),
       supabase.from('receipts').select('*').eq('org_id', o.id),
@@ -70,6 +107,29 @@ export default function DashboardPage() {
     })
     setLoading(false)
   }
+
+  function toggleDraftQA(href: string) {
+    setQaHrefsDraft(prev =>
+      prev.includes(href) ? prev.filter(h => h !== href) : [...prev, href]
+    )
+  }
+
+  async function saveQA() {
+    if (!userId) return
+    setSavingQA(true)
+    await supabase.from('user_preferences').upsert({
+      user_id: userId,
+      quick_actions: qaHrefsDraft,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' })
+    setQaHrefs(qaHrefsDraft)
+    setSavingQA(false)
+    setShowQAModal(false)
+  }
+
+  const activeQA = qaHrefs
+    .map(href => ALL_QUICK_ACTIONS.find(a => a.href === href))
+    .filter(Boolean) as typeof ALL_QUICK_ACTIONS
 
   if (loading) return (
     <AppLayout>
@@ -178,7 +238,6 @@ export default function DashboardPage() {
 
         {/* Middle grid */}
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px', marginBottom:'12px' }}>
-
           <div style={{ background:'#fff', border:'0.5px solid rgba(0,0,0,0.08)', borderRadius:'12px', padding:'14px 16px' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'12px' }}>
               <div style={{ fontSize:'12px', fontWeight:'500', color:'#0D1F12' }}>Zadnji računi</div>
@@ -236,18 +295,19 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Quick actions — 2 vrstici x 3 */}
+        {/* Quick actions */}
         <div style={{ background:'#fff', border:'0.5px solid rgba(0,0,0,0.08)', borderRadius:'12px', padding:'14px 16px' }}>
-          <div style={{ fontSize:'12px', fontWeight:'500', color:'#0D1F12', marginBottom:'12px' }}>Hitre akcije</div>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'12px' }}>
+            <div style={{ fontSize:'12px', fontWeight:'500', color:'#0D1F12' }}>Hitre akcije</div>
+            <button
+              onClick={() => { setQaHrefsDraft(qaHrefs); setShowQAModal(true) }}
+              style={{ background:'#F7F6F2', border:'0.5px solid rgba(0,0,0,0.08)', borderRadius:'20px', padding:'4px 12px', fontSize:'11px', color:'#888', cursor:'pointer' }}
+            >
+              ✏️ Uredi
+            </button>
+          </div>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'8px' }}>
-            {[
-              { href:'/invoices/new', icon:'📄', label:'Nov račun', sub:'Izstavite takoj' },
-              { href:'/scan', icon:'📸', label:'Skeniraj račun', sub:'AI OCR' },
-              { href:'/prispevki', icon:'💳', label:'Prispevki QR', sub:'ZPIZ + ZZZS' },
-              { href:'/expenses', icon:'🧾', label:'Dodaj strošek', sub:'Prejeti računi' },
-              { href:'/ai', icon:'🤖', label:'AI računovodja', sub:'Vprašajte karkoli' },
-              { href:'/statistika', icon:'📊', label:'Statistika', sub:'Pregled leta' },
-            ].map(item => (
+            {activeQA.map(item => (
               <Link key={item.href} href={item.href} style={{ textDecoration:'none' }}>
                 <div style={{ background:'#F7F6F2', border:'0.5px solid rgba(0,0,0,0.06)', borderRadius:'10px', padding:'12px 14px', display:'flex', alignItems:'center', gap:'10px' }}>
                   <div style={{ fontSize:'20px', flexShrink:0 }}>{item.icon}</div>
@@ -261,6 +321,59 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* MODAL — uredi hitre akcije */}
+      {showQAModal && (
+        <div
+          onClick={e => { if (e.target === e.currentTarget) setShowQAModal(false) }}
+          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }}
+        >
+          <div style={{ background:'#fff', borderRadius:'12px', width:'360px', maxHeight:'80vh', overflowY:'auto', border:'0.5px solid rgba(0,0,0,0.1)' }}>
+            <div style={{ padding:'16px 18px', borderBottom:'0.5px solid #eee', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <span style={{ fontSize:'14px', fontWeight:'500', color:'#1a1a1a' }}>Uredi hitre akcije</span>
+              <button onClick={() => setShowQAModal(false)} style={{ background:'none', border:'none', fontSize:'18px', cursor:'pointer', color:'#888', lineHeight:1 }}>✕</button>
+            </div>
+            <div style={{ padding:'12px 18px' }}>
+              <div style={{ fontSize:'11px', color:'#999', marginBottom:'10px' }}>Izberite akcije ki jih želite videti na dashboardu</div>
+              {ALL_QUICK_ACTIONS.map(item => (
+                <div key={item.href} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 4px', borderBottom:'0.5px solid #f5f5f5' }}>
+                  <span style={{ display:'flex', alignItems:'center', gap:'10px', fontSize:'13px', color:'#1a1a1a' }}>
+                    <span style={{ fontSize:'16px' }}>{item.icon}</span>
+                    <span>
+                      <div style={{ fontWeight:'500' }}>{item.label}</div>
+                      <div style={{ fontSize:'11px', color:'#888' }}>{item.sub}</div>
+                    </span>
+                  </span>
+                  <div
+                    onClick={() => toggleDraftQA(item.href)}
+                    style={{
+                      width:'32px', height:'18px', borderRadius:'9px', cursor:'pointer',
+                      background: qaHrefsDraft.includes(item.href) ? '#1D9E75' : '#ddd',
+                      position:'relative', transition:'background .2s', flexShrink:0,
+                    }}
+                  >
+                    <div style={{
+                      position:'absolute', top:'2px',
+                      left: qaHrefsDraft.includes(item.href) ? '14px' : '2px',
+                      width:'14px', height:'14px', borderRadius:'50%', background:'#fff',
+                      transition:'left .2s',
+                    }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ padding:'12px 18px 16px' }}>
+              <button
+                onClick={saveQA}
+                disabled={savingQA}
+                style={{ width:'100%', padding:'9px', borderRadius:'8px', background:'#1D9E75', color:'#fff', border:'none', fontSize:'13px', fontWeight:'500', cursor:'pointer', opacity: savingQA ? 0.7 : 1 }}
+              >
+                {savingQA ? 'Shranjujem...' : 'Shrani'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   )
 }
