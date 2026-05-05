@@ -49,7 +49,6 @@ const ALL_STEPS = [
     title: 'Ali imate zaposlene?',
     sub: 'Modul za plače, REK-1 in dopust aktiviramo samo če jih potrebujete.',
     type: 'single' as const,
-    // Pokaži samo če je d.o.o. ali zavod, ali če dejavnost vključuje gostinstvo/gradnjo/transport
     showIf: (a: any) => {
       if (a.tip === 'doo' || a.tip === 'zavod') return true
       const d = (a.dejavnost as string[]) || []
@@ -98,12 +97,10 @@ function computeHiddenNav(answers: Answers): string[] {
   if (!e.includes('potni')) hidden.push('/potni-stroski')
   if (!e.includes('repr')) hidden.push('/reprezentanca')
   if (!e.includes('blagajna') && !d.includes('gostinstvo')) hidden.push('/blagajna')
-  // Zaposleni — skrij če ni bilo vprašanja (sp + storitve) ali je odgovoril solo
   if (zap !== 'yes' && zap !== 'soon') { hidden.push('/place'); hidden.push('/rek1'); hidden.push('/dopust') }
   if (ddv !== 'yes' && ddv !== 'soon') { hidden.push('/ddv'); hidden.push('/ddv/evidenca') }
   if (tip !== 'sp') { hidden.push('/normirani'); hidden.push('/prispevki'); hidden.push('/kpo') }
   if (!d.includes('storitve') && !d.includes('digital')) hidden.push('/eslog')
-
   return hidden
 }
 
@@ -112,7 +109,6 @@ function computeQuickActions(answers: Answers): string[] {
   const e = (answers.extras as string[]) || []
   const ddv = answers.ddv as string
   const tip = answers.tip as string
-
   const qa = ['/invoices/new', '/expenses']
   if (d.includes('blago') || d.includes('gostinstvo') || e.includes('blagajna')) qa.push('/blagajna')
   if (ddv === 'yes' || ddv === 'soon') qa.push('/ddv')
@@ -128,12 +124,14 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(0)
   const [answers, setAnswers] = useState<Answers>({})
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
   const [orgName, setOrgName] = useState('')
   const [showNameStep, setShowNameStep] = useState(true)
 
   const visibleSteps = getVisibleSteps(answers)
   const totalDots = visibleSteps.length + 2
   const currentDot = showNameStep ? 0 : step + 1
+  const isResult = !showNameStep && step >= visibleSteps.length
 
   function getSelected(stepId: string): string[] {
     const s = visibleSteps[step]
@@ -158,62 +156,74 @@ export default function OnboardingPage() {
     if (showNameStep) return orgName.trim().length > 2
     const s = visibleSteps[step]
     if (!s) return true
-    // Single select zahteva izbiro, multi-select lahko gre naprej brez izbire
     if (s.type === 'single') return getSelected(s.id).length > 0
     return true
   }
 
-  function goNext() {
-    if (!canNext()) return
-    const newStep = step + 1
-    // Recalculate visible steps with current answers to handle dynamic filtering
-    const nextVisible = getVisibleSteps(answers)
-    if (newStep >= nextVisible.length) {
-      setStep(newStep) // show results
-    } else {
-      setStep(newStep)
-    }
-  }
-
   async function finish() {
     setSaving(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { router.push('/login'); return }
+    setError('')
 
-    // Za s.p. ki ni šel skozi zaposleni korak — nastavi default
-    const finalAnswers = { ...answers }
-    if (!finalAnswers.zaposleni) finalAnswers.zaposleni = 'solo'
-    if (!finalAnswers.extras) finalAnswers.extras = []
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        setError('Niste prijavljeni. Prosimo prijavite se.')
+        setSaving(false)
+        return
+      }
 
-    const { data: org } = await supabase.from('organizations').insert({
-      name: orgName,
-      vat_registered: finalAnswers.ddv === 'yes',
-    }).select().single()
+      const finalAnswers = { ...answers }
+      if (!finalAnswers.zaposleni) finalAnswers.zaposleni = 'solo'
+      if (!finalAnswers.extras) finalAnswers.extras = []
 
-    if (org) {
-      await supabase.from('org_members').insert({
-        org_id: org.id,
-        user_id: user.id,
-        role: 'owner',
-      })
+      // Ustvari organizacijo
+      const { data: org, error: orgError } = await supabase
+        .from('organizations')
+        .insert({ name: orgName, vat_registered: finalAnswers.ddv === 'yes' })
+        .select()
+        .single()
+
+      if (orgError) {
+        setError(`Napaka pri ustvarjanju organizacije: ${orgError.message}`)
+        setSaving(false)
+        return
+      }
+
+      // Ustvari org_member
+      const { error: memberError } = await supabase
+        .from('org_members')
+        .insert({ org_id: org.id, user_id: user.id, role: 'owner' })
+
+      if (memberError) {
+        setError(`Napaka pri dodajanju člana: ${memberError.message}`)
+        setSaving(false)
+        return
+      }
+
+      // Shrani preferences
+      const { error: prefError } = await supabase
+        .from('user_preferences')
+        .upsert({
+          user_id: user.id,
+          nav_hidden: computeHiddenNav(finalAnswers),
+          nav_order: ['Pregled', 'Poslovanje', 'Davki', 'Zaposleni', 'Evidenca', 'Blagajna'],
+          quick_actions: computeQuickActions(finalAnswers),
+          onboarding_answers: finalAnswers,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' })
+
+      if (prefError) {
+        // Preferences napaka ni kritična — gremo naprej
+        console.error('Preferences error:', prefError)
+      }
+
+      router.push('/dashboard')
+
+    } catch (e: any) {
+      setError(`Nepričakovana napaka: ${e.message}`)
+      setSaving(false)
     }
-
-    const hiddenNav = computeHiddenNav(finalAnswers)
-    const quickActions = computeQuickActions(finalAnswers)
-
-    await supabase.from('user_preferences').upsert({
-      user_id: user.id,
-      nav_hidden: hiddenNav,
-      nav_order: ['Pregled', 'Poslovanje', 'Davki', 'Zaposleni', 'Evidenca', 'Blagajna'],
-      quick_actions: quickActions,
-      onboarding_answers: finalAnswers,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id' })
-
-    router.push('/dashboard')
   }
-
-  const isResult = !showNameStep && step >= visibleSteps.length
 
   return (
     <div style={{ minHeight: '100vh', background: '#F7F6F2', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 16px' }}>
@@ -224,7 +234,6 @@ export default function OnboardingPage() {
           <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>Nastavimo vašo aplikacijo</div>
         </div>
 
-        {/* Progress */}
         <div style={{ display: 'flex', gap: '5px', marginBottom: '28px' }}>
           {Array.from({ length: totalDots }).map((_, i) => (
             <div key={i} style={{
@@ -314,11 +323,14 @@ export default function OnboardingPage() {
                     background: 'none', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: '8px',
                     padding: '9px 18px', fontSize: '13px', color: '#666', cursor: 'pointer',
                   }}>← Nazaj</button>
-                  <button onClick={goNext} disabled={!canNext()} style={{
-                    background: '#0D1F12', color: '#fff', border: 'none', borderRadius: '8px',
-                    padding: '10px 24px', fontSize: '13px', fontWeight: '500', cursor: 'pointer',
-                    opacity: canNext() ? 1 : 0.4,
-                  }}>
+                  <button
+                    onClick={() => { if (canNext()) setStep(s => s + 1) }}
+                    disabled={!canNext()}
+                    style={{
+                      background: '#0D1F12', color: '#fff', border: 'none', borderRadius: '8px',
+                      padding: '10px 24px', fontSize: '13px', fontWeight: '500', cursor: 'pointer',
+                      opacity: canNext() ? 1 : 0.4,
+                    }}>
                     {step === visibleSteps.length - 1 ? 'Prikaži rezultat →' : 'Naprej →'}
                   </button>
                 </div>
@@ -342,9 +354,11 @@ export default function OnboardingPage() {
                     Aktivirali smo <strong>{activeCount} modulov</strong> ki ustrezajo vašemu poslovanju.
                   </div>
                 </div>
+
                 <div style={{ background: '#F7F6F2', borderRadius: '10px', padding: '14px', marginBottom: '16px' }}>
                   <div style={{ fontSize: '11px', fontWeight: '500', color: '#888', marginBottom: '10px', letterSpacing: '.04em' }}>VAŠA KONFIGURACIJA</div>
                   {[
+                    { label: 'Ime podjetja', value: orgName },
                     { label: 'Pravna oblika', value: answers.tip === 'sp' ? 'Samostojni podjetnik' : answers.tip === 'doo' ? 'd.o.o.' : 'Zavod/društvo' },
                     { label: 'DDV', value: answers.ddv === 'yes' ? 'Zavezanec' : answers.ddv === 'soon' ? 'Kmalu zavezanec' : 'Ni zavezanec' },
                     { label: 'Zaposleni', value: finalAnswers.zaposleni === 'yes' ? 'Da' : finalAnswers.zaposleni === 'soon' ? 'Kmalu' : 'Ne' },
@@ -356,6 +370,13 @@ export default function OnboardingPage() {
                     </div>
                   ))}
                 </div>
+
+                {error && (
+                  <div style={{ background: '#FCEBEB', border: '0.5px solid #F7C1C1', borderRadius: '8px', padding: '10px 14px', marginBottom: '12px', fontSize: '12px', color: '#A32D2D' }}>
+                    {error}
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <button onClick={() => setStep(visibleSteps.length - 1)} style={{
                     background: 'none', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: '8px',
