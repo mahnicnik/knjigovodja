@@ -91,7 +91,7 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
         const { data: member } = await supabase
           .from('org_members').select('organizations(*)')
           .eq('user_id', user.id).single()
-        if (member) setOrgData((member as any).organizations)
+        if (member) { setOrgData((member as any).organizations) } else { router.push("/onboarding"); return }
       }
 
       const { data: prefs } = await supabase
