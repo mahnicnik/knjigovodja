@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
 export default function RegisterPage() {
@@ -10,7 +9,7 @@ export default function RegisterPage() {
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const router = useRouter()
+  const [done, setDone] = useState(false)
   const supabase = createClient()
 
   async function handleRegister(e: React.FormEvent) {
@@ -21,9 +20,7 @@ export default function RegisterPage() {
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: { full_name: name }
-      }
+      options: { data: { full_name: name } }
     })
 
     if (error) {
@@ -32,7 +29,32 @@ export default function RegisterPage() {
       return
     }
 
-    router.push('/onboarding')
+    setDone(true)
+  }
+
+  if (done) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 w-full max-w-md text-center">
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>📧</div>
+          <h1 className="text-2xl font-semibold text-gray-900 mb-3">Preverite email</h1>
+          <p className="text-gray-500 text-sm leading-relaxed mb-6">
+            Poslali smo potrditveno sporočilo na <strong>{email}</strong>.
+            Kliknite na link v emailu in se nato prijavite.
+          </p>
+          <a
+            href="/login"
+            className="block w-full bg-gray-900 text-white rounded-xl py-3 text-sm font-medium hover:bg-gray-800 transition-colors text-center"
+            style={{ textDecoration: 'none' }}
+          >
+            Pojdi na prijavo →
+          </a>
+          <p className="text-gray-400 text-xs mt-4">
+            Email ni prišel? Preverite mapo spam.
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -42,7 +64,6 @@ export default function RegisterPage() {
           <h1 className="text-2xl font-semibold text-gray-900">Knjigovodja.si</h1>
           <p className="text-gray-500 mt-2">Ustvarite brezplačni račun</p>
         </div>
-
         <form onSubmit={handleRegister} className="space-y-4">
           <div>
             <label className="text-sm text-gray-600 block mb-1">Ime in priimek</label>
@@ -78,11 +99,9 @@ export default function RegisterPage() {
               className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
             />
           </div>
-
           {error && (
             <p className="text-red-500 text-sm text-center">{error}</p>
           )}
-
           <button
             type="submit"
             disabled={loading}
@@ -91,7 +110,6 @@ export default function RegisterPage() {
             {loading ? 'Ustvarjam račun...' : 'Ustvarite račun'}
           </button>
         </form>
-
         <p className="text-center text-sm text-gray-500 mt-6">
           Že imate račun?{' '}
           <a href="/login" className="text-gray-900 font-medium hover:underline">

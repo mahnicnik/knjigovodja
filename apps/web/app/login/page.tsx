@@ -17,18 +17,31 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
 
-    if (error) {
+    if (signInError) {
       setError('Napačen email ali geslo.')
       setLoading(false)
       return
     }
 
-    router.push('/dashboard')
+    // Preveri ali ima uporabnik organizacijo
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: member } = await supabase
+        .from('org_members')
+        .select('org_id')
+        .eq('user_id', user.id)
+        .single()
+
+      if (member) {
+        router.push('/dashboard')
+      } else {
+        router.push('/onboarding')
+      }
+    } else {
+      router.push('/dashboard')
+    }
   }
 
   return (
