@@ -3,72 +3,116 @@
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import AppLayout from '@/components/AppLayout'
 
 interface Message {
   role: 'user' | 'assistant'
   content: string
+  actions?: Action[]
+}
+
+interface Action {
+  label: string
+  href: string
+  icon: string
 }
 
 const QUICK_QUESTIONS = [
-  'Koliko dohodnine bom plačal letos?',
-  'Kdaj moram oddati DDV obračun?',
-  'Kaj so davčno priznavni stroški?',
-  'Kako izračunam neto plačo zaposlenega?',
-  'Kdaj moram plačati prispevke?',
-  'Kaj je razlika med s.p. in d.o.o.?',
+  { icon: '💰', text: 'Koliko dohodnine bom plačal letos?' },
+  { icon: '📅', text: 'Kdaj moram plačati prispevke?' },
+  { icon: '🧾', text: 'Kateri stroški so davčno priznavni?' },
+  { icon: '📊', text: 'Analiziraj moje poslovanje' },
+  { icon: '🔄', text: 'Ali mi bolj ustreza s.p. ali d.o.o.?' },
+  { icon: '⚠️', text: 'Kaj moram narediti ta mesec?' },
 ]
+
+function getActionsForResponse(text: string): Action[] {
+  const actions: Action[] = []
+  if (text.includes('račun') || text.includes('faktur')) actions.push({ label: 'Nov račun', href: '/invoices/new', icon: '📄' })
+  if (text.includes('strošek') || text.includes('stroški')) actions.push({ label: 'Dodaj strošek', href: '/expenses', icon: '🧾' })
+  if (text.includes('prispevk')) actions.push({ label: 'Plačaj prispevke', href: '/prispevki', icon: '💳' })
+  if (text.includes('DDV') || text.includes('ddv')) actions.push({ label: 'DDV obračun', href: '/ddv', icon: '📊' })
+  if (text.includes('plač') && text.includes('zaposleni')) actions.push({ label: 'Obračun plač', href: '/place', icon: '👥' })
+  if (text.includes('dohodnin')) actions.push({ label: 'Dohodnina', href: '/dohodnina', icon: '💰' })
+  if (text.includes('statistik') || text.includes('analiz')) actions.push({ label: 'Statistika', href: '/statistika', icon: '📈' })
+  return actions.slice(0, 3)
+}
 
 export default function AIPage() {
   const [org, setOrg] = useState<any>(null)
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: 'assistant',
-      content: 'Pozdravljeni! Sem vaš AI računovodja za slovenskega s.p. Vprašajte me karkoli o davkih, DDV, prispevkih, računih ali poslovanju. 💼'
-    }
-  ])
+  const [orgData, setOrgData] = useState<any>(null)
+  const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [stats, setStats] = useState({ revenue: 0, expenses: 0, vatDue: 0 })
+  const [loadingData, setLoadingData] = useState(true)
   const bottomRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
 
-  useEffect(() => {
-    async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: member } = await supabase
-        .from('org_members')
-        .select('organizations(*)')
-        .eq('user_id', user.id)
-        .single()
-      if (member) {
-        const o = (member as any).organizations
-        setOrg(o)
+  useEffect(() => { loadData() }, [])
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
-        // Naloži statistike za kontekst
-        const { data: invoices } = await supabase
-          .from('issued_invoices')
-          .select('amount_net, vat_amount, status')
-          .eq('org_id', o.id)
-        const { data: receipts } = await supabase
-          .from('receipts')
-          .select('amount_net, vat_amount')
-          .eq('org_id', o.id)
+  async function loadData() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
 
-        const revenue = invoices?.filter(i => i.status !== 'draft').reduce((s: number, i: any) => s + Number(i.amount_net), 0) || 0
-        const vatOut = invoices?.filter(i => i.status !== 'draft').reduce((s: number, i: any) => s + Number(i.vat_amount), 0) || 0
-        const vatIn = receipts?.reduce((s: number, r: any) => s + Number(r.vat_amount), 0) || 0
-        const expenses = receipts?.reduce((s: number, r: any) => s + Number(r.amount_net), 0) || 0
+    const { data: member } = await supabase
+      .from('org_members').select('organizations(*)')
+      .eq('user_id', user.id).single()
 
-        setStats({ revenue, expenses, vatDue: vatOut - vatIn })
-      }
+    if (!member) return
+    const o = (member as any).organizations
+    setOrg(o)
+
+    const now = new Date()
+    const year = now.getFullYear()
+    const monthStart = `${year}-01-01`
+    const today = now.toISOString().split('T')[0]
+
+    const [invRes, expRes, empRes] = await Promise.all([
+      supabase.from('issued_invoices').select('amount_net,vat_amount,amount_total,status,due_date').eq('org_id', o.id).neq('status','draft'),
+      supabase.from('receipts').select('amount_net,vat_amount').eq('org_id', o.id),
+      supabase.from('employees').select('id').eq('org_id', o.id).eq('status','active'),
+    ])
+
+    const invoices = invRes.data || []
+    const receipts = expRes.data || []
+    const revenue = invoices.reduce((s: number, i: any) => s + Number(i.amount_net), 0)
+    const expenses = receipts.reduce((s: number, r: any) => s + Number(r.amount_net), 0)
+    const vatOut = invoices.reduce((s: number, i: any) => s + Number(i.vat_amount), 0)
+    const vatIn = receipts.reduce((s: number, r: any) => s + Number(r.vat_amount), 0)
+    const unpaid = invoices.filter((i: any) => i.status === 'sent')
+    const overdue = invoices.filter((i: any) => i.status === 'sent' && i.due_date < today)
+
+    const data = {
+      name: o.name,
+      vat_registered: o.vat_registered,
+      revenue,
+      expenses,
+      vatDue: Math.max(0, vatOut - vatIn),
+      unpaidCount: unpaid.length,
+      unpaidAmount: unpaid.reduce((s: number, i: any) => s + Number(i.amount_total), 0),
+      overdueCount: overdue.length,
+      hasEmployees: (empRes.data || []).length > 0,
     }
-    load()
-  }, [])
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    setOrgData(data)
+
+    // Generiraj personaliziran pozdrav na podlagi podatkov
+    const greetingParts = []
+    if (overdue.length > 0) greetingParts.push(`⚠️ Imate ${overdue.length} računov v zamudi za €${overdue.reduce((s:number,i:any)=>s+Number(i.amount_total),0).toFixed(0)}.`)
+    if (unpaid.length > 0) greetingParts.push(`📬 ${unpaid.length} računov čaka na plačilo (€${unpaid.reduce((s:number,i:any)=>s+Number(i.amount_total),0).toFixed(0)}).`)
+
+    const now2 = new Date()
+    const daysUntil15 = 15 - now2.getDate()
+    if (daysUntil15 >= 0 && daysUntil15 <= 7) greetingParts.push(`⏰ Prispevki zapadejo čez ${daysUntil15} dni.`)
+
+    const greeting = greetingParts.length > 0
+      ? `Pozdravljeni! Vaše stanje:\n\n${greetingParts.join('\n')}\n\nLetni prihodki: €${revenue.toFixed(0)}, odhodki: €${expenses.toFixed(0)}. Vprašajte me karkoli! 💼`
+      : `Pozdravljeni! Vaši letni prihodki so €${revenue.toFixed(0)}, odhodki €${expenses.toFixed(0)}. Dobiček: €${(revenue-expenses).toFixed(0)}. Vprašajte me karkoli o davkih ali poslovanju! 💼`
+
+    setMessages([{ role: 'assistant', content: greeting }])
+    setLoadingData(false)
+  }
 
   async function sendMessage(text?: string) {
     const userMessage = text || input.trim()
@@ -79,142 +123,157 @@ export default function AIPage() {
     setLoading(true)
 
     try {
-      const context = org ? `
-Kontekst o s.p.:
-- Ime: ${org.name}
-- Davčna številka: ${org.tax_number}
-- DDV zavezanec: ${org.vat_registered ? 'Da' : 'Ne'}
-- Kraj: ${org.city}
-- YTD prihodki: €${stats.revenue.toFixed(2)}
-- YTD odhodki: €${stats.expenses.toFixed(2)}
-- DDV dolg: €${stats.vatDue.toFixed(2)}
-- Datum: ${new Date().toLocaleDateString('sl-SI')}
-      ` : ''
-
       const response = await fetch('/api/ai-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [
-            ...messages.slice(1), // Preskoči prvi pozdravni message
-            { role: 'user', content: userMessage }
-          ],
-          context,
+          messages: [...messages.slice(1), { role: 'user', content: userMessage }],
+          orgData,
         }),
       })
 
       const data = await response.json()
-      setMessages(prev => [...prev, { role: 'assistant', content: data.response }])
-    } catch (err) {
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: 'Oprostite, prišlo je do napake. Prosimo poskusite znova.'
-      }])
+      const actions = getActionsForResponse(data.response || '')
+      setMessages(prev => [...prev, { role: 'assistant', content: data.response, actions }])
+    } catch {
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Oprostite, prišlo je do napake. Poskusite znova.' }])
     }
     setLoading(false)
   }
 
+  const now = new Date()
+  const daysUntil15 = 15 - now.getDate()
+  const month = now.getMonth()
+  const ddvMonths = [4,7,10,1]
+
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
-        <div>
-          <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900">← Domov</Link>
-          <h1 className="font-semibold text-gray-900 mt-0.5">AI računovodja</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-green-500"></div>
-          <span className="text-xs text-gray-500">Online</span>
-        </div>
-      </div>
+    <AppLayout org={org}>
+      <div style={{ display:'flex', flexDirection:'column', height:'100vh', maxHeight:'100vh' }}>
 
-      {/* Kontekst strip */}
-      {org && (
-        <div className="bg-blue-50 border-b border-blue-100 px-6 py-2 flex gap-6 text-xs text-blue-700">
-          <span>📊 Prihodki: <strong>€{stats.revenue.toFixed(2)}</strong></span>
-          <span>💸 Odhodki: <strong>€{stats.expenses.toFixed(2)}</strong></span>
-          <span>🧾 DDV dolg: <strong>€{stats.vatDue.toFixed(2)}</strong></span>
+        {/* Header */}
+        <div style={{ background:'#fff', borderBottom:'0.5px solid rgba(0,0,0,0.08)', padding:'14px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+          <div>
+            <div style={{ fontSize:'16px', fontWeight:'500', color:'#0D1F12' }}>🤖 AI računovodja</div>
+            <div style={{ fontSize:'11px', color:'#888', marginTop:'1px' }}>Pozna vaše podatke · Slovensko davčno pravo 2026</div>
+          </div>
+          <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+            <div style={{ width:'6px', height:'6px', borderRadius:'50%', background:'#1D9E75' }}></div>
+            <span style={{ fontSize:'11px', color:'#888' }}>Online</span>
+          </div>
         </div>
-      )}
 
-      {/* Sporočila */}
-      <div className="flex-1 overflow-y-auto px-6 py-6 max-w-3xl mx-auto w-full">
-
-        {/* Hitra vprašanja */}
-        {messages.length === 1 && (
-          <div className="mb-6">
-            <p className="text-xs text-gray-500 mb-3 font-medium">POGOSTA VPRAŠANJA</p>
-            <div className="grid grid-cols-2 gap-2">
-              {QUICK_QUESTIONS.map((q, i) => (
-                <button
-                  key={i}
-                  onClick={() => sendMessage(q)}
-                  className="text-left text-sm bg-white border border-gray-200 rounded-xl px-4 py-3 hover:border-gray-400 hover:bg-gray-50 transition-all"
-                >
-                  {q}
-                </button>
-              ))}
-            </div>
+        {/* Kontekst strip */}
+        {orgData && (
+          <div style={{ background:'#EAF3DE', borderBottom:'0.5px solid rgba(0,0,0,0.06)', padding:'8px 24px', display:'flex', gap:'20px', fontSize:'11px', color:'#27500A', flexShrink:0, flexWrap:'wrap' }}>
+            <span>💰 Prihodki YTD: <strong>€{orgData.revenue?.toFixed(0)}</strong></span>
+            <span>💸 Odhodki: <strong>€{orgData.expenses?.toFixed(0)}</strong></span>
+            <span>📈 Dobiček: <strong>€{((orgData.revenue||0)-(orgData.expenses||0)).toFixed(0)}</strong></span>
+            {orgData.unpaidCount > 0 && <span style={{ color:'#854F0B' }}>⏳ Neplačano: <strong>€{orgData.unpaidAmount?.toFixed(0)}</strong></span>}
+            {orgData.overdueCount > 0 && <span style={{ color:'#A32D2D' }}>⚠️ Zamude: <strong>{orgData.overdueCount}</strong></span>}
+            {daysUntil15 >= 0 && daysUntil15 <= 7 && <span style={{ color:'#854F0B' }}>⏰ Prispevki: <strong>čez {daysUntil15} dni</strong></span>}
+            {ddvMonths.includes(month+1) && orgData.vat_registered && <span style={{ color:'#A32D2D' }}>🔴 <strong>DDV-O ta mesec!</strong></span>}
           </div>
         )}
 
-        {messages.map((msg, i) => (
-          <div key={i} className={`mb-4 flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            {msg.role === 'assistant' && (
-              <div className="w-8 h-8 rounded-full bg-gray-900 flex items-center justify-center text-white text-xs mr-3 flex-shrink-0 mt-0.5">
-                AI
+        {/* Sporočila */}
+        <div style={{ flex:1, overflowY:'auto', padding:'20px 24px' }}>
+          <div style={{ maxWidth:'700px', margin:'0 auto' }}>
+
+            {/* Hitra vprašanja */}
+            {messages.length <= 1 && !loadingData && (
+              <div style={{ marginBottom:'20px' }}>
+                <div style={{ fontSize:'11px', color:'#aaa', marginBottom:'10px', letterSpacing:'.05em' }}>POGOSTA VPRAŠANJA</div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px' }}>
+                  {QUICK_QUESTIONS.map((q, i) => (
+                    <button key={i} onClick={() => sendMessage(q.text)} style={{
+                      textAlign:'left', fontSize:'12px', background:'#fff',
+                      border:'0.5px solid rgba(0,0,0,0.1)', borderRadius:'10px',
+                      padding:'10px 14px', cursor:'pointer', display:'flex', alignItems:'center', gap:'8px',
+                      color:'#0D1F12', transition:'border-color .15s',
+                    }}>
+                      <span style={{ fontSize:'16px' }}>{q.icon}</span>
+                      {q.text}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
-            <div className={`max-w-lg rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-              msg.role === 'user'
-                ? 'bg-gray-900 text-white rounded-tr-sm'
-                : 'bg-white border border-gray-100 text-gray-800 rounded-tl-sm'
-            }`}>
-              {msg.content.split('\n').map((line, j) => (
-                <span key={j}>
-                  {line}
-                  {j < msg.content.split('\n').length - 1 && <br />}
-                </span>
-              ))}
-            </div>
-          </div>
-        ))}
 
-        {loading && (
-          <div className="mb-4 flex justify-start">
-            <div className="w-8 h-8 rounded-full bg-gray-900 flex items-center justify-center text-white text-xs mr-3 flex-shrink-0">
-              AI
-            </div>
-            <div className="bg-white border border-gray-100 rounded-2xl rounded-tl-sm px-4 py-3">
-              <div className="flex gap-1 items-center">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:'0ms'}}></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:'150ms'}}></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:'300ms'}}></div>
+            {/* Sporočila */}
+            {messages.map((msg, i) => (
+              <div key={i} style={{ marginBottom:'16px', display:'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                {msg.role === 'assistant' && (
+                  <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:'#0D1F12', display:'flex', alignItems:'center', justifyContent:'center', color:'#9FE1CB', fontSize:'10px', fontWeight:'600', marginRight:'10px', flexShrink:0, marginTop:'2px' }}>
+                    AI
+                  </div>
+                )}
+                <div style={{ maxWidth:'560px' }}>
+                  <div style={{
+                    borderRadius:'14px', padding:'12px 16px', fontSize:'13px', lineHeight:'1.65',
+                    background: msg.role === 'user' ? '#0D1F12' : '#fff',
+                    color: msg.role === 'user' ? '#fff' : '#0D1F12',
+                    border: msg.role === 'user' ? 'none' : '0.5px solid rgba(0,0,0,0.08)',
+                    borderTopLeftRadius: msg.role === 'assistant' ? '4px' : '14px',
+                    borderTopRightRadius: msg.role === 'user' ? '4px' : '14px',
+                  }}>
+                    {msg.content.split('\n').map((line, j) => (
+                      <span key={j}>{line}{j < msg.content.split('\n').length - 1 && <br />}</span>
+                    ))}
+                  </div>
+                  {/* Predlagane akcije */}
+                  {msg.actions && msg.actions.length > 0 && (
+                    <div style={{ display:'flex', gap:'6px', marginTop:'8px', flexWrap:'wrap' }}>
+                      {msg.actions.map((action, j) => (
+                        <Link key={j} href={action.href} style={{ textDecoration:'none' }}>
+                          <div style={{ fontSize:'11px', padding:'5px 12px', borderRadius:'20px', background:'#EAF3DE', color:'#27500A', border:'0.5px solid rgba(0,0,0,0.08)', cursor:'pointer', display:'flex', alignItems:'center', gap:'5px', fontWeight:'500' }}>
+                            {action.icon} {action.label}
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          </div>
-        )}
-        <div ref={bottomRef} />
-      </div>
+            ))}
 
-      {/* Input */}
-      <div className="bg-white border-t border-gray-100 px-6 py-4">
-        <div className="max-w-3xl mx-auto flex gap-3">
-          <input
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-            placeholder="Vprašajte karkoli o davkih, DDV, prispevkih..."
-            className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
-          />
-          <button
-            onClick={() => sendMessage()}
-            disabled={loading || !input.trim()}
-            className="bg-gray-900 text-white px-5 py-3 rounded-xl text-sm font-medium disabled:opacity-40 hover:bg-gray-800 transition-colors"
-          >
-            Pošlji
-          </button>
+            {loading && (
+              <div style={{ marginBottom:'16px', display:'flex', justifyContent:'flex-start' }}>
+                <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:'#0D1F12', display:'flex', alignItems:'center', justifyContent:'center', color:'#9FE1CB', fontSize:'10px', fontWeight:'600', marginRight:'10px', flexShrink:0 }}>AI</div>
+                <div style={{ background:'#fff', border:'0.5px solid rgba(0,0,0,0.08)', borderRadius:'14px', borderTopLeftRadius:'4px', padding:'12px 16px' }}>
+                  <div style={{ display:'flex', gap:'4px', alignItems:'center' }}>
+                    {[0,150,300].map(d => (
+                      <div key={d} style={{ width:'6px', height:'6px', background:'#ccc', borderRadius:'50%', animation:'bounce 1s infinite', animationDelay:`${d}ms` }} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+        </div>
+
+        {/* Input */}
+        <div style={{ background:'#fff', borderTop:'0.5px solid rgba(0,0,0,0.08)', padding:'14px 24px', flexShrink:0 }}>
+          <div style={{ maxWidth:'700px', margin:'0 auto', display:'flex', gap:'10px' }}>
+            <input
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+              placeholder="Vprašajte karkoli o davkih, DDV, prispevkih..."
+              style={{ flex:1, border:'0.5px solid rgba(0,0,0,0.15)', borderRadius:'10px', padding:'10px 14px', fontSize:'13px', outline:'none', color:'#0D1F12' }}
+            />
+            <button
+              onClick={() => sendMessage()}
+              disabled={loading || !input.trim()}
+              style={{ background:'#0D1F12', color:'#fff', border:'none', borderRadius:'10px', padding:'10px 20px', fontSize:'13px', fontWeight:'500', cursor:'pointer', opacity: (loading || !input.trim()) ? 0.4 : 1 }}
+            >
+              Pošlji
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+
+      <style>{`@keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }`}</style>
+    </AppLayout>
   )
 }
