@@ -17,12 +17,8 @@ const BRACKETS = [
 function r(v: number) { return Math.round(v * 100) / 100 }
 
 function calcPayroll(grossSalary: number, dependents: number = 0, extras: {
-  overtime?: number
-  nightBonus?: number
-  sundayBonus?: number
-  holidayBonus?: number
-  travelAllowance?: number
-  mealAllowance?: number
+  overtime?: number; nightBonus?: number; sundayBonus?: number;
+  holidayBonus?: number; travelAllowance?: number; mealAllowance?: number;
 } = {}) {
   const overtimeAmt = r(grossSalary / 174 * 1.3 * (extras.overtime || 0))
   const nightAmt = r(grossSalary / 174 * 0.3 * (extras.nightBonus || 0))
@@ -30,14 +26,11 @@ function calcPayroll(grossSalary: number, dependents: number = 0, extras: {
   const holidayAmt = r(grossSalary / 174 * 1.0 * (extras.holidayBonus || 0))
   const taxableGross = grossSalary + overtimeAmt + nightAmt + sundayAmt + holidayAmt
   const travelAmt = r((extras.travelAllowance || 0) * 21 * 0.21)
-  const mealAmt = r((extras.mealAllowance || 0) * 0.0)
-
   const ee_piz = r(taxableGross * EE.piz)
   const ee_zzzs = r(taxableGross * EE.zzzs)
   const ee_injury = r(taxableGross * EE.injury)
   const ee_unemployment = r(taxableGross * EE.unemployment)
   const ee_total = r(ee_piz + ee_zzzs + ee_injury + ee_unemployment)
-
   const base = taxableGross - ee_total
   const depRelief = dependents === 0 ? 0 : dependents === 1 ? 2697/12 : dependents === 2 ? 4120/12 : 7780/12
   const taxableBase = Math.max(0, base - GENERAL_RELIEF_MONTHLY - depRelief)
@@ -58,17 +51,23 @@ function calcPayroll(grossSalary: number, dependents: number = 0, extras: {
   const er_unemployment = r(taxableGross * ER.unemployment)
   const er_parental = r(taxableGross * ER.parental)
   const er_total = r(er_piz + er_zzzs + er_injury + er_unemployment + er_parental)
-
   return {
-    baseSalary: grossSalary,
-    overtimeAmt, nightAmt, sundayAmt, holidayAmt,
-    taxableGross, travelAmt,
-    ee_piz, ee_zzzs, ee_injury, ee_unemployment, ee_total,
-    incomeTax, netSalary,
-    er_piz, er_zzzs, er_injury, er_unemployment, er_parental, er_total,
-    totalCost: r(taxableGross + er_total),
-    totalFurs: r(ee_total + incomeTax + er_total),
+    baseSalary: grossSalary, overtimeAmt, nightAmt, sundayAmt, holidayAmt,
+    taxableGross, travelAmt, ee_piz, ee_zzzs, ee_injury, ee_unemployment, ee_total,
+    incomeTax, netSalary, er_piz, er_zzzs, er_injury, er_unemployment, er_parental, er_total,
+    totalCost: r(taxableGross + er_total), totalFurs: r(ee_total + incomeTax + er_total),
   }
+}
+
+// Regres je neobdavčen do minimalne plače, nad tem se obdavči
+function calcRegres(grossSalary: number): { amount: number; taxFree: number; taxable: number; netAmount: number } {
+  const amount = Math.max(MIN_WAGE, grossSalary) // vsaj minimalna plača
+  const taxFree = MIN_WAGE // do minimalne plače neobdavčeno
+  const taxable = Math.max(0, amount - taxFree)
+  // Davek samo na obdavčljivi del (dohodnina ~27% povprečno)
+  const tax = r(taxable * 0.27)
+  const netAmount = r(amount - tax)
+  return { amount, taxFree, taxable, netAmount }
 }
 
 const MONTHS = ['Januar','Februar','Marec','April','Maj','Junij','Julij','Avgust','September','Oktober','November','December']
@@ -83,19 +82,16 @@ export default function PlacePage() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [extras, setExtras] = useState<Record<string, any>>({})
+  const [regresModal, setRegresModal] = useState<any>(null)
+  const [regresIzplacila, setRegresIzplacila] = useState<Record<string, any>>({})
 
   const [calcGross, setCalcGross] = useState('1800')
   const [calcDeps, setCalcDeps] = useState(0)
-  const [calcExtras, setCalcExtras] = useState({
-    overtime: 0, nightBonus: 0, sundayBonus: 0,
-    holidayBonus: 0, travelAllowance: 0, mealAllowance: 0,
-  })
+  const [calcExtras, setCalcExtras] = useState({ overtime: 0, nightBonus: 0, sundayBonus: 0, holidayBonus: 0, travelAllowance: 0, mealAllowance: 0 })
 
   const [form, setForm] = useState({
-    full_name: '', tax_number: '', iban: '',
-    gross_salary: '', employment_type: 'full_time',
-    start_date: new Date().toISOString().split('T')[0],
-    dependents: 0,
+    full_name: '', tax_number: '', iban: '', gross_salary: '',
+    employment_type: 'full_time', start_date: new Date().toISOString().split('T')[0], dependents: 0,
   })
 
   const supabase = createClient()
@@ -105,15 +101,21 @@ export default function PlacePage() {
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    const { data: member } = await supabase
-      .from('org_members').select('organizations(*)')
-      .eq('user_id', user.id).single()
+    const { data: member } = await supabase.from('org_members').select('organizations(*)').eq('user_id', user.id).single()
     if (member) {
       const o = (member as any).organizations
       setOrg(o)
-      const { data } = await supabase.from('employees').select('*')
-        .eq('org_id', o.id).eq('status', 'active')
+      const { data } = await supabase.from('employees').select('*').eq('org_id', o.id).eq('status', 'active')
       setEmployees(data || [])
+      // Naloži regres izplačila za ta leto
+      const { data: regres } = await supabase.from('payslips')
+        .select('*').eq('org_id', o.id).eq('type', 'regres')
+        .gte('period_start', `${new Date().getFullYear()}-01-01`)
+      const regresMap: Record<string, any> = {}
+      for (const r of regres || []) {
+        regresMap[r.employee_id] = r
+      }
+      setRegresIzplacila(regresMap)
     }
     setLoading(false)
   }
@@ -122,15 +124,10 @@ export default function PlacePage() {
     if (!org || !form.full_name || !form.gross_salary) return
     setSaving(true)
     await supabase.from('employees').insert({
-      org_id: org.id,
-      full_name: form.full_name,
-      tax_number: form.tax_number,
-      iban: form.iban,
-      gross_salary: parseFloat(form.gross_salary),
-      employment_type: form.employment_type,
-      start_date: form.start_date,
-      dependents: form.dependents,
-      status: 'active',
+      org_id: org.id, full_name: form.full_name, tax_number: form.tax_number,
+      iban: form.iban, gross_salary: parseFloat(form.gross_salary),
+      employment_type: form.employment_type, start_date: form.start_date,
+      dependents: form.dependents, status: 'active',
     })
     setForm({ full_name: '', tax_number: '', iban: '', gross_salary: '', employment_type: 'full_time', start_date: new Date().toISOString().split('T')[0], dependents: 0 })
     setShowForm(false)
@@ -138,12 +135,118 @@ export default function PlacePage() {
     load()
   }
 
-  function getExtras(empId: string) {
-    return extras[empId] || { overtime: 0, nightBonus: 0, sundayBonus: 0, holidayBonus: 0, travelAllowance: 0, mealAllowance: 0 }
+  async function izplačajRegres(emp: any, amount: number) {
+    if (!org) return
+    const regres = calcRegres(Number(emp.gross_salary))
+    await supabase.from('payslips').insert({
+      org_id: org.id,
+      employee_id: emp.id,
+      type: 'regres',
+      period_start: `${new Date().getFullYear()}-01-01`,
+      period_end: `${new Date().getFullYear()}-07-01`,
+      gross_amount: regres.amount,
+      net_amount: regres.netAmount,
+      tax_amount: r(regres.amount - regres.netAmount),
+      status: 'paid',
+      paid_at: new Date().toISOString(),
+    })
+    setRegresModal(null)
+    load()
   }
 
-  function setEmpExtras(empId: string, field: string, value: number) {
-    setExtras((prev: any) => ({ ...prev, [empId]: { ...getExtras(empId), [field]: value } }))
+  function downloadRegresLista(emp: any) {
+    const regres = calcRegres(Number(emp.gross_salary))
+    const year = new Date().getFullYear()
+    const html = `<!DOCTYPE html>
+<html lang="sl"><head><meta charset="UTF-8">
+<style>
+  body{font-family:Arial,sans-serif;font-size:10px;color:#111;padding:20px 30px;max-width:580px;margin:0 auto}
+  .header{display:flex;justify-content:space-between;margin-bottom:20px;padding-bottom:16px;border-bottom:2px solid #111}
+  .company{font-size:14px;font-weight:bold}
+  .title{font-size:16px;font-weight:bold;text-align:center;margin:16px 0;text-transform:uppercase;letter-spacing:1px}
+  .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+  .info-box{background:#f9f9f9;padding:10px 12px;border-radius:6px}
+  .info-label{font-size:8px;color:#666;text-transform:uppercase;margin-bottom:4px}
+  .info-val{font-size:11px;font-weight:500}
+  table{width:100%;border-collapse:collapse;margin:12px 0}
+  th{background:#111;color:white;padding:6px 10px;font-size:9px;text-align:left}
+  th.r{text-align:right}
+  td{padding:5px 10px;border-bottom:1px solid #f0f0f0;font-size:10px}
+  td.r{text-align:right}
+  .total-row td{font-weight:bold;background:#f5f5f5}
+  .net-box{background:#111;color:white;padding:12px 16px;border-radius:6px;display:flex;justify-content:space-between;align-items:center;margin:12px 0}
+  .legal{background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:10px 12px;margin:12px 0;font-size:9px;color:#92400e}
+  .sign{margin-top:30px;display:flex;justify-content:space-between}
+  .sign-line{border-top:1px solid #111;width:200px;padding-top:4px;font-size:9px;color:#666}
+  .footer{margin-top:20px;font-size:8px;color:#aaa;text-align:center}
+</style></head><body>
+<div class="header">
+  <div>
+    <div class="company">${org.name}</div>
+    <div style="font-size:9px;color:#666;margin-top:4px">${org.address || ''}, ${org.city || ''}<br>Davčna: ${org.tax_number}</div>
+  </div>
+  <div style="text-align:right;font-size:9px;color:#666">Regres za letni dopust<br>${year}</div>
+</div>
+
+<div class="title">Regres za letni dopust ${year}</div>
+
+<div class="info-grid">
+  <div class="info-box">
+    <div class="info-label">Delavec</div>
+    <div class="info-val">${emp.full_name}</div>
+    <div style="font-size:9px;color:#666;margin-top:2px">Davčna: ${emp.tax_number || '—'}</div>
+  </div>
+  <div class="info-box">
+    <div class="info-label">Delodajalec</div>
+    <div class="info-val">${org.name}</div>
+    <div style="font-size:9px;color:#666;margin-top:2px">Davčna: ${org.tax_number}</div>
+  </div>
+  <div class="info-box">
+    <div class="info-label">Datum izplačila</div>
+    <div class="info-val">${new Date().toLocaleDateString('sl-SI')}</div>
+  </div>
+  <div class="info-box">
+    <div class="info-label">Zakonski rok</div>
+    <div class="info-val">1. julij ${year}</div>
+  </div>
+</div>
+
+<div class="legal">
+  ⚖️ Pravna podlaga: 131. člen ZDR-1 — Regres za letni dopust mora biti izplačan najkasneje do 1. julija tekočega leta. Minimalni znesek je enak minimalni plači (€${MIN_WAGE.toFixed(2)}).
+</div>
+
+<table>
+  <thead><tr><th>Postavka</th><th class="r">Znesek</th><th class="r">Opomba</th></tr></thead>
+  <tbody>
+    <tr><td>Regres za letni dopust ${year}</td><td class="r">€${regres.amount.toFixed(2)}</td><td class="r">Bruto znesek</td></tr>
+    <tr><td style="color:#16a34a">Neobdavčeni del (do min. plače)</td><td class="r" style="color:#16a34a">€${regres.taxFree.toFixed(2)}</td><td class="r" style="color:#16a34a">Neobdavčeno</td></tr>
+    ${regres.taxable > 0 ? `<tr><td style="color:#666">Obdavčljivi del</td><td class="r" style="color:#666">€${regres.taxable.toFixed(2)}</td><td class="r" style="color:#666">—</td></tr>
+    <tr><td style="color:#dc2626">− Dohodnina (~27%)</td><td class="r" style="color:#dc2626">−€${r(regres.taxable * 0.27).toFixed(2)}</td><td class="r" style="color:#dc2626">Akontacija</td></tr>` : ''}
+  </tbody>
+</table>
+
+<div class="net-box">
+  <span style="font-size:13px">NETO IZPLAČILO</span>
+  <span style="font-size:18px;font-weight:bold">€${regres.netAmount.toFixed(2)}</span>
+</div>
+
+${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 12px;margin:8px 0;font-size:10px">
+  <strong>Nakazilo na:</strong> ${emp.iban}
+</div>` : ''}
+
+<div class="sign">
+  <div><div class="sign-line">${org.name}</div><div style="font-size:9px;color:#666">Delodajalec — podpis in žig</div></div>
+  <div><div class="sign-line">${emp.full_name}</div><div style="font-size:9px;color:#666">Delavec — podpis</div></div>
+</div>
+
+<div class="footer">Dokument je bil generiran z Knjigovodja.si · ${org.name} · ${year}</div>
+<script>window.onload=function(){window.print()}</script>
+</body></html>`
+
+    const w = window.open('', '_blank')
+    if (!w) return
+    w.document.write(html)
+    w.document.close()
   }
 
   function downloadPlacilnaLista(emp: any) {
@@ -172,38 +275,18 @@ export default function PlacePage() {
   .footer{margin-top:20px;font-size:8px;color:#aaa;text-align:center}
 </style></head><body>
 <div class="header">
-  <div>
-    <div class="company">${org.name}</div>
+  <div><div class="company">${org.name}</div>
     <div style="font-size:9px;color:#666;margin-top:4px">${org.address || ''}, ${org.city || ''}<br>Davčna: ${org.tax_number}</div>
   </div>
-  <div style="text-align:right;font-size:9px;color:#666">
-    Plačilna lista<br>${month} ${selectedYear}
-  </div>
+  <div style="text-align:right;font-size:9px;color:#666">Plačilna lista<br>${month} ${selectedYear}</div>
 </div>
-
 <div class="title">Plačilna lista — ${month} ${selectedYear}</div>
-
 <div class="info-grid">
-  <div class="info-box">
-    <div class="info-label">Delavec</div>
-    <div class="info-val">${emp.full_name}</div>
-    <div style="font-size:9px;color:#666;margin-top:2px">Davčna: ${emp.tax_number || '—'}</div>
-  </div>
-  <div class="info-box">
-    <div class="info-label">Delodajalec</div>
-    <div class="info-val">${org.name}</div>
-    <div style="font-size:9px;color:#666;margin-top:2px">Davčna: ${org.tax_number}</div>
-  </div>
-  <div class="info-box">
-    <div class="info-label">Vrsta zaposlitve</div>
-    <div class="info-val">${emp.employment_type === 'full_time' ? 'Polni delovni čas' : emp.employment_type === 'part_time' ? 'Krajši delovni čas' : 'Študentsko delo'}</div>
-  </div>
-  <div class="info-box">
-    <div class="info-label">Datum izplačila</div>
-    <div class="info-val">${new Date().toLocaleDateString('sl-SI')}</div>
-  </div>
+  <div class="info-box"><div class="info-label">Delavec</div><div class="info-val">${emp.full_name}</div><div style="font-size:9px;color:#666;margin-top:2px">Davčna: ${emp.tax_number || '—'}</div></div>
+  <div class="info-box"><div class="info-label">Delodajalec</div><div class="info-val">${org.name}</div><div style="font-size:9px;color:#666;margin-top:2px">Davčna: ${org.tax_number}</div></div>
+  <div class="info-box"><div class="info-label">Vrsta zaposlitve</div><div class="info-val">${emp.employment_type === 'full_time' ? 'Polni delovni čas' : emp.employment_type === 'part_time' ? 'Krajši delovni čas' : 'Študentsko delo'}</div></div>
+  <div class="info-box"><div class="info-label">Datum izplačila</div><div class="info-val">${new Date().toLocaleDateString('sl-SI')}</div></div>
 </div>
-
 <table>
   <thead><tr><th>Postavka</th><th class="r">Osnova</th><th class="r">Znesek</th></tr></thead>
   <tbody>
@@ -221,12 +304,7 @@ export default function PlacePage() {
     ${p.travelAmt > 0 ? `<tr><td style="color:#16a34a">+ Potni stroški</td><td class="r" style="color:#16a34a">—</td><td class="r" style="color:#16a34a">+€${p.travelAmt.toFixed(2)}</td></tr>` : ''}
   </tbody>
 </table>
-
-<div class="net-box">
-  <span style="font-size:13px">NETO IZPLAČILO</span>
-  <span style="font-size:18px;font-weight:bold">€${p.netSalary.toFixed(2)}</span>
-</div>
-
+<div class="net-box"><span style="font-size:13px">NETO IZPLAČILO</span><span style="font-size:18px;font-weight:bold">€${p.netSalary.toFixed(2)}</span></div>
 <table>
   <thead><tr><th>Prispevki delodajalca</th><th class="r">Stopnja</th><th class="r">Znesek</th></tr></thead>
   <tbody>
@@ -237,24 +315,31 @@ export default function PlacePage() {
     <tr class="total-row"><td>Skupni strošek delodajalca</td><td class="r">—</td><td class="r">€${p.totalCost.toFixed(2)}</td></tr>
   </tbody>
 </table>
-
 <div class="sign">
   <div><div class="sign-line">${org.name}</div><div style="font-size:9px;color:#666">Delodajalec</div></div>
   <div><div class="sign-line">${emp.full_name}</div><div style="font-size:9px;color:#666">Delavec</div></div>
 </div>
-
 <div class="footer">Plačilna lista je bila generirana z Knjigovodja.si · ${org.name} · ${new Date().getFullYear()}</div>
 <script>window.onload=function(){window.print()}</script>
 </body></html>`
-
     const w = window.open('', '_blank')
     if (!w) return
     w.document.write(html)
     w.document.close()
   }
 
+  function getExtras(empId: string) {
+    return extras[empId] || { overtime: 0, nightBonus: 0, sundayBonus: 0, holidayBonus: 0, travelAllowance: 0, mealAllowance: 0 }
+  }
+  function setEmpExtras(empId: string, field: string, value: number) {
+    setExtras((prev: any) => ({ ...prev, [empId]: { ...getExtras(empId), [field]: value } }))
+  }
+
   const gross = parseFloat(calcGross) || 0
   const calcResult = gross >= MIN_WAGE ? calcPayroll(gross, calcDeps, calcExtras) : null
+  const now = new Date()
+  const daysToJuly = Math.ceil((new Date(now.getFullYear(), 6, 1).getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+  const showRegresAlert = employees.length > 0 && daysToJuly > 0 && daysToJuly <= 60
 
   if (loading) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -269,26 +354,16 @@ export default function PlacePage() {
           <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900">← Domov</Link>
           <h1 className="font-semibold text-gray-900 mt-0.5">Plače in zaposleni</h1>
         </div>
-        <div className="flex gap-2">
-          <select value={selectedMonth} onChange={e => setSelectedMonth(parseInt(e.target.value))}
-            className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none">
+        <div className="flex gap-2 flex-wrap">
+          <select value={selectedMonth} onChange={e => setSelectedMonth(parseInt(e.target.value))} className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none">
             {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
           </select>
-          <select value={selectedYear} onChange={e => setSelectedYear(parseInt(e.target.value))}
-            className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none">
+          <select value={selectedYear} onChange={e => setSelectedYear(parseInt(e.target.value))} className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none">
             {[2024,2025,2026,2027].map(y => <option key={y}>{y}</option>)}
           </select>
-          <button onClick={() => setShowCalc(!showCalc)}
-            className="border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm">
-            🧮 Kalkulator
-          </button>
-          <Link href="/rek1" className="border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm">
-            📋 REK-1
-          </Link>
-          <button onClick={() => setShowForm(!showForm)}
-            className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium">
-            + Dodaj zaposlenega
-          </button>
+          <button onClick={() => setShowCalc(!showCalc)} className="border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm">🧮 Kalkulator</button>
+          <Link href="/rek1" className="border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm">📋 REK-1</Link>
+          <button onClick={() => setShowForm(!showForm)} className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium">+ Dodaj zaposlenega</button>
         </div>
       </div>
 
@@ -299,157 +374,93 @@ export default function PlacePage() {
           <div className="bg-white rounded-2xl border border-gray-900 p-6 mb-6">
             <h3 className="font-medium text-gray-900 mb-4">Kalkulator bruto → neto</h3>
             <div className="grid grid-cols-3 gap-4 mb-4">
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Bruto plača (€)</label>
-                <input type="number" value={calcGross} onChange={e => setCalcGross(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Vzdrževani otroci</label>
-                <select value={calcDeps} onChange={e => setCalcDeps(parseInt(e.target.value))}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none">
-                  <option value={0}>Brez</option>
-                  <option value={1}>1 otrok</option>
-                  <option value={2}>2 otroka</option>
-                  <option value={3}>3+</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Nadure (št. ur)</label>
-                <input type="number" value={calcExtras.overtime}
-                  onChange={e => setCalcExtras({...calcExtras, overtime: parseFloat(e.target.value)||0})}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Nočno delo (ur)</label>
-                <input type="number" value={calcExtras.nightBonus}
-                  onChange={e => setCalcExtras({...calcExtras, nightBonus: parseFloat(e.target.value)||0})}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Nedeljsko delo (ur)</label>
-                <input type="number" value={calcExtras.sundayBonus}
-                  onChange={e => setCalcExtras({...calcExtras, sundayBonus: parseFloat(e.target.value)||0})}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Praznično delo (ur)</label>
-                <input type="number" value={calcExtras.holidayBonus}
-                  onChange={e => setCalcExtras({...calcExtras, holidayBonus: parseFloat(e.target.value)||0})}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Prevoz (dni)</label>
-                <input type="number" value={calcExtras.travelAllowance}
-                  onChange={e => setCalcExtras({...calcExtras, travelAllowance: parseFloat(e.target.value)||0})}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none" />
-              </div>
+              {[
+                { label:'Bruto plača (€)', val:calcGross, set:(v:string)=>setCalcGross(v), type:'number' },
+              ].map((f,i) => (
+                <div key={i}><label className="text-xs text-gray-500 block mb-1">{f.label}</label>
+                  <input type={f.type} value={f.val} onChange={e=>f.set(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" /></div>
+              ))}
+              <div><label className="text-xs text-gray-500 block mb-1">Vzdrževani otroci</label>
+                <select value={calcDeps} onChange={e=>setCalcDeps(parseInt(e.target.value))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none">
+                  <option value={0}>Brez</option><option value={1}>1 otrok</option><option value={2}>2 otroka</option><option value={3}>3+</option>
+                </select></div>
+              <div><label className="text-xs text-gray-500 block mb-1">Nadure (ur)</label>
+                <input type="number" value={calcExtras.overtime} onChange={e=>setCalcExtras({...calcExtras,overtime:parseFloat(e.target.value)||0})} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none" /></div>
             </div>
-
             {calcResult && (
               <div className="bg-gray-900 rounded-xl p-4 text-white">
                 <div className="grid grid-cols-3 gap-4 text-center">
-                  <div>
-                    <div className="text-xs text-gray-400 mb-1">Delavec dobi</div>
-                    <div className="text-2xl font-semibold text-green-400">€{calcResult.netSalary.toFixed(2)}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-400 mb-1">Skupaj FURS</div>
-                    <div className="text-2xl font-semibold text-orange-400">€{calcResult.totalFurs.toFixed(2)}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-400 mb-1">Vaš strošek</div>
-                    <div className="text-2xl font-semibold">€{calcResult.totalCost.toFixed(2)}</div>
-                  </div>
+                  <div><div className="text-xs text-gray-400 mb-1">Delavec dobi</div><div className="text-2xl font-semibold text-green-400">€{calcResult.netSalary.toFixed(2)}</div></div>
+                  <div><div className="text-xs text-gray-400 mb-1">Skupaj FURS</div><div className="text-2xl font-semibold text-orange-400">€{calcResult.totalFurs.toFixed(2)}</div></div>
+                  <div><div className="text-xs text-gray-400 mb-1">Vaš strošek</div><div className="text-2xl font-semibold">€{calcResult.totalCost.toFixed(2)}</div></div>
                 </div>
               </div>
             )}
           </div>
         )}
 
-        {/* Forma za novega zaposlenega */}
+        {/* Nova zaposlitev forma */}
         {showForm && (
           <div className="bg-white rounded-2xl border border-gray-900 p-6 mb-6">
             <h3 className="font-medium text-gray-900 mb-4">Dodaj zaposlenega</h3>
             <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Ime in priimek *</label>
-                <input value={form.full_name} onChange={e => setForm({...form, full_name: e.target.value})}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Davčna številka</label>
-                <input value={form.tax_number} onChange={e => setForm({...form, tax_number: e.target.value})}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Bruto plača (€) *</label>
-                <input type="number" value={form.gross_salary} onChange={e => setForm({...form, gross_salary: e.target.value})}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">IBAN delavca</label>
-                <input value={form.iban} onChange={e => setForm({...form, iban: e.target.value})}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Tip zaposlitve</label>
-                <select value={form.employment_type} onChange={e => setForm({...form, employment_type: e.target.value})}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none">
-                  <option value="full_time">Polni delovni čas</option>
-                  <option value="part_time">Skrajšan delovni čas</option>
-                  <option value="student">Študentsko delo</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Vzdrževani otroci</label>
-                <select value={form.dependents} onChange={e => setForm({...form, dependents: parseInt(e.target.value)})}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none">
-                  <option value={0}>Brez</option>
-                  <option value={1}>1 otrok</option>
-                  <option value={2}>2 otroka</option>
-                  <option value={3}>3+</option>
-                </select>
-              </div>
+              {[
+                { label:'Ime in priimek *', key:'full_name', type:'text' },
+                { label:'Davčna številka', key:'tax_number', type:'text' },
+                { label:'Bruto plača (€) *', key:'gross_salary', type:'number' },
+                { label:'IBAN delavca', key:'iban', type:'text' },
+              ].map(f => (
+                <div key={f.key}><label className="text-xs text-gray-500 block mb-1">{f.label}</label>
+                  <input type={f.type} value={(form as any)[f.key]} onChange={e=>setForm({...form,[f.key]:e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" /></div>
+              ))}
+              <div><label className="text-xs text-gray-500 block mb-1">Tip zaposlitve</label>
+                <select value={form.employment_type} onChange={e=>setForm({...form,employment_type:e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none">
+                  <option value="full_time">Polni delovni čas</option><option value="part_time">Skrajšan delovni čas</option><option value="student">Študentsko delo</option>
+                </select></div>
+              <div><label className="text-xs text-gray-500 block mb-1">Vzdrževani otroci</label>
+                <select value={form.dependents} onChange={e=>setForm({...form,dependents:parseInt(e.target.value)})} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none">
+                  <option value={0}>Brez</option><option value={1}>1 otrok</option><option value={2}>2 otroka</option><option value={3}>3+</option>
+                </select></div>
             </div>
             <div className="flex gap-3">
-              <button onClick={handleAddEmployee} disabled={saving || !form.full_name || !form.gross_salary}
-                className="flex-1 bg-gray-900 text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-40">
+              <button onClick={handleAddEmployee} disabled={saving||!form.full_name||!form.gross_salary} className="flex-1 bg-gray-900 text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-40">
                 {saving ? 'Shranjujem...' : 'Dodaj zaposlenega'}
               </button>
-              <button onClick={() => setShowForm(false)}
-                className="border border-gray-200 rounded-xl px-6 py-2.5 text-sm">Prekliči</button>
+              <button onClick={() => setShowForm(false)} className="border border-gray-200 rounded-xl px-6 py-2.5 text-sm">Prekliči</button>
             </div>
           </div>
         )}
 
         {/* Regres opomnik */}
-        {new Date().getMonth() >= 3 && new Date().getMonth() <= 5 && employees.length > 0 && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 mb-6">
-            <div className="font-medium text-yellow-800 text-sm mb-1">💰 Opomnik: Regres za letni dopust</div>
-            <div className="text-yellow-700 text-xs">
-              Regres mora biti izplačan do <strong>1. julija</strong>.
-              Minimalni znesek = minimalna plača <strong>€{MIN_WAGE.toFixed(2)}</strong>.
-              Za vsakega zaposlenega posebej.
+        {showRegresAlert && (
+          <div style={{ background:'#FFFBEB', border:'1px solid #FDE68A', borderRadius:'12px', padding:'14px 18px', marginBottom:'20px', display:'flex', alignItems:'flex-start', gap:'12px' }}>
+            <div style={{ fontSize:'20px', flexShrink:0 }}>💰</div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:'13px', fontWeight:'500', color:'#92400E', marginBottom:'4px' }}>
+                Regres za letni dopust — rok čez <strong>{daysToJuly} dni</strong> (1. julij)
+              </div>
+              <div style={{ fontSize:'12px', color:'#92400E' }}>
+                Minimalni znesek: <strong>€{MIN_WAGE.toFixed(2)}</strong> za vsakega zaposlenega.
+                {Object.keys(regresIzplacila).length > 0 && ` Izplačano: ${Object.keys(regresIzplacila).length}/${employees.length} zaposlenih.`}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Seznam zaposlenih */}
+        {/* Zaposleni */}
         {employees.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
             <div className="text-4xl mb-4">👥</div>
             <h3 className="font-semibold text-gray-900 mb-2">Še ni zaposlenih</h3>
-            <button onClick={() => setShowForm(true)}
-              className="bg-gray-900 text-white px-6 py-3 rounded-xl text-sm font-medium mt-4">
-              + Dodaj prvega zaposlenega
-            </button>
+            <button onClick={() => setShowForm(true)} className="bg-gray-900 text-white px-6 py-3 rounded-xl text-sm font-medium mt-4">+ Dodaj prvega zaposlenega</button>
           </div>
         ) : (
           <div className="space-y-6">
             {employees.map(emp => {
               const empExtras = getExtras(emp.id)
               const p = calcPayroll(Number(emp.gross_salary), emp.dependents || 0, empExtras)
+              const regres = calcRegres(Number(emp.gross_salary))
+              const regresIzplacen = !!regresIzplacila[emp.id]
 
               return (
                 <div key={emp.id} className="bg-white rounded-2xl border border-gray-100 p-6">
@@ -461,30 +472,39 @@ export default function PlacePage() {
                         {emp.tax_number && ` · ${emp.tax_number}`}
                       </div>
                     </div>
-                    <button onClick={() => downloadPlacilnaLista(emp)}
-                      className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium">
-                      📄 Plačilna lista
-                    </button>
+                    <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
+                      {/* Regres gumb */}
+                      <button
+                        onClick={() => setRegresModal({ emp, regres })}
+                        style={{
+                          fontSize:'12px', padding:'6px 12px', borderRadius:'10px', cursor:'pointer', border:'none', fontWeight:'500',
+                          background: regresIzplacen ? '#EAF3DE' : '#FFFBEB',
+                          color: regresIzplacen ? '#27500A' : '#92400E',
+                        }}
+                      >
+                        {regresIzplacen ? '✓ Regres izplačan' : '💰 Regres'}
+                      </button>
+                      <button onClick={() => downloadPlacilnaLista(emp)} className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium">
+                        📄 Plačilna lista
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Dodatki za ta mesec */}
+                  {/* Dodatki */}
                   <div className="bg-gray-50 rounded-xl p-4 mb-4">
                     <div className="text-xs font-medium text-gray-500 mb-3 uppercase">Dodatki za {MONTHS[selectedMonth]}</div>
                     <div className="grid grid-cols-3 gap-3">
                       {[
-                        { key: 'overtime', label: 'Nadure (ur)', placeholder: '0' },
-                        { key: 'nightBonus', label: 'Nočno delo (ur)', placeholder: '0' },
-                        { key: 'sundayBonus', label: 'Nedelja (ur)', placeholder: '0' },
-                        { key: 'holidayBonus', label: 'Praznik (ur)', placeholder: '0' },
-                        { key: 'travelAllowance', label: 'Prevoz (dni)', placeholder: '0' },
+                        { key:'overtime', label:'Nadure (ur)' },
+                        { key:'nightBonus', label:'Nočno delo (ur)' },
+                        { key:'sundayBonus', label:'Nedelja (ur)' },
+                        { key:'holidayBonus', label:'Praznik (ur)' },
+                        { key:'travelAllowance', label:'Prevoz (dni)' },
                       ].map(field => (
                         <div key={field.key}>
                           <label className="text-xs text-gray-500 block mb-1">{field.label}</label>
-                          <input type="number" min="0"
-                            value={empExtras[field.key] || ''}
-                            onChange={e => setEmpExtras(emp.id, field.key, parseFloat(e.target.value)||0)}
-                            placeholder={field.placeholder}
-                            className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none" />
+                          <input type="number" min="0" value={empExtras[field.key] || ''} onChange={e => setEmpExtras(emp.id, field.key, parseFloat(e.target.value)||0)}
+                            placeholder="0" className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none" />
                         </div>
                       ))}
                     </div>
@@ -517,30 +537,73 @@ export default function PlacePage() {
               <div className="bg-gray-900 rounded-2xl p-5 text-white">
                 <div className="text-sm text-gray-400 mb-3">Skupaj {MONTHS[selectedMonth]} {selectedYear}</div>
                 <div className="grid grid-cols-3 gap-4 text-center">
-                  <div>
-                    <div className="text-xs text-gray-400 mb-1">Neto izplačilo</div>
-                    <div className="text-xl font-semibold text-green-400">
-                      €{employees.reduce((s, e) => s + calcPayroll(Number(e.gross_salary), e.dependents||0, getExtras(e.id)).netSalary, 0).toFixed(2)}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-400 mb-1">Skupaj FURS</div>
-                    <div className="text-xl font-semibold text-orange-400">
-                      €{employees.reduce((s, e) => s + calcPayroll(Number(e.gross_salary), e.dependents||0, getExtras(e.id)).totalFurs, 0).toFixed(2)}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-400 mb-1">Skupaj strošek</div>
-                    <div className="text-xl font-semibold">
-                      €{employees.reduce((s, e) => s + calcPayroll(Number(e.gross_salary), e.dependents||0, getExtras(e.id)).totalCost, 0).toFixed(2)}
-                    </div>
-                  </div>
+                  <div><div className="text-xs text-gray-400 mb-1">Neto izplačilo</div><div className="text-xl font-semibold text-green-400">€{employees.reduce((s,e)=>s+calcPayroll(Number(e.gross_salary),e.dependents||0,getExtras(e.id)).netSalary,0).toFixed(2)}</div></div>
+                  <div><div className="text-xs text-gray-400 mb-1">Skupaj FURS</div><div className="text-xl font-semibold text-orange-400">€{employees.reduce((s,e)=>s+calcPayroll(Number(e.gross_salary),e.dependents||0,getExtras(e.id)).totalFurs,0).toFixed(2)}</div></div>
+                  <div><div className="text-xs text-gray-400 mb-1">Skupaj strošek</div><div className="text-xl font-semibold">€{employees.reduce((s,e)=>s+calcPayroll(Number(e.gross_salary),e.dependents||0,getExtras(e.id)).totalCost,0).toFixed(2)}</div></div>
                 </div>
               </div>
             )}
           </div>
         )}
       </div>
+
+      {/* REGRES MODAL */}
+      {regresModal && (
+        <div onClick={e => { if (e.target === e.currentTarget) setRegresModal(null) }}
+          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:'16px' }}>
+          <div style={{ background:'#fff', borderRadius:'16px', width:'100%', maxWidth:'420px', overflow:'hidden' }}>
+            <div style={{ background:'#FFFBEB', padding:'20px 24px', borderBottom:'0.5px solid #FDE68A' }}>
+              <div style={{ fontSize:'16px', fontWeight:'500', color:'#92400E', marginBottom:'4px' }}>💰 Regres za letni dopust</div>
+              <div style={{ fontSize:'12px', color:'#A16207' }}>{regresModal.emp.full_name} · {new Date().getFullYear()}</div>
+            </div>
+            <div style={{ padding:'20px 24px' }}>
+              <div style={{ display:'flex', flexDirection:'column', gap:'10px', marginBottom:'20px' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px', padding:'8px 0', borderBottom:'0.5px solid #f5f5f5' }}>
+                  <span style={{ color:'#666' }}>Bruto plača zaposlenega</span>
+                  <span style={{ fontWeight:'500' }}>€{Number(regresModal.emp.gross_salary).toFixed(2)}</span>
+                </div>
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px', padding:'8px 0', borderBottom:'0.5px solid #f5f5f5' }}>
+                  <span style={{ color:'#666' }}>Minimalni regres (= min. plača)</span>
+                  <span style={{ fontWeight:'500' }}>€{MIN_WAGE.toFixed(2)}</span>
+                </div>
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px', padding:'8px 0', borderBottom:'0.5px solid #f5f5f5' }}>
+                  <span style={{ color:'#16a34a' }}>Neobdavčeni del</span>
+                  <span style={{ color:'#16a34a', fontWeight:'500' }}>€{regresModal.regres.taxFree.toFixed(2)}</span>
+                </div>
+                {regresModal.regres.taxable > 0 && (
+                  <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px', padding:'8px 0', borderBottom:'0.5px solid #f5f5f5' }}>
+                    <span style={{ color:'#dc2626' }}>Dohodnina (~27%)</span>
+                    <span style={{ color:'#dc2626', fontWeight:'500' }}>−€{r(regresModal.regres.taxable * 0.27).toFixed(2)}</span>
+                  </div>
+                )}
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:'15px', padding:'10px 14px', background:'#0D1F12', borderRadius:'10px', marginTop:'4px' }}>
+                  <span style={{ color:'rgba(255,255,255,0.7)' }}>Neto izplačilo</span>
+                  <span style={{ color:'#9FE1CB', fontWeight:'500' }}>€{regresModal.regres.netAmount.toFixed(2)}</span>
+                </div>
+              </div>
+              <div style={{ background:'#EAF3DE', borderRadius:'8px', padding:'10px 12px', marginBottom:'16px', fontSize:'11px', color:'#27500A' }}>
+                ⚖️ Zakonski rok: <strong>1. julij {new Date().getFullYear()}</strong> · Pravna podlaga: 131. člen ZDR-1
+              </div>
+              <div style={{ display:'flex', gap:'10px' }}>
+                <button onClick={() => downloadRegresLista(regresModal.emp)} style={{ flex:1, padding:'10px', borderRadius:'10px', border:'0.5px solid rgba(0,0,0,0.1)', background:'#fff', fontSize:'13px', cursor:'pointer', color:'#0D1F12' }}>
+                  📄 Natisni listo
+                </button>
+                {!regresIzplacila[regresModal.emp.id] && (
+                  <button onClick={() => izplačajRegres(regresModal.emp, regresModal.regres.amount)} style={{ flex:1, padding:'10px', borderRadius:'10px', border:'none', background:'#1D9E75', color:'#fff', fontSize:'13px', fontWeight:'500', cursor:'pointer' }}>
+                    ✓ Označi kot izplačan
+                  </button>
+                )}
+                {regresIzplacila[regresModal.emp.id] && (
+                  <div style={{ flex:1, padding:'10px', borderRadius:'10px', background:'#EAF3DE', color:'#27500A', fontSize:'13px', fontWeight:'500', textAlign:'center' }}>
+                    ✓ Že izplačano
+                  </div>
+                )}
+              </div>
+              <button onClick={() => setRegresModal(null)} style={{ width:'100%', marginTop:'8px', padding:'8px', border:'none', background:'none', color:'#888', fontSize:'12px', cursor:'pointer' }}>Zapri</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
