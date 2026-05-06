@@ -1,5 +1,5 @@
 'use client'
-
+import LegalUpdatesWidget from '@/components/LegalUpdatesWidget'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
@@ -373,7 +373,7 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-      )}
+      )} 
     </AppLayout>
   )
 }
