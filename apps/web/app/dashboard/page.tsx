@@ -373,7 +373,13 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-      )} 
-    </AppLayout>
+  )}
+
+  {/* Zakonske novosti */}
+  <div style={{ padding:'0 24px 24px' }}>
+    <LegalUpdatesWidget />
+  </div>
+
+</AppLayout>
   )
 }
