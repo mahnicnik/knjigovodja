@@ -135,7 +135,33 @@ export default function InvoicesPage() {
     const dueFormatted = new Date(inv.due_date).toISOString().slice(0,10).replace(/-/g,'')
     const iban = (org.iban || '').replace(/\s/g, '')
     const reference = (inv.reference || `SI00${inv.invoice_number}`).replace(/\s/g,'')
-    const upnData = ['UPNQR','','','',org.name,org.address||'',`${org.post_code||''} ${org.city||''}`,amount,dueFormatted,'OTHR',`Plačilo računa ${inv.invoice_number}`,iban,reference,inv.client_name,'',''].join('\n')
+    // UPN QR — točen format po slovenski specifikaciji (19 polj)
+const namen = `Plačilo računa ${inv.invoice_number}`.slice(0, 42)
+const dueDD = new Date(inv.due_date)
+const rokPlacila = `${String(dueDD.getDate()).padStart(2,'0')}${String(dueDD.getMonth()+1).padStart(2,'0')}${dueDD.getFullYear()}`
+
+const upnFields = [
+  'UPNQR',           // 1. oznaka
+  '',                // 2. IBAN plačnika (prazno)
+  '',                // 3. koda namena plačnika (prazno)
+  '',                // 4. nujno (prazno)
+  inv.client_name.slice(0, 33),  // 5. ime plačnika
+  '',                // 6. ulica plačnika (prazno)
+  '',                // 7. kraj plačnika (prazno)
+  amount,            // 8. znesek v centih, 11 znakov
+  '',                // 9. datum valute (prazno)
+  'OTHR',            // 10. koda namena
+  namen,             // 11. namen plačila
+  rokPlacila,        // 12. rok plačila DDMMLLLL
+  iban,              // 13. IBAN prejemnika (brez presledkov)
+  reference,         // 14. referenca SI00...
+  org.name.slice(0, 33),  // 15. ime prejemnika
+  (org.address || '').slice(0, 33),  // 16. ulica prejemnika
+  `${org.post_code || ''} ${org.city || ''}`.slice(0, 33),  // 17. kraj prejemnika
+  '',                // 18. BIC (prazno)
+  '',                // 19. kontrolna vsota (prazno)
+]
+const upnData = upnFields.join('\n')
     const qrDataUrl = await QRCode.toDataURL(upnData, { width: 120, margin: 1 })
     const isStorno = inv.amount_total < 0
     const isDobropis = inv.invoice_number?.includes('-D')
