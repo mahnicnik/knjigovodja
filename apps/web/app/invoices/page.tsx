@@ -136,33 +136,43 @@ export default function InvoicesPage() {
     const iban = (org.iban || '').replace(/\s/g, '')
     const reference = (inv.reference || `SI00${inv.invoice_number}`).replace(/\s/g,'')
     // UPN QR — točen format po slovenski specifikaciji (19 polj)
-const namen = `Plačilo računa ${inv.invoice_number}`.slice(0, 42)
-const dueDD = new Date(inv.due_date)
-const rokPlacila = `${String(dueDD.getDate()).padStart(2,'0')}${String(dueDD.getMonth()+1).padStart(2,'0')}${dueDD.getFullYear()}`
+// ── UPN QR — točen format ZBS (20 polj) ──────────────────
+function upnDate(dateStr: string): string {
+  const d = new Date(dateStr)
+  return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`
+}
+
+const namen = `Placilo racuna ${inv.invoice_number}`.slice(0, 42)
+const ibanClean = (org.iban || '').replace(/\s/g, '')
+const refClean = (inv.reference || `SI00 ${inv.invoice_number}`).replace(/\s/g, '')
 
 const upnFields = [
-  'UPNQR',           // 1. oznaka
-  '',                // 2. IBAN plačnika (prazno)
-  '',                // 3. koda namena plačnika (prazno)
-  '',                // 4. nujno (prazno)
-  inv.client_name.slice(0, 33),  // 5. ime plačnika
-  '',                // 6. ulica plačnika (prazno)
-  '',                // 7. kraj plačnika (prazno)
-  amount,            // 8. znesek v centih, 11 znakov
-  '',                // 9. datum valute (prazno)
-  'OTHR',            // 10. koda namena
-  namen,             // 11. namen plačila
-  rokPlacila,        // 12. rok plačila DDMMLLLL
-  iban,              // 13. IBAN prejemnika (brez presledkov)
-  reference,         // 14. referenca SI00...
-  org.name.slice(0, 33),  // 15. ime prejemnika
-  (org.address || '').slice(0, 33),  // 16. ulica prejemnika
-  `${org.post_code || ''} ${org.city || ''}`.slice(0, 33),  // 17. kraj prejemnika
-  '',                // 18. BIC (prazno)
-  '',                // 19. kontrolna vsota (prazno)
+  'UPNQR',                                          // 1
+  '',                                                // 2  IBAN plačnika
+  '',                                                // 3  Polog
+  '',                                                // 4  Dvig
+  '',                                                // 5  Referenca plačnika
+  inv.client_name.slice(0, 33),                      // 6  Ime plačnika
+  '',                                                // 7  Ulica plačnika
+  '',                                                // 8  Kraj plačnika
+  amount,                                            // 9  Znesek (centi, 11 znakov)
+  '',                                                // 10 Datum plačila
+  '',                                                // 11 Nujno
+  'OTHR',                                            // 12 Koda namena
+  namen,                                             // 13 Namen plačila
+  upnDate(inv.due_date),                             // 14 Rok plačila DD.MM.LLLL
+  ibanClean,                                         // 15 IBAN prejemnika
+  refClean,                                          // 16 Referenca
+  org.name.slice(0, 33),                             // 17 Ime prejemnika
+  (org.address || '').slice(0, 33),                  // 18 Ulica prejemnika
+  `${org.post_code || ''} ${org.city || ''}`.trim().slice(0, 33), // 19 Kraj prejemnika
 ]
-const upnData = upnFields.join('\n')
-    const qrDataUrl = await QRCode.toDataURL(upnData, { width: 120, margin: 1 })
+
+// Kontrolna vsota = vsota dolžin polj + 19 ločil
+const checksum = upnFields.reduce((s, f) => s + f.length + 1, 0)
+const upnData = upnFields.join('\n') + '\n' + String(checksum).padStart(3, '0')
+const qrDataUrl = await QRCode.toDataURL(upnData, { width: 200, margin: 2, errorCorrectionLevel: 'M' })
+// ─────────────────────────────────────────────────────────
     const isStorno = inv.amount_total < 0
     const isDobropis = inv.invoice_number?.includes('-D')
     const docType = isDobropis ? 'DOBROPIS' : isStorno ? 'STORNO' : 'RAČUN'
