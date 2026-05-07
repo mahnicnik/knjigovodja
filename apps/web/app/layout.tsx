@@ -28,6 +28,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#0D1F12" />
         <meta name="apple-mobile-web-app-capable" content="yes" />

@@ -7,69 +7,79 @@ import { useEffect, useRef, useState } from 'react'
 
 const NAV_DEFAULT = [
   { label: 'Pregled', items: [
-    { href: '/vodic', icon: '🗺️', label: 'Mesečni vodič' },
-    { href: '/dashboard', icon: '▣', label: 'Dashboard' },
-    { href: '/statistika', icon: '◈', label: 'Statistika' },
-    { href: '/rokovnik', icon: '◷', label: 'Rokovnik' },
-    { href: '/opomniki', icon: '△', label: 'Opomniki' },
-    { href: '/ai', icon: '◎', label: 'AI računovodja' },
+    { href: '/dashboard',   icon: 'ti-layout-dashboard', label: 'Dashboard' },
+    { href: '/vodic',       icon: 'ti-map-2',            label: 'Mesečni vodič' },
+    { href: '/statistika',  icon: 'ti-chart-bar',        label: 'Statistika' },
+    { href: '/rokovnik',    icon: 'ti-calendar',         label: 'Rokovnik' },
+    { href: '/opomniki',    icon: 'ti-bell',             label: 'Opomniki' },
+    { href: '/ai',          icon: 'ti-robot',            label: 'AI računovodja' },
   ]},
   { label: 'Poslovanje', items: [
-    { href: '/invoices/new', icon: '+', label: 'Nov račun' },
-    { href: '/invoices', icon: '▤', label: 'Računi' },
-    { href: '/expenses', icon: '⊡', label: 'Stroški' },
-    { href: '/scan', icon: '⊙', label: 'Skeniraj račun' },
-    { href: '/kpo', icon: '≡', label: 'KPO knjiga' },
-    { href: '/banka', icon: '⬡', label: 'Bančni uvoz' },
-    { href: '/kartice', icon: '◉', label: 'Kartice' },
+    { href: '/invoices/new', icon: 'ti-file-plus',     label: 'Nov račun' },
+    { href: '/invoices',     icon: 'ti-file-invoice',  label: 'Računi' },
+    { href: '/expenses',     icon: 'ti-receipt',       label: 'Stroški' },
+    { href: '/scan',         icon: 'ti-scan',          label: 'Skeniraj račun' },
+    { href: '/kpo',          icon: 'ti-book',          label: 'KPO knjiga' },
+    { href: '/banka',        icon: 'ti-building-bank', label: 'Bančni uvoz' },
+    { href: '/kartice',      icon: 'ti-credit-card',   label: 'Kartice' },
   ]},
   { label: 'Davki', items: [
-    { href: '/ddv', icon: '◈', label: 'DDV obračun' },
-    { href: '/ddv/evidenca', icon: '▦', label: 'DDV evidenca' },
-    { href: '/dohodnina', icon: '◆', label: 'Dohodnina' },
-    { href: '/prispevki', icon: '▷', label: 'Prispevki QR' },
-    { href: '/normirani', icon: '◑', label: 'Normirani' },
-    { href: '/letni-pregled', icon: '◐', label: 'Letni pregled' },
+    { href: '/ddv',          icon: 'ti-percentage',       label: 'DDV obračun' },
+    { href: '/ddv/evidenca', icon: 'ti-list-details',     label: 'DDV evidenca' },
+    { href: '/dohodnina',    icon: 'ti-currency-euro',    label: 'Dohodnina' },
+    { href: '/prispevki',    icon: 'ti-qrcode',           label: 'Prispevki QR' },
+    { href: '/normirani',    icon: 'ti-calculator',       label: 'Normirani' },
+    { href: '/letni-pregled',icon: 'ti-calendar-stats',   label: 'Letni pregled' },
   ]},
   { label: 'Zaposleni', items: [
-    { href: '/place', icon: '◉', label: 'Plače' },
-    { href: '/rek1', icon: '▦', label: 'REK-1' },
-    { href: '/dopust', icon: '◷', label: 'Dopust' },
-    { href: '/potni-stroski', icon: '✈', label: 'Potni stroški' },
+    { href: '/place',        icon: 'ti-users',       label: 'Plače' },
+    { href: '/rek1',         icon: 'ti-file-text',   label: 'REK-1' },
+    { href: '/dopust',       icon: 'ti-umbrella',    label: 'Dopust' },
+    { href: '/potni-stroski',icon: 'ti-plane',       label: 'Potni stroški' },
   ]},
   { label: 'Evidenca', items: [
-    { href: '/kilometrina', icon: '◱', label: 'Kilometrina' },
-    { href: '/zaloga', icon: '◧', label: 'Zaloga' },
-    { href: '/amortizacija', icon: '◰', label: 'Amortizacija' },
-    { href: '/reprezentanca', icon: '◫', label: 'Reprezentanca' },
-    { href: '/avto', icon: '◲', label: 'Službeni avto' },
+    { href: '/kilometrina',  icon: 'ti-car',           label: 'Kilometrina' },
+    { href: '/zaloga',       icon: 'ti-package',       label: 'Zaloga' },
+    { href: '/amortizacija', icon: 'ti-trending-down', label: 'Amortizacija' },
+    { href: '/reprezentanca',icon: 'ti-glass-full',    label: 'Reprezentanca' },
+    { href: '/avto',         icon: 'ti-car',           label: 'Službeni avto' },
   ]},
   { label: 'Blagajna', items: [
-    { href: '/blagajna', icon: '▣', label: 'POS blagajna' },
-    { href: '/eslog', icon: '◈', label: 'e-Račun' },
+    { href: '/blagajna', icon: 'ti-building-store', label: 'POS blagajna' },
+    { href: '/eslog',    icon: 'ti-file-invoice',   label: 'e-Račun' },
   ]},
 ]
 
 const QA_DEFAULT = [
-  { href: '/invoices/new', icon: '+', label: 'Nov račun' },
-  { href: '/expenses', icon: '⊡', label: 'Nov strošek' },
-  { href: '/scan', icon: '⊙', label: 'Skeniraj' },
-  { href: '/dashboard', icon: '▣', label: 'Dashboard' },
-  { href: '/blagajna', icon: '◉', label: 'Blagajna' },
-  { href: '/kpo', icon: '≡', label: 'KPO knjiga' },
+  { href: '/invoices/new', icon: 'ti-file-plus',      label: 'Nov račun' },
+  { href: '/expenses',     icon: 'ti-receipt',         label: 'Nov strošek' },
+  { href: '/scan',         icon: 'ti-scan',            label: 'Skeniraj' },
+  { href: '/dashboard',    icon: 'ti-layout-dashboard',label: 'Dashboard' },
+  { href: '/blagajna',     icon: 'ti-building-store',  label: 'Blagajna' },
+  { href: '/kpo',          icon: 'ti-book',            label: 'KPO knjiga' },
 ]
 
-// Bottom nav za mobile — 5 najpomembnejših
 const BOTTOM_NAV = [
-  { href: '/dashboard', icon: '▣', label: 'Domov' },
-  { href: '/invoices', icon: '▤', label: 'Računi' },
-  { href: '/invoices/new', icon: '+', label: 'Nov račun', primary: true },
-  { href: '/expenses', icon: '⊡', label: 'Stroški' },
-  { href: '/ai', icon: '◎', label: 'AI' },
+  { href: '/dashboard',    icon: 'ti-home',         label: 'Domov' },
+  { href: '/invoices',     icon: 'ti-file-invoice', label: 'Računi' },
+  { href: '/invoices/new', icon: 'ti-plus',         label: 'Nov račun', primary: true },
+  { href: '/expenses',     icon: 'ti-receipt',      label: 'Stroški' },
+  { href: '/ai',           icon: 'ti-robot',        label: 'AI' },
+]
+
+const ACTION_BAR = [
+  { href: '/scan',      icon: 'ti-scan',      label: 'Skeniraj strošek' },
+  { href: '/prispevki', icon: 'ti-qrcode',    label: 'Prispevki QR' },
+  { href: '/ai',        icon: 'ti-robot',     label: 'Vprašaj AI' },
+  { href: '/vodic',     icon: 'ti-map-2',     label: 'Vodič' },
 ]
 
 type NavItem = { href: string; icon: string; label: string }
 type NavSection = { label: string; items: NavItem[] }
+
+function Icon({ name, style }: { name: string; style?: React.CSSProperties }) {
+  return <i className={`ti ${name}`} style={style} aria-hidden="true" />
+}
 
 export default function AppLayout({ children, org }: { children: React.ReactNode; org?: any }) {
   const pathname = usePathname()
@@ -97,7 +107,6 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
     return () => window.removeEventListener('resize', check)
   }, [])
 
-  // Zapri mobile menu ob navigaciji
   useEffect(() => { setShowMobileMenu(false) }, [pathname])
 
   useEffect(() => {
@@ -217,7 +226,7 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
           borderRadius: '6px', color: 'rgba(255,255,255,0.5)', fontSize: '11px',
           cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '6px',
         }}>
-          <span>⚙</span> Prilagodi meni
+          <Icon name="ti-settings" style={{ fontSize: '13px' }} /> Prilagodi meni
         </button>
       </div>
 
@@ -228,8 +237,8 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', padding: '0 4px' }}>
             {qaItems.map(item => (
               <Link key={item.href} href={item.href} style={{ textDecoration: 'none' }}>
-                <div style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '11px', background: 'rgba(255,255,255,0.07)', border: '0.5px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.65)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ fontSize: '11px' }}>{item.icon}</span>{item.label}
+                <div style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '11px', background: 'rgba(255,255,255,0.07)', border: '0.5px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.65)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <Icon name={item.icon} style={{ fontSize: '13px' }} />{item.label}
                 </div>
               </Link>
             ))}
@@ -249,7 +258,7 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
               return (
                 <Link key={item.href} href={item.href} style={{ textDecoration: 'none' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', borderRadius: '8px', marginBottom: '1px', background: isActive ? 'rgba(255,255,255,0.1)' : 'transparent', transition: 'background 0.1s' }}>
-                    <span style={{ fontSize: '12px', width: '16px', textAlign: 'center', color: isActive ? '#9FE1CB' : 'rgba(255,255,255,0.35)', flexShrink: 0 }}>{item.icon}</span>
+                    <Icon name={item.icon} style={{ fontSize: '15px', width: '16px', textAlign: 'center', color: isActive ? '#9FE1CB' : 'rgba(255,255,255,0.4)', flexShrink: 0 }} />
                     <span style={{ fontSize: '12.5px', color: isActive ? '#fff' : 'rgba(255,255,255,0.6)', fontWeight: isActive ? '500' : '400' }}>{item.label}</span>
                   </div>
                 </Link>
@@ -284,31 +293,48 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
           <aside style={{ background: '#0D1F12', position: 'sticky', top: 0, height: '100vh', overflowY: 'auto', overflowX: 'hidden', direction: 'rtl', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.12) transparent' }}>
             {sidebarContent}
           </aside>
-          <main style={{ overflowY: 'auto', minHeight: '100vh' }}>{children}</main>
+          <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+            <main style={{ flex: 1 }}>{children}</main>
+
+            {/* Sticky action bar */}
+            <div style={{ background: '#fff', borderTop: '0.5px solid rgba(0,0,0,0.08)', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, position: 'sticky', bottom: 0 }}>
+              <span style={{ fontSize: '11px', color: '#aaa', marginRight: '4px' }}>Hitro:</span>
+              {ACTION_BAR.map(item => (
+                <Link key={item.href} href={item.href} style={{ textDecoration: 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '500', border: '0.5px solid rgba(0,0,0,0.1)', background: '#fff', color: '#444', cursor: 'pointer' }}>
+                    <Icon name={item.icon} style={{ fontSize: '15px', color: '#666' }} />
+                    {item.label}
+                  </div>
+                </Link>
+              ))}
+              <div style={{ flex: 1 }} />
+              <Link href="/invoices/new" style={{ textDecoration: 'none' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: '500', background: '#0D1F12', color: '#fff', cursor: 'pointer' }}>
+                  <Icon name="ti-file-plus" style={{ fontSize: '16px' }} />
+                  Nov račun
+                </div>
+              </Link>
+            </div>
+          </div>
         </div>
       )}
 
       {/* MOBILE LAYOUT */}
       {isMobile && (
         <div style={{ minHeight: '100vh', background: '#F7F6F2', paddingBottom: '64px' }}>
-          {/* Mobile top bar */}
           <div style={{ position: 'sticky', top: 0, zIndex: 50, background: '#0D1F12', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ color: '#fff', fontSize: '15px', fontWeight: '500' }}>Knjigovodja.si</div>
-            <button onClick={() => setShowMobileMenu(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <div style={{ width: '20px', height: '2px', background: '#fff', borderRadius: '1px' }}/>
-              <div style={{ width: '20px', height: '2px', background: '#fff', borderRadius: '1px' }}/>
-              <div style={{ width: '20px', height: '2px', background: '#fff', borderRadius: '1px' }}/>
+            <button onClick={() => setShowMobileMenu(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}>
+              <Icon name="ti-menu-2" style={{ fontSize: '22px', color: '#fff' }} />
             </button>
           </div>
 
-          {/* Vsebina */}
           <main>{children}</main>
 
-          {/* Mobile drawer */}
           {showMobileMenu && (
             <>
               <div onClick={() => setShowMobileMenu(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100 }} />
-              <div style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: '280px', background: '#0D1F12', zIndex: 101, overflowY: 'auto', transition: 'transform .3s' }}>
+              <div style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: '280px', background: '#0D1F12', zIndex: 101, overflowY: 'auto' }}>
                 {sidebarContent}
               </div>
             </>
@@ -320,14 +346,14 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
               const isActive = pathname === item.href
               return (
                 <Link key={item.href} href={item.href} style={{ textDecoration: 'none', flex: 1 }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: item.primary ? '8px 0' : '10px 0', gap: '3px' }}>
-                    {item.primary ? (
-                      <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#0D1F12', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', marginTop: '-16px', border: '3px solid #F7F6F2' }}>
-                        <span style={{ color: '#9FE1CB', fontSize: '18px', fontWeight: '300' }}>+</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: (item as any).primary ? '8px 0' : '10px 0', gap: '3px' }}>
+                    {(item as any).primary ? (
+                      <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#0D1F12', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '-16px', border: '3px solid #F7F6F2' }}>
+                        <Icon name="ti-plus" style={{ fontSize: '20px', color: '#9FE1CB' }} />
                       </div>
                     ) : (
                       <>
-                        <span style={{ fontSize: '18px', color: isActive ? '#0D1F12' : '#aaa' }}>{item.icon}</span>
+                        <Icon name={item.icon} style={{ fontSize: '20px', color: isActive ? '#0D1F12' : '#aaa' }} />
                         <span style={{ fontSize: '10px', color: isActive ? '#0D1F12' : '#aaa', fontWeight: isActive ? '500' : '400' }}>{item.label}</span>
                       </>
                     )}
@@ -339,7 +365,7 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
         </div>
       )}
 
-      {/* MODAL — prilagodi (skupen za desktop in mobile) */}
+      {/* MODAL */}
       {showModal && (
         <div onClick={e => { if (e.target === e.currentTarget) setShowModal(false) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div style={{ background: '#fff', borderRadius: '12px', width: '90%', maxWidth: '380px', maxHeight: '85vh', overflowY: 'auto', border: '0.5px solid rgba(0,0,0,0.1)' }}>
@@ -353,7 +379,7 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
                 {QA_DEFAULT.map((item) => (
                   <div key={item.href} draggable={qaHrefs.includes(item.href)} onDragStart={() => handleQaDragStart(qaHrefs.indexOf(item.href))} onDragOver={e => handleQaDragOver(e, qaHrefs.indexOf(item.href))} onDrop={() => handleQaDrop(qaHrefs.indexOf(item.href))} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 4px', borderRadius: '6px' }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#1a1a1a' }}>
-                      <span style={{ fontSize: '13px' }}>{item.icon}</span>{item.label}
+                      <Icon name={item.icon} style={{ fontSize: '15px', color: '#666' }} />{item.label}
                     </span>
                     <div onClick={() => toggleQA(item.href)} style={{ width: '32px', height: '18px', borderRadius: '9px', cursor: 'pointer', background: qaHrefs.includes(item.href) ? '#1D9E75' : '#ddd', position: 'relative', transition: 'background .2s', flexShrink: 0 }}>
                       <div style={{ position: 'absolute', top: '2px', left: qaHrefs.includes(item.href) ? '14px' : '2px', width: '14px', height: '14px', borderRadius: '50%', background: '#fff', transition: 'left .2s' }} />
@@ -368,7 +394,7 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
                 {section.items.map(item => (
                   <div key={item.href} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 4px', borderBottom: '0.5px solid #f5f5f5' }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#1a1a1a' }}>
-                      <span style={{ fontSize: '13px' }}>{item.icon}</span>{item.label}
+                      <Icon name={item.icon} style={{ fontSize: '15px', color: '#666' }} />{item.label}
                     </span>
                     <div onClick={() => toggleHidden(item.href)} style={{ width: '32px', height: '18px', borderRadius: '9px', cursor: 'pointer', background: !hiddenHrefs.has(item.href) ? '#1D9E75' : '#ddd', position: 'relative', transition: 'background .2s', flexShrink: 0 }}>
                       <div style={{ position: 'absolute', top: '2px', left: !hiddenHrefs.has(item.href) ? '14px' : '2px', width: '14px', height: '14px', borderRadius: '50%', background: '#fff', transition: 'left .2s' }} />
