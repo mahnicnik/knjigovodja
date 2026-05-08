@@ -239,7 +239,7 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
   <div><div class="sign-line">${emp.full_name}</div><div style="font-size:9px;color:#666">Delavec — podpis</div></div>
 </div>
 
-<div class="footer">Dokument je bil generiran z Knjigovodja.si · ${org.name} · ${year}</div>
+<div class="footer">Dokument je bil generiran z Računko · ${org.name} · ${year}</div>
 <script>window.onload=function(){window.print()}</script>
 </body></html>`
 
@@ -319,7 +319,7 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
   <div><div class="sign-line">${org.name}</div><div style="font-size:9px;color:#666">Delodajalec</div></div>
   <div><div class="sign-line">${emp.full_name}</div><div style="font-size:9px;color:#666">Delavec</div></div>
 </div>
-<div class="footer">Plačilna lista je bila generirana z Knjigovodja.si · ${org.name} · ${new Date().getFullYear()}</div>
+<div class="footer">Plačilna lista je bila generirana z Računko · ${org.name} · ${new Date().getFullYear()}</div>
 <script>window.onload=function(){window.print()}</script>
 </body></html>`
     const w = window.open('', '_blank')

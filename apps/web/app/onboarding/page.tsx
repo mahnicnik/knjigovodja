@@ -230,7 +230,7 @@ export default function OnboardingPage() {
       <div style={{ width: '100%', maxWidth: '480px' }}>
 
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div style={{ fontSize: '18px', fontWeight: '500', color: '#0D1F12' }}>Knjigovodja.si</div>
+          <div style={{ fontSize: '18px', fontWeight: '500', color: '#0D1F12' }}>Računko</div>
           <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>Nastavimo vašo aplikacijo</div>
         </div>
 
