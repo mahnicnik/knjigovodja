@@ -15,6 +15,7 @@ const NAV_DEFAULT = [
     { href: '/ai',          icon: 'ti-robot',            label: 'AI računovodja' },
   ]},
   { label: 'Poslovanje', items: [
+    { href: '/stripe', icon: 'ti-brand-stripe', label: 'Stripe uvoz' },
     { href: '/invoices/new', icon: 'ti-file-plus',     label: 'Nov račun' },
     { href: '/invoices',     icon: 'ti-file-invoice',  label: 'Računi' },
     { href: '/expenses',     icon: 'ti-receipt',       label: 'Stroški' },
