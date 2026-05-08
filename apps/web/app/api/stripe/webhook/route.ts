@@ -6,34 +6,20 @@ const sb = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// Stripe signature verification brez stripe SDK
-async function verifyStripeSignature(
-  payload: string,
-  signature: string,
-  secret: string
-): Promise<boolean> {
+async function verifyStripeSignature(payload: string, signature: string, secret: string): Promise<boolean> {
   try {
     const parts = signature.split(',').reduce((acc: any, part) => {
-      const [key, val] = part.split('=')
-      acc[key] = val
-      return acc
+      const [key, val] = part.split('='); acc[key] = val; return acc
     }, {})
-
     const timestamp = parts['t']
     const sig = parts['v1']
     if (!timestamp || !sig) return false
-
-    // HMAC-SHA256
     const encoder = new TextEncoder()
-    const key = await crypto.subtle.importKey(
-      'raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
-    )
+    const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
     const data = encoder.encode(`${timestamp}.${payload}`)
     const hashBuffer = await crypto.subtle.sign('HMAC', key, data)
     const hashArray = Array.from(new Uint8Array(hashBuffer))
     const computed = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
-
-    // Timing-safe compare
     if (computed.length !== sig.length) return false
     let diff = 0
     for (let i = 0; i < computed.length; i++) diff |= computed.charCodeAt(i) ^ sig.charCodeAt(i)
@@ -41,84 +27,63 @@ async function verifyStripeSignature(
   } catch { return false }
 }
 
-function invoiceNumber(count: number): string {
-  const year = new Date().getFullYear()
-  return `${year}-STR-${String(count + 1).padStart(3, '0')}`
+function invoiceNum(prefix: string, count: number): string {
+  return `${new Date().getFullYear()}-${prefix}-${String(count + 1).padStart(3, '0')}`
 }
 
 export async function POST(request: NextRequest) {
   try {
     const payload = await request.text()
     const signature = request.headers.get('stripe-signature') || ''
-
-    // Najdi org po stripe_user_id ali webhook_secret iz URL params
     const url = new URL(request.url)
     const orgId = url.searchParams.get('org_id')
+    const mode = url.searchParams.get('mode') || 'payout' // 'payout' ali 'per_purchase'
 
-    if (!orgId) {
-      return NextResponse.json({ error: 'Manjka org_id' }, { status: 400 })
-    }
+    if (!orgId) return NextResponse.json({ error: 'Manjka org_id' }, { status: 400 })
 
-    // Naloži Stripe nastavitve za to org
-    const { data: settings } = await sb
-      .from('stripe_settings')
-      .select('*')
-      .eq('org_id', orgId)
-      .single()
+    const { data: settings } = await sb.from('stripe_settings').select('*').eq('org_id', orgId).single()
+    if (!settings) return NextResponse.json({ error: 'Stripe ni nastavljen' }, { status: 404 })
 
-    if (!settings) {
-      return NextResponse.json({ error: 'Stripe ni nastavljen' }, { status: 404 })
-    }
-
-    // Preveri Stripe signature
     const isValid = await verifyStripeSignature(payload, signature, settings.webhook_secret)
-    if (!isValid) {
-      return NextResponse.json({ error: 'Neveljavna Stripe signatura' }, { status: 401 })
-    }
+    if (!isValid) return NextResponse.json({ error: 'Neveljavna Stripe signatura' }, { status: 401 })
 
     const event = JSON.parse(payload)
-    console.log(`Stripe event [${orgId}]: ${event.type}`)
-
-    // Naloži org podatke
     const { data: org } = await sb.from('organizations').select('*').eq('id', orgId).single()
     if (!org) return NextResponse.json({ error: 'Org ne obstaja' }, { status: 404 })
 
-    // Obdela evente
+    const today = new Date().toISOString().split('T')[0]
+    const vatRate = parseFloat(settings.default_vat_rate || '0')
+
     switch (event.type) {
 
-      case 'payment_intent.succeeded': {
-        const pi = event.data.object
-        const amount = pi.amount / 100 // centov v EUR
-        const currency = pi.currency.toUpperCase()
-        const customerName = pi.shipping?.name || pi.metadata?.customer_name || 'Stripe stranka'
-        const customerEmail = pi.receipt_email || pi.metadata?.customer_email || ''
-        const description = pi.description || pi.metadata?.description || 'Stripe plačilo'
-
-        // DDV stopnja iz metadata ali default
-        const vatRate = parseFloat(pi.metadata?.vat_rate || settings.default_vat_rate || '0')
+      // ── PAYOUT.PAID — 1 račun za celoten payout ──────────────────────────
+      case 'payout.paid': {
+        const payout = event.data.object
+        const amount = payout.amount / 100
         const amountNet = vatRate > 0 ? amount / (1 + vatRate / 100) : amount
         const vatAmount = amount - amountNet
 
-        // Preštej obstoječe Stripe račune
+        const arrivalDate = new Date(payout.arrival_date * 1000).toISOString().split('T')[0]
+        const periodStart = payout.metadata?.period_start || arrivalDate
+        const periodEnd = payout.metadata?.period_end || arrivalDate
+
         const { count } = await sb.from('issued_invoices')
           .select('*', { count: 'exact', head: true })
-          .eq('org_id', orgId)
-          .like('invoice_number', '%-STR-%')
+          .eq('org_id', orgId).like('invoice_number', '%-PAY-%')
 
-        const invNum = invoiceNumber(count || 0)
-        const today = new Date().toISOString().split('T')[0]
-        const dueDate = today // že plačano
+        const num = invoiceNum('PAY', count || 0)
+        const desc = `Stripe izplačilo — ${new Date(payout.arrival_date * 1000).toLocaleDateString('sl-SI', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
         await sb.from('issued_invoices').insert({
           org_id: orgId,
-          invoice_number: invNum,
+          invoice_number: num,
           invoice_type: 'invoice',
-          client_name: customerName,
-          client_email: customerEmail,
-          issue_date: today,
-          due_date: dueDate,
+          client_name: 'Stripe — izplačilo',
+          client_email: '',
+          issue_date: arrivalDate,
+          due_date: arrivalDate,
           line_items: [{
-            description,
+            description: desc,
             quantity: 1,
             unit_price: amountNet,
             vat_rate: vatRate,
@@ -127,22 +92,76 @@ export async function POST(request: NextRequest) {
           vat_amount: Math.round(vatAmount * 100) / 100,
           amount_total: amount,
           status: 'paid',
-          reference: `SI00 ${invNum}`,
-          notes: `Stripe Payment Intent: ${pi.id}`,
-          stripe_payment_id: pi.id,
+          reference: `SI00 ${num}`,
+          notes: `Stripe Payout ID: ${payout.id} · Obdobje: ${periodStart} – ${periodEnd} · Valuta: ${payout.currency.toUpperCase()}`,
+          stripe_payment_id: payout.id,
         })
 
-        console.log(`✅ Račun ${invNum} ustvarjen — ${customerName} €${amount}`)
+        // Shrani tudi v stripe_payouts tabelo za sledenje
+        await sb.from('stripe_payouts').upsert({
+          org_id: orgId,
+          payout_id: payout.id,
+          amount: amount,
+          currency: payout.currency.toUpperCase(),
+          arrival_date: arrivalDate,
+          invoice_number: num,
+          status: 'paid',
+          created_at: new Date().toISOString(),
+        }, { onConflict: 'payout_id' })// ignorira če tabela ne obstaja
+
+        console.log(`✅ Payout račun ${num} — €${amount} (${arrivalDate})`)
         break
       }
 
+      // ── PAYMENT_INTENT.SUCCEEDED — individualni račun (za per_purchase mode) ──
+      case 'payment_intent.succeeded': {
+        if (mode !== 'per_purchase') {
+          console.log('payment_intent ignoriran — mode je payout')
+          break
+        }
+        const pi = event.data.object
+        const amount = pi.amount / 100
+        const amountNet = vatRate > 0 ? amount / (1 + vatRate / 100) : amount
+        const vatAmount = amount - amountNet
+        const customerName = pi.shipping?.name || pi.metadata?.customer_name || 'Stripe stranka'
+        const customerEmail = pi.receipt_email || pi.metadata?.customer_email || ''
+        const description = pi.description || pi.metadata?.description || 'Stripe plačilo'
+
+        const { count } = await sb.from('issued_invoices')
+          .select('*', { count: 'exact', head: true })
+          .eq('org_id', orgId).like('invoice_number', '%-STR-%')
+
+        const num = invoiceNum('STR', count || 0)
+
+        await sb.from('issued_invoices').insert({
+          org_id: orgId,
+          invoice_number: num,
+          invoice_type: 'invoice',
+          client_name: customerName,
+          client_email: customerEmail,
+          issue_date: today,
+          due_date: today,
+          line_items: [{ description, quantity: 1, unit_price: amountNet, vat_rate: vatRate }],
+          amount_net: Math.round(amountNet * 100) / 100,
+          vat_amount: Math.round(vatAmount * 100) / 100,
+          amount_total: amount,
+          status: 'paid',
+          reference: `SI00 ${num}`,
+          notes: `Stripe Payment Intent: ${pi.id}`,
+          stripe_payment_id: pi.id,
+        })
+        console.log(`✅ Per-purchase račun ${num} — ${customerName} €${amount}`)
+        break
+      }
+
+      // ── INVOICE.PAID — Stripe naročnine ──────────────────────────────────
       case 'invoice.paid': {
+        if (mode !== 'per_purchase') {
+          console.log('invoice.paid ignoriran — mode je payout')
+          break
+        }
         const inv = event.data.object
         const amount = inv.amount_paid / 100
-        const customerEmail = inv.customer_email || ''
-        const customerName = inv.customer_name || inv.metadata?.customer_name || 'Stripe stranka'
-
-        const vatRate = parseFloat(settings.default_vat_rate || '0')
         const amountNet = vatRate > 0 ? amount / (1 + vatRate / 100) : amount
         const vatAmount = amount - amountNet
 
@@ -150,12 +169,9 @@ export async function POST(request: NextRequest) {
           .select('*', { count: 'exact', head: true })
           .eq('org_id', orgId).like('invoice_number', '%-STR-%')
 
-        const invNum = invoiceNumber(count || 0)
-        const today = new Date().toISOString().split('T')[0]
-
-        // Linijske postavke iz Stripe invoice items
+        const num = invoiceNum('STR', count || 0)
         const lineItems = (inv.lines?.data || []).map((line: any) => ({
-          description: line.description || 'Stripe narocnina',
+          description: line.description || 'Stripe naročnina',
           quantity: line.quantity || 1,
           unit_price: (line.amount / 100) / (line.quantity || 1),
           vat_rate: vatRate,
@@ -163,68 +179,62 @@ export async function POST(request: NextRequest) {
 
         await sb.from('issued_invoices').insert({
           org_id: orgId,
-          invoice_number: invNum,
+          invoice_number: num,
           invoice_type: 'invoice',
-          client_name: customerName,
-          client_email: customerEmail,
+          client_name: inv.customer_name || 'Stripe stranka',
+          client_email: inv.customer_email || '',
           issue_date: today,
           due_date: today,
-          line_items: lineItems.length > 0 ? lineItems : [{
-            description: 'Stripe narocnina',
-            quantity: 1,
-            unit_price: amountNet,
-            vat_rate: vatRate,
-          }],
+          line_items: lineItems.length > 0 ? lineItems : [{ description: 'Stripe naročnina', quantity: 1, unit_price: amountNet, vat_rate: vatRate }],
           amount_net: Math.round(amountNet * 100) / 100,
           vat_amount: Math.round(vatAmount * 100) / 100,
           amount_total: amount,
           status: 'paid',
-          reference: `SI00 ${invNum}`,
+          reference: `SI00 ${num}`,
           notes: `Stripe Invoice: ${inv.id}`,
           stripe_payment_id: inv.id,
         })
-
-        console.log(`✅ Račun ${invNum} ustvarjen iz Stripe Invoice — ${customerName} €${amount}`)
+        console.log(`✅ Naročnina ${num} — €${amount}`)
         break
       }
 
+      // ── PAYOUT.FAILED ─────────────────────────────────────────────────────
+      case 'payout.failed': {
+        const payout = event.data.object
+        console.warn(`⚠️ Stripe payout neuspešen: ${payout.id} — ${payout.failure_message}`)
+        // Opcijsko: pošlji email obvestilo
+        break
+      }
+
+      // ── CHARGE.REFUNDED — vračilo ─────────────────────────────────────────
       case 'charge.refunded': {
         const charge = event.data.object
         const refundAmount = charge.amount_refunded / 100
-        const originalId = charge.payment_intent
 
-        // Najdi originalni račun
-        const { data: original } = await sb.from('issued_invoices')
-          .select('*').eq('org_id', orgId)
-          .eq('stripe_payment_id', originalId).single()
+        const { count } = await sb.from('issued_invoices')
+          .select('*', { count: 'exact', head: true })
+          .eq('org_id', orgId).like('invoice_number', '%-REF-%')
 
-        if (original) {
-          const { count } = await sb.from('issued_invoices')
-            .select('*', { count: 'exact', head: true })
-            .eq('org_id', orgId).like('invoice_number', '%-STR-%')
+        const num = invoiceNum('REF', count || 0)
 
-          const refundNum = `${invoiceNumber(count || 0)}-R`
-          const today = new Date().toISOString().split('T')[0]
-
-          await sb.from('issued_invoices').insert({
-            org_id: orgId,
-            invoice_number: refundNum,
-            invoice_type: 'credit_note',
-            client_name: original.client_name,
-            client_email: original.client_email,
-            issue_date: today,
-            due_date: today,
-            line_items: [{ description: `Vračilo za ${original.invoice_number}`, quantity: 1, unit_price: -refundAmount, vat_rate: 0 }],
-            amount_net: -refundAmount,
-            vat_amount: 0,
-            amount_total: -refundAmount,
-            status: 'paid',
-            reference: `SI00 ${refundNum}`,
-            notes: `Stripe vračilo za: ${originalId}`,
-            stripe_payment_id: charge.id,
-          })
-          console.log(`✅ Dobropis ${refundNum} ustvarjen — vračilo €${refundAmount}`)
-        }
+        await sb.from('issued_invoices').insert({
+          org_id: orgId,
+          invoice_number: num,
+          invoice_type: 'credit_note',
+          client_name: 'Stripe — vračilo',
+          client_email: '',
+          issue_date: today,
+          due_date: today,
+          line_items: [{ description: `Stripe vračilo — ${charge.id}`, quantity: 1, unit_price: -refundAmount, vat_rate: 0 }],
+          amount_net: -refundAmount,
+          vat_amount: 0,
+          amount_total: -refundAmount,
+          status: 'paid',
+          reference: `SI00 ${num}`,
+          notes: `Stripe vračilo za: ${charge.payment_intent}`,
+          stripe_payment_id: charge.id,
+        })
+        console.log(`✅ Vračilo ${num} — €${refundAmount}`)
         break
       }
 
@@ -232,7 +242,7 @@ export async function POST(request: NextRequest) {
         console.log(`Event ${event.type} se ignorira`)
     }
 
-    return NextResponse.json({ received: true, event: event.type })
+    return NextResponse.json({ received: true, event: event.type, mode })
   } catch (error: any) {
     console.error('Stripe webhook error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
