@@ -61,7 +61,7 @@ export default function RegisterPage() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-semibold text-gray-900">Knjigovodja.si</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">Računko</h1>
           <p className="text-gray-500 mt-2">Ustvarite brezplačni račun</p>
         </div>
         <form onSubmit={handleRegister} className="space-y-4">

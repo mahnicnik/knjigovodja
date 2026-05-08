@@ -103,7 +103,7 @@ export default function StripePage() {
         <div style={{ background: '#F0F9FF', border: '0.5px solid #B5D4F4', borderRadius: '12px', padding: '16px 18px', marginBottom: '20px' }}>
           <div style={{ fontSize: '13px', fontWeight: '500', color: '#042C53', marginBottom: '8px' }}>ℹ️ Kako deluje</div>
           <div style={{ fontSize: '12px', color: '#185FA5', lineHeight: '1.6' }}>
-            Ko stranka opravi nakup na vaši spletni strani → Stripe pošlje obvestilo na Knjigovodja.si → aplikacija <strong>samodejno ustvari račun</strong> v vaši bazi. Račun je takoj viden v sekciji Računi z oznako "Plačano".
+            Ko stranka opravi nakup na vaši spletni strani → Stripe pošlje obvestilo na Računko → aplikacija <strong>samodejno ustvari račun</strong> v vaši bazi. Račun je takoj viden v sekciji Računi z oznako "Plačano".
           </div>
           <div style={{ marginTop: '10px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
             {['payment_intent.succeeded', 'invoice.paid', 'charge.refunded'].map(e => (

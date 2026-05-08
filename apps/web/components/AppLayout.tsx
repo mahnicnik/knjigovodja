@@ -211,7 +211,7 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
       {/* Logo */}
       <div style={{ padding: '20px 18px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ color: '#fff', fontSize: '17px', fontWeight: '500', letterSpacing: '-0.3px' }}>Knjigovodja.si</div>
+          <div style={{ color: '#fff', fontSize: '17px', fontWeight: '500', letterSpacing: '-0.3px' }}>Računko.si</div>
           <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '10px', marginTop: '3px', letterSpacing: '0.8px', textTransform: 'uppercase' }}>AI računovodja</div>
         </div>
         {isMobile && (
@@ -324,7 +324,7 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
       {isMobile && (
         <div style={{ minHeight: '100vh', background: '#F7F6F2', paddingBottom: '64px' }}>
           <div style={{ position: 'sticky', top: 0, zIndex: 50, background: '#0D1F12', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ color: '#fff', fontSize: '15px', fontWeight: '500' }}>Knjigovodja.si</div>
+            <div style={{ color: '#fff', fontSize: '15px', fontWeight: '500' }}>Računko.si</div>
             <button onClick={() => setShowMobileMenu(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}>
               <Icon name="ti-menu-2" style={{ fontSize: '22px', color: '#fff' }} />
             </button>

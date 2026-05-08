@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Knjigovodja.si",
+  title: "Računko",
   description: "AI računovodja za slovenskega s.p.",
 };
 
@@ -33,7 +33,7 @@ export default function RootLayout({
         <meta name="theme-color" content="#0D1F12" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="Knjigovodja" />
+        <meta name="apple-mobile-web-app-title" content="Računko" />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
       </head>
       <body className="min-h-full flex flex-col">{children}</body>

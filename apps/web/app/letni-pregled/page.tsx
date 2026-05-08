@@ -294,7 +294,7 @@ ${data.receipts.length > 0 ? `
 ` : ''}
 
 <div class="footer">
-  Letni pregled ${selectedYear} · ${org.name} · Generirano z Knjigovodja.si · ${new Date().toLocaleString('sl-SI')}
+  Letni pregled ${selectedYear} · ${org.name} · Generirano z Računko · ${new Date().toLocaleString('sl-SI')}
 </div>
 
 <script>window.onload=function(){window.print()}</script>
