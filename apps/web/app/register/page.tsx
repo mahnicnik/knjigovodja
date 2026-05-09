@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import posthog from 'posthog-js'
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('')
@@ -29,6 +30,7 @@ export default function RegisterPage() {
       return
     }
 
+    posthog.capture('user_signed_up', { email, name })
     setDone(true)
   }
 

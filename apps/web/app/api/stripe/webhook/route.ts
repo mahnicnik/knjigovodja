@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { getPostHogClient } from '@/lib/posthog-server'
 
 const sb = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -109,6 +110,17 @@ export async function POST(request: NextRequest) {
           created_at: new Date().toISOString(),
         }, { onConflict: 'payout_id' })// ignorira če tabela ne obstaja
 
+        getPostHogClient().capture({
+          distinctId: orgId,
+          event: 'stripe_payout_received',
+          properties: {
+            payout_id: payout.id,
+            amount,
+            currency: payout.currency.toUpperCase(),
+            invoice_number: num,
+            arrival_date: arrivalDate,
+          },
+        })
         console.log(`✅ Payout račun ${num} — €${amount} (${arrivalDate})`)
         break
       }
@@ -149,6 +161,16 @@ export async function POST(request: NextRequest) {
           reference: `SI00 ${num}`,
           notes: `Stripe Payment Intent: ${pi.id}`,
           stripe_payment_id: pi.id,
+        })
+        getPostHogClient().capture({
+          distinctId: orgId,
+          event: 'stripe_payment_received',
+          properties: {
+            payment_intent_id: pi.id,
+            amount,
+            customer_name: customerName,
+            invoice_number: num,
+          },
         })
         console.log(`✅ Per-purchase račun ${num} — ${customerName} €${amount}`)
         break
@@ -233,6 +255,15 @@ export async function POST(request: NextRequest) {
           reference: `SI00 ${num}`,
           notes: `Stripe vračilo za: ${charge.payment_intent}`,
           stripe_payment_id: charge.id,
+        })
+        getPostHogClient().capture({
+          distinctId: orgId,
+          event: 'stripe_refund_processed',
+          properties: {
+            charge_id: charge.id,
+            refund_amount: refundAmount,
+            invoice_number: num,
+          },
         })
         console.log(`✅ Vračilo ${num} — €${refundAmount}`)
         break

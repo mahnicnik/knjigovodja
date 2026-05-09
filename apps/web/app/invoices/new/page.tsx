@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import posthog from 'posthog-js'
 
 interface LineItem {
   description: string
@@ -71,6 +72,22 @@ export default function NewInvoicePage() {
       status, notes, reference: `SI00 ${invoiceNumber}`,
     })
     if (error) { alert('Napaka: ' + error.message); setLoading(false); return }
+    if (status === 'sent') {
+      posthog.capture('invoice_created', {
+        invoice_number: invoiceNumber,
+        amount_total: total,
+        amount_net: subtotal,
+        vat_amount: vatAmount,
+        line_items_count: items.length,
+        client_name: clientName,
+      })
+    } else {
+      posthog.capture('invoice_drafted', {
+        invoice_number: invoiceNumber,
+        amount_total: total,
+        line_items_count: items.length,
+      })
+    }
     router.push('/invoices')
   }
 

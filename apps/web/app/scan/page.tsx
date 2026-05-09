@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import posthog from 'posthog-js'
 
 export default function ScanPage() {
   const [org, setOrg] = useState<any>(null)
@@ -142,6 +143,12 @@ export default function ScanPage() {
         setScanning(false)
         return
       }
+      posthog.capture('receipt_scanned', {
+        vendor: data.vendor,
+        amount_net: data.amount_net,
+        vat_rate: data.vat_rate,
+        category: data.category,
+      })
       setResult(data)
       setForm({
         vendor: data.vendor || '',
@@ -191,6 +198,13 @@ export default function ScanPage() {
       category: form.category,
     })
 
+    posthog.capture('receipt_saved', {
+      category: form.category,
+      amount_net: amountNet,
+      amount_total: amountTotal,
+      vat_rate: vatRate,
+      ai_scanned: !!result,
+    })
     setSaving(false)
     router.push('/expenses')
   }

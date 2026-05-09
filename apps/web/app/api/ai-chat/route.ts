@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { getPostHogClient } from '@/lib/posthog-server'
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -8,6 +9,15 @@ const client = new Anthropic({
 export async function POST(request: NextRequest) {
   try {
     const { messages, context, orgData } = await request.json()
+
+    getPostHogClient().capture({
+      distinctId: orgData?.org_id || 'anonymous',
+      event: 'ai_chat_message_sent',
+      properties: {
+        message_count: messages?.length,
+        has_org_data: !!orgData,
+      },
+    })
 
     const now = new Date()
     const month = now.getMonth()

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import posthog from 'posthog-js'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -28,6 +29,9 @@ export default function LoginPage() {
     // Preveri ali ima uporabnik organizacijo
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
+      posthog.identify(user.id, { email: user.email })
+      posthog.capture('user_logged_in', { email: user.email })
+
       const { data: member } = await supabase
         .from('org_members')
         .select('org_id')
