@@ -22,9 +22,9 @@ export default function LandingPage() {
         .ndark{padding:7px 16px;border-radius:7px;font-size:12px;font-weight:500;background:#0A3D2B;color:#fff;border:none;cursor:pointer;text-decoration:none;display:inline-block}
         .hero{padding:72px 40px 64px;background:#fff;text-align:center}
         .hero-eyebrow{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;background:#E8F5EE;color:#085041;font-size:11px;font-weight:500;border:0.5px solid #C5E8D5;margin-bottom:22px}
-        .hero-h1{font-size:44px;font-weight:500;line-height:1.12;letter-spacing:-1px;color:#0A0A0A;margin-bottom:18px;max-width:660px;margin-left:auto;margin-right:auto}
+        .hero-h1{font-size:45px;font-weight:600;line-height:1.12;letter-spacing:-1px;color:#0A0A0A;margin-bottom:18px;max-width:660px;margin-left:auto;margin-right:auto}
         .grn{color:#1D9E75}.red{color:#D14040}
-        .hero-sub{font-size:16px;color:#666;line-height:1.7;max-width:480px;margin:0 auto 32px}
+        .hero-sub{font-size:17px;color:#444;line-height:1.7;max-width:480px;margin:0 auto 32px}
         .hero-cta{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:14px}
         .btn-primary{padding:13px 30px;border-radius:9px;font-size:14px;font-weight:500;background:#1D9E75;color:#fff;border:none;cursor:pointer;text-decoration:none;display:inline-block}
         .btn-secondary{padding:13px 22px;border-radius:9px;font-size:14px;color:#555;border:0.5px solid #DDD;background:#fff;cursor:pointer;text-decoration:none;display:inline-block}
@@ -36,7 +36,7 @@ export default function LandingPage() {
         .math{padding:60px 40px;background:#FAFAFA}
         .math-head{text-align:center;margin-bottom:40px}
         .sec-tag{display:inline-block;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:500;margin-bottom:12px}
-        .sec-h{font-size:26px;font-weight:500;letter-spacing:-.5px;color:#111;margin-bottom:8px}
+        .sec-h{font-size:27px;font-weight:600;letter-spacing:-.5px;color:#111;margin-bottom:8px}
         .sec-sub{font-size:13px;color:#666;line-height:1.6}
         .math-eq{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:center;gap:0;max-width:720px;margin:0 auto}
         .mc{background:#fff;border:0.5px solid #E8E8E8;border-radius:12px;padding:22px;text-align:center}
