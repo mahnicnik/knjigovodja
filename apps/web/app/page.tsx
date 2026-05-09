@@ -98,7 +98,7 @@ function Nav() {
         <div className="nav-cta">
           <Link className="btn btn-ghost" href="/login">Prijava</Link>
           <Link className="btn btn-primary" href="/register">
-            Začni — brezplačno <span aria-hidden="true">→</span>
+          Začni brezplačno <span aria-hidden="true">→</span>
           </Link>
         </div>
       </div>
@@ -574,7 +574,7 @@ function Footer() {
 export default function LandingPage() {
   const t = {
     palette: "forest",
-    headline: "identity",
+    headline: "math",
     density: "normal",
     font: "instrument",
   } as const
