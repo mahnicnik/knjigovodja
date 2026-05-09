@@ -956,7 +956,12 @@ html, body {
     padding: 12px var(--pad-x);
   }
   .nav-links { display: none; }
-  .nav-cta .btn-ghost { display: none; }
+  .nav-cta .btn-ghost {
+    border: none;
+    padding: 0.55em 0.5em;
+    font-size: 0.85rem;
+    color: var(--c-ink2);
+  }
   .brand { font-size: 1.2rem; }
   .brand-mark { width: 26px; height: 26px; font-size: 0.95rem; }
   .nav-cta .btn { padding: 0.55em 0.95em; font-size: 0.85rem; }
