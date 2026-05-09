@@ -4,7 +4,11 @@ import Link from 'next/link'
 export default function LandingPage() {
   return (
     <>
-      <style>{`
+   <style>{`
+  html{scroll-behavior:smooth}
+  *{box-sizing:border-box;margin:0;padding:0}
+  
+
         *{box-sizing:border-box;margin:0;padding:0}
         .lp{background:#fff;color:#111;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
         .nav{display:flex;align-items:center;justify-content:space-between;padding:0 40px;height:56px;border-bottom:0.5px solid #EBEBEB;background:#fff;position:sticky;top:0;z-index:99}
@@ -176,9 +180,9 @@ export default function LandingPage() {
             <span className="nname">Računko</span>
           </div>
           <div className="nr">
-            <span className="nlnk">Kako deluje</span>
-            <span className="nlnk">Primerjava</span>
-            <span className="nlnk">Cene</span>
+          <a href="#kako-deluje" className="nlnk">Kako deluje</a>
+<a href="#primerjava" className="nlnk">Primerjava</a>
+<a href="#cene" className="nlnk">Cene</a>
             <Link href="/login" className="nbtn">Prijava</Link>
             <Link href="/register" className="ndark">Začni brezplačno →</Link>
           </div>
@@ -308,7 +312,7 @@ export default function LandingPage() {
 
         <hr className="divider" />
 
-        <div className="feats">
+        <div className="feats" id="kako-deluje">
           <div className="math-head">
             <div className="sec-tag" style={{background:'#E8F5EE',color:'#085041'}}>Kaj dobite</div>
             <div className="sec-h">Vse kar računovodja počne. Plus tisto kar ne.</div>
@@ -324,7 +328,7 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <div className="compare">
+        <div className="compare" id="primerjava">
           <div className="math-head">
             <div className="sec-tag" style={{background:'#FEF3E2',color:'#9A6315'}}>Poštena primerjava</div>
             <div className="sec-h">Računovodja vs. Računko</div>
@@ -363,7 +367,7 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <div className="pricing">
+        <div className="pricing" id="cene">
           <div className="math-head">
             <div className="sec-tag" style={{background:'#FEF3E2',color:'#9A6315'}}>Cene</div>
             <div className="sec-h">Fiksno. Brez presenečenj.</div>
