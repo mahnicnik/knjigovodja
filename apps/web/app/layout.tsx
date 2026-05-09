@@ -1,20 +1,27 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
+});
+
+const instrumentSerif = Instrument_Serif({
+  variable: "--font-instrument-serif",
+  subsets: ["latin", "latin-ext"],
+  weight: "400",
+  style: ["normal", "italic"],
 });
 
 export const metadata: Metadata = {
-  title: "Računko",
-  description: "AI računovodja za slovenskega s.p.",
+  title: "Računko — AI računovodja za slovenskega s.p.",
+  description: "Zamenja računovodja za €19.99/mesec. AI ki pozna FURS, vaše dejanske podatke in slovensko davčno pravo. Brez vezave, brez kreditne kartice.",
 };
 
 export default function RootLayout({
@@ -25,12 +32,19 @@ export default function RootLayout({
   return (
     <html
       lang="sl"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} h-full antialiased`}
     >
       <head>
-      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+        <style>{`
+          :root {
+            --ff-display: var(--font-instrument-serif), 'Instrument Serif', serif;
+            --ff-body: var(--font-geist-sans), system-ui, sans-serif;
+            --ff-mono: var(--font-geist-mono), ui-monospace, monospace;
+          }
+        `}</style>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#0D1F12" />
+        <meta name="theme-color" content="#0E3D2A" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Računko" />
