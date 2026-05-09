@@ -157,18 +157,22 @@ export default function LandingPage() {
         .fcopy{font-size:11px;color:#aaa}
         .divider{border:none;border-top:0.5px solid #EBEBEB}
         @media(max-width:768px){
-          .nav{padding:0 16px}.hero{padding:48px 16px 40px}.hero-h1{font-size:30px}
-          .math-eq{grid-template-columns:1fr;gap:8px}.mop{padding:4px 0;font-size:16px}
-          .app-body{grid-template-columns:1fr}.sb{display:none}
-          .kpis{grid-template-columns:1fr 1fr}.amid{grid-template-columns:1fr}
-          .feat-grid{grid-template-columns:1fr}.cmp-grid{grid-template-columns:1fr}
-          .testis{grid-template-columns:1fr}.plans{grid-template-columns:1fr}
-          .math{padding:40px 16px}.product{padding:40px 16px}.feats{padding:40px 16px}
-          .compare{padding:40px 16px}.social{padding:40px 16px}.pricing{padding:40px 16px}
-          .faq{padding:40px 16px}.cta{padding:48px 16px}.foot{padding:20px 16px}
-          .pain{padding:18px 16px}.hero-trust{gap:12px}
-          .nr .nlnk{display:none}
-        }
+  .nav{padding:0 16px}.hero{padding:48px 16px 40px}.hero-h1{font-size:30px}
+  .math-eq{grid-template-columns:1fr;gap:8px}.mop{padding:4px 0;font-size:16px}
+  .app-body{grid-template-columns:1fr}.sb{display:none}
+  .kpis{grid-template-columns:1fr 1fr}.amid{grid-template-columns:1fr}
+  .feat-grid{grid-template-columns:1fr}.cmp-grid{grid-template-columns:1fr}
+  .testis{grid-template-columns:1fr}.plans{grid-template-columns:1fr}
+  .math{padding:40px 16px}.product{padding:40px 16px}.feats{padding:40px 16px}
+  .compare{padding:40px 16px}.social{padding:40px 16px}.pricing{padding:40px 16px}
+  .faq{padding:40px 16px}.cta{padding:48px 16px}.foot{padding:20px 16px}
+  .pain{padding:18px 16px}.hero-trust{gap:12px}
+  .nr .nlnk{display:none}
+  .hero-cta{flex-direction:column;gap:8px}
+  .btn-primary{width:100%;text-align:center;box-sizing:border-box}
+  .btn-secondary{display:none}
+  .nav .nbtn{display:none}
+}
       `}</style>
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
 
