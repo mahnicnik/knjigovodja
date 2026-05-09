@@ -425,8 +425,8 @@ export default function LandingPage() {
         <footer className="foot">
           <div className="flogo">Računko</div>
           <div className="flinks">
-            <a href="#" className="flink">Zasebnost</a>
-            <a href="#" className="flink">Pogoji</a>
+          <Link href="/privacy" className="flink">Zasebnost</Link>
+          <Link href="/terms" className="flink">Pogoji</Link>
             <a href="#" className="flink">Kontakt</a>
           </div>
           <div className="fcopy">© 2026 · Narejeno za slovenskega podjetnika</div>

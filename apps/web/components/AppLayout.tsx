@@ -282,6 +282,10 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
           </div>
         </Link>
         <button onClick={handleLogout} style={{ width: '100%', marginTop: '4px', padding: '5px 8px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.2)', fontSize: '11px', cursor: 'pointer', textAlign: 'left', borderRadius: '6px' }}>Odjava</button>
+        <div style={{display:'flex',gap:'12px',padding:'4px 8px',marginBottom:'4px'}}>
+  <Link href="/privacy" style={{fontSize:'10px',color:'rgba(255,255,255,0.2)',textDecoration:'none'}}>Zasebnost</Link>
+  <Link href="/terms" style={{fontSize:'10px',color:'rgba(255,255,255,0.2)',textDecoration:'none'}}>Pogoji</Link>
+</div>
       </div>
     </div>
   )
