@@ -168,6 +168,7 @@ export default function LandingPage() {
   .faq{padding:40px 16px}.cta{padding:48px 16px}.foot{padding:20px 16px}
   .pain{padding:18px 16px}.hero-trust{gap:12px}
   .nr .nlnk{display:none}
+  .nbtn{display:inline-block!important}
   .hero-cta{flex-direction:column;gap:8px}
   .btn-primary{width:100%;text-align:center;box-sizing:border-box}
   .btn-secondary{display:none}
