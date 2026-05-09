@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import posthog from 'posthog-js'
 
 const ALL_STEPS = [
   {
@@ -216,6 +217,16 @@ export default function OnboardingPage() {
         // Preferences napaka ni kritična — gremo naprej
         console.error('Preferences error:', prefError)
       }
+
+      posthog.identify(user.id, { email: user.email })
+      posthog.capture('onboarding_completed', {
+        org_name: orgName,
+        business_type: finalAnswers.tip,
+        vat_registered: finalAnswers.ddv === 'yes',
+        has_employees: finalAnswers.zaposleni === 'yes',
+        industries: finalAnswers.dejavnost,
+        active_modules: 18 - computeHiddenNav(finalAnswers).length,
+      })
 
       router.push('/dashboard')
 

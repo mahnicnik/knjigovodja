@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import posthog from 'posthog-js'
 
 export default function ExpensesPage() {
   const [org, setOrg] = useState<any>(null)
@@ -84,6 +85,12 @@ export default function ExpensesPage() {
       category: form.category,
     })
 
+    posthog.capture('expense_added', {
+      category: form.category,
+      amount_net: amountNet,
+      amount_total: amountTotal,
+      vat_rate: vatRate,
+    })
     setForm({
       vendor: '',
       receipt_date: new Date().toISOString().split('T')[0],

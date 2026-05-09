@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import posthog from 'posthog-js'
 
 const SP_CONTRIBUTIONS: Record<number, number> = {
   1: 2584.92, 2: 3012.36, 3: 3439.20, 4: 3866.04, 5: 4293.00,
@@ -83,6 +84,11 @@ export default function NastavitevPage() {
     if (error) {
       alert('Napaka: ' + error.message)
     } else {
+      posthog.capture('organization_settings_saved', {
+        vat_registered: form.vat_registered,
+        contribution_class: form.contribution_class,
+        has_iban: !!form.iban,
+      })
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     }
