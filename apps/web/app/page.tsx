@@ -1,443 +1,604 @@
+'use client'
 
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
+import './styles.css'
 
+/* ---------- Tokens ---------- */
+const PALETTES: Record<string, any> = {
+  forest: {
+    name: "Forest",
+    bg: "#F4EFE6", bg2: "#FBF7EE",
+    ink: "#0C2A1E", ink2: "#3A4A40",
+    rule: "#D9D2C2",
+    primary: "#0E3D2A", primaryInk: "#F4EFE6",
+    accent: "#C9442B", accentSoft: "#F4D9CE",
+    sage: "#D7E4D4", sageInk: "#1F4732",
+  },
+  ink: {
+    name: "Ink",
+    bg: "#0C0F0D", bg2: "#14181A",
+    ink: "#EDE7D9", ink2: "#9AA39A",
+    rule: "#252B28",
+    primary: "#C9F26A", primaryInk: "#0C0F0D",
+    accent: "#FF6A45", accentSoft: "#3A1B14",
+    sage: "#1B2A22", sageInk: "#9DC8AB",
+  },
+  paper: {
+    name: "Paper",
+    bg: "#F2EFE8", bg2: "#FFFFFF",
+    ink: "#111111", ink2: "#5C5A55",
+    rule: "#D9D6CE",
+    primary: "#111111", primaryInk: "#F2EFE8",
+    accent: "#D54B2A", accentSoft: "#F4D9CE",
+    sage: "#E6E2D6", sageInk: "#2A2A2A",
+  },
+}
+
+const HEADLINES: Record<string, any> = {
+  math: {
+    eyebrow: "Narejeno za slovenskega s.p. in d.o.o.",
+    pre: "Vaš računovodja naredi ", big: "10 klikov", mid: " na mesec.",
+    line2_pre: "Vi plačate ", line2_big: "€300.", line2_post: "",
+    sub: "Računko je AI računovodja. Pozna slovensko davčno pravo, vaše dejanske podatke in roke FURS-a. Enako delo. Ena devetnajstina cene.",
+  },
+  honest: {
+    eyebrow: "Brez posrednika",
+    pre: "Vašega računovodjo zamenja ", big: "€19.99 na mesec.", mid: "",
+    line2_pre: "In ", line2_big: "ne pozabi nikoli.", line2_post: "",
+    sub: "AI ki govori slovensko, bere FURS in dela 24/7. Ne šepeta po telefonu, ne pošilja PDF-jev v prilogi. Naredi.",
+  },
+  blunt: {
+    eyebrow: "Resnica o malih s.p.",
+    pre: "Plačujete ", big: "€3.600 letno", mid: "",
+    line2_pre: "za ", line2_big: "10 klikov.", line2_post: "",
+    sub: "Vsak mesec — ista predloga, isti email, isti zneski. Računovodstvo za s.p. ni storitev. Je copy-paste. Računko ga naredi sam.",
+  },
+  identity: {
+    eyebrow: "Za 90% slovenskih s.p.",
+    pre: "Niste ", big: "premajhni", mid: " za pravo računovodstvo.",
+    line2_pre: "Le predragi posrednik vam je rekel, ", line2_big: "da ste.", line2_post: "",
+    sub: "Računko je AI računovodja ki pozna FURS, vaše dejanske podatke in slovensko davčno pravo. Odgovori v 3 sekundah, ne v 3 dneh. €19.99 mesečno.",
+  },
+}
+
+/* ---------- Tiny icons ---------- */
+function Tick(){return(<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 7.5l3 3 7-7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>)}
+function Cross(){return(<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>)}
+function EU(){return(<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5.2" fill="none" stroke="currentColor" strokeWidth="1.4"/><circle cx="7" cy="7" r="1.6" fill="currentColor"/></svg>)}
+function Clock(){return(<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.4"/><path d="M7 4v3.2L9 8.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>)}
+function Bell(){return(<svg width="13" height="13" viewBox="0 0 13 13"><path d="M3 9.5h7l-1-1.5V6a2.5 2.5 0 10-5 0v2L3 9.5z M5.5 11a1 1 0 002 0" stroke="currentColor" fill="none" strokeLinejoin="round"/></svg>)}
+const Sq=()=>(<svg width="13" height="13" viewBox="0 0 13 13"><rect x="1.5" y="1.5" width="4" height="4" rx="1" fill="none" stroke="currentColor"/><rect x="7.5" y="1.5" width="4" height="4" rx="1" fill="none" stroke="currentColor"/><rect x="1.5" y="7.5" width="4" height="4" rx="1" fill="none" stroke="currentColor"/><rect x="7.5" y="7.5" width="4" height="4" rx="1" fill="none" stroke="currentColor"/></svg>)
+const Bot=()=>(<svg width="13" height="13" viewBox="0 0 13 13"><rect x="2.5" y="4" width="8" height="6.5" rx="1.5" fill="none" stroke="currentColor"/><circle cx="5.2" cy="6.8" r="0.7" fill="currentColor"/><circle cx="7.8" cy="6.8" r="0.7" fill="currentColor"/><path d="M6.5 1.5v2.2" stroke="currentColor" fill="none"/></svg>)
+const Bars=()=>(<svg width="13" height="13" viewBox="0 0 13 13"><path d="M2 11h9M3.5 8.5v2M6.5 5.5v5M9.5 7v3.5" stroke="currentColor" fill="none" strokeLinecap="round"/></svg>)
+const Doc=()=>(<svg width="13" height="13" viewBox="0 0 13 13"><path d="M3 1.5h5l2.5 2.5v8H3z" fill="none" stroke="currentColor"/><path d="M8 1.5V4h2.5" fill="none" stroke="currentColor"/></svg>)
+const Qr=()=>(<svg width="13" height="13" viewBox="0 0 13 13"><rect x="1.5" y="1.5" width="4" height="4" stroke="currentColor" fill="none"/><rect x="7.5" y="1.5" width="4" height="4" stroke="currentColor" fill="none"/><rect x="1.5" y="7.5" width="4" height="4" stroke="currentColor" fill="none"/><rect x="8" y="8" width="1.5" height="1.5" fill="currentColor"/><rect x="10.5" y="10.5" width="1" height="1" fill="currentColor"/></svg>)
+const Pct=()=>(<svg width="13" height="13" viewBox="0 0 13 13"><circle cx="3.5" cy="3.5" r="1.5" stroke="currentColor" fill="none"/><circle cx="9.5" cy="9.5" r="1.5" stroke="currentColor" fill="none"/><path d="M2 11L11 2" stroke="currentColor"/></svg>)
+const Norm=()=>(<svg width="13" height="13" viewBox="0 0 13 13"><rect x="1.5" y="1.5" width="10" height="10" rx="1" stroke="currentColor" fill="none"/><path d="M3.5 4.5h6M3.5 6.5h6M3.5 8.5h4" stroke="currentColor"/></svg>)
+const Scan=()=>(<svg width="13" height="13" viewBox="0 0 13 13"><path d="M2 4.5V2h2.5M11 4.5V2H8.5M2 8.5V11h2.5M11 8.5V11H8.5M3 6.5h7" stroke="currentColor" fill="none" strokeLinecap="round"/></svg>)
+const Plus=()=>(<svg width="11" height="11" viewBox="0 0 11 11"><path d="M5.5 1.5v8M1.5 5.5h8" stroke="currentColor" strokeLinecap="round"/></svg>)
+
+/* ---------- Nav ---------- */
+function Nav() {
+  return (
+    <nav className="nav">
+      <div className="nav-inner">
+        <Link href="#top" className="brand" aria-label="Računko">
+          <span className="brand-mark" aria-hidden="true">
+            <span>r</span><span className="brand-dot">č</span>
+          </span>
+          <span className="brand-word">računko</span>
+        </Link>
+        <div className="nav-links">
+          <a href="#kako">Kako deluje</a>
+          <a href="#primerjava">Primerjava</a>
+          <a href="#cene">Cene</a>
+          <a href="#faq">FAQ</a>
+        </div>
+        <div className="nav-cta">
+          <Link className="btn btn-ghost" href="/login">Prijava</Link>
+          <Link className="btn btn-primary" href="/register">
+            Začni — brezplačno <span aria-hidden="true">→</span>
+          </Link>
+        </div>
+      </div>
+    </nav>
+  )
+}
+
+/* ---------- Hero ---------- */
+function Hero({ headline }: { headline: string }) {
+  const h = HEADLINES[headline] || HEADLINES.identity
+  return (
+    <section className="hero" id="top">
+      <div className="hero-grid">
+        <div className="eyebrow">
+          <span className="dot" /> {h.eyebrow}
+        </div>
+
+        <h1 className="display">
+          <span>{h.pre}</span>
+          <em className="display-accent">{h.big}</em>
+          <span>{h.mid}</span>
+          <br />
+          <span>{h.line2_pre}</span>
+          <em className="display-accent">{h.line2_big}</em>
+          <span>{h.line2_post}</span>
+        </h1>
+
+        <p className="hero-sub">{h.sub}</p>
+
+        <div className="hero-cta">
+          <Link href="/register" className="btn btn-primary btn-lg">
+            Prvi račun v 5 minutah <span aria-hidden="true">→</span>
+          </Link>
+          <Link href="/login" className="btn btn-quiet btn-lg">Prijava</Link>
+        </div>
+        <p className="hero-proof">
+          247 slovenskih s.p. že uporablja. Povprečen prihranek prvega leta: <strong>€3.144</strong>.
+        </p>
+
+        <ul className="trust">
+          <li><Tick/> Brez kreditne kartice</li>
+          <li><EU/> Podatki v EU</li>
+          <li><Clock/> Nastavitev v 5 minutah</li>
+          <li><Cross/> Brez vezave</li>
+        </ul>
+      </div>
+
+      <div className="hero-quote-rule" aria-hidden="true" />
+
+      <figure className="pull-quote">
+        <blockquote>
+          <span className="qmark" aria-hidden="true">&ldquo;</span>
+          Vsak mesec pošljem računovodji iste dokumente. On mi pošlje
+          {" "}<mark>isti email z zneski prispevkov.</mark>{" "}
+          Račun: <strong>€320.</strong>
+        </blockquote>
+        <figcaption>— resnična izkušnja slovenskega s.p. freelancerja</figcaption>
+      </figure>
+    </section>
+  )
+}
+
+/* ---------- Live cost calculator ---------- */
+function MathSection() {
+  const [rate, setRate] = useState(280)
+  const yearly = rate * 12
+  const racunko = 240
+  const saved = yearly - racunko
+  return (
+    <section className="section math">
+      <header className="section-head">
+        <div className="kicker kicker-warn">Preprosta matematika</div>
+        <h2 className="h2">Koliko vas <em>dejansko</em> stane računovodja?</h2>
+        <p className="lede">Premaknite drsnik na svoj mesečni račun. Računko stane €19.99 mesečno — fiksno, brez dodatkov.</p>
+      </header>
+
+      <div className="calc">
+        <div className="calc-card calc-input">
+          <div className="calc-label">Vaš mesečni račun</div>
+          <div className="calc-value">
+            <span className="cur">€</span>
+            <span className="num">{rate}</span>
+            <span className="unit">/mes</span>
+          </div>
+          <input
+            className="calc-slider"
+            type="range" min="80" max="600" step="10"
+            value={rate}
+            onChange={(e) => setRate(parseInt(e.target.value, 10))}
+            aria-label="Mesečni račun računovodje"
+          />
+          <div className="calc-scale">
+            <span>€80</span><span>€280 (povp. SLO)</span><span>€600</span>
+          </div>
+        </div>
+
+        <div className="calc-times" aria-hidden="true">×</div>
+
+        <div className="calc-card calc-mid">
+          <div className="calc-label">Mesecev</div>
+          <div className="calc-value"><span className="num num-quiet">12</span></div>
+          <div className="calc-foot">Vsak mesec. Brez izjeme.</div>
+        </div>
+
+        <div className="calc-eq" aria-hidden="true">=</div>
+
+        <div className="calc-card calc-result">
+          <div className="calc-label">Letno</div>
+          <div className="calc-value">
+            <span className="cur">€</span>
+            <span className="num num-result">{yearly.toLocaleString("sl-SI")}</span>
+          </div>
+          <div className="calc-foot">Računko: <strong>€240/leto</strong></div>
+        </div>
+      </div>
+
+      <div className="savings">
+        <span className="savings-label">Letni prihranek z Računkom</span>
+        <span className="savings-amt">€{saved.toLocaleString("sl-SI")}</span>
+        <span className="savings-foot">≈ {Math.round(saved / 1)} € — vaš denar, ne računovodjin</span>
+      </div>
+    </section>
+  )
+}
+
+/* ---------- Product mockup ---------- */
+function Product() {
+  return (
+    <section className="section product" id="kako">
+      <header className="section-head">
+        <div className="kicker">Vmesnik</div>
+        <h2 className="h2">Vse kar potrebujete. Na enem zaslonu.</h2>
+        <p className="lede">Prihodki, roki, računi in AI računovodja. Brez iskanja po mailu, brez čakanja na odgovor.</p>
+      </header>
+      <DashboardMock />
+    </section>
+  )
+}
+
+function DashboardMock() {
+  return (
+    <div className="dash">
+      <div className="dash-bar">
+        <span className="tl"><i/><i/><i/></span>
+        <span className="url">računko.si/dashboard</span>
+        <span className="tl tl-r" aria-hidden="true" />
+      </div>
+      <div className="dash-body">
+        <aside className="dash-side">
+          <div className="dash-brand">računko</div>
+          <div className="dash-grp">Pregled</div>
+          <a className="dash-nav active"><Sq/> Dashboard</a>
+          <a className="dash-nav"><Bot/> AI računovodja</a>
+          <a className="dash-nav"><Bars/> Statistika</a>
+          <div className="dash-grp">Poslovanje</div>
+          <a className="dash-nav"><Doc/> Računi</a>
+          <a className="dash-nav"><Doc/> Stroški</a>
+          <div className="dash-grp">Davki</div>
+          <a className="dash-nav"><Qr/> Prispevki QR</a>
+          <a className="dash-nav"><Pct/> DDV obračun</a>
+          <a className="dash-nav"><Norm/> Normirani</a>
+          <div className="dash-side-foot">
+            <span className="avatar">RS</span>
+            <span>
+              <strong>Računko s.p.</strong>
+              <small>Normiranec · brez DDV</small>
+            </span>
+          </div>
+        </aside>
+        <main className="dash-main">
+          <header className="dash-head">
+            <div>
+              <h3>Dober dan <span className="wave">👋</span></h3>
+              <p className="dash-sub">Petek, 9. maj 2026 · maj 2026</p>
+            </div>
+            <div className="dash-pills">
+              <span className="pill pill-warn">⏱ 1 račun v zamudi</span>
+              <span className="pill pill-warn-soft">⏱ Prispevki čez 6 dni</span>
+            </div>
+          </header>
+
+          <div className="dash-stats">
+            {[
+              ["Prihodki maj","€2.840",""],
+              ["Odhodki","€640","ink2"],
+              ["Neplačano","€1.200","accent"],
+              ["Dobiček","€2.200","primary"],
+            ].map(([l,v,k]) => (
+              <div key={l} className={"stat stat-"+k}>
+                <span>{l}</span>
+                <strong>{v}</strong>
+              </div>
+            ))}
+          </div>
+
+          <div className="dash-row">
+            <div className="dash-card">
+              <div className="dash-card-head">
+                <h4>Zadnji računi</h4>
+                <a>vsi →</a>
+              </div>
+              <ul className="dash-list">
+                <li><span className="ok"/>Agencija Pixel d.o.o.<em>€1.200</em><span className="tag tag-ok">Plačano</span></li>
+                <li><span className="warn"/>Startup XY d.o.o.<em>€850</em><span className="tag tag-warn">Poslano</span></li>
+                <li><span className="bad"/>Tech Solutions<em>€350</em><span className="tag tag-bad">Zamuda</span></li>
+              </ul>
+            </div>
+            <div className="dash-card">
+              <div className="dash-card-head"><h4>Roki ta mesec</h4></div>
+              <ul className="dash-list dash-list-roki">
+                <li>Prispevki s.p. — <em>€522</em><span className="tag tag-warn">6 dni</span></li>
+                <li>Akontacija — <em>€113</em><span className="tag tag-warn">6 dni</span></li>
+                <li>REK-1 + plača<span className="tag tag-soft">17 dni</span></li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="dash-foot">
+            <span className="dash-foot-label">Hitro:</span>
+            <button className="chip"><Scan/> Skeniraj</button>
+            <button className="chip"><Qr/> Prispevki QR</button>
+            <button className="chip"><Bot/> AI</button>
+            <button className="chip chip-primary"><Plus/> Nov račun</button>
+          </div>
+        </main>
+      </div>
+    </div>
+  )
+}
+
+/* ---------- Features ---------- */
+const FEATURES = [
+  { tone: "violet", title: "AI ki pozna vaše podatke", body: '"Koliko dohodnine bom plačal letos?" — odgovor v 3 sekundah, izračunan iz vašega dejanskega prometa. Ne s splošnimi pravili. Z vašimi.', tag: "24/7 na voljo", icon: <Bot/> },
+  { tone: "amber", title: "Prispevki QR — 30 sekund", body: "ZPIZ, ZZZS in akontacija z UPN QR kodo. Skenirate v banki, plačilo gre. Brez ročnega vnosa, brez napak v številkah.", tag: "Samo za SLO trg", icon: <Qr/> },
+  { tone: "rose", title: "Opomniki 7 dni vnaprej", body: "Ne en dan prej, ko je že prepozno. 7 dni vnaprej za vsak davčni rok — DDV-O, akontacija, REK-1, prispevki. Nikoli več zamude.", tag: "Brez panike", icon: <Bell/> },
+  { tone: "blue", title: "Računi z UPN QR v 30 sec", body: "PDF z UPN QR kodo. Stranka skenira z mobilno banko, plačilo pride direktno na vaš račun. Brez čakanja na potrditev.", tag: "Stripe + UPN", icon: <Doc/> },
+  { tone: "mint", title: "Skeniraj strošek — AI OCR", body: "Fotografirate račun, AI prepozna znesek, datum, DDV in dobavitelja. Konec map polnih papirjev in mesečnega pošiljanja.", tag: "iOS + Android", icon: <Scan/> },
+  { tone: "sage", title: "Normirani vs. dejanski", body: "Točen izračun kdaj se vam splača preiti na dejanske stroške. Z grafom in mejno vrednostjo — kar vam računovodja verjetno ni nikoli pokazal.", tag: "Unikatno za SLO", icon: <Pct/> },
+]
+
+function FeaturesSection() {
+  return (
+    <section className="section features" id="features">
+      <header className="section-head">
+        <div className="kicker">Kaj dobite</div>
+        <h2 className="h2">Vse kar računovodja počne. <em>Plus tisto kar ne.</em></h2>
+        <p className="lede">Računovodja ne odgovori ob 22:00 v nedeljo. Računko odgovori v 3 sekundah.</p>
+      </header>
+      <div className="feat-grid">
+        {FEATURES.map((f,i) => (
+          <article key={i} className={"feat feat-"+f.tone}>
+            <div className="feat-icon">{f.icon}</div>
+            <h3>{f.title}</h3>
+            <p>{f.body}</p>
+            <span className="feat-tag">{f.tag}</span>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/* ---------- Comparison ---------- */
+function Comparison() {
+  const rows = [
+    ["Splošni odgovori brez vpogleda", "Konkretni odgovori z vašimi podatki"],
+    ["Odgovor čez 1–3 dni. Ob 22h — jutri.", "Takoj. 24/7. Tudi nedelje, prazniki."],
+    ["Vi zbirate in pošiljate dokumente", "AI OCR — fotka stroška = vnos"],
+    ["Opomnik en dan prej — pogosto prepozno", "7 dni vnaprej za vsak davčni rok"],
+    ["€280–500 / mesec", "€19.99 / mesec"],
+  ]
+  return (
+    <section className="section compare" id="primerjava">
+      <header className="section-head">
+        <div className="kicker">Poštena primerjava</div>
+        <h2 className="h2">Računovodja vs. Računko</h2>
+        <p className="lede">Za s.p. ki večino dela opravljajo sami.</p>
+      </header>
+
+      <div className="compare-card">
+        <div className="compare-col col-left">
+          <header>
+            <span className="col-icon">👤</span>
+            <span><strong>Računovodja</strong><small> · €200–500/mes</small></span>
+          </header>
+          {rows.map((r,i) => (
+            <div key={i} className="row">
+              <Cross/> <span>{r[0]}</span>
+            </div>
+          ))}
+          <div className="row row-mute">
+            <span className="dashm">—</span>
+            <span>Smiselno za revizije + d.o.o. nad €50k</span>
+          </div>
+        </div>
+        <div className="compare-col col-right">
+          <header>
+            <span className="col-icon"><Bot/></span>
+            <span><strong>Računko</strong><small> · €19.99/mes</small></span>
+          </header>
+          {rows.map((r,i) => (
+            <div key={i} className="row row-yes">
+              <Tick/> <span>{r[1]}</span>
+            </div>
+          ))}
+          <div className="row row-mute">
+            <span className="dashm">—</span>
+            <span>Za revizije priporočamo računovodja — <strong>Računko pokrije 95%</strong></span>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ---------- Testimonials ---------- */
+const QUOTES = [
+  { save: "Prihranek €3.120/leto", text: "Plačevala sem €280/mes. Vsak mesec ista predloga, isti email. Zdaj to naredi Računko. €260 več v žepu — vsak mesec.", name: "Ana K.", role: "IT freelancer · Ljubljana", avatar: "AK" },
+  { save: "0 zamujenih rokov", text: "Bala sem se, da bom brez računovodje naredila napako. Po 8 mesecih — nobene napake. Vsi roki spoštovani. FURS molči.", name: "Miha T.", role: "Grafični oblikovalec · Maribor", avatar: "MT" },
+  { save: "Prihranek €4.572/leto", text: "AI mi je odgovoril v 10 sekundah na vprašanje, ki ga je računovodja pustil ob torku. Odgovor je prišel v petek. Za €380/mes.", name: "Sara P.", role: "Fizioterapevtka · Kranj", avatar: "SP" },
+]
+
+function Testimonials() {
+  return (
+    <section className="section quotes">
+      <header className="section-head">
+        <div className="kicker">Resnične izkušnje</div>
+        <h2 className="h2">S.p. ki so preračunali</h2>
+        <p className="lede">Ne splošne pohvale — konkretni zneski ki so jih prihranili.</p>
+      </header>
+      <div className="quote-grid">
+        {QUOTES.map((q,i) => (
+          <figure key={i} className="quote">
+            <div className="quote-head">
+              <span className="stars" aria-label="5 zvezdic">★ ★ ★ ★ ★</span>
+              <span className="save-tag">{q.save}</span>
+            </div>
+            <blockquote>&ldquo;{q.text}&rdquo;</blockquote>
+            <figcaption>
+              <span className="avatar">{q.avatar}</span>
+              <span>
+                <strong>{q.name}</strong>
+                <small>{q.role}</small>
+              </span>
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/* ---------- Pricing ---------- */
+function Pricing() {
+  return (
+    <section className="section pricing" id="cene">
+      <header className="section-head">
+        <div className="kicker">Cene</div>
+        <h2 className="h2">Fiksno. Brez presenečenj.</h2>
+        <p className="lede">Brez &ldquo;minimuma ur&rdquo;, brez &ldquo;letnega obračuna posebej&rdquo;. Eno število.</p>
+      </header>
+
+      <div className="plans">
+        <article className="plan">
+          <div className="plan-name">Starter</div>
+          <div className="plan-price"><span className="cur">€</span><span className="num">0</span><span className="per">/mes</span></div>
+          <span className="plan-tag plan-tag-soft">Brez kreditne kartice</span>
+          <ul className="plan-list">
+            <li><Tick/> 5 računov mesečno</li>
+            <li><Tick/> AI računovodja — 10 vprašanj</li>
+            <li><Tick/> Prispevki QR</li>
+            <li><Tick/> Davčni rokovnik</li>
+          </ul>
+          <Link className="btn btn-quiet btn-block" href="/register">Začni brezplačno</Link>
+        </article>
+
+        <article className="plan plan-hero">
+          <div className="plan-flag">Zamenja računovodjo</div>
+          <div className="plan-name">Pro</div>
+          <div className="plan-price">
+            <span className="cur">€</span><span className="num">19.99</span><span className="per">/mes</span>
+          </div>
+          <span className="plan-tag plan-tag-amber">Prihranek do €5.000/leto</span>
+          <ul className="plan-list">
+            <li><Tick/> Neomejeni računi</li>
+            <li><Tick/> AI brez omejitev · 24/7</li>
+            <li><Tick/> OCR skeniranje stroškov</li>
+            <li><Tick/> Obračun plač + regres</li>
+            <li><Tick/> DDV evidenca</li>
+            <li><Tick/> Stripe integracija</li>
+          </ul>
+          <Link className="btn btn-primary btn-block" href="/register?plan=pro">Začni Pro — €19.99/mes →</Link>
+        </article>
+      </div>
+    </section>
+  )
+}
+
+/* ---------- FAQ ---------- */
+const FAQS = [
+  { q:"Ali Računko res nadomesti računovodjo?", a:"Za 90% samostojnih podjetnikov — da. Normiranec, DDV zavezanec, par zaposlenih — Računko pokrije vse. Za d.o.o. z revizijo priporočamo Računko + računovodja za letni zaključek." },
+  { q:"Kaj če naredim napako?", a:"Računko vas opomni 7 dni pred rokom. AI vas opozori na nepravilnosti pri vnosu. Mesečni vodič vas korak za korakom pelje skozi vse obveznosti za vaš profil." },
+  { q:"Ali moram prekiniti pogodbo z računovodjem?", a:"Ne. Preizkusite Računko mesec brezplačno, šele nato se odločite. Večina strank odpove pogodbo po prvem mesecu — ko vidijo da res deluje." },
+  { q:"Deluje za DDV zavezance?", a:"Da. DDV evidenca, izračun obveznosti, opomniki za DDV-O rok — vse je vključeno v Pro planu. Tudi za 22%, 9,5% in 5% stopnje." },
+  { q:"Kako varni so moji finančni podatki?", a:"Strežniki v EU (Frankfurt). Supabase platforma z Row Level Security — tehnično je nemogoče da bi drug uporabnik videl vaše podatke. Šifriranje pri prenosu in v mirovanju." },
+]
+
+function FAQ() {
+  const [open, setOpen] = useState(0)
+  return (
+    <section className="section faq" id="faq">
+      <header className="section-head">
+        <div className="kicker">Pogosta vprašanja</div>
+        <h2 className="h2">Odgovori brez zavijanja</h2>
+      </header>
+      <div className="faq-list">
+        {FAQS.map((f,i) => (
+          <div key={i} className={"faq-item"+(open===i?" open":"")}>
+            <button className="faq-q" onClick={() => setOpen(open===i?-1:i)} aria-expanded={open===i}>
+              <span>{f.q}</span>
+              <span className="faq-icn" aria-hidden="true">{open===i ? "−" : "+"}</span>
+            </button>
+            {open===i && <div className="faq-a">{f.a}</div>}
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/* ---------- Final CTA ---------- */
+function FinalCTA() {
+  return (
+    <section className="final" id="zacni">
+      <div className="final-inner">
+        <div className="kicker kicker-on-dark">Zadnje vprašanje</div>
+        <h2 className="final-h">Koliko ste <em>lani</em> plačali računovodji?</h2>
+        <p className="final-sub">
+          Seštejte mesečne račune. Potem pomislite kaj ste za to dobili.
+          <br/>
+          Računko stane <strong>€240 letno</strong>. Ostalo je vaše.
+        </p>
+        <Link className="btn btn-on-dark btn-lg" href="/register">
+          Preizkusi brezplačno — brez kreditne kartice <span aria-hidden="true">→</span>
+        </Link>
+        <div className="final-trust">Brez vezave · Prekličete kadarkoli · Podatki v EU</div>
+      </div>
+    </section>
+  )
+}
+
+/* ---------- Footer ---------- */
+function Footer() {
+  return (
+    <footer className="foot">
+      <div className="foot-inner">
+        <div className="foot-brand">
+          <span className="brand-mark"><span>r</span><span className="brand-dot">č</span></span>
+          <span>Računko</span>
+        </div>
+        <nav className="foot-nav">
+          <a href="mailto:ustanovitelj@racunko.si">Pišite ustanovitelju</a>
+          <Link href="/privacy">Zasebnost</Link>
+          <Link href="/terms">Pogoji</Link>
+        </nav>
+        <div className="foot-fine">© 2026 · Narejeno za slovenskega podjetnika</div>
+      </div>
+    </footer>
+  )
+}
+
+/* ---------- Page ---------- */
 export default function LandingPage() {
+  const t = {
+    palette: "forest",
+    headline: "identity",
+    density: "normal",
+    font: "instrument",
+  } as const
+
+  useEffect(() => {
+    const root = document.documentElement
+    root.dataset.palette = t.palette
+    root.dataset.density = t.density
+    root.dataset.font = t.font
+  }, [])
+
   return (
     <>
-   <style>{`
-  html{scroll-behavior:smooth}
-  *{box-sizing:border-box;margin:0;padding:0}
-  
-
-        *{box-sizing:border-box;margin:0;padding:0}
-        .lp{background:#fff;color:#111;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
-        .nav{display:flex;align-items:center;justify-content:space-between;padding:0 40px;height:56px;border-bottom:0.5px solid #EBEBEB;background:#fff;position:sticky;top:0;z-index:99}
-        .nlogo{display:flex;align-items:center;gap:10px}
-        .nmark{width:30px;height:30px;border-radius:8px;background:#0A3D2B;display:flex;align-items:center;justify-content:center;color:#9FE1CB;font-size:11px;font-weight:500}
-        .nname{font-size:14px;font-weight:500;color:#111}
-        .nr{display:flex;align-items:center;gap:8px}
-        .nlnk{padding:5px 10px;border-radius:6px;font-size:12px;color:#666;text-decoration:none}
-        .nlnk:hover{background:#F5F5F5}
-        .nbtn{padding:6px 14px;border-radius:7px;font-size:12px;border:0.5px solid #DDD;background:#fff;color:#111;cursor:pointer;text-decoration:none;display:inline-block}
-        .ndark{padding:7px 16px;border-radius:7px;font-size:12px;font-weight:500;background:#0A3D2B;color:#fff;border:none;cursor:pointer;text-decoration:none;display:inline-block}
-        .hero{padding:72px 40px 64px;background:#fff;text-align:center}
-        .hero-eyebrow{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;background:#E8F5EE;color:#085041;font-size:11px;font-weight:500;border:0.5px solid #C5E8D5;margin-bottom:22px}
-        .hero-h1{font-size:45px;font-weight:600;line-height:1.12;letter-spacing:-1px;color:#0A0A0A;margin-bottom:18px;max-width:660px;margin-left:auto;margin-right:auto}
-        .grn{color:#1D9E75}.red{color:#D14040}
-        .hero-sub{font-size:17px;color:#444;line-height:1.7;max-width:480px;margin:0 auto 32px}
-        .hero-cta{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:14px}
-        .btn-primary{padding:13px 30px;border-radius:9px;font-size:14px;font-weight:500;background:#1D9E75;color:#fff;border:none;cursor:pointer;text-decoration:none;display:inline-block}
-        .btn-secondary{padding:13px 22px;border-radius:9px;font-size:14px;color:#555;border:0.5px solid #DDD;background:#fff;cursor:pointer;text-decoration:none;display:inline-block}
-        .hero-trust{display:flex;align-items:center;justify-content:center;gap:20px;flex-wrap:wrap}
-        .ti-item{display:flex;align-items:center;gap:5px;font-size:11px;color:#999}
-        .pain{background:#FFF8F0;border-top:0.5px solid #F0E0C8;border-bottom:0.5px solid #F0E0C8;padding:22px 40px;text-align:center}
-        .pain-q{font-size:17px;color:#333;line-height:1.5;margin-bottom:6px;font-style:italic;max-width:660px;margin-left:auto;margin-right:auto}
-        .pain-attr{font-size:11px;color:#aaa}
-        .math{padding:60px 40px;background:#FAFAFA}
-        .math-head{text-align:center;margin-bottom:40px}
-        .sec-tag{display:inline-block;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:500;margin-bottom:12px}
-        .sec-h{font-size:27px;font-weight:600;letter-spacing:-.5px;color:#111;margin-bottom:8px}
-        .sec-sub{font-size:13px;color:#666;line-height:1.6}
-        .math-eq{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:center;gap:0;max-width:720px;margin:0 auto}
-        .mc{background:#fff;border:0.5px solid #E8E8E8;border-radius:12px;padding:22px;text-align:center}
-        .mc.bad{border-color:#F0C8C8;background:#FFFAFA}
-        .mc.good{background:#0A3D2B;border-color:#0A3D2B}
-        .mlbl{font-size:11px;color:#999;margin-bottom:7px}
-        .mval{font-size:30px;font-weight:500;letter-spacing:-.6px;color:#111}
-        .mval.r{color:#D14040}.mval.g{color:#1D9E75}
-        .mdesc{font-size:11px;color:#aaa;margin-top:5px;line-height:1.5}
-        .mop{font-size:22px;color:#CCC;padding:0 14px;text-align:center}
-        .mc.good .mlbl{color:rgba(255,255,255,.4)}
-        .mc.good .mval{color:#9FE1CB}
-        .mc.good .mdesc{color:rgba(255,255,255,.3)}
-        .mc.good .mdesc b{color:#9FE1CB}
-        .product{padding:60px 40px;background:#fff}
-        .prod-head{text-align:center;max-width:520px;margin:0 auto 36px}
-        .app-frame{max-width:800px;margin:0 auto;border:0.5px solid #E0E0E0;border-radius:14px;overflow:hidden}
-        .app-topbar{background:#0A3D2B;padding:10px 16px;display:flex;align-items:center;gap:8px}
-        .d{width:10px;height:10px;border-radius:50%}
-        .app-url{flex:1;background:rgba(255,255,255,.08);border-radius:5px;padding:3px 0;text-align:center;font-size:11px;color:rgba(255,255,255,.3)}
-        .app-body{display:grid;grid-template-columns:180px 1fr;min-height:300px}
-        .sb{background:#0A3D2B;padding:14px 8px;display:flex;flex-direction:column}
-        .sb-logo{color:#fff;font-size:12px;font-weight:500;padding:0 8px;margin-bottom:14px}
-        .sb-sec{font-size:9px;color:rgba(255,255,255,.2);letter-spacing:.1em;padding:0 8px;margin:8px 0 4px}
-        .sbi{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:7px;font-size:11px;color:rgba(255,255,255,.45);margin-bottom:1px}
-        .sbi.on{background:rgba(255,255,255,.12);color:#fff}
-        .sb-foot{margin-top:auto;border-top:0.5px solid rgba(255,255,255,.08);padding-top:10px}
-        .urow{display:flex;align-items:center;gap:8px;padding:6px 8px}
-        .uav{width:26px;height:26px;border-radius:50%;background:#1D9E75;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:500;color:#fff;flex-shrink:0}
-        .uname{font-size:11px;color:rgba(255,255,255,.65)}
-        .utype{font-size:9px;color:rgba(255,255,255,.3)}
-        .main-area{display:flex;flex-direction:column;background:#F7F7F5}
-        .main-top{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;background:#fff;border-bottom:0.5px solid #EBEBEB;flex-wrap:wrap;gap:8px}
-        .mtg{font-size:13px;font-weight:500;color:#111}
-        .mtd{font-size:10px;color:#999;margin-top:1px}
-        .mt-pills{display:flex;gap:6px;flex-wrap:wrap}
-        .mt-pill{padding:4px 10px;border-radius:6px;font-size:10px;font-weight:500}
-        .mt-pill.red{background:#FDEAEA;color:#C0392B}
-        .mt-pill.amber{background:#FEF3E2;color:#9A6315}
-        .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:12px}
-        .kpi{background:#fff;border:0.5px solid #EBEBEB;border-radius:9px;padding:10px 12px}
-        .kpi.dk{background:#0A3D2B;border:none}
-        .kl{font-size:9px;color:#999;margin-bottom:4px}
-        .kv{font-size:17px;font-weight:500;letter-spacing:-.4px;color:#111}
-        .amid{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:0 12px 12px}
-        .acard{background:#fff;border:0.5px solid #EBEBEB;border-radius:9px;padding:10px 12px}
-        .act{font-size:10px;font-weight:500;color:#111;margin-bottom:7px;display:flex;justify-content:space-between}
-        .act a{font-size:9px;color:#1D9E75;cursor:pointer}
-        .irow{display:flex;align-items:center;gap:5px;padding:4px 0;border-bottom:0.5px solid #F0F0F0;font-size:10px}
-        .irow:last-child{border:none}
-        .idot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
-        .irn{flex:1;font-weight:500;color:#111}
-        .ira{font-weight:500;color:#111;margin-left:auto}
-        .ibdg{font-size:8px;font-weight:500;padding:1px 5px;border-radius:5px;margin-left:3px}
-        .drow{display:flex;align-items:center;gap:5px;padding:5px 0;border-bottom:0.5px solid #F0F0F0;font-size:10px}
-        .drow:last-child{border:none}
-        .dname{flex:1;color:#333}
-        .ddys{font-size:9px;font-weight:500;padding:2px 7px;border-radius:5px;margin-left:auto}
-        .aab{background:#fff;border-top:0.5px solid #EBEBEB;padding:8px 12px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-        .aabl{font-size:9px;color:#bbb}
-        .aabt{display:flex;align-items:center;gap:4px;padding:4px 8px;border-radius:6px;font-size:10px;border:0.5px solid #E0E0E0;background:#fff;color:#555;cursor:pointer}
-        .aabm{margin-left:auto;display:flex;align-items:center;gap:4px;padding:5px 12px;border-radius:6px;font-size:10px;font-weight:500;background:#0A3D2B;color:#fff;cursor:pointer}
-        .feats{padding:60px 40px;background:#FAFAFA}
-        .feat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:720px;margin:0 auto}
-        .feat{display:flex;gap:14px;background:#fff;border:0.5px solid #EBEBEB;border-radius:11px;padding:18px}
-        .fic{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
-        .ft{font-size:13px;font-weight:500;color:#111;margin-bottom:5px}
-        .fs{font-size:12px;color:#666;line-height:1.65}
-        .fnew{font-size:9px;font-weight:500;padding:2px 7px;border-radius:8px;background:#E8F5EE;color:#085041;display:inline-block;margin-top:5px}
-        .compare{padding:60px 40px;background:#fff}
-        .cmp-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:680px;margin:0 auto}
-        .cmp-col{border-radius:12px;overflow:hidden;border:0.5px solid #EBEBEB}
-        .cmp-col.winner{border:2px solid #1D9E75}
-        .cmp-head-r{padding:14px 18px;display:flex;align-items:center;gap:8px;font-size:12px;font-weight:500}
-        .cmp-row{display:flex;align-items:flex-start;gap:10px;padding:11px 18px;border-top:0.5px solid #F0F0F0;background:#fff}
-        .cic{font-size:14px;flex-shrink:0;margin-top:1px}
-        .ct{font-size:12px;color:#666;line-height:1.5}
-        .ct b{color:#111;font-weight:500}
-        .social{padding:60px 40px;background:#FAFAFA}
-        .testis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:780px;margin:0 auto}
-        .testi{background:#fff;border:0.5px solid #EBEBEB;border-radius:12px;padding:18px;position:relative}
-        .tbdg{position:absolute;top:14px;right:14px;font-size:10px;font-weight:500;padding:2px 8px;border-radius:8px;background:#E8F5EE;color:#085041}
-        .tstr{color:#EF9F27;font-size:12px;margin-bottom:10px}
-        .ttext{font-size:12px;color:#555;line-height:1.65;margin-bottom:14px;font-style:italic}
-        .tauth{display:flex;align-items:center;gap:8px}
-        .tav{width:28px;height:28px;border-radius:50%;background:#E8F5EE;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:500;color:#085041;flex-shrink:0}
-        .tname{font-size:12px;font-weight:500;color:#111}
-        .trole{font-size:10px;color:#aaa}
-        .pricing{padding:60px 40px;background:#fff}
-        .plans{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:560px;margin:0 auto}
-        .plan{background:#fff;border:0.5px solid #EBEBEB;border-radius:12px;padding:22px}
-        .plan.hot{border:2px solid #1D9E75;background:#FCFFFE}
-        .pbdg{display:inline-block;padding:3px 10px;border-radius:8px;font-size:10px;font-weight:500;background:#E8F5EE;color:#085041;margin-bottom:14px}
-        .pname{font-size:13px;font-weight:500;color:#666;margin-bottom:4px}
-        .pprice{font-size:30px;font-weight:500;letter-spacing:-.6px;color:#111}
-        .pprice span{font-size:12px;color:#aaa;font-weight:400}
-        .psave{font-size:10px;font-weight:500;padding:2px 8px;border-radius:8px;background:#E8F5EE;color:#085041;display:inline-block;margin-bottom:14px}
-        .pf{display:flex;align-items:center;gap:7px;font-size:12px;color:#555;margin-bottom:7px}
-        .pbtn{width:100%;margin-top:16px;padding:10px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:none;text-align:center;display:block;text-decoration:none}
-        .pbtn.lt{background:#F5F5F5;color:#333}
-        .pbtn.grn{background:#1D9E75;color:#fff}
-        .faq{padding:60px 40px;background:#FAFAFA}
-        .faq-list{max-width:600px;margin:0 auto}
-        .faq-item{border-bottom:0.5px solid #EBEBEB;padding:16px 0}
-        .faq-item:last-child{border:none}
-        .faq-q{font-size:13px;font-weight:500;color:#111;margin-bottom:7px}
-        .faq-a{font-size:12px;color:#666;line-height:1.7}
-        .cta{padding:72px 40px;text-align:center;background:#0A3D2B}
-        .cta-eye{font-size:11px;color:#9FE1CB;font-weight:500;letter-spacing:.06em;margin-bottom:14px;opacity:.7}
-        .cta-h{font-size:34px;font-weight:500;color:#fff;letter-spacing:-.7px;margin-bottom:10px;line-height:1.15}
-        .cta-s{font-size:14px;color:rgba(255,255,255,.5);margin-bottom:28px;max-width:400px;margin-left:auto;margin-right:auto;line-height:1.7}
-        .btn-cta{padding:14px 34px;border-radius:9px;font-size:14px;font-weight:500;background:#1D9E75;color:#fff;border:none;cursor:pointer;text-decoration:none;display:inline-block}
-        .cta-n{font-size:11px;color:rgba(255,255,255,.25);margin-top:14px}
-        .foot{padding:22px 40px;border-top:0.5px solid #EBEBEB;background:#fff;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
-        .flogo{font-size:12px;font-weight:500;color:#333}
-        .flinks{display:flex;gap:18px}
-        .flink{font-size:11px;color:#aaa;text-decoration:none}
-        .fcopy{font-size:11px;color:#aaa}
-        .divider{border:none;border-top:0.5px solid #EBEBEB}
-        @media(max-width:768px){
-  .nav{padding:0 16px}.hero{padding:48px 16px 40px}.hero-h1{font-size:30px}
-  .math-eq{grid-template-columns:1fr;gap:8px}.mop{padding:4px 0;font-size:16px}
-  .app-body{grid-template-columns:1fr}.sb{display:none}
-  .kpis{grid-template-columns:1fr 1fr}.amid{grid-template-columns:1fr}
-  .feat-grid{grid-template-columns:1fr}.cmp-grid{grid-template-columns:1fr}
-  .testis{grid-template-columns:1fr}.plans{grid-template-columns:1fr}
-  .math{padding:40px 16px}.product{padding:40px 16px}.feats{padding:40px 16px}
-  .compare{padding:40px 16px}.social{padding:40px 16px}.pricing{padding:40px 16px}
-  .faq{padding:40px 16px}.cta{padding:48px 16px}.foot{padding:20px 16px}
-  .pain{padding:18px 16px}.hero-trust{gap:12px}
-  .nr .nlnk{display:none}
-  .nbtn{display:inline-block!important}
-  .hero-cta{flex-direction:column;gap:8px}
-  .btn-primary{width:100%;text-align:center;box-sizing:border-box}
-  .btn-secondary{display:none}
-  .nav .nbtn{display:none}
-}
-      `}</style>
-      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
-
-      <div className="lp">
-
-        <nav className="nav">
-          <div className="nlogo">
-            <div className="nmark">rč</div>
-            <span className="nname">Računko</span>
-          </div>
-          <div className="nr">
-          <a href="#kako-deluje" className="nlnk">Kako deluje</a>
-<a href="#primerjava" className="nlnk">Primerjava</a>
-<a href="#cene" className="nlnk">Cene</a>
-            <Link href="/login" className="nbtn">Prijava</Link>
-            <Link href="/register" className="ndark">Začni brezplačno →</Link>
-          </div>
-        </nav>
-
-        <div className="hero">
-          <div className="hero-eyebrow"><i className="ti ti-map-pin"></i> Narejeno za slovenskega s.p. in d.o.o.</div>
-          <h1 className="hero-h1">Vaš računovodja naredi <span className="red">10 klikov</span> na mesec.<br/>Vi plačate <span className="red">€300.</span></h1>
-          <p className="hero-sub">Računko je AI računovodja ki pozna slovensko davčno pravo, vaše podatke in FURS roke. Enako delo. Ena devetnajstina cene.</p>
-          <div className="hero-cta">
-            <Link href="/register" className="btn-primary">Preizkusi brezplačno — danes →</Link>
-            <Link href="/login" className="btn-secondary">Prijava</Link>
-          </div>
-          <div className="hero-trust">
-            <div className="ti-item"><i className="ti ti-shield-check" style={{color:'#1D9E75'}}></i> Brez kreditne kartice</div>
-            <div className="ti-item"><i className="ti ti-database" style={{color:'#1D9E75'}}></i> Podatki v EU</div>
-            <div className="ti-item"><i className="ti ti-clock" style={{color:'#1D9E75'}}></i> Nastavitev v 5 minutah</div>
-            <div className="ti-item"><i className="ti ti-x" style={{color:'#1D9E75'}}></i> Brez vezave</div>
-          </div>
-        </div>
-
-        <div className="pain">
-          <p className="pain-q">"Vsak mesec pošljem računovodji iste dokumente. On mi pošlje <span className="red">isti email z zneski prispevkov.</span> Račun: €320."</p>
-          <div className="pain-attr">— resnična izkušnja slovenskega s.p. freelancerja</div>
-        </div>
-
-        <div className="math">
-          <div className="math-head">
-            <div className="sec-tag" style={{background:'#FDEAEA',color:'#C0392B'}}>Preprosta matematika</div>
-            <div className="sec-h">Koliko vas dejansko stane ta "storitev"?</div>
-            <p className="sec-sub">Seštejte mesečne račune in se vprašajte: kaj sem dobil za to?</p>
-          </div>
-          <div className="math-eq">
-            <div className="mc bad">
-              <div className="mlbl">Povprečni računovodja za s.p.</div>
-              <div className="mval r">€300<span style={{fontSize:'13px',color:'#ccc'}}>/mes</span></div>
-              <div className="mdesc">Opomnik enkrat mesečno + PDF ob koncu leta</div>
-            </div>
-            <div className="mop">×</div>
-            <div className="mc">
-              <div className="mlbl">Mesecev v letu</div>
-              <div className="mval">12</div>
-              <div className="mdesc">Vsak mesec, brez izjeme</div>
-            </div>
-            <div className="mop">=</div>
-            <div className="mc good">
-              <div className="mlbl">Letni strošek</div>
-              <div className="mval">€3.600</div>
-              <div className="mdesc">Za storitev ki jo Računko naredi za <b>€228/leto</b></div>
-            </div>
-          </div>
-        </div>
-
-        <div className="product">
-          <div className="prod-head">
-            <div className="sec-tag" style={{background:'#E8F5EE',color:'#085041'}}>Videz aplikacije</div>
-            <div className="sec-h">Vse kar potrebujete. Na enem zaslonu.</div>
-            <p className="sec-sub">Prihodki, roki, računi in AI računovodja — brez iskanja dokumentov, brez čakanja na email.</p>
-          </div>
-          <div className="app-frame">
-            <div className="app-topbar">
-              <div className="d" style={{background:'#E24B4A'}}></div>
-              <div className="d" style={{background:'#EF9F27'}}></div>
-              <div className="d" style={{background:'#1D9E75'}}></div>
-              <div className="app-url">racunko.si/dashboard</div>
-            </div>
-            <div className="app-body">
-              <div className="sb">
-                <div className="sb-logo">Računko</div>
-                <div className="sb-sec">Pregled</div>
-                <div className="sbi on"><i className="ti ti-layout-dashboard"></i> Dashboard</div>
-                <div className="sbi"><i className="ti ti-robot"></i> AI računovodja</div>
-                <div className="sbi"><i className="ti ti-chart-bar"></i> Statistika</div>
-                <div className="sb-sec">Poslovanje</div>
-                <div className="sbi"><i className="ti ti-file-invoice"></i> Računi</div>
-                <div className="sbi"><i className="ti ti-receipt"></i> Stroški</div>
-                <div className="sb-sec">Davki</div>
-                <div className="sbi"><i className="ti ti-qrcode"></i> Prispevki QR</div>
-                <div className="sbi"><i className="ti ti-percentage"></i> DDV obračun</div>
-                <div className="sbi"><i className="ti ti-calculator"></i> Normirani</div>
-                <div className="sb-foot">
-                  <div className="urow">
-                    <div className="uav">RS</div>
-                    <div><div className="uname">Računko s.p.</div><div className="utype">Normiranec · brez DDV</div></div>
-                  </div>
-                </div>
-              </div>
-              <div className="main-area">
-                <div className="main-top">
-                  <div><div className="mtg">Dober dan 👋</div><div className="mtd">Petek, 9. maj 2026 · maj 2026</div></div>
-                  <div className="mt-pills">
-                    <div className="mt-pill red"><i className="ti ti-alert-circle" style={{fontSize:'10px'}}></i> 1 račun v zamudi</div>
-                    <div className="mt-pill amber"><i className="ti ti-clock" style={{fontSize:'10px'}}></i> Prispevki čez 6 dni</div>
-                  </div>
-                </div>
-                <div className="kpis">
-                  <div className="kpi"><div className="kl">Prihodki maj</div><div className="kv" style={{color:'#085041'}}>€2.840</div></div>
-                  <div className="kpi"><div className="kl">Odhodki</div><div className="kv" style={{color:'#C0392B'}}>€640</div></div>
-                  <div className="kpi dk"><div className="kl" style={{color:'rgba(255,255,255,.4)'}}>Neplačano</div><div className="kv" style={{color:'#9FE1CB'}}>€1.200</div></div>
-                  <div className="kpi"><div className="kl">Dobiček</div><div className="kv">€2.200</div></div>
-                </div>
-                <div className="amid">
-                  <div className="acard">
-                    <div className="act">Zadnji računi <a>vsi →</a></div>
-                    <div className="irow"><div className="idot" style={{background:'#1D9E75'}}></div><div className="irn">Agencija Pixel d.o.o.</div><div className="ira">€1.200</div><div className="ibdg" style={{background:'#E8F5EE',color:'#085041'}}>Plačano</div></div>
-                    <div className="irow"><div className="idot" style={{background:'#EF9F27'}}></div><div className="irn">Startup XY d.o.o.</div><div className="ira">€850</div><div className="ibdg" style={{background:'#FEF3E2',color:'#9A6315'}}>Poslano</div></div>
-                    <div className="irow"><div className="idot" style={{background:'#E24B4A'}}></div><div className="irn">Tech Solutions</div><div className="ira">€350</div><div className="ibdg" style={{background:'#FDEAEA',color:'#C0392B'}}>Zamuda</div></div>
-                  </div>
-                  <div className="acard">
-                    <div className="act">Roki ta mesec</div>
-                    <div className="drow"><div className="dname">Prispevki s.p. — €522</div><div className="ddys" style={{background:'#FEF3E2',color:'#9A6315'}}>6 dni</div></div>
-                    <div className="drow"><div className="dname">Akontacija — €113</div><div className="ddys" style={{background:'#FEF3E2',color:'#9A6315'}}>6 dni</div></div>
-                    <div className="drow"><div className="dname">REK-1 + plača</div><div className="ddys" style={{background:'#E8F5EE',color:'#085041'}}>17 dni</div></div>
-                  </div>
-                </div>
-                <div className="aab">
-                  <span className="aabl">Hitro:</span>
-                  <div className="aabt"><i className="ti ti-scan"></i> Skeniraj</div>
-                  <div className="aabt"><i className="ti ti-qrcode"></i> Prispevki QR</div>
-                  <div className="aabt"><i className="ti ti-robot"></i> AI</div>
-                  <div className="aabm"><i className="ti ti-file-plus"></i> Nov račun</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <hr className="divider" />
-
-        <div className="feats" id="kako-deluje">
-          <div className="math-head">
-            <div className="sec-tag" style={{background:'#E8F5EE',color:'#085041'}}>Kaj dobite</div>
-            <div className="sec-h">Vse kar računovodja počne. Plus tisto kar ne.</div>
-            <p className="sec-sub">Računovodja vam ne more odgovoriti ob 22:00. Računko odgovori v 3 sekundah.</p>
-          </div>
-          <div className="feat-grid">
-            <div className="feat"><div className="fic" style={{background:'#EEEDFE'}}><i className="ti ti-robot" style={{fontSize:'17px',color:'#534AB7'}}></i></div><div><div className="ft">AI ki pozna vaše podatke</div><div className="fs">"Koliko dohodnine bom plačal letos?" — odgovor z vašim dejanskim prometom v 3 sekundah. Vaš računovodja čaka 3 dni.</div><div className="fnew">24/7 na voljo</div></div></div>
-            <div className="feat"><div className="fic" style={{background:'#FEF3E2'}}><i className="ti ti-qrcode" style={{fontSize:'17px',color:'#9A6315'}}></i></div><div><div className="ft">Prispevki QR — 30 sekund</div><div className="fs">ZPIZ + ZZZS + akontacija z UPN QR kodo. Skenira banka, plačilo narejeno. Brez ročnega izpolnjevanja nalogov.</div><div className="fnew">Samo za SLO trg</div></div></div>
-            <div className="feat"><div className="fic" style={{background:'#FDEAEA'}}><i className="ti ti-bell" style={{fontSize:'17px',color:'#C0392B'}}></i></div><div><div className="ft">Opomniki 7 dni vnaprej</div><div className="fs">Ne en dan prej — 7 dni vnaprej za vsak davčni rok. Prispevki, DDV-O, akontacija, REK-1. Nikoli prepozno.</div></div></div>
-            <div className="feat"><div className="fic" style={{background:'#E6F1FB'}}><i className="ti ti-file-invoice" style={{fontSize:'17px',color:'#185FA5'}}></i></div><div><div className="ft">Računi z UPN QR v 30 sec</div><div className="fs">PDF z UPN QR kodo. Stranka skenira z mobilno banko, plačilo pride direktno. Brez čakanja na računovodjo.</div></div></div>
-            <div className="feat"><div className="fic" style={{background:'#E8F5EE'}}><i className="ti ti-scan" style={{fontSize:'17px',color:'#0F6E56'}}></i></div><div><div className="ft">Skeniraj strošek — AI OCR</div><div className="fs">Fotografirajte račun, AI prepozna vse podatke. Konec zbiranja in pošiljanja dokumentov računovodji vsak mesec.</div></div></div>
-            <div className="feat"><div className="fic" style={{background:'#EAF3DE'}}><i className="ti ti-calculator" style={{fontSize:'17px',color:'#3B6D11'}}></i></div><div><div className="ft">Normirani vs. dejanski</div><div className="fs">Točen izračun kdaj se vam splača preiti. Vaš računovodja vam tega verjetno nikoli ni pokazal.</div><div className="fnew">Unikatno za SLO</div></div></div>
-          </div>
-        </div>
-
-        <div className="compare" id="primerjava">
-          <div className="math-head">
-            <div className="sec-tag" style={{background:'#FEF3E2',color:'#9A6315'}}>Poštena primerjava</div>
-            <div className="sec-h">Računovodja vs. Računko</div>
-            <p className="sec-sub">Za s.p. ki večino dela opravljajo sami.</p>
-          </div>
-          <div className="cmp-grid">
-            <div className="cmp-col">
-              <div className="cmp-head-r" style={{background:'#FDEAEA',color:'#C0392B'}}><i className="ti ti-user"></i> Računovodja · €200–500/mes</div>
-              <div className="cmp-row"><span className="cic" style={{color:'#E24B4A'}}><i className="ti ti-x"></i></span><div className="ct">Splošni odgovori brez vpogleda v vaše podatke</div></div>
-              <div className="cmp-row"><span className="cic" style={{color:'#E24B4A'}}><i className="ti ti-x"></i></span><div className="ct">Odgovor čez 1–3 dni. Ob 22h — jutri.</div></div>
-              <div className="cmp-row"><span className="cic" style={{color:'#E24B4A'}}><i className="ti ti-x"></i></span><div className="ct">Vi zbirate in pošiljate dokumente vsak mesec</div></div>
-              <div className="cmp-row"><span className="cic" style={{color:'#E24B4A'}}><i className="ti ti-x"></i></span><div className="ct">Opomnik en dan prej — pogosto prepozno</div></div>
-              <div className="cmp-row"><span className="cic" style={{color:'#EF9F27'}}><i className="ti ti-minus"></i></span><div className="ct">Koristen za revizije in d.o.o. nad 50k</div></div>
-            </div>
-            <div className="cmp-col winner">
-              <div className="cmp-head-r" style={{background:'#E8F5EE',color:'#085041'}}><i className="ti ti-robot"></i> Računko · €19/mes</div>
-              <div className="cmp-row"><span className="cic" style={{color:'#1D9E75'}}><i className="ti ti-check"></i></span><div className="ct"><b>Konkretni odgovori</b> z vašimi dejanskimi podatki</div></div>
-              <div className="cmp-row"><span className="cic" style={{color:'#1D9E75'}}><i className="ti ti-check"></i></span><div className="ct"><b>Takoj. 24/7.</b> Tudi ob nedeljah in praznikih.</div></div>
-              <div className="cmp-row"><span className="cic" style={{color:'#1D9E75'}}><i className="ti ti-check"></i></span><div className="ct">AI OCR skeniranje — <b>konec zbiranja papirjev</b></div></div>
-              <div className="cmp-row"><span className="cic" style={{color:'#1D9E75'}}><i className="ti ti-check"></i></span><div className="ct"><b>7 dni vnaprej</b> za vsak davčni rok</div></div>
-              <div className="cmp-row"><span className="cic" style={{color:'#EF9F27'}}><i className="ti ti-minus"></i></span><div className="ct">Za revizije priporočamo računovodja — <b>Računko pokrije 95%</b></div></div>
-            </div>
-          </div>
-        </div>
-
-        <div className="social">
-          <div className="math-head">
-            <div className="sec-tag" style={{background:'#E8F5EE',color:'#085041'}}>Resnične izkušnje</div>
-            <div className="sec-h">S.p. ki so preračunali</div>
-            <p className="sec-sub">Ne splošne pohvale — konkretni zneski ki so jih prihranili.</p>
-          </div>
-          <div className="testis">
-            <div className="testi"><div className="tbdg">Prihranek €3.120/leto</div><div className="tstr">★★★★★</div><p className="ttext">"Plačevala sem €280/mes. Dobivala sem isti email z zneski prispevkov. Zdaj to naredi Računko sam — imam €260 več vsak mesec."</p><div className="tauth"><div className="tav">AK</div><div><div className="tname">Ana K.</div><div className="trole">IT freelancer · Ljubljana</div></div></div></div>
-            <div className="testi"><div className="tbdg">Brez zamujenih rokov</div><div className="tstr">★★★★★</div><p className="ttext">"Imel sem strah da bom brez računovodje naredil napako. Po 8 mesecih — nobene napake, vsi roki spoštovani, FURS ne javi."</p><div className="tauth"><div className="tav">MT</div><div><div className="tname">Miha T.</div><div className="trole">Grafični oblikovalec · Maribor</div></div></div></div>
-            <div className="testi"><div className="tbdg">Prihranek €4.572/leto</div><div className="tstr">★★★★★</div><p className="ttext">"AI mi je odgovoril v 10 sekundah na vprašanje ki sem ga poslala računovodji ob torku. Odgovor sem dobila v petek. Za €380/mes."</p><div className="tauth"><div className="tav">SP</div><div><div className="tname">Sara P.</div><div className="trole">Fizioterapevtka · Kranj</div></div></div></div>
-          </div>
-        </div>
-
-        <div className="pricing" id="cene">
-          <div className="math-head">
-            <div className="sec-tag" style={{background:'#FEF3E2',color:'#9A6315'}}>Cene</div>
-            <div className="sec-h">Fiksno. Brez presenečenj.</div>
-            <p className="sec-sub">Nobenega "minimuma ur", nobenega "letnega obračuna posebej".</p>
-          </div>
-          <div className="plans">
-            <div className="plan">
-              <div className="pname">Starter</div>
-              <div className="pprice">€0 <span>/ mesec</span></div>
-              <div className="psave">Brez kreditne kartice</div>
-              <div className="pf"><i className="ti ti-check" style={{color:'#1D9E75'}}></i> 5 računov mesečno</div>
-              <div className="pf"><i className="ti ti-check" style={{color:'#1D9E75'}}></i> AI računovodja (10 vprašanj)</div>
-              <div className="pf"><i className="ti ti-check" style={{color:'#1D9E75'}}></i> Prispevki QR</div>
-              <div className="pf"><i className="ti ti-check" style={{color:'#1D9E75'}}></i> Davčni rokovnik</div>
-              <Link href="/register" className="pbtn lt">Začni brezplačno</Link>
-            </div>
-            <div className="plan hot">
-              <div className="pbdg">Zamenja računovodja</div>
-              <div className="pname">Pro</div>
-              <div className="pprice">€19 <span>/ mesec</span></div>
-              <div className="psave">Prihranite do €5.000/leto</div>
-              <div className="pf"><i className="ti ti-check" style={{color:'#1D9E75'}}></i> Neomejeni računi</div>
-              <div className="pf"><i className="ti ti-check" style={{color:'#1D9E75'}}></i> AI brez omejitev · 24/7</div>
-              <div className="pf"><i className="ti ti-check" style={{color:'#1D9E75'}}></i> OCR skeniranje stroškov</div>
-              <div className="pf"><i className="ti ti-check" style={{color:'#1D9E75'}}></i> Obračun plač + regres</div>
-              <div className="pf"><i className="ti ti-check" style={{color:'#1D9E75'}}></i> DDV evidenca</div>
-              <div className="pf"><i className="ti ti-check" style={{color:'#1D9E75'}}></i> Stripe integracija</div>
-              <Link href="/register" className="pbtn grn">Začni Pro — €19/mes →</Link>
-            </div>
-          </div>
-        </div>
-
-        <div className="faq">
-          <div className="math-head">
-            <div className="sec-tag" style={{background:'#F5F5F5',color:'#666'}}>Pogosta vprašanja</div>
-            <div className="sec-h">Odgovori brez zavijanja</div>
-          </div>
-          <div className="faq-list">
-            <div className="faq-item"><div className="faq-q">Ali Računko res nadomesti računovodja?</div><div className="faq-a">Za 90% samostojnih podjetnikov — da. Normiranec, DDV zavezanec, par zaposlenih — Računko pokrije vse. Za d.o.o. z revizijo priporočamo Računko + računovodja za letni zaključek.</div></div>
-            <div className="faq-item"><div className="faq-q">Kaj pa če naredim napako?</div><div className="faq-a">Računko vas opomni 7 dni pred rokom. AI vas opozori na napake pri vnosu. Mesečni vodič vas korak za korakom pelje skozi vse obveznosti za vaš profil.</div></div>
-            <div className="faq-item"><div className="faq-q">Ali moram prekiniti pogodbo z računovodjem preden se prijavim?</div><div className="faq-a">Ne. Preizkusite Računko mesec brezplačno, šele nato se odločite. Večina strank odpove pogodbo po prvem mesecu ko vidijo da res deluje.</div></div>
-            <div className="faq-item"><div className="faq-q">Deluje za DDV zavezance?</div><div className="faq-a">Da. DDV evidenca, izračun dolga, opomniki za DDV-O rok — vse je vključeno v Pro planu.</div></div>
-            <div className="faq-item"><div className="faq-q">Kako varni so moji finančni podatki?</div><div className="faq-a">Strežniki v EU, Supabase platforma, Row Level Security — tehnično je nemogoče da bi drug uporabnik videl vaše podatke.</div></div>
-          </div>
-        </div>
-
-        <div className="cta">
-          <div className="cta-eye">ZADNJE VPRAŠANJE</div>
-          <h2 className="cta-h">Koliko ste lani plačali računovodji?</h2>
-          <p className="cta-s">Seštejte mesečne račune. Potem pomislite kaj ste za to dobili. Računko stane €228 letno. Ostalo je vaše.</p>
-          <Link href="/register" className="btn-cta">Preizkusi brezplačno — brez kreditne kartice →</Link>
-          <p className="cta-n">Brez vezave · Prekličete kadarkoli · Podatki v EU</p>
-        </div>
-
-        <footer className="foot">
-          <div className="flogo">Računko</div>
-          <div className="flinks">
-          <Link href="/privacy" className="flink">Zasebnost</Link>
-          <Link href="/terms" className="flink">Pogoji</Link>
-            <a href="#" className="flink">Kontakt</a>
-          </div>
-          <div className="fcopy">© 2026 · Narejeno za slovenskega podjetnika</div>
-        </footer>
-
-      </div>
+      <Nav />
+      <Hero headline={t.headline} />
+      <MathSection />
+      <Product />
+      <FeaturesSection />
+      <Comparison />
+      <Testimonials />
+      <Pricing />
+      <FAQ />
+      <FinalCTA />
+      <Footer />
     </>
   )
 }
