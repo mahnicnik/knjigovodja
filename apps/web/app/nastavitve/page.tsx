@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import posthog from 'posthog-js'
+import UpgradeButton from '@/components/UpgradeButton'
 
 const SP_CONTRIBUTIONS: Record<number, number> = {
   1: 2584.92, 2: 3012.36, 3: 3439.20, 4: 3866.04, 5: 4293.00,
@@ -16,6 +17,8 @@ export default function NastavitevPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
+  const [showCancelled, setShowCancelled] = useState(false)
   const [form, setForm] = useState({
     name: '',
     tax_number: '',
@@ -32,7 +35,22 @@ export default function NastavitevPage() {
   })
   const supabase = createClient()
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { 
+    load()
+    // Check for success/cancel from Stripe redirect
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('success') === 'true' && params.get('plan') === 'pro') {
+      setShowSuccess(true)
+      posthog.capture('subscription_upgrade_success', { plan: 'pro' })
+      window.history.replaceState({}, '', '/nastavitve')
+      // Reload org after delay to catch webhook update
+      setTimeout(() => load(), 2500)
+    } else if (params.get('plan') === 'cancelled') {
+      setShowCancelled(true)
+      posthog.capture('subscription_upgrade_cancelled')
+      window.history.replaceState({}, '', '/nastavitve')
+    }
+  }, [])
 
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -101,6 +119,8 @@ export default function NastavitevPage() {
     </div>
   )
 
+  const isPro = org?.plan === 'pro'
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
@@ -115,6 +135,62 @@ export default function NastavitevPage() {
       </div>
 
       <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
+
+        {showSuccess && (
+          <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-green-900">🎉 Dobrodošli v Pro planu!</p>
+              <p className="text-xs text-green-700 mt-1">Vaš plan je aktiven. Hvala za zaupanje!</p>
+            </div>
+            <button onClick={() => setShowSuccess(false)} className="text-green-700 hover:text-green-900 text-lg leading-none">✕</button>
+          </div>
+        )}
+
+        {showCancelled && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-amber-900">Plačilo preklicano</p>
+              <p className="text-xs text-amber-700 mt-1">Niste izvršili nadgradnje. Plačilo lahko izvršite kadarkoli.</p>
+            </div>
+            <button onClick={() => setShowCancelled(false)} className="text-amber-700 hover:text-amber-900 text-lg leading-none">✕</button>
+          </div>
+        )}
+
+        <div className="bg-white rounded-2xl border border-gray-100 p-6">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h3 className="font-medium text-gray-900">Vaš plan</h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {isPro ? 'Pro plan z neomejenim dostopom' : 'Trenutno uporabljate Starter plan'}
+              </p>
+            </div>
+            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+              isPro ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700'
+            }`}>
+              {isPro ? 'PRO' : 'STARTER'}
+            </span>
+          </div>
+
+          {isPro ? (
+            <div className="space-y-2 text-sm text-gray-600">
+              {org.plan_expires_at && (
+                <p>Naslednje plačilo: <strong className="text-gray-900">{new Date(org.plan_expires_at).toLocaleDateString('sl-SI', { day: 'numeric', month: 'long', year: 'numeric' })}</strong></p>
+              )}
+              <p className="text-xs text-gray-500 pt-2">Za upravljanje naročnine ali preklic kontaktirajte podporo.</p>
+            </div>
+          ) : (
+            <div>
+              <ul className="space-y-2 mb-5 text-sm text-gray-600">
+                <li className="flex items-center gap-2"><span className="text-green-600">✓</span>Neomejeno število računov</li>
+                <li className="flex items-center gap-2"><span className="text-green-600">✓</span>Letno poročilo in DDV obračun</li>
+                <li className="flex items-center gap-2"><span className="text-green-600">✓</span>Stripe integracija za samodejni uvoz plačil</li>
+                <li className="flex items-center gap-2"><span className="text-green-600">✓</span>AI pomočnik za knjiženje</li>
+                <li className="flex items-center gap-2"><span className="text-green-600">✓</span>Prioritetna podpora</li>
+              </ul>
+              <UpgradeButton currentPlan="starter" />
+            </div>
+          )}
+        </div>
 
         <div className="bg-white rounded-2xl border border-gray-100 p-6">
           <h3 className="font-medium text-gray-900 mb-4">Osnovni podatki</h3>
