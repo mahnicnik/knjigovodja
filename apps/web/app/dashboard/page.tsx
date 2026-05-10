@@ -62,47 +62,72 @@ export default function DashboardPage() {
   useEffect(() => { load() }, [])
 
   async function load() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    setUserId(user.id)
-    const { data: member } = await supabase
-      .from('org_members').select('organizations(*)')
-      .eq('user_id', user.id).single()
-    if (!member) return
-    const o = (member as any).organizations
-    setOrg(o)
-    const { data: prefs } = await supabase
-      .from('user_preferences').select('quick_actions')
-      .eq('user_id', user.id).single()
-    if (prefs?.quick_actions && prefs.quick_actions.length > 0) {
-      setQaHrefs(prefs.quick_actions)
-      setQaHrefsDraft(prefs.quick_actions)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        window.location.href = '/login'
+        return
+      }
+      setUserId(user.id)
+      
+      const { data: member, error: memberErr } = await supabase
+        .from('org_members').select('organizations(*)')
+        .eq('user_id', user.id).maybeSingle()
+      
+      if (memberErr) {
+        console.error('Member load error:', memberErr)
+        setLoading(false)
+        return
+      }
+      
+      if (!member || !(member as any).organizations) {
+        // User exists but no org — should not happen anymore (trigger fixed)
+        // Fallback: redirect to onboarding to create org manually
+        console.warn('User has no organization, redirecting to onboarding')
+        window.location.href = '/onboarding'
+        return
+      }
+      
+      const o = (member as any).organizations
+      setOrg(o)
+      
+      const { data: prefs } = await supabase
+        .from('user_preferences').select('quick_actions')
+        .eq('user_id', user.id).maybeSingle()
+      if (prefs?.quick_actions && prefs.quick_actions.length > 0) {
+        setQaHrefs(prefs.quick_actions)
+        setQaHrefsDraft(prefs.quick_actions)
+      }
+      
+      const [invRes, expRes, empRes] = await Promise.all([
+        supabase.from('issued_invoices').select('*').eq('org_id', o.id).neq('status','draft'),
+        supabase.from('receipts').select('*').eq('org_id', o.id),
+        supabase.from('employees').select('id').eq('org_id', o.id).eq('status','active'),
+      ])
+      const invoices = invRes.data || []
+      const receipts = expRes.data || []
+      const monthInv = invoices.filter((i: any) => i.issue_date >= monthStart && i.issue_date <= monthEnd)
+      const revenue = monthInv.reduce((s: number, i: any) => s + Number(i.amount_net), 0)
+      const expenses = receipts.filter((r: any) => r.receipt_date >= monthStart && r.receipt_date <= monthEnd).reduce((s: number, r: any) => s + Number(r.amount_net), 0)
+      const vatOut = invoices.reduce((s: number, i: any) => s + Number(i.vat_amount), 0)
+      const vatIn = receipts.reduce((s: number, r: any) => s + Number(r.vat_amount), 0)
+      const unpaid = invoices.filter((i: any) => i.status === 'sent')
+      const overdue = invoices.filter((i: any) => i.status === 'sent' && i.due_date < today)
+      const recent = [...invoices].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 4)
+      setData({
+        revenue, expenses,
+        vatDue: Math.max(0, vatOut - vatIn),
+        unpaidCount: unpaid.length,
+        unpaidAmount: unpaid.reduce((s: number, i: any) => s + Number(i.amount_total), 0),
+        overdueInvoices: overdue.slice(0, 3),
+        recentInvoices: recent,
+        hasEmployees: (empRes.data || []).length > 0,
+      })
+      setLoading(false)
+    } catch (err) {
+      console.error('Dashboard load failed:', err)
+      setLoading(false)
     }
-    const [invRes, expRes, empRes] = await Promise.all([
-      supabase.from('issued_invoices').select('*').eq('org_id', o.id).neq('status','draft'),
-      supabase.from('receipts').select('*').eq('org_id', o.id),
-      supabase.from('employees').select('id').eq('org_id', o.id).eq('status','active'),
-    ])
-    const invoices = invRes.data || []
-    const receipts = expRes.data || []
-    const monthInv = invoices.filter((i: any) => i.issue_date >= monthStart && i.issue_date <= monthEnd)
-    const revenue = monthInv.reduce((s: number, i: any) => s + Number(i.amount_net), 0)
-    const expenses = receipts.filter((r: any) => r.receipt_date >= monthStart && r.receipt_date <= monthEnd).reduce((s: number, r: any) => s + Number(r.amount_net), 0)
-    const vatOut = invoices.reduce((s: number, i: any) => s + Number(i.vat_amount), 0)
-    const vatIn = receipts.reduce((s: number, r: any) => s + Number(r.vat_amount), 0)
-    const unpaid = invoices.filter((i: any) => i.status === 'sent')
-    const overdue = invoices.filter((i: any) => i.status === 'sent' && i.due_date < today)
-    const recent = [...invoices].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 4)
-    setData({
-      revenue, expenses,
-      vatDue: Math.max(0, vatOut - vatIn),
-      unpaidCount: unpaid.length,
-      unpaidAmount: unpaid.reduce((s: number, i: any) => s + Number(i.amount_total), 0),
-      overdueInvoices: overdue.slice(0, 3),
-      recentInvoices: recent,
-      hasEmployees: (empRes.data || []).length > 0,
-    })
-    setLoading(false)
   }
 
   function toggleDraftQA(href: string) {
@@ -184,7 +209,7 @@ export default function DashboardPage() {
       {/* Content */}
       <div style={{ padding: cp }}>
 
-        {/* Stats — na mobilnem 2x2, na desktopu enako */}
+        {/* Stats */}
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap: isMobile ? '8px' : '12px', marginBottom: isMobile ? '10px' : '14px' }}>
           {[
             { label:`Prihodki ${MONTHS[month]}`, value:`€${data.revenue.toFixed(0)}`, sub:'Brez DDV', color:'#27500A', bg:'#EAF3DE', icon:'💰', dark:false },
@@ -210,10 +235,9 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        {/* Middle grid — na mobilnem ena kolona */}
+        {/* Middle grid */}
         <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? '8px' : '12px', marginBottom: isMobile ? '10px' : '12px' }}>
 
-          {/* Zadnji računi */}
           <div style={{ background:'#fff', border:'0.5px solid rgba(0,0,0,0.08)', borderRadius:'12px', padding:'14px 16px' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'10px' }}>
               <div style={{ fontSize:'12px', fontWeight:'500', color:'#0D1F12' }}>Zadnji računi</div>
@@ -239,7 +263,6 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          {/* Roki */}
           <div style={{ background:'#fff', border:'0.5px solid rgba(0,0,0,0.08)', borderRadius:'12px', padding:'14px 16px' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'10px' }}>
               <div style={{ fontSize:'12px', fontWeight:'500', color:'#0D1F12' }}>Roki ta mesec</div>
@@ -266,7 +289,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Hitre akcije — na mobilnem 2 koloni */}
+        {/* Hitre akcije */}
         <div style={{ background:'#fff', border:'0.5px solid rgba(0,0,0,0.08)', borderRadius:'12px', padding:'14px 16px', marginBottom: isMobile ? '10px' : '0' }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'12px' }}>
             <div style={{ fontSize:'12px', fontWeight:'500', color:'#0D1F12' }}>Hitre akcije</div>
@@ -289,7 +312,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Zakonske novosti */}
         <div style={{ marginTop: isMobile ? '10px' : '12px' }}>
           <LegalUpdatesWidget />
         </div>
