@@ -3,7 +3,7 @@ import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2026-04-22.dahlia' as any,
+  apiVersion: '2026-04-22.dahlia' as any,
 })
 
 export async function POST(request: NextRequest) {
@@ -15,15 +15,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })
     }
 
-    // Pridobi org podatke
-    const { data: org } = await supabase
-      .from('organizations')
-      .select('id, name, stripe_customer_id')
-      .eq('owner_id', user.id)
-      .single()
+    // Pridobi org preko org_members (ne preko owner_id)
+    const { data: member, error: memberErr } = await supabase
+      .from('org_members')
+      .select('organizations(id, name, stripe_customer_id, subscription_status)')
+      .eq('user_id', user.id)
+      .maybeSingle()
 
-    if (!org) {
+    if (memberErr || !member || !(member as any).organizations) {
+      console.error('Org lookup error:', memberErr)
       return NextResponse.json({ error: 'Organizacija ni najdena' }, { status: 404 })
+    }
+
+    const org = (member as any).organizations
+
+    // Preveri da uporabnik še nima Pro
+    if (org.subscription_status === 'pro') {
+      return NextResponse.json({ error: 'Že imate Pro plan' }, { status: 400 })
     }
 
     // Ustvari ali pridobi Stripe customer
@@ -37,7 +45,6 @@ export async function POST(request: NextRequest) {
       })
       customerId = customer.id
 
-      // Shrani customer ID v bazo
       await supabase
         .from('organizations')
         .update({ stripe_customer_id: customerId })
@@ -53,8 +60,8 @@ export async function POST(request: NextRequest) {
         price: process.env.STRIPE_PRO_PRICE_ID!,
         quantity: 1,
       }],
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/nastavitve?plan=pro&success=true`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/nastavitve?plan=cancelled`,
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/nastavitve?success=true`,
+      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/nastavitve?cancelled=true`,
       metadata: { org_id: org.id },
       subscription_data: {
         metadata: { org_id: org.id },

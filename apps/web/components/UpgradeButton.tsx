@@ -3,13 +3,13 @@
 import { useState } from 'react'
 
 interface UpgradeButtonProps {
-  currentPlan?: 'starter' | 'pro'
+  subscriptionStatus?: 'free' | 'pro' | 'cancelled' | 'past_due'
   className?: string
   variant?: 'primary' | 'inline'
 }
 
 export default function UpgradeButton({ 
-  currentPlan = 'starter', 
+  subscriptionStatus = 'free', 
   className = '',
   variant = 'primary'
 }: UpgradeButtonProps) {
@@ -43,7 +43,7 @@ export default function UpgradeButton({
     }
   }
 
-  if (currentPlan === 'pro') return null
+  if (subscriptionStatus === 'pro') return null
 
   const buttonClass = variant === 'inline'
     ? 'inline-flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-800 disabled:opacity-40 transition-colors'

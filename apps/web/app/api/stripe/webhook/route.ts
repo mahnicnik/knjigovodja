@@ -36,11 +36,11 @@ export async function POST(request: NextRequest) {
 
       if (orgId) {
         await sb.from('organizations').update({
-          plan: 'pro',
+          subscription_status: 'pro',
           stripe_subscription_id: sub?.id || null,
           plan_expires_at: sub ? new Date((sub as any).current_period_end * 1000).toISOString() : null,
         }).eq('id', orgId)
-        console.log(`✅ Plan posodobljen na PRO: ${orgId}`)
+        console.log(`✅ Subscription PRO: ${orgId}`)
       }
       break
     }
@@ -48,11 +48,11 @@ export async function POST(request: NextRequest) {
     case 'customer.subscription.deleted': {
       if (orgId) {
         await sb.from('organizations').update({
-          plan: 'starter',
+          subscription_status: 'cancelled',
           stripe_subscription_id: null,
           plan_expires_at: null,
         }).eq('id', orgId)
-        console.log(`⬇️ Plan posodobljen na STARTER: ${orgId}`)
+        console.log(`⬇️ Subscription CANCELLED: ${orgId}`)
       }
       break
     }
