@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import SendInvoiceModal from '@/components/SendInvoiceModal'
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<any[]>([])
@@ -10,6 +11,8 @@ export default function InvoicesPage() {
   const [loading, setLoading] = useState(true)
   const [actionInv, setActionInv] = useState<any>(null)
   const [actionLoading, setActionLoading] = useState('')
+  const [sendModalInv, setSendModalInv] = useState<any>(null)
+  const [sendSuccess, setSendSuccess] = useState('')
   const supabase = createClient()
 
   useEffect(() => { load() }, [])
@@ -50,7 +53,6 @@ export default function InvoicesPage() {
 
   async function storno(inv: any) {
     setActionLoading('storno_' + inv.id)
-    // Ustvari storno račun z negativnimi zneski
     const stornoNumber = `${inv.invoice_number}-S`
     const lineItems = (inv.line_items || []).map((item: any) => ({
       ...item,
@@ -72,7 +74,6 @@ export default function InvoicesPage() {
       notes: `Storno računa ${inv.invoice_number}`,
       reference: `SI00 ${stornoNumber}`,
     })
-    // Posodobi originalni račun
     await supabase.from('issued_invoices').update({ status: 'storno' }).eq('id', inv.id)
     await load()
     setActionLoading('')
@@ -132,47 +133,35 @@ export default function InvoicesPage() {
   async function downloadPDF(inv: any) {
     const QRCode = await import('qrcode')
     const amount = String(Math.round(inv.amount_total * 100)).padStart(11, '0')
-    const dueFormatted = new Date(inv.due_date).toISOString().slice(0,10).replace(/-/g,'')
-    const iban = (org.iban || '').replace(/\s/g, '')
-    const reference = (inv.reference || `SI00${inv.invoice_number}`).replace(/\s/g,'')
-    // UPN QR — točen format po slovenski specifikaciji (19 polj)
-// ── UPN QR — točen format ZBS (20 polj) ──────────────────
-function upnDate(dateStr: string): string {
-  const d = new Date(dateStr)
-  return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`
-}
 
-const namen = `Placilo racuna ${inv.invoice_number}`.slice(0, 42)
-const ibanClean = (org.iban || '').replace(/\s/g, '')
-const refClean = (inv.reference || `SI00 ${inv.invoice_number}`).replace(/\s/g, '')
+    function upnDate(dateStr: string): string {
+      const d = new Date(dateStr)
+      return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`
+    }
 
-const upnFields = [
-  'UPNQR',                                          // 1
-  '',                                                // 2  IBAN plačnika
-  '',                                                // 3  Polog
-  '',                                                // 4  Dvig
-  '',                                                // 5  Referenca plačnika
-  inv.client_name.slice(0, 33),                      // 6  Ime plačnika
-  '',                                                // 7  Ulica plačnika
-  '',                                                // 8  Kraj plačnika
-  amount,                                            // 9  Znesek (centi, 11 znakov)
-  '',                                                // 10 Datum plačila
-  '',                                                // 11 Nujno
-  'OTHR',                                            // 12 Koda namena
-  namen,                                             // 13 Namen plačila
-  upnDate(inv.due_date),                             // 14 Rok plačila DD.MM.LLLL
-  ibanClean,                                         // 15 IBAN prejemnika
-  refClean,                                          // 16 Referenca
-  org.name.slice(0, 33),                             // 17 Ime prejemnika
-  (org.address || '').slice(0, 33),                  // 18 Ulica prejemnika
-  `${org.post_code || ''} ${org.city || ''}`.trim().slice(0, 33), // 19 Kraj prejemnika
-]
+    const namen = `Placilo racuna ${inv.invoice_number}`.slice(0, 42)
+    const ibanClean = (org.iban || '').replace(/\s/g, '')
+    const refClean = (inv.reference || `SI00 ${inv.invoice_number}`).replace(/\s/g, '')
 
-// Kontrolna vsota = vsota dolžin polj + 19 ločil
-const checksum = upnFields.reduce((s, f) => s + f.length + 1, 0)
-const upnData = upnFields.join('\n') + '\n' + String(checksum).padStart(3, '0')
-const qrDataUrl = await QRCode.toDataURL(upnData, { width: 200, margin: 2, errorCorrectionLevel: 'M' })
-// ─────────────────────────────────────────────────────────
+    const upnFields = [
+      'UPNQR','','','','',
+      inv.client_name.slice(0, 33),
+      '','',
+      amount,
+      '','','OTHR',
+      namen,
+      upnDate(inv.due_date),
+      ibanClean,
+      refClean,
+      org.name.slice(0, 33),
+      (org.address || '').slice(0, 33),
+      `${org.post_code || ''} ${org.city || ''}`.trim().slice(0, 33),
+    ]
+
+    const checksum = upnFields.reduce((s, f) => s + f.length + 1, 0)
+    const upnData = upnFields.join('\n') + '\n' + String(checksum).padStart(3, '0')
+    const qrDataUrl = await QRCode.toDataURL(upnData, { width: 200, margin: 2, errorCorrectionLevel: 'M' })
+
     const isStorno = inv.amount_total < 0
     const isDobropis = inv.invoice_number?.includes('-D')
     const docType = isDobropis ? 'DOBROPIS' : isStorno ? 'STORNO' : 'RAČUN'
@@ -362,7 +351,6 @@ ${!isStorno && !isDobropis ? `
                     </div>
                   </div>
 
-                  {/* Akcije */}
                   <div className="flex gap-2 flex-shrink-0">
                     <button
                       onClick={() => downloadPDF(inv)}
@@ -370,6 +358,14 @@ ${!isStorno && !isDobropis ? `
                     >
                       ⬇ PDF
                     </button>
+                    {inv.status !== 'storno' && (
+                      <button
+                        onClick={() => setSendModalInv(inv)}
+                        className="border border-gray-900 bg-gray-900 text-white rounded-xl px-3 py-1.5 text-xs hover:bg-gray-800 transition-colors"
+                      >
+                        📧 Pošlji
+                      </button>
+                    )}
                     <button
                       onClick={() => setActionInv(actionInv?.id === inv.id ? null : inv)}
                       className="border border-gray-200 rounded-xl px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
@@ -378,7 +374,6 @@ ${!isStorno && !isDobropis ? `
                     </button>
                   </div>
 
-                  {/* Dropdown akcije */}
                   {actionInv?.id === inv.id && (
                     <div style={{
                       position: 'absolute', right: '24px', marginTop: '80px',
@@ -443,12 +438,31 @@ ${!isStorno && !isDobropis ? `
         )}
       </div>
 
-      {/* Overlay za zapiranje dropdowna */}
       {actionInv && (
         <div
           style={{ position: 'fixed', inset: 0, zIndex: 99 }}
           onClick={() => setActionInv(null)}
         />
+      )}
+
+      {sendModalInv && (
+        <SendInvoiceModal
+          invoice={sendModalInv}
+          orgName={org?.name || ''}
+          onClose={() => setSendModalInv(null)}
+          onSent={() => {
+            setSendModalInv(null)
+            setSendSuccess(`Račun #${sendModalInv.invoice_number} uspešno poslan na ${sendModalInv.client_email || 'stranko'}`)
+            load()
+            setTimeout(() => setSendSuccess(''), 5000)
+          }}
+        />
+      )}
+
+      {sendSuccess && (
+        <div style={{ position: 'fixed', bottom: '20px', right: '20px', background: '#0D1F12', color: '#fff', padding: '14px 18px', borderRadius: '12px', fontSize: '13px', zIndex: 1001, boxShadow: '0 4px 20px rgba(0,0,0,0.2)', maxWidth: '360px' }}>
+          ✅ {sendSuccess}
+        </div>
       )}
     </div>
   )

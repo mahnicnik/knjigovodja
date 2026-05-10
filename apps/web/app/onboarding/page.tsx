@@ -177,30 +177,36 @@ export default function OnboardingPage() {
       if (!finalAnswers.zaposleni) finalAnswers.zaposleni = 'solo'
       if (!finalAnswers.extras) finalAnswers.extras = []
 
-      // Ustvari organizacijo
+    
+      // Pridobi obstoječi org (ki ga je ustvaril trigger ob registraciji)
+      const { data: member, error: memberFetchErr } = await supabase
+        .from('org_members')
+        .select('org_id')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (memberFetchErr || !member) {
+        setError('Organizacija ni najdena. Prosimo poskusite se znova prijaviti.')
+        setSaving(false)
+        return
+      }
+
+      // Posodobi org z imenom in DDV statusom
       const { data: org, error: orgError } = await supabase
         .from('organizations')
-        .insert({ name: orgName, vat_registered: finalAnswers.ddv === 'yes' })
+        .update({ 
+          name: orgName, 
+          vat_registered: finalAnswers.ddv === 'yes' 
+        })
+        .eq('id', member.org_id)
         .select()
         .single()
 
       if (orgError) {
-        setError(`Napaka pri ustvarjanju organizacije: ${orgError.message}`)
+        setError(`Napaka pri posodabljanju organizacije: ${orgError.message}`)
         setSaving(false)
         return
       }
-
-      // Ustvari org_member
-      const { error: memberError } = await supabase
-        .from('org_members')
-        .insert({ org_id: org.id, user_id: user.id, role: 'owner' })
-
-      if (memberError) {
-        setError(`Napaka pri dodajanju člana: ${memberError.message}`)
-        setSaving(false)
-        return
-      }
-
       // Shrani preferences
       const { error: prefError } = await supabase
         .from('user_preferences')
