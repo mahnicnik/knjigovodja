@@ -39,13 +39,13 @@ export default function NastavitevPage() {
     load()
     // Check for success/cancel from Stripe redirect
     const params = new URLSearchParams(window.location.search)
-    if (params.get('success') === 'true' && params.get('plan') === 'pro') {
+    if (params.get('success') === 'true') {
       setShowSuccess(true)
-      posthog.capture('subscription_upgrade_success', { plan: 'pro' })
+      posthog.capture('subscription_upgrade_success')
       window.history.replaceState({}, '', '/nastavitve')
       // Reload org after delay to catch webhook update
       setTimeout(() => load(), 2500)
-    } else if (params.get('plan') === 'cancelled') {
+    } else if (params.get('cancelled') === 'true') {
       setShowCancelled(true)
       posthog.capture('subscription_upgrade_cancelled')
       window.history.replaceState({}, '', '/nastavitve')
@@ -119,7 +119,7 @@ export default function NastavitevPage() {
     </div>
   )
 
-  const isPro = org?.plan === 'pro'
+  const isPro = org?.subscription_status === 'pro'
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -187,7 +187,7 @@ export default function NastavitevPage() {
                 <li className="flex items-center gap-2"><span className="text-green-600">✓</span>AI pomočnik za knjiženje</li>
                 <li className="flex items-center gap-2"><span className="text-green-600">✓</span>Prioritetna podpora</li>
               </ul>
-              <UpgradeButton currentPlan="starter" />
+              <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} />
             </div>
           )}
         </div>
