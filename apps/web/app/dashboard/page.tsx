@@ -76,6 +76,7 @@ function Icon({ name, size = 18 }: { name: string; size?: number }) {
     case 'mic':      return <svg {...props}><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
     case 'sun':      return <svg {...props}><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
     case 'moon':     return <svg {...props}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    case 'bell':     return <svg {...props}><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
     case 'plus':     return <svg {...props}><path d="M12 5v14M5 12h14"/></svg>
     case 'scan':     return <svg {...props}><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 10h8M8 14h5"/></svg>
     case 'pay':      return <svg {...props}><path d="M21 15V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h9"/><path d="M16 17l3 3 5-5"/></svg>
@@ -108,6 +109,7 @@ export default function DashboardPage() {
   const [theme, setTheme] = useState<'light'|'dark'>('light')
   const [density, setDensity] = useState<'comfortable'|'compact'|'power'>('comfortable')
   const [voiceOpen, setVoiceOpen] = useState(false)
+  const [voiceStage, setVoiceStage] = useState<'listening'|'understood'>('listening')
   const [upnOpen, setUpnOpen] = useState(false)
   const [toasts, setToasts] = useState<{id:number;text:string}[]>([])
   const [showOnboarding, setShowOnboarding] = useState(true)
@@ -115,6 +117,11 @@ export default function DashboardPage() {
   const [qaHrefs, setQaHrefs] = useState<string[]>(DEFAULT_QA_HREFS)
   const [qaHrefsDraft, setQaHrefsDraft] = useState<string[]>(DEFAULT_QA_HREFS)
   const [savingQA, setSavingQA] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [paletteQuery, setPaletteQuery] = useState('')
+  const [paletteSelectedIdx, setPaletteSelectedIdx] = useState(0)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [draggedQaIdx, setDraggedQaIdx] = useState<number | null>(null)
 
   const [data, setData] = useState({
     revenue: 0, expenses: 0, vatDue: 0,
@@ -154,6 +161,37 @@ export default function DashboardPage() {
     if (t) setTheme(t)
     if (d) setDensity(d)
   }, [])
+
+  /* ============ KEYBOARD SHORTCUTS ============ */
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      // Cmd+K / Ctrl+K → odpri command palette
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setPaletteOpen(true)
+        setPaletteQuery('')
+        setPaletteSelectedIdx(0)
+      }
+      // Escape zapre vse
+      if (e.key === 'Escape') {
+        setPaletteOpen(false)
+        setVoiceOpen(false)
+        setUpnOpen(false)
+        setNotificationsOpen(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  /* ============ VOICE MOCK ============ */
+  useEffect(() => {
+    if (voiceOpen) {
+      setVoiceStage('listening')
+      const t = setTimeout(() => setVoiceStage('understood'), 2400)
+      return () => clearTimeout(t)
+    }
+  }, [voiceOpen])
 
   function applyTheme(t: 'light'|'dark') {
     setTheme(t)
@@ -277,6 +315,102 @@ export default function DashboardPage() {
     showToast('Hitre akcije shranjene')
   }
   const activeQA = qaHrefs.map(h => ALL_QUICK_ACTIONS.find(a => a.href === h)).filter(Boolean) as typeof ALL_QUICK_ACTIONS
+
+  /* ============ COMMAND PALETTE ITEMS ============ */
+  const paletteItems = useMemo(() => {
+    return [
+      // Hitra dejanja
+      { type: 'action', icon: 'plus',     label: 'Nov račun',           sub: 'Izstavi nov izhodni račun',  href: '/invoices/new' },
+      { type: 'action', icon: 'scan',     label: 'Skeniraj račun',      sub: 'AI OCR za prejete račune',   href: '/scan' },
+      { type: 'action', icon: 'receipt',  label: 'Dodaj strošek',       sub: 'Ročno vnesi strošek',        href: '/expenses' },
+      { type: 'action', icon: 'pay',      label: 'Plačaj prispevke',    sub: 'UPN za s.p. prispevke',      href: '/prispevki' },
+      // Pregled
+      { type: 'nav',    icon: 'home',     label: 'Dashboard',           sub: 'Domača stran',               href: '/dashboard' },
+      { type: 'nav',    icon: 'invoices', label: 'Vsi računi',          sub: 'Pregled izdanih računov',    href: '/invoices' },
+      { type: 'nav',    icon: 'expenses', label: 'Vsi stroški',         sub: 'Pregled prejetih računov',   href: '/expenses' },
+      { type: 'nav',    icon: 'stats',    label: 'Statistika',          sub: 'Letni pregled',              href: '/statistika' },
+      // Davki
+      { type: 'tax',    icon: 'percent',  label: 'DDV obračun',         sub: 'Mesečni DDV-O',              href: '/ddv' },
+      { type: 'tax',    icon: 'percent',  label: 'DDV evidenca',        sub: 'Knjiga DDV',                 href: '/ddv/evidenca' },
+      { type: 'tax',    icon: 'book',     label: 'KPO knjiga',          sub: 'Evidenca prihodkov',         href: '/kpo' },
+      { type: 'tax',    icon: 'taxes',    label: 'Dohodnina',           sub: 'Akontacija dohodnine',       href: '/dohodnina' },
+      // AI & ostalo
+      { type: 'ai',     icon: 'ai',       label: 'AI računovodja',      sub: 'Vprašajte karkoli',          href: '/ai' },
+      { type: 'nav',    icon: 'calendar', label: 'Rokovnik',            sub: 'Davčni roki',                href: '/rokovnik' },
+      { type: 'nav',    icon: 'settings', label: 'Nastavitve',          sub: 'Profil podjetja',            href: '/nastavitve' },
+    ]
+  }, [])
+
+  const filteredPaletteItems = useMemo(() => {
+    if (!paletteQuery.trim()) return paletteItems
+    const q = paletteQuery.toLowerCase().trim()
+    return paletteItems.filter(item => 
+      item.label.toLowerCase().includes(q) || 
+      item.sub.toLowerCase().includes(q)
+    )
+  }, [paletteItems, paletteQuery])
+
+  function selectPaletteItem(item: typeof paletteItems[0]) {
+    setPaletteOpen(false)
+    setPaletteQuery('')
+    if (item.href) router.push(item.href)
+  }
+
+  /* ============ DRAG-AND-DROP for quick actions in modal ============ */
+  function handleQaDragStart(idx: number) {
+    setDraggedQaIdx(idx)
+  }
+  function handleQaDragOver(e: React.DragEvent, overIdx: number) {
+    e.preventDefault()
+    if (draggedQaIdx === null || draggedQaIdx === overIdx) return
+    const next = [...qaHrefsDraft]
+    const [removed] = next.splice(draggedQaIdx, 1)
+    next.splice(overIdx, 0, removed)
+    setQaHrefsDraft(next)
+    setDraggedQaIdx(overIdx)
+  }
+  function handleQaDragEnd() {
+    setDraggedQaIdx(null)
+  }
+
+  /* ============ NOTIFICATIONS (real, computed from data) ============ */
+  const notifications = useMemo(() => {
+    const items: { id: string; severity: 'urgent'|'warning'|'info'; title: string; subtitle: string; href: string }[] = []
+    
+    // Overdue invoices
+    if (data.overdueCount > 0) {
+      items.push({
+        id: 'overdue',
+        severity: 'urgent',
+        title: `${data.overdueCount} ${data.overdueCount === 1 ? 'račun' : 'računov'} v zamudi`,
+        subtitle: `Skupaj €${Math.round(data.overdueAmount)}`,
+        href: '/invoices',
+      })
+    }
+    // Bližnji rok za prispevke
+    if (daysUntil15 >= 0 && daysUntil15 <= 7) {
+      items.push({
+        id: 'prispevki',
+        severity: daysUntil15 <= 3 ? 'urgent' : 'warning',
+        title: `Prispevki s.p. zapadejo čez ${daysUntil15} ${daysUntil15 === 1 ? 'dan' : 'dni'}`,
+        subtitle: '€522 · ZPIZ + ZZZS',
+        href: '/prispevki',
+      })
+    }
+    // DDV
+    if (showDDVAlert && org?.vat_registered) {
+      items.push({
+        id: 'ddv',
+        severity: 'info',
+        title: `DDV-O Q${ddvQuarter} čaka oddajo`,
+        subtitle: 'Konec meseca',
+        href: '/ddv/evidenca',
+      })
+    }
+    return items
+  }, [data, daysUntil15, showDDVAlert, org, ddvQuarter])
+
+  const notificationCount = notifications.length
 
   /* ============ COMPUTED: TAX CALCULATION ============ */
   const taxResult = useMemo(() => {
@@ -437,13 +571,17 @@ export default function DashboardPage() {
             <h1 className="rk-greet">{greet}, <span className="name">{ownerName}</span> 👋</h1>
           </div>
           <div className="rk-head-tools">
-            <div className="rk-head-search" onClick={() => showToast('Iskanje · kmalu')}>
+            <div className="rk-head-search" onClick={() => { setPaletteOpen(true); setPaletteQuery(''); setPaletteSelectedIdx(0) }}>
               <Icon name="search" size={16} />
               <span>Iskanje računov, strank…</span>
               <kbd>⌘K</kbd>
             </div>
             <button className="rk-tool-btn" title="Glasovni ukaz" onClick={() => setVoiceOpen(true)}>
               <Icon name="mic" />
+            </button>
+            <button className="rk-tool-btn rk-tool-bell" title={`Obvestila (${notificationCount})`} onClick={() => setNotificationsOpen(!notificationsOpen)}>
+              <Icon name="bell" />
+              {notificationCount > 0 && <span className="rk-bell-badge">{notificationCount}</span>}
             </button>
             <div className="rk-density-toggle" title="Gostota">
               <button className={density === 'comfortable' ? 'active' : ''} onClick={() => applyDensity('comfortable')} title="Comfortable">
@@ -747,7 +885,7 @@ export default function DashboardPage() {
       {/* FAB */}
       <Link href="/invoices/new" className="rk-fab">＋ Nov račun</Link>
 
-      {/* QUICK ACTIONS MODAL */}
+      {/* QUICK ACTIONS MODAL (z drag-and-drop) */}
       {showQAModal && (
         <div className="rk-modal-backdrop" onClick={e => { if (e.target === e.currentTarget) setShowQAModal(false) }}>
           <div className="rk-modal" onClick={e => e.stopPropagation()}>
@@ -756,7 +894,56 @@ export default function DashboardPage() {
               <button onClick={() => setShowQAModal(false)} className="rk-modal-close">✕</button>
             </div>
             <div className="rk-modal-body">
-              <div style={{ fontSize: 12, color: 'var(--ink3)', marginBottom: 14 }}>Izberite akcije, ki jih želite videti</div>
+              {qaHrefsDraft.length > 0 && (
+                <>
+                  <div style={{ fontSize: 11, color: 'var(--ink3)', marginBottom: 8, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                    Izbrane akcije ({qaHrefsDraft.length}) · povleci za vrstni red
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 18 }}>
+                    {qaHrefsDraft.map((href, idx) => {
+                      const item = ALL_QUICK_ACTIONS.find(a => a.href === href)
+                      if (!item) return null
+                      return (
+                        <div
+                          key={href}
+                          draggable
+                          onDragStart={() => handleQaDragStart(idx)}
+                          onDragOver={(e) => handleQaDragOver(e, idx)}
+                          onDragEnd={handleQaDragEnd}
+                          className="rk-qa-draggable"
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 10,
+                            padding: '8px 10px',
+                            background: draggedQaIdx === idx ? 'var(--green-soft)' : 'var(--rule2)',
+                            borderRadius: 8,
+                            cursor: 'grab',
+                            opacity: draggedQaIdx === idx ? 0.6 : 1,
+                            transition: 'background 0.12s',
+                          }}
+                        >
+                          <span style={{ color: 'var(--ink3)', fontSize: 14, cursor: 'grab' }}>⠿</span>
+                          <span style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--green-soft)', color: 'var(--green)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                            <Icon name={item.icon} size={14} />
+                          </span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>{item.label}</div>
+                          </div>
+                          <button
+                            onClick={() => toggleDraftQA(href)}
+                            style={{ background: 'none', border: 0, color: 'var(--ink3)', fontSize: 18, cursor: 'pointer', padding: '2px 6px', borderRadius: 4, lineHeight: 1 }}
+                            title="Odstrani"
+                          >×</button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+              <div style={{ fontSize: 11, color: 'var(--ink3)', marginBottom: 8, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                Vse razpoložljive akcije
+              </div>
               {ALL_QUICK_ACTIONS.map(item => (
                 <div key={item.href} className="rk-qa-toggle">
                   <span className="rk-qa-toggle-left">
@@ -781,20 +968,50 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* VOICE MODAL (placeholder) */}
+      {/* VOICE MODAL (mock transcription) */}
       {voiceOpen && (
         <div className="rk-voice-backdrop" onClick={e => { if (e.target === e.currentTarget) setVoiceOpen(false) }}>
           <div className="rk-voice-card">
-            <div className="rk-voice-orb"><Icon name="mic" size={32} /></div>
-            <div className="rk-voice-eyebrow">Glasovni vmesnik</div>
-            <div className="rk-voice-text">Kmalu bo na voljo</div>
-            <div className="rk-voice-hints">
-              <span>"Nov račun za 500€"</span>
-              <span>"Pošlji opomnik"</span>
-              <span>"Koliko sem zaslužil maja?"</span>
+            <div className={`rk-voice-orb ${voiceStage === 'listening' ? 'listening' : 'understood'}`}>
+              <Icon name="mic" size={32} />
             </div>
+            <div className="rk-voice-eyebrow">{voiceStage === 'listening' ? 'Poslušam…' : 'Razumem'}</div>
+            <div className="rk-voice-text">
+              {voiceStage === 'listening' ? (
+                'Povej, kaj želiš storiti'
+              ) : data.overdueCount > 0 ? (
+                <>
+                  <span style={{ color: 'var(--ink3)', fontWeight: 500 }}>Pošlji opomnik za </span>
+                  <b style={{ color: 'var(--green)' }}>{data.recentInvoices.find((i:any) => i.status === 'sent' && i.due_date < today)?.client_name || 'stranko'}</b>
+                  <span style={{ color: 'var(--ink3)', fontWeight: 500 }}> — zapadel račun</span>
+                </>
+              ) : (
+                <>
+                  <span style={{ color: 'var(--ink3)', fontWeight: 500 }}>Odpri </span>
+                  <b style={{ color: 'var(--green)' }}>nov račun</b>
+                </>
+              )}
+            </div>
+            {voiceStage === 'listening' && (
+              <div className="rk-voice-wave">
+                <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+              </div>
+            )}
+            {voiceStage === 'listening' && (
+              <div className="rk-voice-hints">
+                <span>"Nov račun za 500€"</span>
+                <span>"Pošlji opomnik"</span>
+                <span>"Koliko sem zaslužil maja?"</span>
+              </div>
+            )}
             <div className="rk-voice-actions">
-              <button className="rk-voice-cancel" onClick={() => setVoiceOpen(false)}>Zapri</button>
+              <button className="rk-voice-cancel" onClick={() => setVoiceOpen(false)}>Prekliči</button>
+              {voiceStage === 'understood' && (
+                <button className="rk-voice-confirm" onClick={() => {
+                  setVoiceOpen(false)
+                  showToast('Glasovni ukazi · kmalu v full funkcionalnosti')
+                }}>Izvedi</button>
+              )}
             </div>
           </div>
         </div>
@@ -840,6 +1057,94 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* COMMAND PALETTE (⌘K) */}
+      {paletteOpen && (
+        <div className="rk-palette-backdrop" onClick={e => { if (e.target === e.currentTarget) setPaletteOpen(false) }}>
+          <div className="rk-palette" onClick={e => e.stopPropagation()}>
+            <div className="rk-palette-input-wrap">
+              <Icon name="search" size={18} />
+              <input
+                type="text"
+                value={paletteQuery}
+                onChange={(e) => { setPaletteQuery(e.target.value); setPaletteSelectedIdx(0) }}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault()
+                    setPaletteSelectedIdx(Math.min(paletteSelectedIdx + 1, filteredPaletteItems.length - 1))
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault()
+                    setPaletteSelectedIdx(Math.max(paletteSelectedIdx - 1, 0))
+                  } else if (e.key === 'Enter') {
+                    e.preventDefault()
+                    const item = filteredPaletteItems[paletteSelectedIdx]
+                    if (item) selectPaletteItem(item)
+                  }
+                }}
+                placeholder="Išči stran ali ukaz…"
+                autoFocus
+              />
+              <kbd>ESC</kbd>
+            </div>
+            <div className="rk-palette-results">
+              {filteredPaletteItems.length === 0 ? (
+                <div className="rk-palette-empty">Ni zadetkov za "{paletteQuery}"</div>
+              ) : (
+                filteredPaletteItems.map((item, idx) => (
+                  <div
+                    key={item.href || idx}
+                    className={`rk-palette-item ${idx === paletteSelectedIdx ? 'selected' : ''}`}
+                    onMouseEnter={() => setPaletteSelectedIdx(idx)}
+                    onClick={() => selectPaletteItem(item)}
+                  >
+                    <span className="rk-palette-ico"><Icon name={item.icon} size={16} /></span>
+                    <div className="rk-palette-text">
+                      <div className="rk-palette-label">{item.label}</div>
+                      <div className="rk-palette-sub">{item.sub}</div>
+                    </div>
+                    <kbd className="rk-palette-enter">↵</kbd>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="rk-palette-foot">
+              <span>↑↓ za navigacijo</span>
+              <span>↵ za izbiro</span>
+              <span>esc za zapri</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NOTIFICATIONS DROPDOWN */}
+      {notificationsOpen && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 1500 }} onClick={() => setNotificationsOpen(false)} />
+          <div className="rk-notif-dropdown">
+            <div className="rk-notif-head">
+              <h4>Obvestila</h4>
+              {notificationCount > 0 && <span className="rk-notif-count">{notificationCount}</span>}
+            </div>
+            <div className="rk-notif-list">
+              {notifications.length === 0 ? (
+                <div className="rk-notif-empty">
+                  ✓ Vse je urejeno · ni nujnih obvestil
+                </div>
+              ) : (
+                notifications.map(n => (
+                  <Link key={n.id} href={n.href} onClick={() => setNotificationsOpen(false)} className={`rk-notif-item ${n.severity}`}>
+                    <span className="rk-notif-dot" />
+                    <div>
+                      <div className="rk-notif-title">{n.title}</div>
+                      <div className="rk-notif-sub">{n.subtitle}</div>
+                    </div>
+                  </Link>
+                ))
+              )}
+            </div>
+          </div>
+        </>
       )}
 
       {/* TOAST WRAP */}
@@ -1218,6 +1523,74 @@ const cssGlobal = `
   .rk-toast { background: var(--bg); color: #fff; padding: 12px 20px; border-radius: 999px; font-size: 13px; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,0.18); display: flex; align-items: center; gap: 10px; pointer-events: auto; opacity: 1; }
   .rk-toast .ti { width: 20px; height: 20px; border-radius: 50%; background: var(--warm); color: var(--bg); display: grid; place-items: center; font-size: 12px; font-weight: 700; }
 
+  /* COMMAND PALETTE */
+  .rk-palette-backdrop { position: fixed; inset: 0; background: rgba(15,31,24,0.4); display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; z-index: 2500; backdrop-filter: blur(8px); }
+  .rk-palette { background: #fff; border-radius: 16px; width: 100%; max-width: 600px; max-height: 70vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 24px 80px rgba(0,0,0,0.25); border: 1px solid var(--rule); }
+  .rk-shell[data-theme="dark"] .rk-palette { background: var(--panel); }
+  .rk-palette-input-wrap { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--rule2); color: var(--ink2); }
+  .rk-palette-input-wrap input { flex: 1; border: 0; outline: 0; background: transparent; font: inherit; font-size: 15px; color: var(--ink); }
+  .rk-palette-input-wrap input::placeholder { color: var(--ink3); }
+  .rk-palette-input-wrap kbd { font-family: var(--rk-mono); font-size: 10px; background: var(--rule2); color: var(--ink2); padding: 3px 7px; border-radius: 4px; font-weight: 600; }
+  .rk-shell[data-theme="dark"] .rk-palette-input-wrap kbd { background: var(--rule); }
+  .rk-palette-results { flex: 1; overflow-y: auto; padding: 6px; }
+  .rk-palette-empty { padding: 32px 20px; text-align: center; color: var(--ink3); font-size: 13px; }
+  .rk-palette-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; cursor: pointer; transition: background 0.08s; }
+  .rk-palette-item.selected { background: var(--green-soft); }
+  .rk-palette-ico { width: 32px; height: 32px; border-radius: 8px; background: var(--rule2); color: var(--ink2); display: grid; place-items: center; flex-shrink: 0; }
+  .rk-shell[data-theme="dark"] .rk-palette-ico { background: var(--rule); }
+  .rk-palette-item.selected .rk-palette-ico { background: var(--green); color: #fff; }
+  .rk-palette-text { flex: 1; min-width: 0; }
+  .rk-palette-label { font-size: 14px; font-weight: 600; color: var(--ink); }
+  .rk-palette-sub { font-size: 12px; color: var(--ink3); margin-top: 1px; }
+  .rk-palette-enter { font-family: var(--rk-mono); font-size: 11px; color: var(--ink3); background: var(--rule2); padding: 3px 7px; border-radius: 4px; opacity: 0; transition: opacity 0.1s; }
+  .rk-shell[data-theme="dark"] .rk-palette-enter { background: var(--rule); }
+  .rk-palette-item.selected .rk-palette-enter { opacity: 1; color: var(--green); }
+  .rk-palette-foot { padding: 10px 20px; border-top: 1px solid var(--rule2); display: flex; gap: 16px; font-family: var(--rk-mono); font-size: 10px; color: var(--ink3); letter-spacing: 0.04em; }
+
+  /* NOTIFICATIONS BELL + DROPDOWN */
+  .rk-tool-bell { position: relative; }
+  .rk-bell-badge { position: absolute; top: 4px; right: 4px; min-width: 16px; height: 16px; background: var(--bad); color: #fff; border-radius: 999px; font-size: 9px; font-weight: 700; display: grid; place-items: center; padding: 0 4px; border: 2px solid var(--cream); line-height: 1; }
+  .rk-shell[data-theme="dark"] .rk-bell-badge { border-color: var(--bg); }
+  .rk-notif-dropdown { position: fixed; top: 80px; right: 32px; width: 360px; max-width: calc(100vw - 32px); background: #fff; border: 1px solid var(--rule); border-radius: 14px; box-shadow: 0 16px 48px rgba(0,0,0,0.16); z-index: 1600; overflow: hidden; }
+  .rk-shell[data-theme="dark"] .rk-notif-dropdown { background: var(--panel); }
+  .rk-notif-head { padding: 14px 18px; border-bottom: 1px solid var(--rule2); display: flex; justify-content: space-between; align-items: center; }
+  .rk-notif-head h4 { font-family: var(--rk-display); font-weight: 700; font-size: 14px; margin: 0; color: var(--ink); }
+  .rk-notif-count { background: var(--bad); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .rk-notif-list { max-height: 400px; overflow-y: auto; }
+  .rk-notif-empty { padding: 28px 18px; text-align: center; color: var(--ink3); font-size: 13px; }
+  .rk-notif-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--rule2); cursor: pointer; text-decoration: none; color: var(--ink); transition: background 0.1s; }
+  .rk-notif-item:last-child { border-bottom: 0; }
+  .rk-notif-item:hover { background: var(--rule2); }
+  .rk-notif-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+  .rk-notif-item.urgent .rk-notif-dot { background: var(--bad); }
+  .rk-notif-item.warning .rk-notif-dot { background: var(--warm); }
+  .rk-notif-item.info .rk-notif-dot { background: var(--green); }
+  .rk-notif-title { font-size: 13px; font-weight: 600; color: var(--ink); line-height: 1.4; }
+  .rk-notif-sub { font-size: 11px; color: var(--ink3); margin-top: 2px; font-family: var(--rk-mono); letter-spacing: 0.04em; }
+
+  /* VOICE WAVE animation */
+  .rk-voice-orb.listening { animation: voicePulse 1.6s ease-in-out infinite; }
+  @keyframes voicePulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(14,94,59,0.4); } 50% { box-shadow: 0 0 0 16px rgba(14,94,59,0); } }
+  .rk-voice-orb.understood { background: linear-gradient(135deg, var(--green), var(--warm)); }
+  .rk-voice-wave { display: flex; gap: 4px; align-items: center; justify-content: center; height: 24px; margin-bottom: 16px; }
+  .rk-voice-wave span { display: inline-block; width: 3px; background: var(--green); border-radius: 2px; animation: voiceWave 1s ease-in-out infinite; }
+  .rk-voice-wave span:nth-child(1) { animation-delay: 0s; height: 8px; }
+  .rk-voice-wave span:nth-child(2) { animation-delay: 0.1s; height: 14px; }
+  .rk-voice-wave span:nth-child(3) { animation-delay: 0.2s; height: 20px; }
+  .rk-voice-wave span:nth-child(4) { animation-delay: 0.3s; height: 18px; }
+  .rk-voice-wave span:nth-child(5) { animation-delay: 0.4s; height: 22px; }
+  .rk-voice-wave span:nth-child(6) { animation-delay: 0.5s; height: 16px; }
+  .rk-voice-wave span:nth-child(7) { animation-delay: 0.6s; height: 18px; }
+  .rk-voice-wave span:nth-child(8) { animation-delay: 0.7s; height: 12px; }
+  .rk-voice-wave span:nth-child(9) { animation-delay: 0.8s; height: 8px; }
+  @keyframes voiceWave { 0%, 100% { transform: scaleY(0.5); } 50% { transform: scaleY(1.4); } }
+  .rk-voice-confirm { background: var(--green); color: #fff; font: inherit; font-weight: 600; font-size: 13px; padding: 11px 22px; border-radius: 999px; cursor: pointer; border: 0; }
+  .rk-voice-confirm:hover { background: var(--green-deep); }
+
+  /* DRAGGABLE QA in modal */
+  .rk-qa-draggable:hover { background: var(--green-soft) !important; }
+  .rk-qa-draggable:active { cursor: grabbing; }
+
   /* MOBILE */
   @media (max-width: 768px) {
     .rk-shell { grid-template-columns: 1fr; }
@@ -1253,5 +1626,8 @@ const cssGlobal = `
     .rk-fab { bottom: 16px; right: 16px; padding: 12px 18px; }
     .rk-upn-card { grid-template-columns: 1fr; max-height: 90vh; overflow-y: auto; }
     .rk-upn-right { padding: 24px 20px; }
+    .rk-palette { max-width: calc(100vw - 24px); margin: 0 12px; }
+    .rk-palette-backdrop { padding-top: 8vh; }
+    .rk-notif-dropdown { top: 70px; right: 12px; width: calc(100vw - 24px); }
   }
 `
