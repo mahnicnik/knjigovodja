@@ -62,6 +62,18 @@ const ALL_STEPS = [
     ],
   },
   {
+    id: 'davcni_sistem',
+    title: 'Kateri davčni sistem uporabljate?',
+    sub: 'To določi izračun davkov in priznanih odhodkov.',
+    type: 'single' as const,
+    showIf: (a: any) => a.tip === 'sp',
+    options: [
+      { icon: '📊', label: 'Normirani 80%', desc: 'Priznani odhodki = 80% prihodkov (do 60.000 € letno)', value: 'normirani_80' },
+      { icon: '📈', label: 'Normirani 40%', desc: 'Priznani odhodki = 40% prihodkov (do 100.000 € letno)', value: 'normirani_40' },
+      { icon: '📒', label: 'Dejanski stroški', desc: 'KPO knjiga z dejanskimi računi za odhodke', value: 'dejanski' },
+    ],
+  },
+  {
     id: 'extras',
     title: 'Kaj še uporabljate?',
     sub: 'Aktiviramo samo module ki jih dejansko potrebujete.',
@@ -177,7 +189,6 @@ export default function OnboardingPage() {
       if (!finalAnswers.zaposleni) finalAnswers.zaposleni = 'solo'
       if (!finalAnswers.extras) finalAnswers.extras = []
 
-    
       // Pridobi obstoječi org (ki ga je ustvaril trigger ob registraciji)
       const { data: member, error: memberFetchErr } = await supabase
         .from('org_members')
@@ -191,12 +202,20 @@ export default function OnboardingPage() {
         return
       }
 
-      // Posodobi org z imenom in DDV statusom
+      // Določi tax_system na podlagi pravne oblike
+      const taxSystem = finalAnswers.tip === 'sp'
+        ? (finalAnswers.davcni_sistem || 'normirani_80')
+        : finalAnswers.tip === 'doo'
+          ? 'doo_obdavcitev'
+          : null
+
+      // Posodobi org z imenom, DDV statusom in davčnim sistemom
       const { data: org, error: orgError } = await supabase
         .from('organizations')
-        .update({ 
-          name: orgName, 
-          vat_registered: finalAnswers.ddv === 'yes' 
+        .update({
+          name: orgName,
+          vat_registered: finalAnswers.ddv === 'yes',
+          tax_system: taxSystem,
         })
         .eq('id', member.org_id)
         .select()
@@ -207,6 +226,7 @@ export default function OnboardingPage() {
         setSaving(false)
         return
       }
+
       // Shrani preferences
       const { error: prefError } = await supabase
         .from('user_preferences')
@@ -228,6 +248,7 @@ export default function OnboardingPage() {
       posthog.capture('onboarding_completed', {
         org_name: orgName,
         business_type: finalAnswers.tip,
+        tax_system: taxSystem,
         vat_registered: finalAnswers.ddv === 'yes',
         has_employees: finalAnswers.zaposleni === 'yes',
         industries: finalAnswers.dejavnost,
@@ -362,6 +383,11 @@ export default function OnboardingPage() {
             if (!finalAnswers.extras) finalAnswers.extras = []
             const hidden = computeHiddenNav(finalAnswers)
             const activeCount = 18 - hidden.length
+            const taxSystemLabel = finalAnswers.davcni_sistem === 'normirani_80' ? 'Normirani 80%'
+              : finalAnswers.davcni_sistem === 'normirani_40' ? 'Normirani 40%'
+              : finalAnswers.davcni_sistem === 'dejanski' ? 'Dejanski stroški'
+              : finalAnswers.tip === 'doo' ? 'd.o.o. obdavčitev'
+              : '—'
             return (
               <div>
                 <div style={{ textAlign: 'center', marginBottom: '20px' }}>
@@ -377,6 +403,7 @@ export default function OnboardingPage() {
                   {[
                     { label: 'Ime podjetja', value: orgName },
                     { label: 'Pravna oblika', value: answers.tip === 'sp' ? 'Samostojni podjetnik' : answers.tip === 'doo' ? 'd.o.o.' : 'Zavod/društvo' },
+                    { label: 'Davčni sistem', value: taxSystemLabel },
                     { label: 'DDV', value: answers.ddv === 'yes' ? 'Zavezanec' : answers.ddv === 'soon' ? 'Kmalu zavezanec' : 'Ni zavezanec' },
                     { label: 'Zaposleni', value: finalAnswers.zaposleni === 'yes' ? 'Da' : finalAnswers.zaposleni === 'soon' ? 'Kmalu' : 'Ne' },
                     { label: 'Aktivni moduli', value: `${activeCount} od 18` },
