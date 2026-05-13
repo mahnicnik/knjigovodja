@@ -31,6 +31,7 @@ const RAIL_ITEMS = [
   { href: '/expenses',   label: 'Stroški',         icon: 'expenses', badge: false },
   { href: '/ddv',        label: 'Davki',           icon: 'taxes',    badge: false },
   { href: '/statistika', label: 'Statistika',      icon: 'stats',    badge: false },
+  { href: '/izvoz', icon: 'export', label: 'Izvoz za računovodjo' },
   { href: '/ai',         label: 'AI računovodja',  icon: 'ai',       badge: false },
   { href: '/rokovnik',   label: 'Koledar',         icon: 'calendar', badge: false },
 ]
@@ -42,6 +43,7 @@ const ALL_QUICK_ACTIONS = [
   { href:'/prispevki',    icon:'pay',      label:'Prispevki QR',    sub:'ZPIZ + ZZZS' },
   { href:'/expenses',     icon:'receipt',  label:'Dodaj strošek',   sub:'Prejeti računi' },
   { href:'/ai',           icon:'ai',       label:'AI računovodja',  sub:'Vprašajte karkoli' },
+  { href: '/izvoz', icon: 'export', label: 'Izvoz za računovodjo', sub: 'XLSX/CSV za računovodjo' },
   { href:'/statistika',   icon:'stats',    label:'Statistika',      sub:'Pregled leta' },
   { href:'/blagajna',     icon:'pos',      label:'Blagajna',        sub:'POS terminal' },
   { href:'/kpo',          icon:'book',     label:'KPO knjiga',      sub:'Evidenca' },
@@ -77,6 +79,7 @@ function Icon({ name, size = 18 }: { name: string; size?: number }) {
     case 'sun':      return <svg {...props}><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
     case 'moon':     return <svg {...props}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
     case 'bell':     return <svg {...props}><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+    case 'export':   return <svg {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
     case 'plus':     return <svg {...props}><path d="M12 5v14M5 12h14"/></svg>
     case 'scan':     return <svg {...props}><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 10h8M8 14h5"/></svg>
     case 'pay':      return <svg {...props}><path d="M21 15V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h9"/><path d="M16 17l3 3 5-5"/></svg>
@@ -338,6 +341,7 @@ export default function DashboardPage() {
       { type: 'ai',     icon: 'ai',       label: 'AI računovodja',      sub: 'Vprašajte karkoli',          href: '/ai' },
       { type: 'nav',    icon: 'calendar', label: 'Rokovnik',            sub: 'Davčni roki',                href: '/rokovnik' },
       { type: 'nav',    icon: 'settings', label: 'Nastavitve',          sub: 'Profil podjetja',            href: '/nastavitve' },
+      { type: 'nav',    icon: 'export',   label: 'Izvoz za računovodjo', sub: 'XLSX/CSV + email računovodji', href: '/izvoz' },
     ]
   }, [])
 
