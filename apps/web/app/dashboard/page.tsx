@@ -45,7 +45,7 @@ const ALL_QUICK_ACTIONS = [
   { href:'/ai',           icon:'ai',       label:'AI računovodja',  sub:'Vprašajte karkoli' },
   { href: '/izvoz', icon: 'export', label: 'Izvoz za računovodjo', sub: 'XLSX/CSV za računovodjo' },
   { href:'/statistika',   icon:'stats',    label:'Statistika',      sub:'Pregled leta' },
-  { href:'/blagajna',     icon:'pos',      label:'Blagajna',        sub:'POS terminal' },
+  { href:'/nastavitve/blagajna',     icon:'pos',      label:'Blagajna',        sub:'POS terminal' },
   { href:'/kpo',          icon:'book',     label:'KPO knjiga',      sub:'Evidenca' },
   { href:'/ddv',          icon:'percent',  label:'DDV obračun',     sub:'Mesečni DDV' },
   { href:'/invoices',     icon:'list',     label:'Vsi računi',      sub:'Pregled' },
