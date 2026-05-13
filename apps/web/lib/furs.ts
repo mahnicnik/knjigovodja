@@ -187,7 +187,7 @@ function buildFursRequest(
             <fu:Created>${timestamp}</fu:Created>
           </fu:ProvidedSignatureInfo>
         </fu:SignatureInfo>
-        ${data.paymentType !== 'invoice' ? `<fu:PaymentType>${paymentCode}</fu:PaymentType>` : ''}
+        ${data.amountTotal > 0 ? `<fu:PaymentType>${paymentCode}</fu:PaymentType>` : ''}
       </fu:invoice>
     </fu:invoiceRequest>
   </soapenv:Body>
