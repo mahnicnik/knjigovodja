@@ -84,7 +84,7 @@ function Icon({ name, size = 18 }: { name: string; size?: number }) {
     case 'scan':     return <svg {...props}><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 10h8M8 14h5"/></svg>
     case 'pay':      return <svg {...props}><path d="M21 15V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h9"/><path d="M16 17l3 3 5-5"/></svg>
     case 'receipt':  return <svg {...props}><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>
-    case 'pos':      return <svg {...props}><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M3 10h18M8 21h8M12 17v4"/></svg>
+    case 'pos':      return <svg {...props} fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
     case 'book':     return <svg {...props}><path d="M4 4h16v16H4z"/><path d="M4 9h16M9 4v16"/></svg>
     case 'percent':  return <svg {...props}><circle cx="12" cy="12" r="9"/><path d="M8 16l8-8M9 9h.01M15 15h.01"/></svg>
     case 'list':     return <svg {...props}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
