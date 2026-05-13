@@ -4,6 +4,7 @@ import { resend, FROM_EMAIL } from '@/lib/resend'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { InvoicePDF, generateUpnQr } from '@/lib/invoice-pdf'
 import { buildInvoiceEmailHtml } from '@/lib/invoice-email'
+import { generateEslogXml, buildEslogFromInvoice } from '@/lib/eslog'
 
 export async function POST(
   request: NextRequest,
@@ -12,7 +13,7 @@ export async function POST(
   try {
     const { id: invoiceId } = await params
     const body = await request.json()
-    const { to, cc, subject, message } = body
+    const { to, cc, subject, message, sendEslog } = body
 
     if (!to || !subject) {
       return NextResponse.json({ error: 'Manjkajo obvezna polja (to, subject)' }, { status: 400 })
@@ -40,7 +41,7 @@ export async function POST(
       return NextResponse.json({ error: 'Organizacija ni najdena' }, { status: 404 })
     }
 
-    // Verify user belongs to this org
+    // Preveri da user spada v to org
     const { data: member } = await supabase
       .from('org_members')
       .select('org_id')
@@ -52,14 +53,40 @@ export async function POST(
       return NextResponse.json({ error: 'Nimate dostopa do tega računa' }, { status: 403 })
     }
 
-    // Generate UPN QR
+    // Generiraj UPN QR
     const qrDataUrl = await generateUpnQr(invoice, org)
 
-    // Generate PDF
+    // Generiraj PDF
     const pdfElement = InvoicePDF({ invoice, org, qrDataUrl })
     const pdfBuffer = await renderToBuffer(pdfElement as any)
 
-    // Build email HTML
+    // Priponke — PDF je vedno priložen
+    const attachments: Array<{ filename: string; content: Buffer | string }> = [
+      {
+        filename: `racun-${invoice.invoice_number}.pdf`,
+        content: pdfBuffer,
+      },
+    ]
+
+    // eSLOG XML — samo če je zahtevano in stranka ima davčno številko
+    let eslogGenerated = false
+    if (sendEslog && invoice.client_tax_number?.trim()) {
+      try {
+        const eslogData = buildEslogFromInvoice(invoice, org)
+        const xmlString = generateEslogXml(eslogData)
+        const safeInvoiceNumber = invoice.invoice_number.replace(/[^a-zA-Z0-9\-_]/g, '_')
+        attachments.push({
+          filename: `${safeInvoiceNumber}.xml`,
+          content: xmlString,
+        })
+        eslogGenerated = true
+      } catch (eslogErr: any) {
+        // eSLOG napaka ne zaustavi pošiljanja — pošljemo samo PDF
+        console.error('eSLOG generacija napaka:', eslogErr)
+      }
+    }
+
+    // Zgradimo email HTML
     const emailHtml = buildInvoiceEmailHtml({
       orgName: org.name,
       invoiceNumber: invoice.invoice_number,
@@ -69,7 +96,7 @@ export async function POST(
       customMessage: message,
     })
 
-    // Send via Resend
+    // Pošlji via Resend
     const { data: resendData, error: resendError } = await resend.emails.send({
       from: FROM_EMAIL,
       to: [to],
@@ -77,18 +104,12 @@ export async function POST(
       replyTo: user.email,
       subject,
       html: emailHtml,
-      attachments: [
-        {
-          filename: `racun-${invoice.invoice_number}.pdf`,
-          content: pdfBuffer,
-        },
-      ],
-    })
+      attachments,
+    } as any)
 
     if (resendError) {
-      console.error('Resend error:', resendError)
-      
-      // Log failed attempt
+      console.error('Resend napaka:', resendError)
+
       await supabase.from('invoice_emails').insert({
         invoice_id: invoiceId,
         org_id: org.id,
@@ -103,7 +124,7 @@ export async function POST(
       return NextResponse.json({ error: resendError.message }, { status: 500 })
     }
 
-    // Log successful send
+    // Zabeležimo uspešno pošiljanje
     await supabase.from('invoice_emails').insert({
       invoice_id: invoiceId,
       org_id: org.id,
@@ -115,18 +136,19 @@ export async function POST(
       resend_email_id: resendData?.id,
     })
 
-    // Update invoice
+    // Posodobi status računa
     await supabase
       .from('issued_invoices')
-      .update({ 
+      .update({
         last_email_sent_at: new Date().toISOString(),
         status: invoice.status === 'draft' ? 'sent' : invoice.status,
       })
       .eq('id', invoiceId)
 
-    return NextResponse.json({ 
-      success: true, 
-      emailId: resendData?.id 
+    return NextResponse.json({
+      success: true,
+      emailId: resendData?.id,
+      eslogAttached: eslogGenerated,
     })
 
   } catch (error: any) {
