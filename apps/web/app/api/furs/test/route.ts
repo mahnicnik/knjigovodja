@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { calculateZoi, confirmWithFurs, type FursConfig, type FursInvoiceData } from '@/lib/furs'
-
-function getSupabase() {
-  const cookieStore = cookies()
+async function getSupabase() {
+  const cookieStore = await cookies()
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
