@@ -34,6 +34,7 @@ const RAIL_ITEMS = [
   { href: '/izvoz', icon: 'export', label: 'Izvoz za računovodjo' },
   { href: '/ai',         label: 'AI računovodja',  icon: 'ai',       badge: false },
   { href: '/nastavitve/blagajna', label: 'Blagajna', icon: 'pos', badge: false },
+  { href: '/pos', label: 'POS Terminal', icon: 'box', badge: false },
   { href: '/rokovnik',   label: 'Koledar',         icon: 'calendar', badge: false },
 ]
 
