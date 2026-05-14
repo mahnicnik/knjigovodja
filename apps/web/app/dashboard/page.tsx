@@ -36,6 +36,7 @@ const RAIL_ITEMS = [
 
   { href: '/pos', label: 'POS Terminal', icon: 'box', badge: false },
   { href: '/rokovnik',   label: 'Koledar',         icon: 'calendar', badge: false },
+  { href: '/ekipa',      label: 'Ekipa',           icon: 'users',    badge: false },
 ]
 
 /* ---------- QUICK ACTIONS library ---------- */
@@ -91,6 +92,7 @@ function Icon({ name, size = 18 }: { name: string; size?: number }) {
     case 'percent':  return <svg {...props}><circle cx="12" cy="12" r="9"/><path d="M8 16l8-8M9 9h.01M15 15h.01"/></svg>
     case 'list':     return <svg {...props}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
     case 'box':      return <svg {...props}><path d="M21 8l-9 5-9-5"/><path d="M3 8v10l9 5 9-5V8l-9-5z"/></svg>
+    case 'users':    return <svg {...props}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
     case 'edit':     return <svg {...props}><path d="M12 20h9M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4z"/></svg>
     case 'check':    return <svg {...props}><path d="M5 13l4 4L19 7"/></svg>
     case 'arrow-right': return <svg {...props}><path d="M5 12h14M13 5l7 7-7 7"/></svg>
