@@ -327,6 +327,12 @@ export default function NastavitevPage() {
           </div>
         </div>
 
+        {/* Davčna blagajna */}
+        <div style={{ marginTop: 24, borderTop: "0.5px solid rgba(0,0,0,0.08)", paddingTop: 24 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#0D1F12", marginBottom: 4 }}>Davčna blagajna (FURS)</div>
+          <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>Nastavitve za FURS potrjevanje gotovinskih računov po ZDavPR</div>
+          <a href="/nastavitve/blagajna" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#0D1F12", color: "#fff", padding: "10px 18px", borderRadius: 8, fontSize: 13, fontWeight: 500, textDecoration: "none" }}>⚙️ Odpri nastavitve blagajne →</a>
+        </div>
         <button onClick={handleSave} disabled={saving}
           className="w-full bg-gray-900 text-white rounded-xl py-3 text-sm font-medium disabled:opacity-40">
           {saved ? '✓ Shranjeno!' : saving ? 'Shranjujem...' : 'Shrani vse spremembe'}
