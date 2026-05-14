@@ -139,7 +139,7 @@ export default function NastavitevPage() {
         <a href="/nastavitve/ekipa" style={{ background: "none", border: 0, borderBottom: "2px solid transparent", padding: "12px 20px", fontSize: 13, fontWeight: 400, color: "#888", cursor: "pointer", textDecoration: "none" }}>👥 Ekipa</a>
         <a href="/nastavitve/blagajna" style={{ background: "none", border: 0, borderBottom: "2px solid transparent", padding: "12px 20px", fontSize: 13, fontWeight: 400, color: "#888", cursor: "pointer", textDecoration: "none" }}>🧾 Davčna blagajna</a>
       </div>
-      <div classNw-2xl mx-auto px-6 py-8 space-y-6">
+      <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
 
         {showSuccess && (
           <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex items-start justify-between gap-4">
