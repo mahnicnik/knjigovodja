@@ -36,7 +36,7 @@ const RAIL_ITEMS = [
 
   { href: '/pos', label: 'POS Terminal', icon: 'box', badge: false },
   { href: '/rokovnik',   label: 'Koledar',         icon: 'calendar', badge: false },
-  { href: '/ekipa',      label: 'Ekipa',           icon: 'users',    badge: false },
+  { href: '/nastavitve', label: 'Nastavitve',      icon: 'settings', badge: false },
 ]
 
 /* ---------- QUICK ACTIONS library ---------- */
