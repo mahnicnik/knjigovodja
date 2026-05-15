@@ -94,6 +94,8 @@ export async function POST(
       amount: Number(invoice.amount_total),
       dueDate: invoice.due_date,
       customMessage: message,
+      iban: org.iban ?? null,
+      reference: invoice.reference ?? null,
     })
 
     // Pošlji via Resend
