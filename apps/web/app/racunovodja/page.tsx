@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import HowTo from '@/components/HowTo'
 
 interface ClientOrg {
   org_id: string
@@ -54,7 +55,6 @@ export default function RacunovodjaPortal() {
 
       setUserName(user.email ?? '')
 
-      // Pridobi vse orge kjer je user accountant
       const { data: memberships } = await supabase
         .from('org_members')
         .select('org_id, created_at')
@@ -68,37 +68,19 @@ export default function RacunovodjaPortal() {
 
       const orgIds = memberships.map(m => m.org_id)
 
-      // Pridobi org podatke
       const { data: orgs } = await supabase
         .from('organizations')
         .select('id, name, tax_number, tax_system, vat_registered')
         .in('id', orgIds)
 
-      // Za vsako org pridobi statistike tega meseca
       const clientsWithStats = await Promise.all(
         (orgs ?? []).map(async (org) => {
           const membership = memberships.find(m => m.org_id === org.id)
 
           const [invRes, recRes, overdueRes] = await Promise.all([
-            supabase
-              .from('issued_invoices')
-              .select('amount_total, status')
-              .eq('org_id', org.id)
-              .gte('issue_date', from)
-              .lte('issue_date', to)
-              .neq('status', 'draft'),
-            supabase
-              .from('receipts')
-              .select('status')
-              .eq('org_id', org.id)
-              .gte('receipt_date', from)
-              .lte('receipt_date', to),
-            supabase
-              .from('issued_invoices')
-              .select('amount_total')
-              .eq('org_id', org.id)
-              .eq('status', 'sent')
-              .lt('due_date', new Date().toISOString().split('T')[0]),
+            supabase.from('issued_invoices').select('amount_total, status').eq('org_id', org.id).gte('issue_date', from).lte('issue_date', to).neq('status', 'draft'),
+            supabase.from('receipts').select('status').eq('org_id', org.id).gte('receipt_date', from).lte('receipt_date', to),
+            supabase.from('issued_invoices').select('amount_total').eq('org_id', org.id).eq('status', 'sent').lt('due_date', new Date().toISOString().split('T')[0]),
           ])
 
           const invoices = invRes.data ?? []
@@ -163,7 +145,6 @@ export default function RacunovodjaPortal() {
             </div>
           </div>
 
-          {/* Skupne statistike */}
           {clients.length > 0 && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 20 }}>
               {[
@@ -186,7 +167,6 @@ export default function RacunovodjaPortal() {
       <div style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px' }}>
 
         {clients.length === 0 ? (
-          /* PRAZNO STANJE */
           <div style={{ background: '#fff', borderRadius: 16, padding: 48, textAlign: 'center', border: '0.5px solid rgba(0,0,0,0.08)' }}>
             <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
             <div style={{ fontSize: 20, fontWeight: 600, color: '#0D1F12', marginBottom: 8 }}>Ni strank</div>
@@ -199,10 +179,22 @@ export default function RacunovodjaPortal() {
               <div style={{ fontSize: 13, color: '#0D1F12', fontFamily: 'monospace' }}>računko.si/nastavitve/ekipa</div>
               <div style={{ fontSize: 12, color: '#aaa', marginTop: 4 }}>Pošljite strankam — vas povabijo z vlogo "Računovodja"</div>
             </div>
+            <div style={{ marginTop: 16, maxWidth: 500, margin: '16px auto 0' }}>
+              <HowTo
+                title="Kako dobim dostop do strank?"
+                steps={[
+                  { icon: '📧', title: 'Stranka vas povabi', desc: 'Stranka gre na Nastavitve → Ekipa → Povabi člana → vnese vaš email → izbere vlogo Računovodja.' },
+                  { icon: '📨', title: 'Prejmete email', desc: 'Na vaš email pride povabilo z gumbom "Sprejmi povabilo". Veljavnost: 7 dni.' },
+                  { icon: '✅', title: 'Sprejmete povabilo', desc: 'Kliknete na link → prijavite se ali ustvarite račun → takoj vidite strankin pregled.' },
+                  { icon: '📊', title: 'Dostopate do podatkov', desc: 'Vidite vse račune, stroške, statistike. Exportate XLSX ali dodate opombe.' },
+                ]}
+                tip="Vsaka stranka mora imeti Računko račun. Pošljite jim računko.si — registracija je brezplačna."
+                defaultOpen={true}
+              />
+            </div>
           </div>
         ) : (
           <>
-            {/* ISKANJE */}
             <div style={{ marginBottom: 16 }}>
               <input
                 type="text"
@@ -212,13 +204,9 @@ export default function RacunovodjaPortal() {
                 style={{ width: '100%', padding: '12px 16px', borderRadius: 10, border: '0.5px solid rgba(0,0,0,0.15)', fontSize: 14, outline: 'none', background: '#fff' }}
               />
             </div>
-
-            {/* LISTA STRANK */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {filtered.map(client => (
                 <div key={client.org_id} style={{ background: '#fff', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.08)', padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
-
-                  {/* Info */}
                   <div style={{ flex: 1, minWidth: 200 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                       <div style={{ fontSize: 16, fontWeight: 600, color: '#0D1F12' }}>{client.org_name}</div>
@@ -231,8 +219,6 @@ export default function RacunovodjaPortal() {
                       {client.tax_system && ` · ${TAX_SYSTEM_LABELS[client.tax_system] ?? client.tax_system}`}
                     </div>
                   </div>
-
-                  {/* Statistike */}
                   {client.stats && (
                     <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
                       <div style={{ textAlign: 'center' }}>
@@ -257,14 +243,11 @@ export default function RacunovodjaPortal() {
                       )}
                     </div>
                   )}
-
-                  {/* Akcije */}
                   <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
                     <Link href={`/racunovodja/${client.org_id}`} style={{ background: '#0D1F12', color: '#fff', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 500, textDecoration: 'none' }}>
                       Pregled →
                     </Link>
                   </div>
-
                 </div>
               ))}
             </div>
