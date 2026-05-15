@@ -364,6 +364,24 @@ ${!isStorno && !isDobropis ? `
                         className="border border-gray-900 bg-gray-900 text-white rounded-xl px-3 py-1.5 text-xs hover:bg-gray-800 transition-colors"
                       >
                         📧 Pošlji
+                        {inv.client_tax_number && (
+                      <button
+                        onClick={async () => {
+                          const r = await fetch(`/api/invoices/${inv.id}/ujp`, { method: 'POST' })
+                          if (!r.ok) { alert('Napaka pri generiranju UJP XML'); return }
+                          const blob = await r.blob()
+                          const url = URL.createObjectURL(blob)
+                          const a = document.createElement('a')
+                          a.href = url
+                          a.download = `${inv.invoice_number}.xml`
+                          a.click()
+                          URL.revokeObjectURL(url)
+                        }}
+                        className="border border-blue-600 text-blue-600 rounded-xl px-3 py-1.5 text-xs hover:bg-blue-50 transition-colors"
+                      >
+                        📄 UJP
+                      </button>
+                    )}
                       </button>
                     )}
                     <button
