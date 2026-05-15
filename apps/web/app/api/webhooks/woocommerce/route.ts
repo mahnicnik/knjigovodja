@@ -227,7 +227,7 @@ export async function POST(req: NextRequest) {
       invoice_id: invoice.id,
       status: 'success',
       payload: { order_number: order.number, total: order.total },
-    }).then(() => {}).catch?.(() => {})
+    }))
 
     return NextResponse.json({
       success: true,
