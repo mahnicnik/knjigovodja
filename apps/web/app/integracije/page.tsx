@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import HowTo from '@/components/HowTo'
 
 interface Integration {
   id: string
@@ -179,7 +180,16 @@ export default function IntegrationPage() {
               </button>
             )}
           </div>
-
+          <HowTo
+  title="Kako povežem WooCommerce?"
+  steps={[
+    { icon: '🔑', title: 'Kopirajte Webhook URL', desc: 'Ta URL boste vnesli v WooCommerce nastavitve.', code: `${webhookBaseUrl}/woocommerce?org_id=${orgId}`, copyable: true },
+    { icon: '🛒', title: 'Odprite WooCommerce Admin', desc: 'Pojdite na: Nastavitve → Napredno → Webhooks → Dodaj webhook' },
+    { icon: '📋', title: 'Izpolnite podatke', desc: 'Tema: Naročilo ustvarjeno · Format: JSON · URL: (iz koraka 1) · Skrivnost: (Webhook Secret spodaj)' },
+    { icon: '✅', title: 'Shranite in testirajte', desc: 'Naredite testno naročilo v vaši trgovini — račun se mora pojaviti v Računko.' },
+  ]}
+  tip="Računko avtomatsko preveri podpis vsakega webhookа. Lažni klici so zavrnjeni."
+/>
           {wcIntegration && (
             <div style={{ background: '#F7F6F2', borderRadius: 10, padding: '14px 16px' }}>
               <div style={{ fontSize: 11, color: '#888', marginBottom: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em' }}>Webhook URL za WooCommerce</div>
@@ -224,7 +234,16 @@ export default function IntegrationPage() {
               </button>
             )}
           </div>
-
+          <HowTo
+  title="Kako povežem Shopify?"
+  steps={[
+    { icon: '🔑', title: 'Kopirajte Webhook URL', desc: 'Ta URL boste vnesli v Shopify nastavitve.', code: `${webhookBaseUrl}/shopify?org_id=${orgId}`, copyable: true },
+    { icon: '🏪', title: 'Odprite Shopify Admin', desc: 'Pojdite na: Nastavitve → Obvestila → Webhooks → Ustvari webhook' },
+    { icon: '📋', title: 'Izpolnite podatke', desc: 'Dogodek: Naročilo plačano · Format: JSON · URL: (iz koraka 1)' },
+    { icon: '✅', title: 'Shranite in testirajte', desc: 'Naredite testno naročilo — račun se mora pojaviti v Računko.' },
+  ]}
+  tip="Shopify pošlje webhook ob vsakem plačanem naročilu. Brezplačna naročila so ignorirana."
+/>
           {shIntegration && (
             <div style={{ background: '#F7F6F2', borderRadius: 10, padding: '14px 16px' }}>
               <div style={{ fontSize: 11, color: '#888', marginBottom: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em' }}>Webhook URL za Shopify</div>

@@ -2,6 +2,7 @@
 import React from 'react'
 
 import { useEffect, useState } from 'react'
+import HowTo from '@/components/HowTo'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
@@ -252,6 +253,16 @@ export default function EkipaPage() {
         {/* POVABI ČLANA */}
         {isOwner && (
           <div style={{ background: '#fff', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.08)', padding: 20, marginBottom: 16 }}>
+            <HowTo
+  title="Kako povabim člana ekipe?"
+  steps={[
+    { icon: '📧', title: 'Vnesite email', desc: 'Vnesite email naslov osebe ki jo želite povabiti.' },
+    { icon: '🎭', title: 'Izberite vlogo', desc: 'Blagajnik: samo POS terminal · Admin: vse razen nastavitev plačil · Računovodja: ogled + export · Gledalec: samo ogled' },
+    { icon: '📨', title: 'Pošljite povabilo', desc: 'Oseba prejme email s povezavo. Povabilo velja 7 dni.' },
+    { icon: '✅', title: 'Oseba sprejme', desc: 'Klikne na link v emailu → ustvari račun ali se prijavi → takoj dobi dostop.' },
+  ]}
+  tip="Blagajnik bo po prijavi preusmerjen direktno na POS terminal — ni dostopa do računov ali nastavitev."
+/>
             <div style={{ fontSize: 14, fontWeight: 600, color: '#0D1F12', marginBottom: 14 }}>+ Povabi novega člana</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div>

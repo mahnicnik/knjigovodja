@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import HowTo from '@/components/HowTo'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
@@ -453,27 +454,19 @@ export default function BlagajnaPage() {
           )}
         </div>
 
-        {/* NAVODILA */}
-        <div style={{ background: '#fff', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.08)', padding: 24, marginBottom: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#0D1F12', marginBottom: 14 }}>📋 Navodila za registracijo pri FURS</div>
-          {[
-            { step: '1', title: 'Pridobite SIGEN-CA certifikat', desc: 'Če nimate certifikata: sigen-ca.si → "Pridobite potrdilo" (~€25/leto, 1-3 dni)' },
-            { step: '2', title: 'Registrirajte se kot zavezanec', desc: 'eDavki → Davčne blagajne → "Nov zavezanec"' },
-            { step: '3', title: 'Dodajte poslovni prostor', desc: 'eDavki → Davčne blagajne → "Poslovni prostori" → "Dodaj" → zapišite si oznako (npr. SIRBFB01)' },
-            { step: '4', title: 'Dodajte elektronsko napravo', desc: 'V poslovnem prostoru → "Naprave" → "Dodaj" → vrsta: Programska oprema → oznaka: RACUNKO01' },
-            { step: '5', title: 'Izvozite certifikat', desc: 'Keychain Access (Mac) → poiščite certifikat → Export → .p12 → nastavite geslo' },
-            { step: '6', title: 'Vnesite podatke v Računko', desc: 'Dodajte poslovni prostor zgoraj z istimi oznakami kot na eDavki, naložite .p12 certifikat' },
-          ].map(item => (
-            <div key={item.step} style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-              <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#0D1F12', color: '#E8B547', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0, marginTop: 1 }}>{item.step}</div>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#0D1F12' }}>{item.title}</div>
-                <div style={{ fontSize: 12, color: '#888', marginTop: 2, lineHeight: 1.5 }}>{item.desc}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-
+        <HowTo
+          title="Kako registriram davčno blagajno pri FURS?"
+          steps={[
+            { icon: "🔐", title: "Pridobite SIGEN-CA certifikat", desc: "sigen-ca.si → Pridobite potrdilo (~€25/leto, 1-3 dni)" },
+            { icon: "🏛️", title: "Registrirajte se na eDavki", desc: "eDavki → Davčne blagajne → Nov zavezanec" },
+            { icon: "🏢", title: "Dodajte poslovni prostor", desc: "eDavki → Davčne blagajne → Poslovni prostori → Dodaj → zapišite oznako (npr. SIRM1)" },
+            { icon: "💻", title: "Dodajte elektronsko napravo", desc: "V poslovnem prostoru → Naprave → Dodaj → Vrsta: Programska oprema → Oznaka: RACUNKO01" },
+            { icon: "📤", title: "Izvozite certifikat (.p12)", desc: "Keychain Access → poiščite certifikat → Export → .p12 → nastavite geslo" },
+            { icon: "⬆️", title: "Naložite certifikat v Računko", desc: "Kliknite Naloži certifikat → izberite .p12 → vnesite geslo → shranite" },
+            { icon: "🧪", title: "Testirajte povezavo", desc: "Kliknite Testiraj FURS — zelena potrditev = blagajna aktivna" },
+          ]}
+          tip="Certifikat velja 1-2 leti. Računko vas bo opozoril pred iztekom."
+        />
         {/* TOAST */}
         {toast && (
           <div style={{

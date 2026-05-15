@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import HowTo from '@/components/HowTo'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
@@ -279,6 +280,17 @@ export default function PosAdminPage() {
       </div>
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 16px' }}>
+      <HowTo
+  title="Kako nastavim POS terminal?"
+  steps={[
+    { icon: '📂', title: 'Dodajte kategorije', desc: 'Kategorije so zavihki v POS terminalu. Npr: Bar, Fitness, Fizioterapija. Vsaki dodajte barvo in emoji.' },
+    { icon: '🛍️', title: 'Dodajte artikle', desc: 'Za vsak artikel vnesite ime, ceno in kategorijo. Dodajte emoji za hitrejše prepoznavanje na zaslonu.' },
+    { icon: '🪑', title: 'Dodajte prostore (opcijsko)', desc: 'Za bar/restavracijo dodajte mize ali prostore. Za tržnico dodajte stojnice.' },
+    { icon: '📍', title: 'Dodajte lokacijo + PIN', desc: 'Za vsako napravo/blagajno ustvarite lokacijo s 4-mestnim PIN-om. Prodajalec ga vnese za dostop.' },
+    { icon: '📱', title: 'Odprite POS terminal', desc: 'Na vsaki napravi odprite računko.si/pos → vnesite PIN → takoj lahko prodajate.' },
+  ]}
+  tip="Spremembe cen so vidne na vseh napravah takoj — ni treba posodabljati vsake naprave posebej."
+/>
 
         {/* ===== ARTIKLI TAB ===== */}
         {tab === 'items' && (
