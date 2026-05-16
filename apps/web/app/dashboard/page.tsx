@@ -25,19 +25,71 @@ const MONTHS_LONG = ['januar','februar','marec','april','maj','junij','julij','a
 const DAYS_LONG = ['nedelja','ponedeljek','torek','sreda','četrtek','petek','sobota']
 
 /* ---------- THIN RAIL navigation items ---------- */
-const RAIL_ITEMS = [
-  { href: '/dashboard',  label: 'Pregled',         icon: 'home',     badge: false },
-  { href: '/invoices',   label: 'Računi',          icon: 'invoices', badge: true  },
-  { href: '/expenses',   label: 'Stroški',         icon: 'expenses', badge: false },
-  { href: '/ddv',        label: 'Davki',           icon: 'taxes',    badge: false },
-  { href: '/statistika', label: 'Statistika',      icon: 'stats',    badge: false },
-  { href: '/izvoz', icon: 'export', label: 'Izvoz za računovodjo' },
-  { href: '/ai',         label: 'AI računovodja',  icon: 'ai',       badge: false },
-
-  { href: '/pos', label: 'POS Terminal', icon: 'box', badge: false },
-  { href: '/rokovnik',   label: 'Koledar',         icon: 'calendar', badge: false },
-  { href: '/nastavitve', label: 'Nastavitve',      icon: 'settings', badge: false },
+const RAIL_GROUPS = [
+  { id: 'dashboard', icon: 'home', label: 'Pregled', href: '/dashboard', single: true },
+  {
+    id: 'poslovanje', icon: 'invoices', label: 'Poslovanje',
+    badge: true,
+    items: [
+      { href: '/invoices',            icon: 'invoices', label: 'Izdani računi' },
+      { href: '/predracuni',          icon: 'doc',      label: 'Predračuni' },
+      { href: '/ponavljajoci-racuni', icon: 'repeat',   label: 'Ponavljajoči računi' },
+      { href: '/expenses',            icon: 'receipt',  label: 'Prejeti računi' },
+      { href: '/pos',                 icon: 'pos',      label: 'POS terminal' },
+      { href: '/zaloge',              icon: 'box',      label: 'Zaloge' },
+      { href: '/integracije',         icon: 'link',     label: 'Integracije' },
+    ],
+  },
+  {
+    id: 'finance', icon: 'taxes', label: 'Finance',
+    items: [
+      { href: '/ddv',          icon: 'percent', label: 'DDV obračun' },
+      { href: '/kpo',          icon: 'book',    label: 'KPO knjiga' },
+      { href: '/dohodnina',    icon: 'taxes',   label: 'Dohodnina' },
+      { href: '/amortizacija', icon: 'chart',   label: 'Amortizacija' },
+      { href: '/banka',        icon: 'bank',    label: 'Banka' },
+      { href: '/kartice',      icon: 'card',    label: 'Kartice' },
+    ],
+  },
+  {
+    id: 'kadri', icon: 'users', label: 'Kadri & Plače',
+    items: [
+      { href: '/rek1',          icon: 'pay',      label: 'Obračun plač' },
+      { href: '/dopust',        icon: 'calendar', label: 'Dopust & Bolniška' },
+      { href: '/cas',           icon: 'clock',    label: 'Evidenca časa' },
+      { href: '/reprezentanca', icon: 'receipt',  label: 'Reprezentanca' },
+    ],
+  },
+  {
+    id: 'prevoz', icon: 'car', label: 'Prevoz',
+    items: [
+      { href: '/kilometrina',   icon: 'car',     label: 'Kilometrina' },
+      { href: '/potni-stroski', icon: 'receipt', label: 'Potni stroški' },
+      { href: '/potni-nalogi',  icon: 'doc',     label: 'Potni nalogi' },
+    ],
+  },
+  {
+    id: 'analitika', icon: 'stats', label: 'Analitika',
+    items: [
+      { href: '/statistika',    icon: 'stats',    label: 'Statistika' },
+      { href: '/letni-pregled', icon: 'list',     label: 'Letni pregled' },
+      { href: '/rokovnik',      icon: 'calendar', label: 'Rokovnik' },
+      { href: '/izvoz',         icon: 'export',   label: 'Izvoz za računovodjo' },
+    ],
+  },
+  { id: 'ai', icon: 'ai', label: 'AI računovodja', href: '/ai', single: true },
+  {
+    id: 'nastavitve', icon: 'settings', label: 'Nastavitve',
+    items: [
+      { href: '/nastavitve',          icon: 'settings', label: 'Profil podjetja' },
+      { href: '/nastavitve/ekipa',    icon: 'users',    label: 'Ekipa' },
+      { href: '/nastavitve/blagajna', icon: 'pos',      label: 'Davčna blagajna' },
+      { href: '/racunovodja',         icon: 'chart',    label: 'Računovodja portal' },
+      { href: '/api-kljuci',          icon: 'key',      label: 'API ključi' },
+    ],
+  },
 ]
+
 
 /* ---------- QUICK ACTIONS library ---------- */
 const ALL_QUICK_ACTIONS = [
@@ -92,6 +144,15 @@ function Icon({ name, size = 18 }: { name: string; size?: number }) {
     case 'percent':  return <svg {...props}><circle cx="12" cy="12" r="9"/><path d="M8 16l8-8M9 9h.01M15 15h.01"/></svg>
     case 'list':     return <svg {...props}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
     case 'box':      return <svg {...props}><path d="M21 8l-9 5-9-5"/><path d="M3 8v10l9 5 9-5V8l-9-5z"/></svg>
+    case 'repeat':   return <svg {...props}><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+    case 'clock':    return <svg {...props}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    case 'car':      return <svg {...props}><path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v9a2 2 0 0 1-2 2h-2"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+    case 'link':     return <svg {...props}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+    case 'bank':     return <svg {...props}><line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7"/></svg>
+    case 'card':     return <svg {...props}><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+    case 'chart':    return <svg {...props}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    case 'key':      return <svg {...props}><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+    case 'doc':      return <svg {...props}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
     case 'users':    return <svg {...props}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
     case 'edit':     return <svg {...props}><path d="M12 20h9M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4z"/></svg>
     case 'check':    return <svg {...props}><path d="M5 13l4 4L19 7"/></svg>
@@ -547,15 +608,38 @@ export default function DashboardPage() {
             <path d="M30 60 Q 46 72, 62 60" stroke="#FFFFFF" strokeWidth="3.5" strokeLinecap="round" fill="none"/>
           </svg>
         </div>
-        {RAIL_ITEMS.map(item => {
-          const active = pathname === item.href
-          const showBadge = item.badge && data.overdueCount > 0
+        {RAIL_GROUPS.map(group => {
+          if (group.single) {
+            const active = pathname === group.href
+            return (
+              <Link key={group.id} href={group.href!} className={`rk-rail-icon ${active ? 'active' : ''}`}>
+                <Icon name={group.icon} />
+                <span className="rk-tip">{group.label}</span>
+              </Link>
+            )
+          }
+          const isGroupActive = group.items?.some((i: any) => pathname === i.href)
+          const showBadge = group.badge && data.overdueCount > 0
           return (
-            <Link key={item.href} href={item.href} className={`rk-rail-icon ${active ? 'active' : ''}`}>
-              <Icon name={item.icon} />
-              {showBadge && <span className="rk-badge-dot" />}
-              <span className="rk-tip">{item.label}</span>
-            </Link>
+            <div key={group.id} className={`rk-rail-group ${isGroupActive ? 'active' : ''}`}>
+              <div className="rk-rail-icon rk-rail-group-trigger">
+                <Icon name={group.icon} />
+                {showBadge && <span className="rk-badge-dot" />}
+                <span className="rk-tip">{group.label}</span>
+              </div>
+              <div className="rk-rail-dropdown">
+                <div className="rk-rail-dropdown-label">{group.label}</div>
+                {group.items?.map((item: any) => {
+                  const active = pathname === item.href
+                  return (
+                    <Link key={item.href} href={item.href} className={`rk-rail-dropdown-item ${active ? 'active' : ''}`}>
+                      <Icon name={item.icon} size={15} />
+                      <span>{item.label}</span>
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
           )
         })}
         <div className="rk-rail-foot">
@@ -1600,6 +1684,23 @@ const cssGlobal = `
   .rk-qa-draggable:active { cursor: grabbing; }
 
   /* MOBILE */
+  /* GROUPED RAIL NAVIGATION */
+  .rk-rail-group { position: relative; width: 100%; display: flex; justify-content: center; }
+  .rk-rail-group-trigger { cursor: pointer; width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; color: rgba(255,255,255,0.5); position: relative; }
+  .rk-rail-group-trigger:hover { background: rgba(255,255,255,0.06); color: #fff; }
+  .rk-rail-group.active .rk-rail-group-trigger { background: rgba(255,255,255,0.1); color: #fff; }
+  .rk-rail-dropdown { position: absolute; left: 52px; top: 0; background: #fff; border-radius: 12px; padding: 6px; min-width: 220px; box-shadow: 0 8px 32px rgba(0,0,0,0.25); border: 1px solid #e4e8e2; opacity: 0; pointer-events: none; transform: translateX(-6px); transition: opacity 0.15s, transform 0.15s; z-index: 1002; }
+  .rk-shell[data-theme="dark"] .rk-rail-dropdown { background: #1a2e25; border-color: #1e2d26; }
+  .rk-rail-group:hover .rk-rail-dropdown { opacity: 1; pointer-events: auto; transform: translateX(0); }
+  .rk-rail-dropdown-label { font-family: var(--rk-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink3); padding: 6px 10px 8px; border-bottom: 1px solid var(--rule2); margin-bottom: 4px; }
+  .rk-rail-dropdown-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--ink2); text-decoration: none; transition: background 0.1s, color 0.1s; white-space: nowrap; }
+  .rk-shell[data-theme="dark"] .rk-rail-dropdown-item { color: rgba(255,255,255,0.6); }
+  .rk-rail-dropdown-item:hover { background: var(--green-soft); color: var(--green); }
+  .rk-rail-dropdown-item.active { background: var(--green-soft); color: var(--green); font-weight: 700; }
+  .rk-shell[data-theme="dark"] .rk-rail-dropdown-item:hover, .rk-shell[data-theme="dark"] .rk-rail-dropdown-item.active { background: rgba(14,94,59,0.3); color: #4AB57D; }
+  .rk-rail-dropdown-item svg { flex-shrink: 0; opacity: 0.6; }
+  .rk-rail-dropdown-item:hover svg, .rk-rail-dropdown-item.active svg { opacity: 1; }
+
   @media (max-width: 768px) {
     .rk-shell { grid-template-columns: 1fr; }
     .rk-rail { display: none; }
