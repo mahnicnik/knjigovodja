@@ -34,6 +34,7 @@ const RAIL_GROUPS = [
       { href: '/invoices',            icon: 'invoices', label: 'Izdani računi' },
       { href: '/predracuni',          icon: 'doc',      label: 'Predračuni' },
       { href: '/ponavljajoci-racuni', icon: 'repeat',   label: 'Ponavljajoči računi' },
+      { href: '/avansni-racuni',      icon: 'doc',      label: 'Avansni računi' },
       { href: '/expenses',            icon: 'receipt',  label: 'Prejeti računi' },
       { href: '/pos',                 icon: 'pos',      label: 'POS terminal' },
       { href: '/zaloge',              icon: 'box',      label: 'Zaloge' },
@@ -55,6 +56,7 @@ const RAIL_GROUPS = [
     id: 'kadri', icon: 'users', label: 'Kadri & Plače',
     items: [
       { href: '/rek1',          icon: 'pay',      label: 'Obračun plač' },
+      { href: '/regres',         icon: 'pay',      label: 'Regres' },
       { href: '/dopust',        icon: 'calendar', label: 'Dopust & Bolniška' },
       { href: '/cas',           icon: 'clock',    label: 'Evidenca časa' },
       { href: '/reprezentanca', icon: 'receipt',  label: 'Reprezentanca' },
@@ -73,6 +75,7 @@ const RAIL_GROUPS = [
     items: [
       { href: '/statistika',    icon: 'stats',    label: 'Statistika' },
       { href: '/letni-pregled', icon: 'list',     label: 'Letni pregled' },
+      { href: '/porocila',      icon: 'chart',    label: 'Poslovna poročila' },
       { href: '/rokovnik',      icon: 'calendar', label: 'Rokovnik' },
       { href: '/izvoz',         icon: 'export',   label: 'Izvoz za računovodjo' },
     ],
