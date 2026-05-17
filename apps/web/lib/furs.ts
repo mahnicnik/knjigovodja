@@ -339,14 +339,6 @@ export function extractFromP12(
     throw new Error('Napaka pri branju certifikata: ' + e.message)
   }
 }
-  } catch {
-    // Fallback: vrnemo placeholder — real implementacija rabi node-forge
-    throw new Error(
-      'Za PKCS12 parsing namestite: npm install node-forge\n' +
-      'Ali uploadajte .pem format namesto .p12'
-    )
-  }
-}
 
 /**
  * Preveri ali je certifikat še veljaven.
