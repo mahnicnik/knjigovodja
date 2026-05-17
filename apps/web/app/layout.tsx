@@ -39,6 +39,11 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
   title: "Računko — AI računovodja za slovenskega s.p.",
   description: "Zamenja računovodja za €19.99/mesec. AI ki pozna FURS, vaše dejanske podatke in slovensko davčno pravo. Brez vezave, brez kreditne kartice.",
 };
