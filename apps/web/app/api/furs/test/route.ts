@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { calculateZoi, confirmWithFurs, type FursConfig, type FursInvoiceData } from '@/lib/furs'
+import { calculateZoi, confirmWithFurs, extractFromP12, type FursConfig, type FursInvoiceData } from '@/lib/furs'
 async function getSupabase() {
   const cookieStore = await cookies()
   return createServerClient(
@@ -72,13 +72,17 @@ export async function POST(req: NextRequest) {
       invoiceType: 'invoice',
     }
 
+    // Parsiraj .p12 certifikat
+    const p12Buffer = Buffer.from(cert.certificate_data, 'base64')
+    const { privateKeyPem, certificatePem } = extractFromP12(p12Buffer, cert.certificate_password ?? 'test')
+
     const config: FursConfig = {
       taxNumber: org.tax_number,
       premiseId: premise.premise_id,
       deviceId: device?.device_id ?? 'RACUNKO01',
-      privateKeyPem: cert.certificate_data, // V produkciji: decrypt + parse iz .p12
-      certificatePem: cert.certificate_data,
-      isTest: true, // Vedno test za /api/furs/test
+      privateKeyPem,
+      certificatePem,
+      isTest: true,
     }
 
     const result = await confirmWithFurs(config, testData)
