@@ -106,10 +106,14 @@ export function calculateZoi(
     amountStr,
   ].join('')
 
-  // RSA podpis vsebine
-  const sign = crypto.createSign('SHA256')
-  sign.update(content, 'utf8')
-  const signature = sign.sign(privateKeyPem, 'hex')
+  // RSA podpis vsebine (node-forge za kompatibilnost)
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const forge = require('node-forge')
+  const privateKey = forge.pki.privateKeyFromPem(privateKeyPem)
+  const md = forge.md.sha256.create()
+  md.update(content, 'utf8')
+  const signatureBytes = privateKey.sign(md)
+  const signature = forge.util.bytesToHex(signatureBytes)
 
   // ZOI = MD5 od RSA podpisa
   const zoi = crypto.createHash('md5').update(signature).digest('hex')
