@@ -328,7 +328,7 @@ export function extractFromP12(
     const p12Asn1 = forge.asn1.fromDer(p12Der)
     const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, password)
     const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag })
-    const keyBa= keyBags[forge.pki.oids.pkcs8ShroudedKeyBag]?.[0]
+    const keyBag = keyBags[forge.pki.oids.pkcs8ShroudedKeyBag]?.[0]
     if (!keyBag?.key) throw new Error('Zasebni ključ ni najden')
     const privateKeyPem = forge.pki.privateKeyToPem(keyBag.key)
     const certBags = p12.getBags({ bagType: forge.pki.oids.certBag })
