@@ -322,20 +322,23 @@ export function extractFromP12(
   password: string,
 ): { privateKeyPem: string; certificatePem: string } {
   try {
-    // Node.js 18+ native PKCS12
-    const p12 = crypto.createPrivateKey({
-      key: p12Buffer,
-      format: 'der',
-      type: 'pkcs8',
-    })
-
-    // Če pride sem brez napake, izvlečemo PEM
-    const privateKeyPem = p12.export({ format: 'pem', type: 'pkcs8' }) as string
-
-    return {
-      privateKeyPem,
-      certificatePem: '', // Certifikat rabimo posebej
-    }
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const forge = require('node-forge')
+    const p12Der = forge.util.createBuffer(p12Buffer.toString('binary'))
+    const p12Asn1 = forge.asn1.fromDer(p12Der)
+    const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, password)
+    const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag })
+    const keyBa= keyBags[forge.pki.oids.pkcs8ShroudedKeyBag]?.[0]
+    if (!keyBag?.key) throw new Error('Zasebni ključ ni najden')
+    const privateKeyPem = forge.pki.privateKeyToPem(keyBag.key)
+    const certBags = p12.getBags({ bagType: forge.pki.oids.certBag })
+    const certBag = certBags[forge.pki.oids.certBag]?.[0]
+    const certificatePem = certBag?.cert ? forge.pki.certificateToPem(certBag.cert) : ''
+    return { privateKeyPem, certificatePem }
+  } catch (e: any) {
+    throw new Error('Napaka pri branju certifikata: ' + e.message)
+  }
+}
   } catch {
     // Fallback: vrnemo placeholder — real implementacija rabi node-forge
     throw new Error(
