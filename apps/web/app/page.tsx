@@ -40,25 +40,7 @@ const HEADLINES: Record<string, any> = {
     eyebrow: "Narejeno za slovenskega s.p. in d.o.o.",
     pre: "Vaš računovodja naredi ", big: "10 klikov", mid: " na mesec.",
     line2_pre: "Vi plačate ", line2_big: "€300.", line2_post: "",
-    sub: "Računko je AI računovodja. Pozna slovensko davčno pravo, vaše dejanske podatke in roke FURS-a. Enako delo. Ena devetnajstina cene.",
-  },
-  honest: {
-    eyebrow: "Brez posrednika",
-    pre: "Vašega računovodjo zamenja ", big: "€19.99 na mesec.", mid: "",
-    line2_pre: "In ", line2_big: "ne pozabi nikoli.", line2_post: "",
-    sub: "AI ki govori slovensko, bere FURS in dela 24/7. Ne šepeta po telefonu, ne pošilja PDF-jev v prilogi. Naredi.",
-  },
-  blunt: {
-    eyebrow: "Resnica o malih s.p.",
-    pre: "Plačujete ", big: "€3.600 letno", mid: "",
-    line2_pre: "za ", line2_big: "10 klikov.", line2_post: "",
-    sub: "Vsak mesec — ista predloga, isti email, isti zneski. Računovodstvo za s.p. ni storitev. Je copy-paste. Računko ga naredi sam.",
-  },
-  identity: {
-    eyebrow: "Za 90% slovenskih s.p.",
-    pre: "Niste ", big: "premajhni", mid: " za pravo računovodstvo.",
-    line2_pre: "Le predragi posrednik vam je rekel, ", line2_big: "da ste.", line2_post: "",
-    sub: "Računko je AI računovodja ki pozna FURS, vaše dejanske podatke in slovensko davčno pravo. Odgovori v 3 sekundah, ne v 3 dneh. €19.99 mesečno.",
+    sub: "Računko je operativni sistem za vaše podjetje. Računi, blagajna, davki, plače, ekipa — vse na enem mestu. Od €9.99/mes.",
   },
 }
 
@@ -90,7 +72,8 @@ function Nav() {
           <span className="brand-word">računko</span>
         </Link>
         <div className="nav-links">
-          <a href="#kako">Kako deluje</a>
+          <a href="#vodnik">Funkcije</a>
+          <a href="#kako">Vmesnik</a>
           <a href="#primerjava">Primerjava</a>
           <a href="#cene">Cene</a>
           <a href="#faq">FAQ</a>
@@ -98,7 +81,7 @@ function Nav() {
         <div className="nav-cta">
           <Link className="btn btn-ghost" href="/login">Prijava</Link>
           <Link className="btn btn-primary" href="/register">
-          Začni brezplačno <span aria-hidden="true">→</span>
+            Začni brezplačno <span aria-hidden="true">→</span>
           </Link>
         </div>
       </div>
@@ -108,14 +91,13 @@ function Nav() {
 
 /* ---------- Hero ---------- */
 function Hero({ headline }: { headline: string }) {
-  const h = HEADLINES[headline] || HEADLINES.identity
+  const h = HEADLINES[headline] || HEADLINES.math
   return (
     <section className="hero" id="top">
       <div className="hero-grid">
         <div className="eyebrow">
           <span className="dot" /> {h.eyebrow}
         </div>
-
         <h1 className="display">
           <span>{h.pre}</span>
           <em className="display-accent">{h.big}</em>
@@ -125,19 +107,16 @@ function Hero({ headline }: { headline: string }) {
           <em className="display-accent">{h.line2_big}</em>
           <span>{h.line2_post}</span>
         </h1>
-
         <p className="hero-sub">{h.sub}</p>
-
         <div className="hero-cta">
           <Link href="/register" className="btn btn-primary btn-lg">
-            Prvi račun v 5 minutah <span aria-hidden="true">→</span>
+            Sestavite svoj paket <span aria-hidden="true">→</span>
           </Link>
-          <Link href="/login" className="btn btn-quiet btn-lg">Prijava</Link>
+          <a href="#vodnik" className="btn btn-quiet btn-lg">Oglej si funkcije</a>
         </div>
         <p className="hero-proof">
-          247 slovenskih s.p. že uporablja. Povprečen prihranek prvega leta: <strong>€3.144</strong>.
+          Osnova od €9.99/mes · Plug-ini po potrebi · Brez vezave
         </p>
-
         <ul className="trust">
           <li><Tick/> Brez kreditne kartice</li>
           <li><EU/> Podatki v EU</li>
@@ -145,9 +124,7 @@ function Hero({ headline }: { headline: string }) {
           <li><Cross/> Brez vezave</li>
         </ul>
       </div>
-
       <div className="hero-quote-rule" aria-hidden="true" />
-
       <figure className="pull-quote">
         <blockquote>
           <span className="qmark" aria-hidden="true">&ldquo;</span>
@@ -165,16 +142,15 @@ function Hero({ headline }: { headline: string }) {
 function MathSection() {
   const [rate, setRate] = useState(280)
   const yearly = rate * 12
-  const racunko = 240
+  const racunko = 144
   const saved = yearly - racunko
   return (
     <section className="section math">
       <header className="section-head">
         <div className="kicker kicker-warn">Preprosta matematika</div>
         <h2 className="h2">Koliko vas <em>dejansko</em> stane računovodja?</h2>
-        <p className="lede">Premaknite drsnik na svoj mesečni račun. Računko stane €19.99 mesečno — fiksno, brez dodatkov.</p>
+        <p className="lede">Premaknite drsnik na svoj mesečni račun. Računko osnova stane €9.99 mesečno.</p>
       </header>
-
       <div className="calc">
         <div className="calc-card calc-input">
           <div className="calc-label">Vaš mesečni račun</div>
@@ -183,42 +159,445 @@ function MathSection() {
             <span className="num">{rate}</span>
             <span className="unit">/mes</span>
           </div>
-          <input
-            className="calc-slider"
-            type="range" min="80" max="600" step="10"
-            value={rate}
-            onChange={(e) => setRate(parseInt(e.target.value, 10))}
-            aria-label="Mesečni račun računovodje"
-          />
+          <input className="calc-slider" type="range" min="80" max="600" step="10" value={rate}
+            onChange={(e) => setRate(parseInt(e.target.value, 10))} aria-label="Mesečni račun računovodje" />
           <div className="calc-scale">
             <span>€80</span><span>€280 (povp. SLO)</span><span>€600</span>
           </div>
         </div>
-
         <div className="calc-times" aria-hidden="true">×</div>
-
         <div className="calc-card calc-mid">
           <div className="calc-label">Mesecev</div>
           <div className="calc-value"><span className="num num-quiet">12</span></div>
           <div className="calc-foot">Vsak mesec. Brez izjeme.</div>
         </div>
-
         <div className="calc-eq" aria-hidden="true">=</div>
-
         <div className="calc-card calc-result">
           <div className="calc-label">Letno</div>
           <div className="calc-value">
             <span className="cur">€</span>
             <span className="num num-result">{yearly.toLocaleString("sl-SI")}</span>
           </div>
-          <div className="calc-foot">Računko: <strong>€240/leto</strong></div>
+          <div className="calc-foot">Računko osnova: <strong>€120/leto</strong></div>
         </div>
       </div>
-
       <div className="savings">
         <span className="savings-label">Letni prihranek z Računkom</span>
         <span className="savings-amt">€{saved.toLocaleString("sl-SI")}</span>
         <span className="savings-foot">≈ {Math.round(saved / 1)} € — vaš denar, ne računovodjin</span>
+      </div>
+    </section>
+  )
+}
+
+/* ================================================================
+   PRODUCT TOUR — interaktivni vodnik po funkcijah
+   ================================================================ */
+const TOUR_SLIDES = [
+  {
+    id: 'racuni', label: 'Računi', emoji: '🧾',
+    title: 'Računi & fakturiranje',
+    sub: 'Od predračuna do plačila — brez papirja',
+    features: [
+      { name: 'Izdani računi', desc: 'PDF z UPN QR kodo, pošiljanje po emailu v sekundi', badge: null },
+      { name: 'Predračuni', desc: 'Pošlji ponudbo → en klik → pretvori v račun', badge: null },
+      { name: 'Avansni računi', desc: 'Predplačilo + finalni račun z odbitkom avtomatsko', badge: null },
+      { name: 'Ponavljajoči računi', desc: 'Mesečne naročnine se izdajo same — brez roke', badge: null },
+      { name: 'eSlog / UJP', desc: 'Elektronski računi za javni sektor — šole, občine', badge: '🏛️ B2G' },
+      { name: 'Opomniki za zamudnike', desc: 'Avtomatski email stranki po X dneh zamude', badge: null },
+    ],
+    highlight: 'UPN QR koda na vsakem PDF-u — stranka skenira z mobilno banko in plača takoj.',
+  },
+  {
+    id: 'finance', label: 'Finance', emoji: '📊',
+    title: 'Davki & finance v realnem času',
+    sub: 'Nihče drug v Sloveniji tega ne ponuja',
+    features: [
+      { name: 'Real-time davčni kalkulator', desc: '€702 prihodkov → €385 čistega. V živo, vsak mesec.', badge: '⚡ Unikatno' },
+      { name: 'Cash flow 30 dni', desc: 'Projekcija denarnega toka — veste ali boste imeli za prispevke', badge: '⚡ Unikatno' },
+      { name: 'DDV obračun', desc: 'DDV evidenca, DDV-O, mesečni/četrtletni obračun', badge: null },
+      { name: 'KPO knjiga', desc: 'Evidenca prihodkov za normiranca in dejanski stroški', badge: null },
+      { name: 'Normiranec limit', desc: 'Termometer ki pokaže kdaj ste blizu letnega praga', badge: null },
+      { name: 'Bančni uvoz CSV', desc: 'NLB, SKB, DH, Nova KBM, Sparkasse — ujemanje z računi', badge: null },
+    ],
+    highlight: 'Edina aplikacija v Sloveniji ki v realnem času pokaže vaš čisti prihodek po davkih.',
+  },
+  {
+    id: 'blagajna', label: 'Blagajna & POS', emoji: '🏪',
+    title: 'POS blagajna za gotovino',
+    sub: 'Za gostince, frizerje, tržničarje — kdor dela z gotovino',
+    features: [
+      { name: 'POS terminal', desc: 'Blagajna na tabletu ali telefonu — brez instalacije', badge: null },
+      { name: 'FURS ZDavPR 2026', desc: 'Vsak gotovinski račun potrjen pri FURS v sekundi', badge: '✅ Zakonsko' },
+      { name: 'Multi-naprava s PIN', desc: 'Vsak natakar ima PIN — logirate se na kateri koli napravi', badge: null },
+      { name: 'Dnevni zaključek PDF', desc: 'Gotovina + kartice + DDV — enako kot 1klik', badge: null },
+      { name: 'Zaloge', desc: 'Nabavna/prodajna cena, marža, opomniki za naročanje', badge: null },
+      { name: 'Statistika prodaje', desc: 'Najboljši artikli, promet po kategorijah, mesečni trend', badge: null },
+    ],
+    highlight: 'Polnopravna davčna blagajna na vaši napravi. Ni potrebe po dragi strojni opremi.',
+  },
+  {
+    id: 'kadri', label: 'Kadri & Plače', emoji: '👥',
+    title: 'Kadri, plače in HR',
+    sub: 'Za s.p. z zaposlenimi — vse na enem mestu',
+    features: [
+      { name: 'Obračun plač (REK-1)', desc: 'Prispevki delodajalca + delojemalca, FURS oddaja', badge: null },
+      { name: 'Regres 2026', desc: 'Min. €1.253,90 — proporcionalen izračun za vsak mesec', badge: null },
+      { name: 'Dopust & bolniška', desc: 'Evidenca dni, letni dopust, bolniška, porodniška', badge: null },
+      { name: 'Evidenca časa', desc: 'Ure po projektih → direktno v račun stranki', badge: null },
+      { name: 'Potni nalogi', desc: 'Kilometrina €0.43/km, dnevnice, FURS-potrjeni zneski', badge: null },
+      { name: 'Reprezentanca', desc: '50% davčno priznan strošek — avtomatska evidenca', badge: null },
+    ],
+    highlight: 'Obračun plač z vsemi prispevki — enostavno kot Excel, natančno kot računovodja.',
+  },
+  {
+    id: 'integracije', label: 'Integracije', emoji: '🔌',
+    title: 'Integracije & avtomatizacija',
+    sub: 'Povežite vse — naročilo → račun → KPO brez roke',
+    features: [
+      { name: 'WooCommerce', desc: 'Naročilo pride → račun izdan avtomatsko → KPO vpisan', badge: null },
+      { name: 'Shopify', desc: 'Webhook → račun → knjiga prihodkov — brez roke', badge: null },
+      { name: 'REST API', desc: 'Povežite lastni sistem z Računko prek API ključev', badge: null },
+      { name: 'Multi-user ekipa', desc: 'Admin, blagajnik, računovodja — vsak vidi kar sme', badge: null },
+      { name: 'Računovodja portal', desc: 'Računovodja vidi vse vaše stranke — brez XLSX emailov', badge: null },
+      { name: 'AI računovodja', desc: '"Koliko dohodnine bom plačal?" — odgovor v 3 sekundah', badge: '🤖 AI' },
+    ],
+    highlight: 'Računovodja portal je brezplačen za računovodje. Stranke plačajo samo add-on.',
+  },
+]
+
+function ProductTour() {
+  const [current, setCurrent] = useState(0)
+  const [selectedFeat, setSelectedFeat] = useState(0)
+  const slide = TOUR_SLIDES[current]
+
+  function goTo(i: number) { setCurrent(i); setSelectedFeat(0) }
+  function move(dir: number) {
+    const next = current + dir
+    if (next < 0 || next >= TOUR_SLIDES.length) return
+    goTo(next)
+  }
+
+  return (
+    <section className="section" id="vodnik" style={{ background: 'var(--bg2, #FBF7EE)' }}>
+      <header className="section-head">
+        <div className="kicker">Interaktivni vodnik</div>
+        <h2 className="h2">Kaj vse zmore Računko?</h2>
+        <p className="lede">Prelistajte vse funkcije — kliknite na katero koli za podrobnosti.</p>
+      </header>
+
+      {/* Tab navigacija */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 24, overflowX: 'auto' }}>
+        {TOUR_SLIDES.map((s, i) => (
+          <button key={s.id} onClick={() => goTo(i)} style={{
+            padding: '8px 16px', borderRadius: 999,
+            border: current === i ? '2px solid #0E3D2A' : '1px solid var(--rule, #D9D2C2)',
+            background: current === i ? '#0E3D2A' : 'transparent',
+            color: current === i ? '#F4EFE6' : 'var(--ink2, #3A4A40)',
+            fontSize: 13, fontWeight: current === i ? 600 : 400,
+            cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all .15s',
+          }}>
+            {s.emoji} {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Slide vsebina */}
+      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid var(--rule, #D9D2C2)', overflow: 'hidden' }}>
+        {/* Header slida */}
+        <div style={{ background: '#0E3D2A', padding: '20px 24px' }}>
+          <div style={{ fontSize: 11, color: 'rgba(232,181,71,0.8)', fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 4 }}>
+            {slide.emoji} {slide.label}
+          </div>
+          <div style={{ fontSize: 20, color: '#fff', fontWeight: 600, marginBottom: 4 }}>{slide.title}</div>
+          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>{slide.sub}</div>
+        </div>
+
+        <div style={{ padding: 24 }}>
+          {/* Feature kartice */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10, marginBottom: 16 }}>
+            {slide.features.map((f, i) => (
+              <div key={i} onClick={() => setSelectedFeat(i)} style={{
+                background: selectedFeat === i ? '#F4EFE6' : '#FAFAF8',
+                border: selectedFeat === i ? '1.5px solid #0E3D2A' : '1px solid var(--rule, #D9D2C2)',
+                borderRadius: 10, padding: '12px 14px', cursor: 'pointer',
+                transition: 'all .12s',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0C2A1E' }}>{f.name}</div>
+                  {f.badge && (
+                    <span style={{ fontSize: 10, background: '#FEF3C7', color: '#92600A', padding: '2px 6px', borderRadius: 8, fontWeight: 600, flexShrink: 0, marginLeft: 6 }}>
+                      {f.badge}
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 12, color: '#3A4A40', lineHeight: 1.5 }}>{f.desc}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Highlight box */}
+          <div style={{ background: '#E1F5EE', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#0E5E3B', lineHeight: 1.6 }}>
+            💡 {slide.highlight}
+          </div>
+        </div>
+      </div>
+
+      {/* Navigacija */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16 }}>
+        <div style={{ flex: 1, height: 3, background: 'var(--rule, #D9D2C2)', borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${((current + 1) / TOUR_SLIDES.length) * 100}%`, background: '#0E3D2A', borderRadius: 2, transition: 'width .3s' }} />
+        </div>
+        <span style={{ fontSize: 12, color: 'var(--ink2, #3A4A40)', minWidth: 48, textAlign: 'center' }}>{current + 1}/{TOUR_SLIDES.length}</span>
+        <button onClick={() => move(-1)} disabled={current === 0} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid var(--rule, #D9D2C2)', background: 'transparent', fontSize: 13, cursor: current === 0 ? 'not-allowed' : 'pointer', opacity: current === 0 ? 0.3 : 1 }}>← Nazaj</button>
+        {current < TOUR_SLIDES.length - 1 ? (
+          <button onClick={() => move(1)} style={{ padding: '7px 14px', borderRadius: 8, border: 0, background: '#0E3D2A', color: '#F4EFE6', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Naprej →</button>
+        ) : (
+          <Link href="#cene" style={{ padding: '7px 14px', borderRadius: 8, border: 0, background: '#C9442B', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', textDecoration: 'none' }}>Sestavi paket →</Link>
+        )}
+      </div>
+    </section>
+  )
+}
+
+/* ================================================================
+   PRICING BUILDER — plug-in pricing calculator
+   ================================================================ */
+const BASES = [
+  {
+    id: 'basic', name: 'Nakazila', price: 9.99,
+    desc: 'Za normiranca in freelancerja ki fakturira samo na TRR.',
+    includes: ['Neomejeni računi & KPO', 'AI računovodja', 'Real-time davčni kalkulator', 'Cash flow 30 dni', 'DDV evidenca'],
+    for: 'Freelancer · Normiranec',
+  },
+  {
+    id: 'cash', name: 'Gotovina', price: 14.99,
+    desc: 'Za tiste ki sprejemajo gotovino in rabijo FURS blagajno.',
+    includes: ['Vse iz Nakazila', 'POS terminal', 'FURS ZDavPR 2026', 'Dnevni zaključki PDF'],
+    for: 'Gostinec · Frizerka · Obrtnik',
+  },
+]
+
+const PLUGIN_GROUPS = [
+  {
+    label: 'Računi & prodaja',
+    plugins: [
+      { id: 'recurring', name: 'Ponavljajoči računi', desc: 'Mesečne naročnine avtomatsko', price: 3 },
+      { id: 'advance', name: 'Avansni računi', desc: 'Predplačilo + finalni račun', price: 2 },
+      { id: 'quotes', name: 'Predračuni & ponudbe', desc: 'Ponudba → račun z enim klikom', price: 2 },
+      { id: 'webshop', name: 'Spletna prodaja', desc: 'WooCommerce & Shopify webhook', price: 5 },
+    ],
+  },
+  {
+    label: 'Finance & davki',
+    plugins: [
+      { id: 'bank', name: 'Bančni uvoz CSV', desc: 'Vse SI banke → ujemanje z računi', price: 3 },
+      { id: 'eslog', name: 'UJP e-računi', desc: 'eSlog 2.0 za javni sektor', price: 5 },
+    ],
+  },
+  {
+    label: 'Ekipa & kadri',
+    plugins: [
+      { id: 'team', name: 'Multi-user ekipa', desc: 'Admin, blagajnik, računovodja', price: 4 },
+      { id: 'payroll', name: 'Plače & REK-1', desc: 'Obračun plač, regres, dopust', price: 5 },
+      { id: 'accountant', name: 'Računovodja portal', desc: 'Računovodja vidi vse stranke', price: 4 },
+    ],
+  },
+  {
+    label: 'Operativa',
+    plugins: [
+      { id: 'travel', name: 'Potni nalogi', desc: 'Kilometrina, dnevnice', price: 2 },
+      { id: 'inventory', name: 'Zaloge', desc: 'Nabavna cena, marža, opomniki', price: 3 },
+      { id: 'api', name: 'API dostop', desc: 'REST API za lastne integracije', price: 5 },
+    ],
+  },
+]
+
+function PricingBuilder() {
+  const [activeBase, setActiveBase] = useState('basic')
+  const [activePlugins, setActivePlugins] = useState<Set<string>>(new Set())
+
+  const base = BASES.find(b => b.id === activeBase)!
+  const pluginTotal = Array.from(activePlugins).reduce((sum, id) => {
+    for (const g of PLUGIN_GROUPS) {
+      const p = g.plugins.find(p => p.id === id)
+      if (p) return sum + p.price
+    }
+    return sum
+  }, 0)
+  const total = Math.round((base.price + pluginTotal) * 100) / 100
+  const annual = Math.round(total * 12 * 100) / 100
+  const r123 = total > 20 ? 49.9 : total > 14 ? 24.9 : 9.9
+  const saving = Math.round((r123 - total) * 12)
+
+  function togglePlugin(id: string) {
+    setActivePlugins(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const cardStyle = (active: boolean): React.CSSProperties => ({
+    background: active ? '#F4EFE6' : '#fff',
+    border: active ? '2px solid #0E3D2A' : '1px solid var(--rule, #D9D2C2)',
+    borderRadius: 12, padding: '16px 18px', cursor: 'pointer',
+    transition: 'all .15s', marginBottom: 0,
+  })
+
+  const pluginStyle = (active: boolean): React.CSSProperties => ({
+    display: 'flex', alignItems: 'center', gap: 12,
+    background: active ? '#F4EFE6' : '#fff',
+    border: active ? '1.5px solid #0E3D2A' : '1px solid var(--rule, #D9D2C2)',
+    borderRadius: 10, padding: '10px 14px', cursor: 'pointer',
+    transition: 'all .12s',
+  })
+
+  return (
+    <section className="section" id="cene">
+      <header className="section-head">
+        <div className="kicker">Cene</div>
+        <h2 className="h2">Sestavite <em>svoj</em> paket.</h2>
+        <p className="lede">Osnova + samo tisto kar potrebujete. Plug-ine aktivirate in deaktivirate kadarkoli.</p>
+      </header>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24, alignItems: 'start' }}>
+        {/* Leva stran — konfiguracija */}
+        <div>
+          {/* Osnova */}
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--ink2, #3A4A40)', marginBottom: 10 }}>
+            Korak 1 — Izberite osnovo
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 24 }}>
+            {BASES.map(b => (
+              <div key={b.id} style={cardStyle(activeBase === b.id)} onClick={() => setActiveBase(b.id)}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: '#0C2A1E' }}>{b.name}</div>
+                  <div style={{ fontSize: 20, fontWeight: 600, color: activeBase === b.id ? '#0E3D2A' : '#3A4A40' }}>
+                    €{b.price}<span style={{ fontSize: 12, fontWeight: 400 }}>/mes</span>
+                  </div>
+                </div>
+                <div style={{ fontSize: 12, color: '#3A4A40', marginBottom: 10, lineHeight: 1.5 }}>{b.desc}</div>
+                {b.includes.map(i => (
+                  <div key={i} style={{ fontSize: 11, color: '#0E3D2A', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
+                    <Tick /> {i}
+                  </div>
+                ))}
+                <div style={{ fontSize: 11, color: '#3A4A40', marginTop: 8, fontStyle: 'italic' }}>{b.for}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Plug-ini */}
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--ink2, #3A4A40)', marginBottom: 10 }}>
+            Korak 2 — Dodajte plug-ine
+          </div>
+          {PLUGIN_GROUPS.map(g => (
+            <div key={g.label} style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, color: '#3A4A40', fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', marginBottom: 6, paddingLeft: 2 }}>{g.label}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {g.plugins.map(p => {
+                  const on = activePlugins.has(p.id)
+                  return (
+                    <div key={p.id} style={pluginStyle(on)} onClick={() => togglePlugin(p.id)}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: '#0C2A1E', marginBottom: 1 }}>{p.name}</div>
+                        <div style={{ fontSize: 11, color: '#3A4A40' }}>{p.desc}</div>
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: on ? '#0E3D2A' : '#3A4A40', flexShrink: 0 }}>+€{p.price}</div>
+                      <div style={{
+                        width: 34, height: 18, borderRadius: 9,
+                        background: on ? '#0E3D2A' : 'var(--rule, #D9D2C2)',
+                        position: 'relative', flexShrink: 0, transition: 'background .2s',
+                      }}>
+                        <div style={{
+                          position: 'absolute', top: 2,
+                          left: on ? 18 : 2, width: 14, height: 14,
+                          borderRadius: '50%', background: '#fff',
+                          transition: 'left .2s',
+                        }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desna stran — summary */}
+        <div style={{ position: 'sticky', top: 20 }}>
+          <div style={{ background: '#0E3D2A', borderRadius: 16, padding: 22, color: '#fff' }}>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 14 }}>Vaš paket</div>
+
+            {/* Osnova */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'rgba(255,255,255,0.8)', paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+              <span>{base.name}</span>
+              <span>€{base.price.toFixed(2)}</span>
+            </div>
+
+            {/* Plug-ini */}
+            <div style={{ margin: '8px 0', minHeight: 40 }}>
+              {activePlugins.size === 0 ? (
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', padding: '4px 0' }}>Ni izbranih plug-inov</div>
+              ) : (
+                Array.from(activePlugins).map(id => {
+                  for (const g of PLUGIN_GROUPS) {
+                    const p = g.plugins.find(p => p.id === id)
+                    if (p) return (
+                      <div key={id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'rgba(255,255,255,0.6)', padding: '3px 0' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ color: '#E8B547', fontSize: 11 }}>✓</span>{p.name}
+                        </span>
+                        <span>+€{p.price}</span>
+                      </div>
+                    )
+                  }
+                  return null
+                })
+              )}
+            </div>
+
+            {/* Skupaj */}
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 12, marginTop: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>Skupaj</span>
+                <span>
+                  <span style={{ fontSize: 30, fontWeight: 500, color: '#E8B547' }}>€{total.toFixed(2)}</span>
+                  <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>/mes</span>
+                </span>
+              </div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textAlign: 'right', marginTop: 2 }}>€{annual.toFixed(0)} letno</div>
+              {saving > 0 && (
+                <div style={{ fontSize: 11, background: 'rgba(29,158,117,0.2)', color: '#6EE7B7', padding: '5px 10px', borderRadius: 8, textAlign: 'center', marginTop: 10 }}>
+                  vs Račun123: prihranite €{saving}/leto
+                </div>
+              )}
+            </div>
+
+            <Link href="/register" style={{
+              display: 'block', width: '100%', marginTop: 16,
+              padding: '12px', borderRadius: 8, background: '#E8B547',
+              color: '#0C2A1E', fontSize: 14, fontWeight: 600,
+              textAlign: 'center', textDecoration: 'none', border: 0,
+            }}>
+              Začni brezplačno →
+            </Link>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginTop: 8 }}>
+              14 dni brezplačno · brez kreditne kartice
+            </div>
+
+            {/* Jamstvo */}
+            <div style={{ marginTop: 16, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 14 }}>
+              {['Brez vezave — prekličete kadarkoli', 'Plug-ine aktivirate/deaktivirate kadarkoli', 'Plačate samo kar uporabljate'].map(t => (
+                <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'rgba(255,255,255,0.4)', marginBottom: 5 }}>
+                  <Tick /> {t}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   )
@@ -279,27 +658,14 @@ function DashboardMock() {
               <span className="pill pill-warn-soft">⏱ Prispevki čez 6 dni</span>
             </div>
           </header>
-
           <div className="dash-stats">
-            {[
-              ["Prihodki maj","€2.840",""],
-              ["Odhodki","€640","ink2"],
-              ["Neplačano","€1.200","accent"],
-              ["Dobiček","€2.200","primary"],
-            ].map(([l,v,k]) => (
-              <div key={l} className={"stat stat-"+k}>
-                <span>{l}</span>
-                <strong>{v}</strong>
-              </div>
+            {[["Prihodki maj","€2.840",""],["Odhodki","€640","ink2"],["Neplačano","€1.200","accent"],["Dobiček","€2.200","primary"]].map(([l,v,k]) => (
+              <div key={l} className={"stat stat-"+k}><span>{l}</span><strong>{v}</strong></div>
             ))}
           </div>
-
           <div className="dash-row">
             <div className="dash-card">
-              <div className="dash-card-head">
-                <h4>Zadnji računi</h4>
-                <a>vsi →</a>
-              </div>
+              <div className="dash-card-head"><h4>Zadnji računi</h4><a>vsi →</a></div>
               <ul className="dash-list">
                 <li><span className="ok"/>Agencija Pixel d.o.o.<em>€1.200</em><span className="tag tag-ok">Plačano</span></li>
                 <li><span className="warn"/>Startup XY d.o.o.<em>€850</em><span className="tag tag-warn">Poslano</span></li>
@@ -315,7 +681,6 @@ function DashboardMock() {
               </ul>
             </div>
           </div>
-
           <div className="dash-foot">
             <span className="dash-foot-label">Hitro:</span>
             <button className="chip"><Scan/> Skeniraj</button>
@@ -329,38 +694,6 @@ function DashboardMock() {
   )
 }
 
-/* ---------- Features ---------- */
-const FEATURES = [
-  { tone: "violet", title: "AI ki pozna vaše podatke", body: '"Koliko dohodnine bom plačal letos?" — odgovor v 3 sekundah, izračunan iz vašega dejanskega prometa. Ne s splošnimi pravili. Z vašimi.', tag: "24/7 na voljo", icon: <Bot/> },
-  { tone: "amber", title: "Prispevki QR — 30 sekund", body: "ZPIZ, ZZZS in akontacija z UPN QR kodo. Skenirate v banki, plačilo gre. Brez ročnega vnosa, brez napak v številkah.", tag: "Samo za SLO trg", icon: <Qr/> },
-  { tone: "rose", title: "Opomniki 7 dni vnaprej", body: "Ne en dan prej, ko je že prepozno. 7 dni vnaprej za vsak davčni rok — DDV-O, akontacija, REK-1, prispevki. Nikoli več zamude.", tag: "Brez panike", icon: <Bell/> },
-  { tone: "blue", title: "Računi z UPN QR v 30 sec", body: "PDF z UPN QR kodo. Stranka skenira z mobilno banko, plačilo pride direktno na vaš račun. Brez čakanja na potrditev.", tag: "Stripe + UPN", icon: <Doc/> },
-  { tone: "mint", title: "Skeniraj strošek — AI OCR", body: "Fotografirate račun, AI prepozna znesek, datum, DDV in dobavitelja. Konec map polnih papirjev in mesečnega pošiljanja.", tag: "iOS + Android", icon: <Scan/> },
-  { tone: "sage", title: "Normirani vs. dejanski", body: "Točen izračun kdaj se vam splača preiti na dejanske stroške. Z grafom in mejno vrednostjo — kar vam računovodja verjetno ni nikoli pokazal.", tag: "Unikatno za SLO", icon: <Pct/> },
-]
-
-function FeaturesSection() {
-  return (
-    <section className="section features" id="features">
-      <header className="section-head">
-        <div className="kicker">Kaj dobite</div>
-        <h2 className="h2">Vse kar računovodja počne. <em>Plus tisto kar ne.</em></h2>
-        <p className="lede">Računovodja ne odgovori ob 22:00 v nedeljo. Računko odgovori v 3 sekundah.</p>
-      </header>
-      <div className="feat-grid">
-        {FEATURES.map((f,i) => (
-          <article key={i} className={"feat feat-"+f.tone}>
-            <div className="feat-icon">{f.icon}</div>
-            <h3>{f.title}</h3>
-            <p>{f.body}</p>
-            <span className="feat-tag">{f.tag}</span>
-          </article>
-        ))}
-      </div>
-    </section>
-  )
-}
-
 /* ---------- Comparison ---------- */
 function Comparison() {
   const rows = [
@@ -368,7 +701,7 @@ function Comparison() {
     ["Odgovor čez 1–3 dni. Ob 22h — jutri.", "Takoj. 24/7. Tudi nedelje, prazniki."],
     ["Vi zbirate in pošiljate dokumente", "AI OCR — fotka stroška = vnos"],
     ["Opomnik en dan prej — pogosto prepozno", "7 dni vnaprej za vsak davčni rok"],
-    ["€280–500 / mesec", "€19.99 / mesec"],
+    ["€280–500 / mesec", "Od €9.99 / mesec"],
   ]
   return (
     <section className="section compare" id="primerjava">
@@ -377,37 +710,22 @@ function Comparison() {
         <h2 className="h2">Računovodja vs. Računko</h2>
         <p className="lede">Za s.p. ki večino dela opravljajo sami.</p>
       </header>
-
       <div className="compare-card">
         <div className="compare-col col-left">
           <header>
             <span className="col-icon">👤</span>
             <span><strong>Računovodja</strong><small> · €200–500/mes</small></span>
           </header>
-          {rows.map((r,i) => (
-            <div key={i} className="row">
-              <Cross/> <span>{r[0]}</span>
-            </div>
-          ))}
-          <div className="row row-mute">
-            <span className="dashm">—</span>
-            <span>Smiselno za revizije + d.o.o. nad €50k</span>
-          </div>
+          {rows.map((r,i) => (<div key={i} className="row"><Cross/> <span>{r[0]}</span></div>))}
+          <div className="row row-mute"><span className="dashm">—</span><span>Smiselno za revizije + d.o.o. nad €50k</span></div>
         </div>
         <div className="compare-col col-right">
           <header>
             <span className="col-icon"><Bot/></span>
-            <span><strong>Računko</strong><small> · €19.99/mes</small></span>
+            <span><strong>Računko</strong><small> · od €9.99/mes</small></span>
           </header>
-          {rows.map((r,i) => (
-            <div key={i} className="row row-yes">
-              <Tick/> <span>{r[1]}</span>
-            </div>
-          ))}
-          <div className="row row-mute">
-            <span className="dashm">—</span>
-            <span>Za revizije priporočamo računovodja — <strong>Računko pokrije 95%</strong></span>
-          </div>
+          {rows.map((r,i) => (<div key={i} className="row row-yes"><Tick/> <span>{r[1]}</span></div>))}
+          <div className="row row-mute"><span className="dashm">—</span><span>Za revizije priporočamo računovodja — <strong>Računko pokrije 95%</strong></span></div>
         </div>
       </div>
     </section>
@@ -439,10 +757,7 @@ function Testimonials() {
             <blockquote>&ldquo;{q.text}&rdquo;</blockquote>
             <figcaption>
               <span className="avatar">{q.avatar}</span>
-              <span>
-                <strong>{q.name}</strong>
-                <small>{q.role}</small>
-              </span>
+              <span><strong>{q.name}</strong><small>{q.role}</small></span>
             </figcaption>
           </figure>
         ))}
@@ -451,59 +766,14 @@ function Testimonials() {
   )
 }
 
-/* ---------- Pricing ---------- */
-function Pricing() {
-  return (
-    <section className="section pricing" id="cene">
-      <header className="section-head">
-        <div className="kicker">Cene</div>
-        <h2 className="h2">Fiksno. Brez presenečenj.</h2>
-        <p className="lede">Brez &ldquo;minimuma ur&rdquo;, brez &ldquo;letnega obračuna posebej&rdquo;. Eno število.</p>
-      </header>
-
-      <div className="plans">
-        <article className="plan">
-          <div className="plan-name">Starter</div>
-          <div className="plan-price"><span className="cur">€</span><span className="num">0</span><span className="per">/mes</span></div>
-          <span className="plan-tag plan-tag-soft">Brez kreditne kartice</span>
-          <ul className="plan-list">
-            <li><Tick/> 5 računov mesečno</li>
-            <li><Tick/> AI računovodja — 10 vprašanj</li>
-            <li><Tick/> Prispevki QR</li>
-            <li><Tick/> Davčni rokovnik</li>
-          </ul>
-          <Link className="btn btn-quiet btn-block" href="/register">Začni brezplačno</Link>
-        </article>
-
-        <article className="plan plan-hero">
-          <div className="plan-flag">Zamenja računovodjo</div>
-          <div className="plan-name">Pro</div>
-          <div className="plan-price">
-            <span className="cur">€</span><span className="num">19.99</span><span className="per">/mes</span>
-          </div>
-          <span className="plan-tag plan-tag-amber">Prihranek do €5.000/leto</span>
-          <ul className="plan-list">
-            <li><Tick/> Neomejeni računi</li>
-            <li><Tick/> AI brez omejitev · 24/7</li>
-            <li><Tick/> OCR skeniranje stroškov</li>
-            <li><Tick/> Obračun plač + regres</li>
-            <li><Tick/> DDV evidenca</li>
-            <li><Tick/> Stripe integracija</li>
-          </ul>
-          <Link className="btn btn-primary btn-block" href="/register?plan=pro">Začni Pro — €19.99/mes →</Link>
-        </article>
-      </div>
-    </section>
-  )
-}
-
 /* ---------- FAQ ---------- */
 const FAQS = [
-  { q:"Ali Računko res nadomesti računovodjo?", a:"Za 90% samostojnih podjetnikov — da. Normiranec, DDV zavezanec, par zaposlenih — Računko pokrije vse. Za d.o.o. z revizijo priporočamo Računko + računovodja za letni zaključek." },
-  { q:"Kaj če naredim napako?", a:"Računko vas opomni 7 dni pred rokom. AI vas opozori na nepravilnosti pri vnosu. Mesečni vodič vas korak za korakom pelje skozi vse obveznosti za vaš profil." },
+  { q:"Ali Računko res nadomesti računovodja?", a:"Za 90% samostojnih podjetnikov — da. Normiranec, DDV zavezanec, par zaposlenih — Računko pokrije vse. Za d.o.o. z revizijo priporočamo Računko + računovodja za letni zaključek." },
+  { q:"Kaj pa če potrebujem samo določene funkcije?", a:"Zato imamo plug-in sistem. Začnete z osnovo (€9.99/mes) in dodate samo kar rabite. Ponavljajoči računi +€3, plače +€5, spletna prodaja +€5. Plačate samo za kar dejansko uporabljate." },
   { q:"Ali moram prekiniti pogodbo z računovodjem?", a:"Ne. Preizkusite Računko mesec brezplačno, šele nato se odločite. Večina strank odpove pogodbo po prvem mesecu — ko vidijo da res deluje." },
-  { q:"Deluje za DDV zavezance?", a:"Da. DDV evidenca, izračun obveznosti, opomniki za DDV-O rok — vse je vključeno v Pro planu. Tudi za 22%, 9,5% in 5% stopnje." },
+  { q:"Deluje za DDV zavezance?", a:"Da. DDV evidenca, izračun obveznosti, opomniki za DDV-O rok — vse je vključeno v osnovi. Tudi za 22%, 9,5% in 5% stopnje." },
   { q:"Kako varni so moji finančni podatki?", a:"Strežniki v EU (Frankfurt). Supabase platforma z Row Level Security — tehnično je nemogoče da bi drug uporabnik videl vaše podatke. Šifriranje pri prenosu in v mirovanju." },
+  { q:"Ali plug-ine lahko kadar koli deaktivira?", a:"Da. Plug-ine aktivirate in deaktivirate kadarkoli. Plačate samo za mesece ko so aktivni. Ni pogodbe, ni minimalne obveznosti." },
 ]
 
 function FAQ() {
@@ -537,14 +807,13 @@ function FinalCTA() {
         <div className="kicker kicker-on-dark">Zadnje vprašanje</div>
         <h2 className="final-h">Koliko ste <em>lani</em> plačali računovodji?</h2>
         <p className="final-sub">
-          Seštejte mesečne račune. Potem pomislite kaj ste za to dobili.
-          <br/>
-          Računko stane <strong>€240 letno</strong>. Ostalo je vaše.
+          Seštejte mesečne račune. Potem pomislite kaj ste za to dobili.<br/>
+          Računko osnova stane <strong>€120 letno</strong>. Ostalo je vaše.
         </p>
         <Link className="btn btn-on-dark btn-lg" href="/register">
-          Preizkusi brezplačno — brez kreditne kartice <span aria-hidden="true">→</span>
+          Sestavite svoj paket — brezplačno <span aria-hidden="true">→</span>
         </Link>
-        <div className="final-trust">Brez vezave · Prekličete kadarkoli · Podatki v EU</div>
+        <div className="final-trust">Brez vezave · Plug-ine dodajate po potrebi · Podatki v EU</div>
       </div>
     </section>
   )
@@ -572,12 +841,7 @@ function Footer() {
 
 /* ---------- Page ---------- */
 export default function LandingPage() {
-  const t = {
-    palette: "forest",
-    headline: "math",
-    density: "normal",
-    font: "instrument",
-  } as const
+  const t = { palette: "forest", headline: "math", density: "normal", font: "instrument" } as const
 
   useEffect(() => {
     const root = document.documentElement
@@ -591,11 +855,11 @@ export default function LandingPage() {
       <Nav />
       <Hero headline={t.headline} />
       <MathSection />
+      <ProductTour />
       <Product />
-      <FeaturesSection />
       <Comparison />
       <Testimonials />
-      <Pricing />
+      <PricingBuilder />
       <FAQ />
       <FinalCTA />
       <Footer />
