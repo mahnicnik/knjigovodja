@@ -238,7 +238,7 @@ export async function confirmWithFurs(
       signal: AbortSignal.timeout(15000),
     })
     const proxyData = await proxyResp.json()
-    const response = { ok: proxyData.ok, status: proxyData.status, text: async () => proxyData.body ?? '' }
+    const response = { ok: proxyData.status >= 200 && proxyData.status < 300, status: proxyData.status, text: async () => proxyData.body ?? '' }
 
     if (!response.ok) {
       const errorText = await response.text()
