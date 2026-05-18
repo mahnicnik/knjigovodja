@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
       deviceId: device?.device_id ?? 'RACUNKO01',
       privateKeyPem,
       certificatePem,
-      isTest: true,
+      isTest: process.env.FURS_TEST_MODE !== 'false',
     }
 
     const result = await confirmWithFurs(config, testData)
