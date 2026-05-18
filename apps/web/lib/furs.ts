@@ -237,8 +237,13 @@ export async function confirmWithFurs(
       body: JSON.stringify({ soapBody: xmlRequest, isTest: config.isTest }),
       signal: AbortSignal.timeout(15000),
     })
-    const proxyData = await proxyResp.json()
-    const response = { ok: proxyData.status >= 200 && proxyData.status < 300, status: proxyData.status, text: async () => proxyData.body ?? '' }
+    const proxyRaw = await proxyResp.text()
+    console.log('FURS proxy raw:', proxyRaw)
+    let proxyData: any = {}
+    try { proxyData = JSON.parse(proxyRaw) } catch { proxyData = { error: proxyRaw } }
+    console.log('FURS proxy data:', JSON.stringify(proxyData))
+    if (proxyData.error) throw new Error('Proxy napaka: ' + proxyData.error)
+    const response = { ok: (proxyData.status ?? 0) >= 200 && (proxyData.status ?? 0) < 300, status: proxyData.status ?? 0, text: async () => proxyData.body ?? '' }
 
     if (!response.ok) {
       const errorText = await response.text()
