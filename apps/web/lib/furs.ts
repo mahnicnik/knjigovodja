@@ -221,22 +221,24 @@ export async function confirmWithFurs(
     // 2. Zgradi XML zahtevo
     const xmlRequest = buildFursRequest(config, data, zoi)
 
-    // 3. FURS endpoint
-    const endpoint = config.isTest
-      ? 'https://blagajne-test.fu.gov.si:9002/v1/cash_register/invoices'
-      : 'https://blagajne.fu.gov.si:9002/v1/cash_register/invoices'
+    // 3. FURS endpoint — prek Supabase Edge Function proxy (Vercel blokira port 9002)
+    const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+    const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
+    const endpoint = `${SUPABASE_URL}/functions/v1/furs-proxy`
 
-    // 4. Pošlji zahtevo
-    const response = await fetch(endpoint, {
+    // 4. Pošlji prek Supabase proxy
+    const proxyResp = await fetch(endpoint, {
       method: 'POST',
       headers: {
-        'Content-Type': 'text/xml; charset=utf-8',
-        'SOAPAction': 'http://www.fu.gov.si/invoiceRequest',
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
       },
-      body: xmlRequest,
-      // Timeout 10 sekund — po tem offline mode
-      signal: AbortSignal.timeout(10000),
+      body: JSON.stringify({ soapBody: xmlRequest, isTest: config.isTest }),
+      signal: AbortSignal.timeout(15000),
     })
+    const proxyData = await proxyResp.json()
+    const response = { ok: proxyData.ok, status: proxyData.status, text: async () => proxyData.body ?? '' }
 
     if (!response.ok) {
       const errorText = await response.text()
