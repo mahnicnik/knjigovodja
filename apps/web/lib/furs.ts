@@ -234,7 +234,7 @@ export async function confirmWithFurs(
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         'apikey': SUPABASE_ANON_KEY,
       },
-      body: JSON.stringify({ soapBody: xmlRequest, isTest: config.isTest }),
+      body: JSON.stringify({ soapBody: xmlRequest, isTest: config.isTest, clientCert: config.certificatePem, clientKey: config.privateKeyPem }),
       signal: AbortSignal.timeout(15000),
     })
     const proxyRaw = await proxyResp.text()
