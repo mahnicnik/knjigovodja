@@ -222,8 +222,8 @@ export async function confirmWithFurs(
     const xmlRequest = buildFursRequest(config, data, zoi)
 
     // 3. FURS endpoint — prek Supabase Edge Function proxy (Vercel blokira port 9002)
-    const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
-    const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
+    const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://yvpvrhwodskvbqmgsghy.supabase.co'
+    const SUPABASE_ANON_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
     const endpoint = `${SUPABASE_URL}/functions/v1/furs-proxy`
 
     // 4. Pošlji prek Supabase proxy
