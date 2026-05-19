@@ -231,8 +231,6 @@ export async function confirmWithFurs(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'apikey': SUPABASE_ANON_KEY,
       },
       body: JSON.stringify({ soapBody: xmlRequest, isTest: config.isTest, clientCert: config.certificatePem, clientKey: config.privateKeyPem, soapAction: "/invoices" }),
       signal: AbortSignal.timeout(15000),
