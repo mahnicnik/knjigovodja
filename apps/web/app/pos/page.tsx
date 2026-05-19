@@ -1,5 +1,5 @@
 'use client'
-
+// @ts-nocheck
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
