@@ -222,9 +222,9 @@ export async function confirmWithFurs(
     const xmlRequest = buildFursRequest(config, data, zoi)
 
     // 3. FURS endpoint — prek Supabase Edge Function proxy (Vercel blokira port 9002)
-    const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://yvpvrhwodskvbqmgsghy.supabase.co'
-    const SUPABASE_ANON_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
-    const endpoint = `${SUPABASE_URL}/functions/v1/furs-proxy`
+    const VPS_URL = 'http://152.89.232.145:8787'
+    
+    const endpoint = VPS_URL
 
     // 4. Pošlji prek Supabase proxy
     const proxyResp = await fetch(endpoint, {
@@ -234,7 +234,7 @@ export async function confirmWithFurs(
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         'apikey': SUPABASE_ANON_KEY,
       },
-      body: JSON.stringify({ soapBody: xmlRequest, isTest: config.isTest, clientCert: config.certificatePem, clientKey: config.privateKeyPem }),
+      body: JSON.stringify({ soapBody: xmlRequest, isTest: config.isTest, clientCert: config.certificatePem, clientKey: config.privateKeyPem, soapAction: "/invoices" }),
       signal: AbortSignal.timeout(15000),
     })
     const proxyRaw = await proxyResp.text()
