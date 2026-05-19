@@ -231,6 +231,7 @@ export async function confirmWithFurs(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-API-Key': 'racunko-furs-2026',
       },
       body: JSON.stringify({ soapBody: xmlRequest, isTest: config.isTest, clientCert: config.certificatePem, clientKey: config.privateKeyPem, soapAction: "/invoices" }),
       signal: AbortSignal.timeout(15000),
