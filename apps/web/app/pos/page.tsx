@@ -218,6 +218,14 @@ function eur(v: number) {
   return '€ ' + v.toFixed(2).replace('.', ',')
 }
 
+// ─── Window globals (client-side only) ────────────────────────────
+if (typeof window !== 'undefined') {
+  (window as any).POS_DATA = POS_DATA_DEMO
+  ;(window as any).posHelpers = posHelpers
+  ;(window as any).eur = eur
+}
+
+
 // ================================================================
 // VGRAJENI JSX KOMPONENTI IZ CLAUDE DESIGN
 // ================================================================
