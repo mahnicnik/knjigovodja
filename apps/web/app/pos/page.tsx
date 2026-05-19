@@ -191,12 +191,12 @@ const posHelpers = {
           actions: ['extend', 'inactive'] })
       } else if (ms.status === 'critical') {
         notifs.push({ id, kind: 'member', severity: 'orange', customerName: c.name,
-          title: ms.daysToExpiry !== null ? \`Poteče čez \${ms.daysToExpiry} dni\` : \`Ostane \${ms.remainingVisits} obisk\`,
+          title: ms.daysToExpiry !== null ? `Poteče čez \${ms.daysToExpiry} dni` : `Ostane \${ms.remainingVisits} obisk`,
           detail: 'Kmalu bo potrebno podaljšanje.',
           actions: ['extend', 'dismiss'] })
       } else if (ms.status === 'expiring') {
         notifs.push({ id, kind: 'member', severity: 'yellow', customerName: c.name,
-          title: ms.daysToExpiry !== null ? \`Poteče čez \${ms.daysToExpiry} dni\` : \`Ostaneta \${ms.remainingVisits} obiski\`,
+          title: ms.daysToExpiry !== null ? `Poteče čez \${ms.daysToExpiry} dni` : `Ostaneta \${ms.remainingVisits} obiski`,
           detail: 'Priporočamo pravočasno podaljšanje.',
           actions: ['extend', 'dismiss'] })
       }
@@ -205,7 +205,7 @@ const posHelpers = {
       const c = posHelpers.customer(b.customerId)
       if (!b.reminderSent) {
         notifs.push({ id: 'appt-' + b.id, kind: 'appointment', severity: 'info',
-          customerName: c?.name || '?', title: \`\${b.time} — \${c?.name || 'Brez stranke'}\`,
+          customerName: c?.name || '?', title: `\${b.time} — \${c?.name || 'Brez stranke'}`,
           detail: 'Opomnik ni poslan.', actions: ['dismiss'] })
       }
     })
