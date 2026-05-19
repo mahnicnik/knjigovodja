@@ -1,5 +1,6 @@
 // @ts-nocheck
 'use client'
+export const dynamic = 'force-dynamic'
 // @ts-nocheck
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect } from 'react'
@@ -4600,7 +4601,7 @@ function AutoLockSection({ ctx, auth }) {
 // ================================================================
 // NEXT.JS PAGE ENTRY POINT
 // ================================================================
-function PosPageInner() {
+export default function PosPage() {
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(true)
@@ -4636,7 +4637,3 @@ function PosPageInner() {
   )
 
 }
-
-import dynamic from 'next/dynamic'
-const PosPage = dynamic(() => Promise.resolve(PosPageInner), { ssr: false })
-export default PosPage
