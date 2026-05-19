@@ -4623,7 +4623,7 @@ window.AutoLockSection = AutoLockSection;
 // ================================================================
 // NEXT.JS PAGE ENTRY POINT
 // ================================================================
-export default function PosPage() {
+function PosPageInner() {
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(true)
@@ -4657,4 +4657,9 @@ export default function PosPage() {
       <KlasikApp />
     </div>
   )
+
 }
+
+import dynamic from 'next/dynamic'
+const PosPage = dynamic(() => Promise.resolve(PosPageInner), { ssr: false })
+export default PosPage
