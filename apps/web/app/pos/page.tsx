@@ -270,7 +270,6 @@ const Icon = ({ name, size = 18, stroke = "currentColor", strokeWidth = 1.7 }) =
     </svg>
   );
 };
-window.PosIcon = Icon;
 
 // ─── Modal shell ─────────────────────────────────────────────────────
 function Modal({ open, onClose, children, width = 480, theme = {} }) {
@@ -295,7 +294,6 @@ function Modal({ open, onClose, children, width = 480, theme = {} }) {
     </div>
   );
 }
-window.PosModal = Modal;
 
 // ─── Modifier modal ─────────────────────────────────────────────────
 function ModifierModal({ item, onCancel, onConfirm, theme }) {
@@ -436,7 +434,6 @@ function ModifierModal({ item, onCancel, onConfirm, theme }) {
     </Modal>
   );
 }
-window.ModifierModal = ModifierModal;
 
 // ─── Payment modal ───────────────────────────────────────────────────
 function PaymentModal({ open, total, onCancel, onComplete, theme }) {
@@ -650,7 +647,6 @@ function PaymentModal({ open, total, onCancel, onComplete, theme }) {
     );
   }
 }
-window.PaymentModal = PaymentModal;
 
 // ─── Success toast / receipt confirmation ────────────────────────────
 function ReceiptToast({ data, onClose, theme }) {
@@ -692,7 +688,6 @@ function ReceiptToast({ data, onClose, theme }) {
     </Modal>
   );
 }
-window.ReceiptToast = ReceiptToast;
 
 
 // ===== pos-klasik-shell.jsx =====
@@ -730,7 +725,6 @@ const KLASIK = {
     needs_attention: { bg:'rgba(168,50,50,0.10)', stroke:'rgba(168,50,50,0.55)', dot:'#a83232', label:'Pozor' },
   },
 };
-window.KLASIK = KLASIK;
 
 // ─── Icons (extended set) ──────────────────────────────────────────
 const KI = ({ name, size = 18, strokeWidth = 1.7 }) => {
@@ -795,7 +789,6 @@ const KI = ({ name, size = 18, strokeWidth = 1.7 }) => {
     </svg>
   );
 };
-window.KI = KI;
 
 // ─── App shell ─────────────────────────────────────────────────────
 function KlasikApp() {
@@ -1038,7 +1031,6 @@ function KlasikApp() {
     </div>
   );
 }
-window.KlasikApp = KlasikApp;
 
 // ─── Stat pill ─────────────────────────────────────────────────────
 function StatPill({ T, label, value, color }) {
@@ -1051,7 +1043,6 @@ function StatPill({ T, label, value, color }) {
     </div>
   );
 }
-window.StatPill = StatPill;
 
 function HeaderBtn({ T, icon, badge, tooltip, onClick }) {
   return (
@@ -1072,7 +1063,6 @@ function HeaderBtn({ T, icon, badge, tooltip, onClick }) {
     </button>
   );
 }
-window.HeaderBtn = HeaderBtn;
 
 // ─── Profile picker ────────────────────────────────────────────────
 function ProfilePicker({ T, profile, onChange }) {
@@ -1125,7 +1115,6 @@ function ProfilePicker({ T, profile, onChange }) {
     </div>
   );
 }
-window.ProfilePicker = ProfilePicker;
 
 // ─── Header widget editor ─────────────────────────────────────────
 function WidgetEditor({ T, widgets, setWidgets, onClose }) {
@@ -1299,7 +1288,6 @@ function useAuthState(initialPin = "1234", autoLockMs = 60000) {
 
   return { user, permissions, locked, lock, unlock, isMasterPin, autoLock, setAutoLock };
 }
-window.useAuthState = useAuthState;
 
 // ─── Lock screen ───────────────────────────────────────────────────
 function LockScreen({ auth, theme }) {
@@ -1444,7 +1432,6 @@ function LockScreen({ auth, theme }) {
     </div>
   );
 }
-window.LockScreen = LockScreen;
 
 function PinKey({ digit, onPress, T }) {
   const [pressed, setPressed] = React.useState(false);
@@ -1512,7 +1499,6 @@ function UserAvatar({ user, onLock, T }) {
     </div>
   );
 }
-window.UserAvatar = UserAvatar;
 
 function menuRowStyle(T) {
   return {
@@ -1560,7 +1546,6 @@ function PermissionGate({ perm, permissions, T, isMasterPin, children }) {
     </div>
   );
 }
-window.PermissionGate = PermissionGate;
 
 
 // ===== pos-klasik-screens1.jsx =====
@@ -1749,7 +1734,6 @@ function FloorScreen({ ctx }) {
     </div>
   );
 }
-window.FloorScreen = FloorScreen;
 
 // ═════════════════════════════════════════════════════════════════════
 // SALE — categories + items grid + cart
@@ -1912,7 +1896,6 @@ function SaleScreen({ ctx }) {
     </div>
   );
 }
-window.SaleScreen = SaleScreen;
 
 // ─── Cart panel for sale screen ────────────────────────────────────
 function SaleCart({ ctx }) {
@@ -2333,7 +2316,6 @@ function CalendarScreen({ ctx }) {
     </div>
   );
 }
-window.CalendarScreen = CalendarScreen;
 
 function NewBookingModal({ ctx, onClose }) {
   const { T, D } = ctx;
@@ -2561,7 +2543,6 @@ function CustomersScreen({ ctx }) {
     </div>
   );
 }
-window.CustomersScreen = CustomersScreen;
 
 function CustomerDetail({ ctx, c }) {
   const { T, D, setActiveCustomer, setScreen } = ctx;
@@ -3008,7 +2989,6 @@ function InventoryScreen({ ctx }) {
     </div>
   );
 }
-window.InventoryScreen = InventoryScreen;
 
 function statusPill(T, color, bg) {
   return {
@@ -3165,7 +3145,6 @@ function ReportsScreen({ ctx }) {
     </div>
   );
 }
-window.ReportsScreen = ReportsScreen;
 
 function PaymentSplit({ T, label, pct, sum }) {
   return (
@@ -3252,7 +3231,6 @@ function AdminScreen({ ctx, auth }) {
     </div>
   );
 }
-window.AdminScreen = AdminScreen;
 
 function ProfileSection({ ctx }) {
   const { T, D, profileId, setProfileId } = ctx;
@@ -3683,7 +3661,6 @@ function WeekCalendar({ ctx, staffFilter, onNewBooking }) {
     </div>
   );
 }
-window.WeekCalendar = WeekCalendar;
 
 // ═════════════════════════════════════════════════════════════════════
 // PACKAGES SCREEN — Kartice & Paketi
@@ -3748,7 +3725,6 @@ function PackagesScreen({ ctx }) {
     </div>
   );
 }
-window.PackagesScreen = PackagesScreen;
 
 function PackageCard({ T, pkg, onEdit }) {
   const typeColor = pkg.type === 'unlimited' ? '#1f6b3a'
@@ -4010,7 +3986,6 @@ function ServicesSection({ ctx }) {
     </div>
   );
 }
-window.ServicesSection = ServicesSection;
 
 // ═════════════════════════════════════════════════════════════════════
 // NOTIFICATIONS PANEL — persistent rule-driven
@@ -4021,7 +3996,6 @@ function useNotifications() {
   function resolve(id) { setResolved(r => ({ ...r, [id]: true })); }
   return { notifs, resolve };
 }
-window.useNotifications = useNotifications;
 
 function NotificationsPanel({ T, notifs, resolve, onClose, ctx }) {
   const sevColors = {
@@ -4142,7 +4116,6 @@ function NotificationsPanel({ T, notifs, resolve, onClose, ctx }) {
     </>
   );
 }
-window.NotificationsPanel = NotificationsPanel;
 
 // ═════════════════════════════════════════════════════════════════════
 // Member status badge for customer list/card
@@ -4166,7 +4139,6 @@ function MemberStatusDot({ status, size = 12 }) {
     }}/>
   );
 }
-window.MemberStatusDot = MemberStatusDot;
 
 
 // ===== pos-klasik-admin-extra.jsx =====
@@ -4409,7 +4381,6 @@ function SpacesEditor({ ctx }) {
     </div>
   );
 }
-window.SpacesEditor = SpacesEditor;
 
 // ═════════════════════════════════════════════════════════════════════
 // Updated StaffSection with full permissions editor
@@ -4480,7 +4451,6 @@ function StaffSectionV2({ ctx }) {
     </div>
   );
 }
-window.StaffSectionV2 = StaffSectionV2;
 
 function PermissionsEditor({ T, D, staff }) {
   const [perms, setPerms] = React.useState(staff.permissions || D.rolePresets[staff.role] || {});
@@ -4616,7 +4586,6 @@ function AutoLockSection({ ctx, auth }) {
     </div>
   );
 }
-window.AutoLockSection = AutoLockSection;
 
 
 
