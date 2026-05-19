@@ -806,7 +806,7 @@ function KlasikApp() {
   
 
   // Auth (PIN lock + permissions)
-  const auth = window.useAuthState('1234', 60000);
+  const auth = useAuthState('1234', 60000);
 
   const [profileId, setProfileId] = React.useState('all');
   const profile = H.profile(profileId);
@@ -858,7 +858,7 @@ function KlasikApp() {
   const totals = H.orderTotals(cart);
 
   // Demo notifications
-  const notifications = window.useNotifications();
+  const notifications = useNotifications();
   const [notifOpen, setNotifOpen] = React.useState(false);
 
   const openTabs = D.spaces.flatMap(s => s.tables.filter(t => t.openTab));
@@ -947,11 +947,11 @@ function KlasikApp() {
         {/* Live stats (configurable) */}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14 }}>
           {headerWidgets.promet && auth.permissions.viewSales && <StatPill T={T} label="Promet"
-            value={window.eur(D.today.promet + totals.total)} color={T.brand}/>}
+            value={eur(D.today.promet + totals.total)} color={T.brand}/>}
           {headerWidgets.racuni && <StatPill T={T} label="Računi"
             value={D.today.racuni} color={T.headerInk}/>}
           {headerWidgets.vmesna && <StatPill T={T} label="Vmesna"
-            value={window.eur(totals.total)} color={cart.length ? T.brand : 'rgba(246,241,232,0.5)'}/>}
+            value={eur(totals.total)} color={cart.length ? T.brand : 'rgba(246,241,232,0.5)'}/>}
           {headerWidgets.ura && (
             <div style={{ borderLeft: '1px solid ' + T.headerLine, paddingLeft: 14,
                           display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
@@ -982,7 +982,7 @@ function KlasikApp() {
             onClick={() => setWidgetEditor(v => !v)}/>
 
           {/* User avatar replaces static cashier text */}
-          <window.UserAvatar user={auth.user} onLock={auth.lock} T={T}/>
+          <UserAvatar user={auth.user} onLock={auth.lock} T={T}/>
         </div>
 
         {widgetEditor && (
@@ -990,7 +990,7 @@ function KlasikApp() {
             onClose={() => setWidgetEditor(false)}/>
         )}
         {notifOpen && (
-          <window.NotificationsPanel T={T} notifs={notifications.notifs}
+          <NotificationsPanel T={T} notifs={notifications.notifs}
             resolve={notifications.resolve}
             onClose={() => setNotifOpen(false)} ctx={null}/>
         )}
@@ -1014,7 +1014,7 @@ function KlasikApp() {
           {screen === 'sale'      && <SaleScreen ctx={ctx}/>}
           {screen === 'calendar'  && <CalendarScreen ctx={ctx}/>}
           {screen === 'customers' && <CustomersScreen ctx={ctx}/>}
-          {screen === 'packages'  && <window.PackagesScreen ctx={ctx}/>}
+          {screen === 'packages'  && <PackagesScreen ctx={ctx}/>}
           {screen === 'inventory' && <InventoryScreen ctx={ctx}/>}
           {screen === 'reports'   && <ReportsScreen ctx={ctx}/>}
           {screen === 'admin'     && <AdminScreen ctx={ctx} auth={auth}/>}
@@ -1036,7 +1036,7 @@ function KlasikApp() {
       <ReceiptToast data={receipt} onClose={() => setReceipt(null)} theme={T}/>
 
       {/* Lock screen overlay */}
-      {auth.locked && <window.LockScreen auth={auth} theme={T}/>}
+      {auth.locked && <LockScreen auth={auth} theme={T}/>}
     </div>
   );
 }
@@ -1198,7 +1198,7 @@ function ContextStrip({ T, activeTable, activeCustomer, onClearTable, onClearCus
           <span>Stranka: <b style={{ fontWeight: 800 }}>{activeCustomer.name}</b></span>
           <span style={{ opacity: 0.7 }}>· {activeCustomer.tier} · {activeCustomer.points} t.</span>
           {activeCustomer.prepaid > 0 && (
-            <span style={{ opacity: 0.7 }}>· predplačilo {window.eur(activeCustomer.prepaid)}</span>
+            <span style={{ opacity: 0.7 }}>· predplačilo {eur(activeCustomer.prepaid)}</span>
           )}
           <button onClick={onClearCustomer} style={{
             background: 'rgba(13,40,24,0.15)', border: 'none', cursor: 'pointer',
@@ -1268,8 +1268,8 @@ function useAuthState(initialPin = "1234", autoLockMs = 60000) {
   // Track activity to reset idle timer
   React.useEffect(() => {
     const reset = () => { lastActivity.current = Date.now(); };
-    ['mousedown','touchstart','keydown','wheel'].forEach(e => window.addEventListener(e, reset));
-    return () => ['mousedown','touchstart','keydown','wheel'].forEach(e => window.removeEventListener(e, reset));
+    ['mousedown','touchstart','keydown','wheel'].forEach(e => addEventListener(e, reset));
+    return () => ['mousedown','touchstart','keydown','wheel'].forEach(e => removeEventListener(e, reset));
   }, []);
 
   // Idle timer
@@ -1662,7 +1662,7 @@ function FloorScreen({ ctx }) {
                   {t.status === 'occupied' && (
                     <>
                       <div style={{ fontSize: 13, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
-                                    marginTop: 3 }}>{window.eur(t.order)}</div>
+                                    marginTop: 3 }}>{eur(t.order)}</div>
                       <div style={{ fontSize: 9, color: T.muted }}>{t.since} · {t.server}</div>
                     </>
                   )}
@@ -1701,7 +1701,7 @@ function FloorScreen({ ctx }) {
               </div>
             )}
             {upcomingReservations.map(r => {
-              const cust = r.customerId ? window.posHelpers.customer(r.customerId) : null;
+              const cust = r.customerId ? posHelpers.customer(r.customerId) : null;
               const tbl = D.spaces.flatMap(sp => sp.tables).find(t => t.id === r.tableId);
               return (
                 <div key={r.id} style={{
@@ -1878,7 +1878,7 @@ function SaleScreen({ ctx }) {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
                               marginTop: 8 }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{window.eur(it.price)}</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{eur(it.price)}</div>
                   <div style={{ fontSize: 10, color: T.muted, textTransform: 'uppercase',
                                 letterSpacing: '0.05em' }}>
                     {outOfStock ? 'Razprodano' : it.code}
@@ -2002,7 +2002,7 @@ function SaleCart({ ctx }) {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
               <div style={{ fontWeight: 800, fontSize: 14, fontVariantNumeric: 'tabular-nums' }}>
-                {window.eur(H.lineTotal(l))}
+                {eur(H.lineTotal(l))}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <button onClick={() => l.qty === 1
@@ -2039,15 +2039,15 @@ function SaleCart({ ctx }) {
       {/* Totals + pay */}
       <div style={{ padding: '12px 16px', background: T.surface2, borderTop: '1px solid ' + T.line }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4, color: T.muted }}>
-          <span>Vmesna</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{window.eur(totals.sub)}</span>
+          <span>Vmesna</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{eur(totals.sub)}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 8, color: T.muted }}>
-          <span>DDV 22%</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{window.eur(totals.ddv)}</span>
+          <span>DDV 22%</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{eur(totals.ddv)}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
           <div style={{ fontWeight: 700, fontSize: 14 }}>Skupaj</div>
           <div style={{ fontWeight: 800, fontSize: 26, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-            {window.eur(totals.total)}
+            {eur(totals.total)}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
@@ -2129,7 +2129,7 @@ function CustomerPickerModal({ T, D, onClose, onPick }) {
               <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>
                 {c.phone} · {c.tier} · {c.points} t.
                 {c.packages.length > 0 && <> · {c.packages.length} paket</>}
-                {c.prepaid > 0 && <> · predplačilo {window.eur(c.prepaid)}</>}
+                {c.prepaid > 0 && <> · predplačilo {eur(c.prepaid)}</>}
               </div>
             </div>
           </button>
@@ -2223,7 +2223,7 @@ function CalendarScreen({ ctx }) {
 
       {/* Calendar grid */}
       {view === 'week' ? (
-        <window.WeekCalendar ctx={ctx} staffFilter={staffFilter}
+        <WeekCalendar ctx={ctx} staffFilter={staffFilter}
           onNewBooking={(prefill) => setShowAdd(prefill || true)}/>
       ) : (
       <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
@@ -2279,8 +2279,8 @@ function CalendarScreen({ ctx }) {
                   backgroundImage: `repeating-linear-gradient(180deg, transparent 0 55px, ${T.lineSoft} 55px 56px)`,
                 }}>
                   {staffBookings.map(b => {
-                    const cust = window.posHelpers.customer(b.customerId);
-                    const item = window.posHelpers.itemOf(b.itemId);
+                    const cust = posHelpers.customer(b.customerId);
+                    const item = posHelpers.itemOf(b.itemId);
                     const [hh, mm] = b.time.split(':').map(Number);
                     const top = ((hh - 8) * 56) + (mm / 60 * 56);
                     const height = (b.duration / 60) * 56;
@@ -2362,7 +2362,7 @@ function NewBookingModal({ ctx, onClose }) {
               fontFamily: 'inherit', fontSize: 13, outline: 'none',
             }}>
               {D.items.filter(i => i.bookable).map(i => (
-                <option key={i.id} value={i.id}>{i.name} · {window.eur(i.price)}</option>
+                <option key={i.id} value={i.id}>{i.name} · {eur(i.price)}</option>
               ))}
             </select>
           </Field>
@@ -2520,13 +2520,13 @@ function CustomersScreen({ ctx }) {
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <window.MemberStatusDot status={window.posHelpers.memberStatus(c).status} size={9}/>
+                    <MemberStatusDot status={posHelpers.memberStatus(c).status} size={9}/>
                     {c.name}
                   </div>
                   <div style={{ fontSize: 11, color: T.muted, marginTop: 1, display: 'flex', gap: 6,
                                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {(() => {
-                      const ms = window.posHelpers.memberStatus(c);
+                      const ms = posHelpers.memberStatus(c);
                       return (<>
                         <span>{ms.remainingVisits || 0} obiskov</span>
                         {ms.daysToExpiry !== null && (
@@ -2535,7 +2535,7 @@ function CustomersScreen({ ctx }) {
                             · {ms.daysToExpiry < 0 ? 'potekla' : (ms.daysToExpiry + ' dni')}
                           </span>
                         )}
-                        {c.prepaid > 0 && <span style={{ color: T.accent, fontWeight: 600 }}>· {window.eur(c.prepaid)}</span>}
+                        {c.prepaid > 0 && <span style={{ color: T.accent, fontWeight: 600 }}>· {eur(c.prepaid)}</span>}
                       </>);
                     })()}
                   </div>
@@ -2608,9 +2608,9 @@ function CustomerDetail({ ctx, c }) {
         {/* KPIs */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginTop: 16 }}>
           <Kpi T={T} label="Točke" value={c.points} sub={c.tier}/>
-          <Kpi T={T} label="Predplačilo" value={window.eur(c.prepaid)} sub={c.prepaid > 0 ? 'na voljo' : 'brez'} color={c.prepaid > 0 ? T.accent : null}/>
+          <Kpi T={T} label="Predplačilo" value={eur(c.prepaid)} sub={c.prepaid > 0 ? 'na voljo' : 'brez'} color={c.prepaid > 0 ? T.accent : null}/>
           <Kpi T={T} label="Obiskov" value={c.visits} sub={'zadnji: ' + c.lastVisit}/>
-          <Kpi T={T} label="Porabljeno" value={window.eur(c.spent)} sub={'povp. ' + window.eur(c.avg)}/>
+          <Kpi T={T} label="Porabljeno" value={eur(c.spent)} sub={'povp. ' + eur(c.avg)}/>
         </div>
       </div>
 
@@ -2659,7 +2659,7 @@ function CustomerDetail({ ctx, c }) {
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 700, fontVariantNumeric: 'tabular-nums',
                                  color: h.amount === 0 ? '#634896' : T.ink }}>
-                    {h.amount === 0 ? 'paket' : window.eur(h.amount)}
+                    {h.amount === 0 ? 'paket' : eur(h.amount)}
                   </div>
                 </div>
               ))}
@@ -2717,7 +2717,7 @@ function CustomerDetail({ ctx, c }) {
                   <div style={{ fontSize: 12, color: T.muted, marginBottom: 4 }}>Trenutno stanje</div>
                   <div style={{ fontSize: 28, fontWeight: 800, color: c.prepaid > 0 ? T.accent : T.muted,
                                  fontVariantNumeric: 'tabular-nums' }}>
-                    {window.eur(c.prepaid)}
+                    {eur(c.prepaid)}
                   </div>
                 </div>
                 <button style={{
@@ -2750,7 +2750,7 @@ function CustomerDetail({ ctx, c }) {
                 <div style={{ color: T.muted, fontSize: 12 }}>{h.date}</div>
                 <div style={{ fontWeight: 600 }}>{h.desc}</div>
                 <div style={{ textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                  {h.amount === 0 ? '—' : window.eur(h.amount)}
+                  {h.amount === 0 ? '—' : eur(h.amount)}
                 </div>
                 <div>
                   <span style={{
@@ -2874,7 +2874,7 @@ function InventoryScreen({ ctx }) {
         </div>
 
         <Kpi T={T} label="Pod minimum" value={lowCount} color={lowCount > 0 ? T.warn : T.muted} sub="opozorila"/>
-        <Kpi T={T} label="Vrednost" value={window.eur(totalValue)} sub="po nabavni"/>
+        <Kpi T={T} label="Vrednost" value={eur(totalValue)} sub="po nabavni"/>
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           <button style={{
@@ -2963,7 +2963,7 @@ function InventoryScreen({ ctx }) {
                   <td style={{ padding: '11px 12px', fontSize: 12, color: T.muted,
                                 fontFamily: 'monospace' }}>{i.code}</td>
                   <td style={{ padding: '11px 12px', textAlign: 'right', fontWeight: 600,
-                                fontVariantNumeric: 'tabular-nums' }}>{window.eur(i.price)}</td>
+                                fontVariantNumeric: 'tabular-nums' }}>{eur(i.price)}</td>
                   <td style={{ padding: '11px 12px', textAlign: 'right' }}>
                     <span style={{
                       fontWeight: 700, fontSize: 14, fontVariantNumeric: 'tabular-nums',
@@ -2973,7 +2973,7 @@ function InventoryScreen({ ctx }) {
                   <td style={{ padding: '11px 12px', textAlign: 'right', fontSize: 12, color: T.muted,
                                 fontVariantNumeric: 'tabular-nums' }}>{i.lowStock || '—'}</td>
                   <td style={{ padding: '11px 12px', textAlign: 'right', fontWeight: 600,
-                                fontVariantNumeric: 'tabular-nums' }}>{window.eur(value)}</td>
+                                fontVariantNumeric: 'tabular-nums' }}>{eur(value)}</td>
                   <td style={{ padding: '11px 12px' }}>
                     {out ? (
                       <span style={statusPill(T, T.danger, 'rgba(168,50,50,0.10)')}>Razprodano</span>
@@ -3056,10 +3056,10 @@ function ReportsScreen({ ctx }) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16 }}>
-        <Kpi T={T} label="Promet"  value={window.eur(today.promet)} sub="+12% glede na včeraj" color={T.accent}/>
-        <Kpi T={T} label="Računi"  value={today.racuni} sub={'povp. ' + window.eur(today.averageBill)}/>
-        <Kpi T={T} label="Napitnine" value={window.eur(today.tipsTotal)} sub="5.85% prometa"/>
-        <Kpi T={T} label="Vračila" value={window.eur(Math.abs(D.refunds.reduce((s,r) => s+r.amount, 0)))} sub={D.refunds.length + ' transakcij'}/>
+        <Kpi T={T} label="Promet"  value={eur(today.promet)} sub="+12% glede na včeraj" color={T.accent}/>
+        <Kpi T={T} label="Računi"  value={today.racuni} sub={'povp. ' + eur(today.averageBill)}/>
+        <Kpi T={T} label="Napitnine" value={eur(today.tipsTotal)} sub="5.85% prometa"/>
+        <Kpi T={T} label="Vračila" value={eur(Math.abs(D.refunds.reduce((s,r) => s+r.amount, 0)))} sub={D.refunds.length + ' transakcij'}/>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 16 }}>
@@ -3071,7 +3071,7 @@ function ReportsScreen({ ctx }) {
                 <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column',
                                        alignItems: 'center', gap: 4 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: T.muted,
-                                 fontVariantNumeric: 'tabular-nums' }}>{window.eur(v)}</div>
+                                 fontVariantNumeric: 'tabular-nums' }}>{eur(v)}</div>
                   <div style={{
                     width: '100%', height: h + '%',
                     background: 'linear-gradient(180deg, ' + T.brand + ', ' + T.warn + ')',
@@ -3114,7 +3114,7 @@ function ReportsScreen({ ctx }) {
                     <td style={{ padding: '10px 4px', textAlign: 'right', fontWeight: 600,
                                   fontVariantNumeric: 'tabular-nums' }}>{t.count}</td>
                     <td style={{ padding: '10px 4px', textAlign: 'right', fontWeight: 700,
-                                  fontVariantNumeric: 'tabular-nums' }}>{window.eur(t.sum)}</td>
+                                  fontVariantNumeric: 'tabular-nums' }}>{eur(t.sum)}</td>
                     <td style={{ padding: '10px 4px' }}>
                       <div style={{ height: 5, background: T.surface3, borderRadius: 999, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: pct + '%', background: T.accent }}/>
@@ -3135,7 +3135,7 @@ function ReportsScreen({ ctx }) {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <div style={{ fontSize: 12, fontWeight: 600 }}>{r.original}</div>
                 <div style={{ fontSize: 15, fontWeight: 800, color: T.danger,
-                                fontVariantNumeric: 'tabular-nums' }}>{window.eur(r.amount)}</div>
+                                fontVariantNumeric: 'tabular-nums' }}>{eur(r.amount)}</div>
               </div>
               <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>
                 {r.date} {r.time} · {r.cashier}
@@ -3161,7 +3161,7 @@ function PaymentSplit({ T, label, pct, sum }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
         <span style={{ fontSize: 12, fontWeight: 600 }}>{label}</span>
         <span style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-          {window.eur(sum)} <span style={{ color: T.muted, fontWeight: 500, fontSize: 11 }}>{pct}%</span>
+          {eur(sum)} <span style={{ color: T.muted, fontWeight: 500, fontSize: 11 }}>{pct}%</span>
         </span>
       </div>
       <div style={{ height: 6, background: T.surface3, borderRadius: 999, overflow: 'hidden' }}>
@@ -3216,22 +3216,22 @@ function AdminScreen({ ctx, auth }) {
         {section === 'profile' && <ProfileSection ctx={ctx}/>}
         {section === 'spaces' && (
           auth ? (
-            <window.PermissionGate perm="editSpaces" permissions={auth.permissions}
+            <PermissionGate perm="editSpaces" permissions={auth.permissions}
               T={T} isMasterPin={auth.isMasterPin}>
-              <window.SpacesEditor ctx={ctx}/>
+              <SpacesEditor ctx={ctx}/>
             </window.PermissionGate>
-          ) : <window.SpacesEditor ctx={ctx}/>
+          ) : <SpacesEditor ctx={ctx}/>
         )}
         {section === 'staff' && (
           auth ? (
-            <window.PermissionGate perm="manageStaff" permissions={auth.permissions}
+            <PermissionGate perm="manageStaff" permissions={auth.permissions}
               T={T} isMasterPin={auth.isMasterPin}>
               <window.StaffSectionV2 ctx={ctx}/>
             </window.PermissionGate>
           ) : <window.StaffSectionV2 ctx={ctx}/>
         )}
-        {section === 'autolock' && auth && <window.AutoLockSection ctx={ctx} auth={auth}/>}
-        {section === 'services' && <window.ServicesSection ctx={ctx}/>}
+        {section === 'autolock' && auth && <AutoLockSection ctx={ctx} auth={auth}/>}
+        {section === 'services' && <ServicesSection ctx={ctx}/>}
         {section === 'happy' && <HappyHourSection ctx={ctx}/>}
         {section === 'displays' && <DisplaysSection ctx={ctx}/>}
         {section === 'taxes' && <TaxesSection ctx={ctx}/>}
@@ -3681,15 +3681,15 @@ function PackagesScreen({ ctx }) {
   // Stats
   const stats = React.useMemo(() => {
     const active = D.customers.filter(c => {
-      const s = window.posHelpers.memberStatus(c);
+      const s = posHelpers.memberStatus(c);
       return s.status === 'active' || s.status === 'expiring';
     }).length;
     const expiring = D.customers.filter(c => {
-      const s = window.posHelpers.memberStatus(c);
+      const s = posHelpers.memberStatus(c);
       return s.status === 'expiring' || s.status === 'critical';
     }).length;
     const expired = D.customers.filter(c => {
-      const s = window.posHelpers.memberStatus(c);
+      const s = posHelpers.memberStatus(c);
       return s.status === 'expired';
     }).length;
     const monthlyRevenue = D.customers.reduce((s, c) => s + c.spent, 0);
@@ -3703,7 +3703,7 @@ function PackagesScreen({ ctx }) {
         <Kpi T={T} label="Aktivnih članov" value={stats.active} color={T.accent} sub="zelena oznaka"/>
         <Kpi T={T} label="Potečejo ta teden" value={stats.expiring} color={T.warn} sub="rumena/oranžna"/>
         <Kpi T={T} label="Potekle (čakajo podaljšanje)" value={stats.expired} color={T.danger} sub="rdeča oznaka"/>
-        <Kpi T={T} label="Promet ta mesec" value={window.eur(stats.monthlyRevenue)} color={T.ink} sub="vse stranke"/>
+        <Kpi T={T} label="Promet ta mesec" value={eur(stats.monthlyRevenue)} color={T.ink} sub="vse stranke"/>
       </div>
 
       {/* Header */}
@@ -3758,7 +3758,7 @@ function PackageCard({ T, pkg, onEdit }) {
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 12 }}>
         <div style={{ fontSize: 34, fontWeight: 900, color: T.ink,
                        fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em', lineHeight: 1 }}>
-          {window.eur(pkg.price)}
+          {eur(pkg.price)}
         </div>
       </div>
 
@@ -4001,7 +4001,7 @@ function ServicesSection({ ctx }) {
 // ═════════════════════════════════════════════════════════════════════
 function useNotifications() {
   const [resolved, setResolved] = React.useState({});
-  const notifs = React.useMemo(() => window.posHelpers.computeNotifications(resolved), [resolved]);
+  const notifs = React.useMemo(() => posHelpers.computeNotifications(resolved), [resolved]);
   function resolve(id) { setResolved(r => ({ ...r, [id]: true })); }
   return { notifs, resolve };
 }
