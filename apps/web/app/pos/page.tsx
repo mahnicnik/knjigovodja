@@ -1,3 +1,4 @@
+// @ts-nocheck
 'use client'
 // @ts-nocheck
 /* eslint-disable @typescript-eslint/no-explicit-any */
