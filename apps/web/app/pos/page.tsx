@@ -117,6 +117,7 @@ function usePosData() {
   const [packageTemplates, setPackageTemplates] = useState([])
   const [services, setServices] = useState([])
   const [todayStats, setTodayStats] = useState({ promet: 0, racuni: 0, napitnine: 0 })
+  const [businessProfile, setBusinessProfile] = useState('all')
   const [loading, setLoading] = useState(true)
   const [reloadKey, setReloadKey] = useState(0)
 
@@ -144,6 +145,9 @@ function usePosData() {
         setPackageTemplates(pkgs)
         setServices(svcs)
         setTodayStats(stats)
+        // Fetch business profile
+        const { data: bizData } = await createClient().from('businesses').select('profile_type').eq('id', BUSINESS_ID).single()
+        if (bizData?.profile_type) setBusinessProfile(bizData.profile_type)
       } catch (e) {
         console.error('usePosData error:', e)
       }
@@ -165,7 +169,7 @@ function usePosData() {
     return [{ id: 'cat-fav', name: 'Priljubljeno', icon: '★', color: '#E9B949' }, ...categories]
   }, [categories])
 
-  return { categories: categoriesWithFav, items, spaces, customers, staffList, packageTemplates, services, todayStats, loading, itemsIn, refresh }
+  return { categories: categoriesWithFav, items, spaces, customers, staffList, packageTemplates, services, todayStats, businessProfile, setBusinessProfile, loading, itemsIn, refresh }
 }
 
 // ================================================================
@@ -1281,13 +1285,16 @@ function AdminScreen({ auth, posData }) {
   const supabase = createClient()
 
   const sections = [
-    { id:'staff',      label:'Zaposleni & PIN',       icon:'users'    },
-    { id:'categories', label:'Kategorije & Artikli',  icon:'grid'     },
-    { id:'spaces',     label:'Prostori & Mize',       icon:'chair'    },
-    { id:'packages',   label:'Paketi & Storitve',     icon:'package'  },
-    { id:'autolock',   label:'Avtomatsko zaklepanje', icon:'pin'      },
-    { id:'furs',       label:'FURS & DDV',            icon:'receipt'  },
     { id:'profile',    label:'Tip poslovanja',        icon:'home'     },
+    { id:'staff',      label:'Zaposleni & PIN',       icon:'users'    },
+    { id:'spaces',     label:'Prostori & Mize',       icon:'chair'    },
+    { id:'categories', label:'Kategorije & Artikli',  icon:'grid'     },
+    { id:'storitve',   label:'Storitve',              icon:'calendar' },
+    { id:'packages',   label:'Paketi',                icon:'package'  },
+    { id:'happyhour',  label:'Happy hour',            icon:'happy'    },
+    { id:'kuhinja',    label:'Kuhinja & display',     icon:'receipt'  },
+    { id:'autolock',   label:'Avt. zaklepanje',       icon:'pin'      },
+    { id:'furs',       label:'FURS & DDV',            icon:'receipt'  },
   ]
 
   return (
@@ -1305,6 +1312,9 @@ function AdminScreen({ auth, posData }) {
         {section==='categories' && <CatalogSection posData={posData}/>}
         {section==='spaces'     && <SpacesSection posData={posData}/>}
         {section==='packages'   && <PackagesAdminSection posData={posData}/>}
+        {section==='storitve'   && <StoritveCrudSection posData={posData}/>}
+        {section==='happyhour'  && <HappyHourSection posData={posData}/>}
+        {section==='kuhinja'    && <KuhinjaSection posData={posData}/>}
         {section==='autolock'   && <AutolockSection auth={auth}/>}
         {section==='furs'       && <FursSection/>}
         {section==='profile'    && <ProfileSection posData={posData}/>}
@@ -1848,6 +1858,368 @@ function PackagesAdminSection({ posData }) {
   )
 }
 
+
+// ─── Storitve CRUD ────────────────────────────────────────────
+function StoritveCrudSection({ posData }) {
+  const [modal, setModal] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [toast, setToast] = useState(null)
+  const SVC_COLORS = ['#1f6b3a','#3a6e8f','#7b61b8','#c26a3a','#c76a98','#a83232','#e9b949','#1a1f1a']
+  function showToast(msg, ok=true) { setToast({msg,ok}); setTimeout(()=>setToast(null),3000) }
+
+  async function save() {
+    if (!modal?.name?.trim()) { showToast('Ime je obvezno',false); return }
+    if (!modal?.price) { showToast('Cena je obvezna',false); return }
+    if (!modal?.duration_min) { showToast('Trajanje je obvezno',false); return }
+    setSaving(true)
+    try {
+      const payload = {
+        business_id: BUSINESS_ID,
+        name: modal.name,
+        color: modal.color || '#1f6b3a',
+        duration_min: Number(modal.duration_min),
+        price: Number(modal.price),
+        active: modal.active !== false,
+      }
+      if (modal.id) {
+        const {error} = await createClient().from('services').update(payload).eq('id', modal.id)
+        if (error) throw error
+      } else {
+        const {error} = await createClient().from('services').insert(payload)
+        if (error) throw error
+      }
+      setModal(null); posData.refresh(); showToast(modal.id ? 'Storitev posodobljena' : 'Storitev dodana')
+    } catch(e) { showToast(e.message,false) }
+    setSaving(false)
+  }
+
+  async function remove(id, name) {
+    if (!confirm(`Izbrišem storitev "${name}"?`)) return
+    await createClient().from('services').update({ active: false }).eq('id', id)
+    posData.refresh(); showToast('Storitev izbrisana')
+  }
+
+  async function toggleActive(svc) {
+    await createClient().from('services').update({ active: !svc.active }).eq('id', svc.id)
+    posData.refresh()
+  }
+
+  return (
+    <div>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+        <div>
+          <div style={{ fontSize:22, fontWeight:800 }}>Storitve</div>
+          <div style={{ fontSize:12, color:T.muted, marginTop:4 }}>Fizioterapija, masaža, PT, striženje... Za rezervacije v koledarju.</div>
+        </div>
+        <button onClick={()=>setModal({color:'#1f6b3a',duration_min:60,active:true})} style={btnP}>+ Dodaj storitev</button>
+      </div>
+
+      {posData.services.length === 0 ? (
+        <div style={{ padding:40, textAlign:'center', color:T.muted, background:T.surface, borderRadius:12, border:'1px solid '+T.line }}>Ni storitev — dodajte prvo</div>
+      ) : posData.services.map(s => (
+        <div key={s.id} style={{ display:'flex', alignItems:'center', gap:12, padding:14, borderRadius:10, marginBottom:8, background:T.surface, border:'1px solid '+T.line, opacity: s.active ? 1 : 0.5 }}>
+          <div style={{ width:40, height:40, borderRadius:10, background:s.color||T.accent, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+            <KI name="calendar" size={18} strokeWidth={2}/>
+          </div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontWeight:700, fontSize:14 }}>{s.name}</div>
+            <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>{s.duration_min} min · {eur(s.price)}</div>
+          </div>
+          <div style={{ width:12, height:12, borderRadius:'50%', background:s.color||T.accent, flexShrink:0 }}/>
+          <button onClick={()=>toggleActive(s)} title={s.active?'Deaktiviraj':'Aktiviraj'} style={{ ...btnS, padding:'6px 10px', fontSize:11 }}>
+            {s.active ? '✅' : '⭕'}
+          </button>
+          <button onClick={()=>setModal({...s})} style={btnS}><KI name="edit" size={14}/></button>
+          <button onClick={()=>remove(s.id,s.name)} style={{...btnS,color:T.danger}}><KI name="trash" size={14}/></button>
+        </div>
+      ))}
+
+      <Modal open={!!modal} onClose={()=>setModal(null)} width={420}>
+        <ModalHeader title={modal?.id?'Uredi storitev':'Nova storitev'} onClose={()=>setModal(null)}/>
+        <div style={{ padding:'20px 22px', display:'flex', flexDirection:'column', gap:12 }}>
+          <Field label="Ime storitve *">
+            <input value={modal?.name||''} onChange={e=>setModal(p=>({...p,name:e.target.value}))} placeholder="Fizioterapija, Masaža, PT..." style={inp} autoFocus/>
+          </Field>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <Field label="Cena (€) *">
+              <input type="number" step="0.01" min="0" value={modal?.price||''} onChange={e=>setModal(p=>({...p,price:e.target.value}))} style={inp}/>
+            </Field>
+            <Field label="Trajanje (min) *">
+              <input type="number" min="5" step="5" value={modal?.duration_min||60} onChange={e=>setModal(p=>({...p,duration_min:e.target.value}))} style={inp}/>
+            </Field>
+          </div>
+          <Field label="Barva (za prikaz v koledarju)">
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+              {SVC_COLORS.map(c=>(
+                <div key={c} onClick={()=>setModal(p=>({...p,color:c}))} style={{ width:28, height:28, borderRadius:'50%', background:c, cursor:'pointer', border:modal?.color===c?'3px solid #0D1F12':'3px solid transparent' }}/>
+              ))}
+            </div>
+          </Field>
+          <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, cursor:'pointer' }}>
+            <input type="checkbox" checked={modal?.active!==false} onChange={e=>setModal(p=>({...p,active:e.target.checked}))} style={{ accentColor:T.accent }}/>
+            Storitev je aktivna
+          </label>
+          <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+            <button onClick={()=>setModal(null)} style={btnS}>Prekliči</button>
+            <button onClick={save} disabled={saving} style={{...btnP,opacity:saving?0.6:1}}>{saving?'Shranjujem...':'Shrani'}</button>
+          </div>
+        </div>
+      </Modal>
+      {toast && <Toast msg={toast.msg} ok={toast.ok}/>}
+    </div>
+  )
+}
+
+// ─── Happy Hour CRUD ──────────────────────────────────────────
+function HappyHourSection({ posData }) {
+  const [rules, setRules] = useState([])
+  const [modal, setModal] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [toast, setToast] = useState(null)
+  const [loadingRules, setLoadingRules] = useState(true)
+
+  const DAYS = [
+    { id:'pon', label:'Pon' }, { id:'tor', label:'Tor' }, { id:'sre', label:'Sre' },
+    { id:'čet', label:'Čet' }, { id:'pet', label:'Pet' }, { id:'sob', label:'Sob' }, { id:'ned', label:'Ned' },
+  ]
+
+  function showToast(msg, ok=true) { setToast({msg,ok}); setTimeout(()=>setToast(null),3000) }
+
+  async function loadRules() {
+    setLoadingRules(true)
+    const {data} = await createClient().from('happy_hour_rules').select('*').eq('business_id', BUSINESS_ID)
+    setRules(data || [])
+    setLoadingRules(false)
+  }
+
+  useEffect(() => { loadRules() }, [])
+
+  async function toggleRule(rule) {
+    await createClient().from('happy_hour_rules').update({ active: !rule.active }).eq('id', rule.id)
+    loadRules()
+    showToast(rule.active ? 'Pravilo deaktivirano' : 'Pravilo aktivirano')
+  }
+
+  async function save() {
+    if (!modal?.name?.trim()) { showToast('Ime je obvezno',false); return }
+    if (!modal?.from_time || !modal?.to_time) { showToast('Čas je obvezen',false); return }
+    if (!modal?.discount_pct || modal.discount_pct <= 0) { showToast('Popust mora biti > 0%',false); return }
+    if (!modal?.days || modal.days.length === 0) { showToast('Izberi vsaj en dan',false); return }
+    setSaving(true)
+    try {
+      const catIds = (posData.categories || []).filter(c => c.id !== 'cat-fav' && (modal.selected_cats || []).includes(c.id)).map(c => c.id)
+      const payload = {
+        business_id: BUSINESS_ID,
+        name: modal.name,
+        days: modal.days,
+        from_time: modal.from_time,
+        to_time: modal.to_time,
+        category_ids: catIds,
+        discount_pct: Number(modal.discount_pct),
+        active: modal.active !== false,
+      }
+      if (modal.id) {
+        const {error} = await createClient().from('happy_hour_rules').update(payload).eq('id', modal.id)
+        if (error) throw error
+      } else {
+        const {error} = await createClient().from('happy_hour_rules').insert(payload)
+        if (error) throw error
+      }
+      setModal(null); loadRules(); showToast(modal.id ? 'Pravilo posodobljeno' : 'Pravilo dodano')
+    } catch(e) { showToast(e.message,false) }
+    setSaving(false)
+  }
+
+  async function remove(id) {
+    if (!confirm('Izbrišem to pravilo?')) return
+    await createClient().from('happy_hour_rules').delete().eq('id', id)
+    loadRules(); showToast('Pravilo izbrisano')
+  }
+
+  function openEdit(rule) {
+    setModal({
+      ...rule,
+      selected_cats: rule.category_ids || [],
+    })
+  }
+
+  const realCats = (posData.categories || []).filter(c => c.id !== 'cat-fav')
+
+  return (
+    <div>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+        <div>
+          <div style={{ fontSize:22, fontWeight:800 }}>Happy hour</div>
+          <div style={{ fontSize:12, color:T.muted, marginTop:4 }}>Avtomatski popusti po dnevih, urah in kategorijah.</div>
+        </div>
+        <button onClick={()=>setModal({days:['pon','tor','sre','čet','pet'],from_time:'17:00',to_time:'19:00',discount_pct:20,active:true,selected_cats:[]})} style={btnP}>+ Dodaj pravilo</button>
+      </div>
+
+      {loadingRules ? (
+        <div style={{ padding:30, textAlign:'center', color:T.muted }}>Nalagam...</div>
+      ) : rules.length === 0 ? (
+        <div style={{ padding:40, textAlign:'center', color:T.muted, background:T.surface, borderRadius:12, border:'1px solid '+T.line }}>
+          Ni pravil — dodajte prvo
+        </div>
+      ) : rules.map(r => (
+        <div key={r.id} style={{ padding:16, borderRadius:12, marginBottom:10, background:T.surface, border:'1px solid '+T.line, opacity: r.active ? 1 : 0.55 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
+            <div style={{ width:10, height:10, borderRadius:'50%', background: r.active ? T.brand : T.muted, flexShrink:0 }}/>
+            <div style={{ flex:1 }}>
+              <div style={{ fontWeight:700, fontSize:14 }}>{r.name}</div>
+              <div style={{ fontSize:12, color:T.muted, marginTop:2 }}>
+                {r.from_time} – {r.to_time} · −{r.discount_pct}%
+              </div>
+            </div>
+            <button onClick={()=>toggleRule(r)} style={{ ...btnS, padding:'6px 10px', fontSize:11 }}>
+              {r.active ? '⏸ Pavza' : '▶ Aktiviraj'}
+            </button>
+            <button onClick={()=>openEdit(r)} style={btnS}><KI name="edit" size={14}/></button>
+            <button onClick={()=>remove(r.id)} style={{...btnS,color:T.danger}}><KI name="trash" size={14}/></button>
+          </div>
+          <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
+            {(r.days||[]).map(d => (
+              <span key={d} style={{ padding:'3px 8px', borderRadius:5, background: r.active ? T.accentSoft : T.surface3, color: r.active ? T.accent : T.muted, fontSize:11, fontWeight:600, textTransform:'capitalize' }}>{d}</span>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      <Modal open={!!modal} onClose={()=>setModal(null)} width={500}>
+        <ModalHeader title={modal?.id?'Uredi pravilo':'Novo happy hour pravilo'} onClose={()=>setModal(null)}/>
+        <div style={{ padding:'20px 22px', display:'flex', flexDirection:'column', gap:12, maxHeight:'65vh', overflowY:'auto' }}>
+          <Field label="Ime pravila *">
+            <input value={modal?.name||''} onChange={e=>setModal(p=>({...p,name:e.target.value}))} placeholder="Bar happy hour, Jutranjo kavo..." style={inp} autoFocus/>
+          </Field>
+          <Field label="Popust (%) *">
+            <input type="number" min="1" max="99" value={modal?.discount_pct||20} onChange={e=>setModal(p=>({...p,discount_pct:e.target.value}))} style={inp}/>
+          </Field>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <Field label="Od *">
+              <input type="time" value={modal?.from_time||'17:00'} onChange={e=>setModal(p=>({...p,from_time:e.target.value}))} style={inp}/>
+            </Field>
+            <Field label="Do *">
+              <input type="time" value={modal?.to_time||'19:00'} onChange={e=>setModal(p=>({...p,to_time:e.target.value}))} style={inp}/>
+            </Field>
+          </div>
+          <Field label="Dnevi *">
+            <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+              {DAYS.map(d => {
+                const sel = (modal?.days||[]).includes(d.id)
+                return (
+                  <button key={d.id} onClick={()=>setModal(p=>({...p,days:sel?(p.days||[]).filter(x=>x!==d.id):[...(p.days||[]),d.id]}))}
+                    style={{ padding:'6px 12px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:12, background:sel?T.accent:T.surface3, color:sel?'#fff':T.ink }}>
+                    {d.label}
+                  </button>
+                )
+              })}
+            </div>
+          </Field>
+          <Field label="Kategorije (pusti prazno = vse)">
+            <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+              {realCats.map(c => {
+                const sel = (modal?.selected_cats||[]).includes(c.id)
+                return (
+                  <button key={c.id} onClick={()=>setModal(p=>({...p,selected_cats:sel?(p.selected_cats||[]).filter(x=>x!==c.id):[...(p.selected_cats||[]),c.id]}))}
+                    style={{ padding:'5px 10px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:12, background:sel?T.accentSoft:T.surface3, color:sel?T.accent:T.muted, display:'flex', alignItems:'center', gap:4 }}>
+                    <span>{c.icon}</span> {c.name}
+                  </button>
+                )
+              })}
+            </div>
+            <div style={{ fontSize:11, color:T.muted, marginTop:4 }}>Nobena izbrana = velja za vse kategorije</div>
+          </Field>
+          <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, cursor:'pointer' }}>
+            <input type="checkbox" checked={modal?.active!==false} onChange={e=>setModal(p=>({...p,active:e.target.checked}))} style={{ accentColor:T.accent }}/>
+            Pravilo je aktivno
+          </label>
+          <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+            <button onClick={()=>setModal(null)} style={btnS}>Prekliči</button>
+            <button onClick={save} disabled={saving} style={{...btnP,opacity:saving?0.6:1}}>{saving?'Shranjujem...':'Shrani'}</button>
+          </div>
+        </div>
+      </Modal>
+      {toast && <Toast msg={toast.msg} ok={toast.ok}/>}
+    </div>
+  )
+}
+
+// ─── Kuhinja & Display ────────────────────────────────────────
+function KuhinjaSection({ posData }) {
+  const [saving, setSaving] = useState(null)
+  const [toast, setToast] = useState(null)
+  function showToast(msg, ok=true) { setToast({msg,ok}); setTimeout(()=>setToast(null),3000) }
+
+  const kitchenItems = posData.items.filter(i => i.kitchen)
+  const nonKitchenItems = posData.items.filter(i => !i.kitchen)
+
+  async function toggleKitchen(item) {
+    setSaving(item.id)
+    try {
+      const {error} = await createClient().from('items').update({ kitchen: !item.kitchen }).eq('id', item.id)
+      if (error) throw error
+      posData.refresh()
+      showToast(item.kitchen ? `${item.name} odstranjen iz kuhinje` : `${item.name} dodan v kuhinjo`)
+    } catch(e) { showToast(e.message,false) }
+    setSaving(null)
+  }
+
+  return (
+    <div>
+      <div style={{ marginBottom:20 }}>
+        <div style={{ fontSize:22, fontWeight:800 }}>Kuhinja & display</div>
+        <div style={{ fontSize:12, color:T.muted, marginTop:4 }}>
+          Označi artikle ki gredo v kuhinjo (bon za kuharja). KDS display prihaja.
+        </div>
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+        {/* Kuhinja ON */}
+        <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, overflow:'hidden' }}>
+          <div style={{ padding:'12px 16px', background:T.accentSoft, borderBottom:'1px solid '+T.line }}>
+            <div style={{ fontWeight:700, fontSize:13, color:T.accent }}>🍳 Gre v kuhinjo ({kitchenItems.length})</div>
+          </div>
+          <div style={{ padding:8, maxHeight:400, overflowY:'auto' }}>
+            {kitchenItems.length === 0 && <div style={{ padding:20, textAlign:'center', color:T.muted, fontSize:12 }}>Nobeden artikel</div>}
+            {kitchenItems.map(it => (
+              <div key={it.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 10px', borderRadius:8, marginBottom:4, background:T.surface2 }}>
+                <div style={{ flex:1, fontSize:13, fontWeight:500 }}>{it.name}</div>
+                <button onClick={()=>toggleKitchen(it)} disabled={saving===it.id} style={{ ...btnS, padding:'5px 10px', fontSize:11, color:T.danger }}>
+                  {saving===it.id ? '...' : '✕ Odstrani'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Kuhinja OFF */}
+        <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, overflow:'hidden' }}>
+          <div style={{ padding:'12px 16px', background:T.surface2, borderBottom:'1px solid '+T.line }}>
+            <div style={{ fontWeight:700, fontSize:13, color:T.muted }}>📋 Ni v kuhinji ({nonKitchenItems.length})</div>
+          </div>
+          <div style={{ padding:8, maxHeight:400, overflowY:'auto' }}>
+            {nonKitchenItems.length === 0 && <div style={{ padding:20, textAlign:'center', color:T.muted, fontSize:12 }}>Vsi artikli so v kuhinji</div>}
+            {nonKitchenItems.map(it => (
+              <div key={it.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 10px', borderRadius:8, marginBottom:4, background:T.surface2 }}>
+                <div style={{ flex:1, fontSize:13, fontWeight:500, color:T.muted }}>{it.name}</div>
+                <button onClick={()=>toggleKitchen(it)} disabled={saving===it.id} style={{ ...btnS, padding:'5px 10px', fontSize:11, color:T.accent }}>
+                  {saving===it.id ? '...' : '+ Dodaj'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginTop:16, padding:'12px 14px', background:'rgba(184,140,40,0.08)', borderRadius:10, fontSize:12, color:T.warn, border:'1px solid rgba(184,140,40,0.2)' }}>
+        🖨️ <b>KDS (Kitchen Display System)</b> — prikaz naročil v kuhinji na zaslonu prihaja v naslednji verziji.
+      </div>
+
+      {toast && <Toast msg={toast.msg} ok={toast.ok}/>}
+    </div>
+  )
+}
+
 // ─── Autolock ─────────────────────────────────────────────────
 function AutolockSection({ auth }) {
   return (
@@ -1893,27 +2265,52 @@ function FursSection() {
 // ─── Profile ──────────────────────────────────────────────────
 function ProfileSection({ posData }) {
   const [saving, setSaving] = useState(false)
+  const currentProfile = posData.businessProfile || 'all'
 
-  async function select(profileId) {
+  async function select(pid) {
+    if (saving) return
     setSaving(true)
     try {
-      await createClient().from('businesses').update({ profile_type: profileId }).eq('id', BUSINESS_ID)
+      await createClient().from('businesses').update({ profile_type: pid }).eq('id', BUSINESS_ID)
+      posData.setBusinessProfile(pid)
     } catch(e) { console.error(e) }
     setSaving(false)
   }
 
   return (
     <div>
-      <div style={{ fontSize:22, fontWeight:800, marginBottom:8 }}>Tip poslovanja</div>
-      <div style={{ fontSize:13, color:T.muted, marginBottom:20 }}>Vpliva na vidne razdelke v navigaciji.</div>
+      <div style={{ fontSize:22, fontWeight:800, marginBottom:4 }}>Tip poslovanja</div>
+      <div style={{ fontSize:13, color:T.muted, marginBottom:20 }}>
+        Izberi tip ki ustreza tvojemu poslovanju. Navigacija se prilagodi samodejno.
+      </div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:12 }}>
-        {CFG.profiles.map(p => (
-          <div key={p.id} onClick={() => select(p.id)} style={{ padding:18, borderRadius:12, background:T.surface, border:'2px solid '+T.line, cursor:'pointer' }}>
-            <div style={{ fontSize:24, marginBottom:10 }}>{p.icon}</div>
-            <div style={{ fontSize:17, fontWeight:800 }}>{p.name}</div>
-            <div style={{ fontSize:12, color:T.muted, marginTop:4 }}>Razdelki: {p.nav.join(', ')}</div>
-          </div>
-        ))}
+        {CFG.profiles.map(p => {
+          const selected = currentProfile === p.id
+          return (
+            <div key={p.id} onClick={() => select(p.id)} style={{
+              padding:18, borderRadius:12, background:T.surface,
+              border: selected ? '2px solid '+T.accent : '2px solid '+T.line,
+              cursor:'pointer', position:'relative',
+              boxShadow: selected ? '0 0 0 3px '+T.accentSoft : 'none',
+              transition:'border 0.15s, box-shadow 0.15s',
+            }}>
+              {selected && (
+                <div style={{ position:'absolute', top:14, right:14, width:24, height:24, borderRadius:'50%', background:T.accent, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:800 }}>✓</div>
+              )}
+              <div style={{ fontSize:26, marginBottom:10 }}>{p.icon}</div>
+              <div style={{ fontSize:17, fontWeight:800, color: selected ? T.accent : T.ink }}>{p.name}</div>
+              <div style={{ fontSize:12, color:T.muted, marginTop:4, lineHeight:1.5 }}>
+                {p.nav.map(n => (
+                  <span key={n} style={{ display:'inline-block', margin:'2px 3px 2px 0', padding:'2px 7px', borderRadius:5, background: selected ? T.accentSoft : T.surface3, color: selected ? T.accent : T.muted, fontSize:10, fontWeight:600, textTransform:'capitalize' }}>{n}</span>
+                ))}
+              </div>
+              {saving && selected && <div style={{ fontSize:10, color:T.muted, marginTop:6 }}>Shranjujem...</div>}
+            </div>
+          )
+        })}
+      </div>
+      <div style={{ marginTop:16, padding:'12px 14px', background:T.surface2, borderRadius:10, fontSize:12, color:T.muted }}>
+        💡 Sprememba profila takoj posodobi navigacijo. Podatki ostanejo nespremenjeni.
       </div>
     </div>
   )
@@ -1950,6 +2347,14 @@ function KlasikApp() {
   const auth = useAuthState(60000)
   const posData = usePosData()
   const [profileId, setProfileId] = useState('all')
+
+  // Sync profileId iz Supabase ob loadu
+  useEffect(() => {
+    if (posData.businessProfile && posData.businessProfile !== profileId) {
+      setProfileId(posData.businessProfile)
+    }
+  }, [posData.businessProfile])
+
   const profile = CFG.profiles.find(p => p.id === profileId) || CFG.profiles[0]
 
   const screenPerm = { floor:null, sale:'sale', calendar:'manageBookings', customers:'viewMembers', packages:'editPrices', inventory:'editPrices', reports:'viewReports', admin:null }
