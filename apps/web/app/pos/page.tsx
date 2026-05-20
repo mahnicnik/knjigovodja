@@ -1628,16 +1628,58 @@ function CatalogSection({ posData }) {
   )
 }
 
-// ─── Spaces & Tables CRUD ─────────────────────────────────────
+// ─── Spaces & Tables CRUD — Visual Canvas + Drag & Drop ──────
 function SpacesSection({ posData }) {
+  const [selectedSpaceId, setSelectedSpaceId] = useState(null)
   const [spaceModal, setSpaceModal] = useState(null)
   const [tableModal, setTableModal] = useState(null)
-  const [selectedSpaceId, setSelectedSpaceId] = useState(null)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
-  const SPACE_COLORS = ['#8FBF8F','#B8956A','#9B7AC9','#3a6e8f','#c26a3a','#1f6b3a']
+  const [dragState, setDragState] = useState(null)
+  const [dragPos, setDragPos] = useState({})
+  const canvasRef = useRef(null)
+  const SPACE_COLORS = ['#8FBF8F','#B8956A','#9B7AC9','#3a6e8f','#c26a3a','#1f6b3a','#e9b949','#a83232']
+
+  useEffect(() => {
+    if (posData.spaces.length > 0 && !selectedSpaceId) setSelectedSpaceId(posData.spaces[0].id)
+  }, [posData.spaces])
 
   function showToast(msg, ok=true) { setToast({msg,ok}); setTimeout(()=>setToast(null),3000) }
+
+  const selectedSpace = posData.spaces.find(s => s.id === selectedSpaceId)
+
+  // Drag & drop
+  function startDrag(e, table) {
+    e.preventDefault(); e.stopPropagation()
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const rect = canvas.getBoundingClientRect()
+    setDragState({ tableId:table.id, startX:e.clientX, startY:e.clientY, origX:table.x, origY:table.y, canvasW:rect.width, canvasH:rect.height })
+  }
+
+  useEffect(() => {
+    if (!dragState) return
+    function onMove(e) {
+      const dx = e.clientX - dragState.startX
+      const dy = e.clientY - dragState.startY
+      const nx = Math.max(0, Math.min(88, dragState.origX + (dx / dragState.canvasW * 100)))
+      const ny = Math.max(0, Math.min(82, dragState.origY + (dy / dragState.canvasH * 100)))
+      setDragPos(p => ({...p, [dragState.tableId]: {x:nx, y:ny}}))
+    }
+    async function onUp() {
+      const pos = dragPos[dragState.tableId]
+      if (pos) {
+        try {
+          await createClient().from('tables').update({ x:Math.round(pos.x), y:Math.round(pos.y) }).eq('id', dragState.tableId)
+          posData.refresh()
+        } catch(err) { console.error(err) }
+      }
+      setDragState(null)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+  }, [dragState, dragPos])
 
   async function saveSpace() {
     if (!spaceModal?.name?.trim()) { showToast('Ime je obvezno',false); return }
@@ -1649,6 +1691,12 @@ function SpacesSection({ posData }) {
       } else {
         const {error} = await createClient().from('spaces').insert({business_id:BUSINESS_ID,name:spaceModal.name,color:spaceModal.color||'#8FBF8F',sort_order:posData.spaces.length})
         if (error) throw error
+        posData.refresh()
+        // select new space
+        setTimeout(() => {
+          const newSpace = posData.spaces[posData.spaces.length - 1]
+          if (newSpace) setSelectedSpaceId(newSpace.id)
+        }, 500)
       }
       setSpaceModal(null); posData.refresh(); showToast(spaceModal.id?'Prostor posodobljen':'Prostor dodan')
     } catch(e) { showToast(e.message,false) }
@@ -1658,6 +1706,8 @@ function SpacesSection({ posData }) {
   async function deleteSpace(id, name) {
     if (!confirm(`Izbrišem prostor "${name}" in vse mize?`)) return
     await createClient().from('spaces').delete().eq('id',id)
+    const next = posData.spaces.find(s=>s.id!==id)
+    setSelectedSpaceId(next?.id||null)
     posData.refresh(); showToast('Prostor izbrisan')
   }
 
@@ -1680,42 +1730,121 @@ function SpacesSection({ posData }) {
     setSaving(false)
   }
 
-  async function deleteTable(id, name) {
-    if (!confirm(`Izbrišem mizo "${name}"?`)) return
+  async function deleteTable(id) {
+    if (!confirm('Izbrišem to mizo?')) return
     await createClient().from('tables').delete().eq('id',id)
     posData.refresh(); showToast('Miza izbrisana')
   }
 
+  const tablePos = (t) => dragState?.tableId === t.id && dragPos[t.id] ? dragPos[t.id] : {x:t.x, y:t.y}
+  const spaceColor = (sp) => sp?.color || '#8FBF8F'
+
   return (
-    <div>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
-        <div style={{ fontSize:22, fontWeight:800 }}>Prostori & Mize</div>
-        <button onClick={()=>setSpaceModal({color:'#8FBF8F'})} style={btnP}>+ Dodaj prostor</button>
+    <div style={{ display:'flex', gap:0, height:'calc(100vh - 200px)', minHeight:500 }}>
+      {/* Leva lista prostorov */}
+      <div style={{ width:220, flexShrink:0, display:'flex', flexDirection:'column', gap:0, borderRight:'1px solid '+T.line, paddingRight:16, marginRight:16 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+          <div style={{ fontSize:13, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', color:T.muted }}>Prostori</div>
+          <button onClick={()=>setSpaceModal({color:'#8FBF8F'})} style={{ ...btnP, padding:'6px 10px', fontSize:11 }}>+ Nov</button>
+        </div>
+        {posData.spaces.length === 0 && (
+          <div style={{ fontSize:12, color:T.muted, padding:'12px 0' }}>Ni prostorov</div>
+        )}
+        {posData.spaces.map(sp => {
+          const sel = selectedSpaceId === sp.id
+          return (
+            <div key={sp.id} onClick={()=>setSelectedSpaceId(sp.id)} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', borderRadius:10, marginBottom:4, cursor:'pointer', background: sel ? T.accentSoft : 'transparent', border:'1px solid '+(sel?T.accent:'transparent') }}>
+              <div style={{ width:32, height:32, borderRadius:8, background:spaceColor(sp), display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                <KI name="chair" size={16} strokeWidth={2}/>
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontWeight:700, fontSize:13, color:sel?T.accent:T.ink }}>{sp.name}</div>
+                <div style={{ fontSize:11, color:T.muted }}>{(sp.tables||[]).length} miz</div>
+              </div>
+              <button onClick={e=>{e.stopPropagation();deleteSpace(sp.id,sp.name)}} style={{ background:'none', border:0, cursor:'pointer', color:T.muted, padding:4, opacity:0.6 }}>
+                <KI name="trash" size={13}/>
+              </button>
+            </div>
+          )
+        })}
       </div>
 
-      {posData.spaces.map(sp => (
-        <div key={sp.id} style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:16, marginBottom:12 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
-            <div style={{ width:12, height:12, borderRadius:999, background:sp.color }}/>
-            <div style={{ fontSize:16, fontWeight:700, flex:1 }}>{sp.name}</div>
-            <button onClick={()=>{ setTableModal({space_id:sp.id,seats:2,x:10,y:10}); setSelectedSpaceId(sp.id) }} style={btnS}><KI name="plus" size={13}/> Miza</button>
-            <button onClick={()=>setSpaceModal({...sp})} style={btnS}><KI name="edit" size={13}/></button>
-            <button onClick={()=>deleteSpace(sp.id,sp.name)} style={{...btnS,color:T.danger}}><KI name="trash" size={13}/></button>
+      {/* Desno platno */}
+      <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
+        {!selectedSpace ? (
+          <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', color:T.muted, fontSize:13 }}>
+            Dodaj prostor da začneš
           </div>
-          <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
-            {(sp.tables||[]).map(t => (
-              <div key={t.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', background:T.surface3, borderRadius:9 }}>
-                <span style={{ fontSize:13, fontWeight:700 }}>{t.name}</span>
-                <span style={{ fontSize:11, color:T.muted }}>{t.seats}👤</span>
-                <button onClick={()=>setTableModal({...t,space_id:sp.id})} style={{ background:'none', border:0, cursor:'pointer', color:T.muted, fontSize:11, padding:'1px 3px' }}>✏️</button>
-                <button onClick={()=>deleteTable(t.id,t.name)} style={{ background:'none', border:0, cursor:'pointer', color:T.muted, fontSize:11, padding:'1px 3px' }}>✕</button>
+        ) : (
+          <>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
+              <div style={{ width:10, height:10, borderRadius:'50%', background:spaceColor(selectedSpace) }}/>
+              <div style={{ fontSize:16, fontWeight:700 }}>{selectedSpace.name}</div>
+              <div style={{ fontSize:12, color:T.muted }}>· {(selectedSpace.tables||[]).length} miz</div>
+              <button onClick={()=>setSpaceModal({...selectedSpace})} style={{ ...btnS, padding:'5px 10px', fontSize:11, marginLeft:4 }}>✏️ Uredi</button>
+              <div style={{ marginLeft:'auto', display:'flex', gap:8 }}>
+                <div style={{ fontSize:11, color:T.muted, display:'flex', alignItems:'center', gap:4 }}>
+                  <KI name="arrow" size={12}/> Povleci mizo za premik
+                </div>
+                <button onClick={()=>setTableModal({space_id:selectedSpace.id,seats:2,x:10,y:10})} style={btnP}>
+                  + Dodaj mizo
+                </button>
               </div>
-            ))}
-            {(sp.tables||[]).length === 0 && <span style={{ fontSize:12, color:T.muted }}>Ni miz — dodajte prvo</span>}
-          </div>
-        </div>
-      ))}
-      {posData.spaces.length===0 && <div style={{ padding:40, textAlign:'center', color:T.muted, background:T.surface, borderRadius:12, border:'1px solid '+T.line }}>Ni prostorov — dodajte prvega</div>}
+            </div>
+
+            {/* Canvas */}
+            <div ref={canvasRef} style={{ flex:1, position:'relative', borderRadius:14, border:'1.5px solid '+T.line, background:T.surface2, backgroundImage:'radial-gradient(circle, rgba(26,31,26,0.12) 1px, transparent 1px)', backgroundSize:'24px 24px', overflow:'hidden', userSelect:'none', minHeight:400 }}>
+              {(selectedSpace.tables||[]).length === 0 && (
+                <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:8, color:T.muted }}>
+                  <div style={{ fontSize:32 }}>🪑</div>
+                  <div style={{ fontSize:13 }}>Klikni <b>+ Dodaj mizo</b> za prvo mizo</div>
+                </div>
+              )}
+              {(selectedSpace.tables||[]).map(t => {
+                const pos = tablePos(t)
+                const isDragging = dragState?.tableId === t.id
+                const isRound = t.seats <= 2
+                const w = t.seats<=2?90:t.seats<=4?114:150
+                const h = t.seats<=2?90:t.seats<=4?88:110
+                const spColor = spaceColor(selectedSpace)
+                const statusColors = { free:'rgba(31,107,58,0.5)', occupied:'rgba(184,140,40,0.55)', reserved:'rgba(99,72,150,0.5)', needs_attention:'rgba(168,50,50,0.55)' }
+                const borderColor = statusColors[t.status] || statusColors.free
+                const bgColor = { free:'#ffffff', occupied:'rgba(233,185,73,0.12)', reserved:'rgba(155,122,201,0.12)', needs_attention:'rgba(168,50,50,0.08)' }[t.status] || '#fff'
+
+                return (
+                  <div key={t.id}
+                    onMouseDown={e=>startDrag(e,t)}
+                    style={{ position:'absolute', left:`${pos.x}%`, top:`${pos.y}%`, width:w, height:h, background:bgColor, border:`2px solid ${borderColor}`, borderRadius:isRound?'50%':14, cursor:isDragging?'grabbing':'grab', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2, boxShadow:isDragging?'0 8px 24px rgba(0,0,0,0.18)':'0 2px 6px rgba(0,0,0,0.06)', transition:isDragging?'none':'box-shadow 0.15s', zIndex:isDragging?10:1 }}>
+                    <div style={{ fontSize:16, fontWeight:800, color:T.ink }}>{t.name}</div>
+                    <div style={{ fontSize:10, color:T.muted, display:'flex', alignItems:'center', gap:2 }}>
+                      <KI name="user" size={9}/>{t.seats}
+                    </div>
+                    {/* Edit/delete buttons on hover — shown always for admin */}
+                    <div style={{ position:'absolute', top:-10, right:-10, display:'flex', gap:3 }}>
+                      <button onMouseDown={e=>e.stopPropagation()} onClick={()=>setTableModal({...t,space_id:selectedSpace.id})}
+                        style={{ width:22, height:22, borderRadius:'50%', background:T.surface, border:'1px solid '+T.line, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 1px 4px rgba(0,0,0,0.12)' }}>
+                        <KI name="edit" size={10}/>
+                      </button>
+                      <button onMouseDown={e=>e.stopPropagation()} onClick={()=>deleteTable(t.id)}
+                        style={{ width:22, height:22, borderRadius:'50%', background:T.surface, border:'1px solid rgba(168,50,50,0.3)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:T.danger, boxShadow:'0 1px 4px rgba(0,0,0,0.12)' }}>
+                        <KI name="x" size={10}/>
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+              {/* Legenda */}
+              <div style={{ position:'absolute', bottom:12, left:12, display:'flex', gap:10 }}>
+                {Object.entries(T.status).map(([k,st])=>(
+                  <div key={k} style={{ display:'flex', alignItems:'center', gap:4, fontSize:10, color:T.muted, fontWeight:600 }}>
+                    <span style={{ width:8, height:8, borderRadius:'50%', background:st.dot, display:'inline-block' }}/>{st.label}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Space modal */}
       <Modal open={!!spaceModal} onClose={()=>setSpaceModal(null)} width={380}>
@@ -1743,19 +1872,19 @@ function SpacesSection({ posData }) {
         <ModalHeader title={tableModal?.id?'Uredi mizo':'Nova miza'} onClose={()=>setTableModal(null)}/>
         <div style={{ padding:'20px 22px', display:'flex', flexDirection:'column', gap:12 }}>
           <Field label="Ime *">
-            <input value={tableModal?.name||''} onChange={e=>setTableModal(p=>({...p,name:e.target.value}))} placeholder="B1, Terasa 3..." style={inp} autoFocus/>
+            <input value={tableModal?.name||''} onChange={e=>setTableModal(p=>({...p,name:e.target.value}))} placeholder="T1, Terasa 3..." style={inp} autoFocus/>
           </Field>
           <Field label="Število sedežev">
-            <input type="number" min="1" value={tableModal?.seats||2} onChange={e=>setTableModal(p=>({...p,seats:e.target.value}))} style={inp}/>
+            <div style={{ display:'flex', gap:6 }}>
+              {[2,4,6,8].map(n=>(
+                <button key={n} onClick={()=>setTableModal(p=>({...p,seats:n}))}
+                  style={{ flex:1, padding:'10px 0', borderRadius:8, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:14, background:tableModal?.seats==n?T.accent:T.surface3, color:tableModal?.seats==n?'#fff':T.ink }}>
+                  {n}
+                </button>
+              ))}
+            </div>
+            <input type="number" min="1" max="20" value={tableModal?.seats||2} onChange={e=>setTableModal(p=>({...p,seats:Number(e.target.value)}))} style={{ ...inp, marginTop:6 }} placeholder="Ali vpiši ročno"/>
           </Field>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-            <Field label="Pozicija X (0-100%)">
-              <input type="number" min="0" max="95" value={tableModal?.x||10} onChange={e=>setTableModal(p=>({...p,x:e.target.value}))} style={inp}/>
-            </Field>
-            <Field label="Pozicija Y (0-100%)">
-              <input type="number" min="0" max="90" value={tableModal?.y||10} onChange={e=>setTableModal(p=>({...p,y:e.target.value}))} style={inp}/>
-            </Field>
-          </div>
           <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
             <button onClick={()=>setTableModal(null)} style={btnS}>Prekliči</button>
             <button onClick={saveTable} disabled={saving} style={{...btnP,opacity:saving?0.6:1}}>{saving?'Shranjujem...':'Shrani'}</button>
