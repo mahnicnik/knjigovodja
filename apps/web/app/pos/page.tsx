@@ -178,7 +178,11 @@ function usePosData() {
 function useAuthState(autoLockMs = 60000) {
   const [user, setUser] = useState(null)
   const [locked, setLocked] = useState(true)
-  const [autoLock, setAutoLock] = useState(autoLockMs)
+  const [autoLock, setAutoLock] = useState(() => {
+    if (typeof window === 'undefined') return autoLockMs
+    const saved = localStorage.getItem('pos_autolock')
+    return saved !== null ? parseInt(saved) : autoLockMs
+  })
   const lastActivity = useRef(Date.now())
 
   useEffect(() => {
@@ -227,7 +231,12 @@ function useAuthState(autoLockMs = 60000) {
 
   function lock() { setLocked(true) }
 
-  return { user, permissions, locked, lock, unlock, autoLock, setAutoLock }
+  function saveAutoLock(ms) {
+    setAutoLock(ms)
+    if (typeof window !== 'undefined') localStorage.setItem('pos_autolock', String(ms))
+  }
+
+  return { user, permissions, locked, lock, unlock, autoLock, setAutoLock: saveAutoLock }
 }
 
 // ================================================================
