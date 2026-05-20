@@ -317,7 +317,7 @@ function LockScreen({ auth }) {
 
       <div style={{ marginBottom:28, textAlign:'center' }}>
         <div style={{ fontSize:78, fontWeight:200, fontVariantNumeric:'tabular-nums', letterSpacing:'-0.04em', lineHeight:1 }}>
-          {String(now.getHours()).padStart(2,'0')}:{String(now.getMinutes()).padStart(2,'0')}
+          {String(now.getHours()).padStart(2,"0")}:{String(now.getMinutes()).padStart(2,"0")}
         </div>
         <div style={{ fontSize:14, opacity:0.7, marginTop:8, fontWeight:500 }}>
           {days[now.getDay()]}, {now.getDate()}. {months[now.getMonth()]} {now.getFullYear()}
@@ -2013,7 +2013,7 @@ function KlasikApp() {
           <div style={{ borderLeft:'1px solid '+T.headerLine, paddingLeft:14, display:'flex', flexDirection:'column', alignItems:'flex-end' }}>
             <div style={{ fontSize:10, opacity:0.55, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em' }}>{days[now.getDay()]}</div>
             <div style={{ fontSize:15, fontWeight:700, fontVariantNumeric:'tabular-nums' }}>
-              {String(now.getHours()).padStart(2,'0')}:{String(now.getMinutes()).padStart(2,'0')}
+              {String(now.getHours()).padStart(2,"0")}:{String(now.getMinutes()).padStart(2,"0")}
             </div>
           </div>
           <UserAvatar user={auth.user} onLock={auth.lock}/>
