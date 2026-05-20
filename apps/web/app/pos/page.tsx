@@ -2310,7 +2310,7 @@ function ProfileSection({ posData }) {
               <div style={{ fontSize:17, fontWeight:800, color: selected ? T.accent : T.ink }}>{p.name}</div>
               <div style={{ fontSize:12, color:T.muted, marginTop:4, lineHeight:1.5 }}>
                 {p.nav.map(n => (
-                  <span key={n} style={{ display:'inline-block', margin:'2px 3px 2px 0', padding:'2px 7px', borderRadius:5, background: selected ? T.accentSoft : T.surface3, color: selected ? T.accent : T.muted, fontSize:10, fontWeight:600, textTransform:'capitalize' }}>{n}</span>
+                  <span key={n} style={{ display:'inline-block', margin:'2px 3px 2px 0', padding:'2px 7px', borderRadius:5, background: selected ? T.accentSoft : T.surface3, color: selected ? T.accent : T.muted, fontSize:10, fontWeight:600, }}>{({floor:"Prostori",sale:"Prodaja",calendar:"Koledar",customers:"Stranke",packages:"Paketi",inventory:"Zaloga",reports:"Poročila",admin:"Nastavitve"})[n]||n}</span>
                 ))}
               </div>
               {saving && selected && <div style={{ fontSize:10, color:T.muted, marginTop:6 }}>Shranjujem...</div>}
