@@ -1343,7 +1343,7 @@ function StaffSection({ posData }) {
 
   async function save() {
     if (!modal?.name?.trim()) { showToast('Ime je obvezno', false); return }
-    if (!modal?.pin?.trim() || modal.pin.length < 4) { showToast('PIN mora imeti vsaj 4 mesta', false); return }
+    if (!modal?.pin?.trim()) { showToast('PIN je obvezen', false); return }
     if (!modal.role) { showToast('Vloga je obvezna', false); return }
     setSaving(true)
     try {
