@@ -296,8 +296,8 @@ function LockScreen({ auth }) {
     setError(false)
     const next = pin + d
     setPin(next)
-    if (next.length === 4 || next.length === 6) {
-      setTimeout(() => tryUnlock(next), 200)
+    // auto-try after each digit
+      setTimeout(() => tryUnlock(next), 800)
     }
   }
 
