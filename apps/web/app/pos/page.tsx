@@ -2096,3 +2096,4 @@ export default function PosPage() {
     </div>
   )
 }
+
