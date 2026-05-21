@@ -1567,7 +1567,7 @@ function PackagesScreen({ posData, setSellPackageModal }) {
           <div style={{ fontSize:13 }}>Dodaj pakete v Nastavitvah</div>
         </div>
       ) : (
-        <div style={{ flex:1, overflow:'auto', padding:16, display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:1 alignContent:'start' }}>
+        <div style={{ flex:1, overflow:'auto', padding:16, display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:12, alignContent:'start' }}>
           {filtered.map(p => {
             const ttype = p.template_type || p.type || 'visits'
             const tconf = TEMPLATE_TYPES[ttype] || TEMPLATE_TYPES.visits
