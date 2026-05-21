@@ -1707,102 +1707,298 @@ function PackagesScreen({ posData, setSellPackageModal }) {
 function InventoryScreen({ posData }) {
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState('items')
+  const [filter, setFilter] = useState('vse') // vse | nizko | razprodano
+  const [sort, setSort] = useState('name') // name | stock | value | sold
+  const [selectedItem, setSelectedItem] = useState(null)
+  const [salesData, setSalesData] = useState({})
+  const [priceHistory, setPriceHistory] = useState({})
 
-  const items = posData.items.filter(i => i.item_type !== 'ingredient' && (!search || i.name.toLowerCase().includes(search.toLowerCase())))
-  const ingredients = posData.ingredients.filter(i => !search || i.name.toLowerCase().includes(search.toLowerCase()))
+  const allItems = posData.items.filter(i => i.item_type !== 'ingredient')
+  const allIngredients = posData.ingredients
 
-  const lowItems = items.filter(i => i.stock !== null && i.stock <= 5)
-  const lowIngredients = ingredients.filter(i => i.stock_qty !== null && i.stock_qty <= (i.min_stock || 0))
+  // Statistike za header
+  const lowStock = allItems.filter(i => i.stock !== null && i.min_stock > 0 && i.stock <= i.min_stock)
+  const lowIngr = allIngredients.filter(i => i.stock_qty !== null && i.stock_qty <= (i.min_stock||0) && i.min_stock > 0)
+  const totalAlerts = lowStock.length + lowIngr.length
+  const totalValueItems = allItems.reduce((s,i) => s + (i.cost_price||0)*(i.stock||0), 0)
+  const totalValueIngr = allIngredients.reduce((s,i) => s + (i.cost_price||0)*(i.stock_qty||0), 0)
+  const totalValue = totalValueItems + totalValueIngr
+
+  // Filtriraj in sortiraj
+  let items = allItems.filter(i => !search || i.name.toLowerCase().includes(search.toLowerCase()))
+  if (filter === 'nizko') items = items.filter(i => i.stock !== null && i.min_stock > 0 && i.stock <= i.min_stock)
+  if (filter === 'razprodano') items = items.filter(i => i.stock !== null && i.stock === 0)
+  if (sort === 'stock') items = [...items].sort((a,b) => (a.stock||0)-(b.stock||0))
+  else if (sort === 'value') items = [...items].sort((a,b) => ((b.cost_price||0)*(b.stock||0))-((a.cost_price||0)*(a.stock||0)))
+  else if (sort === 'sold') items = [...items].sort((a,b) => (salesData[b.id]||0)-(salesData[a.id]||0))
+  else items = [...items].sort((a,b) => a.name.localeCompare(b.name))
+
+  let ingredients = allIngredients.filter(i => !search || i.name.toLowerCase().includes(search.toLowerCase()))
+  if (filter === 'nizko') ingredients = ingredients.filter(i => i.stock_qty !== null && i.stock_qty <= (i.min_stock||0) && i.min_stock > 0)
+  if (filter === 'razprodano') ingredients = ingredients.filter(i => i.stock_qty !== null && i.stock_qty === 0)
+
+  // Naloži prodajne podatke za sortiranje
+  useEffect(() => {
+    async function loadSales() {
+      const from = new Date(); from.setDate(from.getDate()-30)
+      const { data } = await createClient()
+        .from('order_lines')
+        .select('name, qty, orders!inner(created_at, status)')
+        .eq('orders.status', 'paid')
+        .gte('orders.created_at', from.toISOString())
+      if (!data) return
+      const map = {}
+      data.forEach(l => {
+        const item = posData.items.find(i => i.name === l.name)
+        if (item) map[item.id] = (map[item.id]||0) + Number(l.qty||1)
+      })
+      setSalesData(map)
+    }
+    loadSales()
+  }, [])
+
+  // Naloži zgodovino cen za izbran artikel
+  useEffect(() => {
+    if (!selectedItem) return
+    async function loadHistory() {
+      const { data } = await createClient()
+        .from('price_history')
+        .select('*')
+        .eq('item_id', selectedItem.id)
+        .order('recorded_at', { ascending: false })
+        .limit(10)
+      if (data) setPriceHistory(h => ({ ...h, [selectedItem.id]: data }))
+    }
+    loadHistory()
+  }, [selectedItem])
+
+  // Posodobi nabavno ceno in zapiši v zgodovino
+  async function updateCostPrice(item, newPrice) {
+    const price = parseFloat(newPrice)
+    if (isNaN(price) || price < 0) return
+    const db = createClient()
+    await db.from('ingredients').update({ cost_price: price }).eq('id', item.id)
+    // Zapiši v zgodovino
+    await db.from('price_history').insert({
+      item_id: item.id,
+      item_name: item.name,
+      cost_price: price,
+      recorded_at: new Date().toISOString(),
+      business_id: BUSINESS_ID,
+    }).select()
+    posData.refresh()
+  }
+
+  const margin = (item) => {
+    if (!item.cost_price || !item.price) return null
+    return ((item.price - item.cost_price) / item.price * 100).toFixed(0)
+  }
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', minHeight:0 }}>
-      <div style={{ padding:'12px 20px', background:T.surface, borderBottom:'1px solid '+T.line, display:'flex', gap:14, alignItems:'center', flexWrap:'wrap' }}>
-        <div style={{ display:'flex', gap:2, background:T.surface3, padding:3, borderRadius:9 }}>
-          {[['items','Artikli'],['ingredients','Surovine']].map(([id,lbl])=>(
-            <button key={id} onClick={()=>setTab(id)} style={{ padding:'7px 16px', borderRadius:7, border:'none', background:tab===id?T.header:'transparent', color:tab===id?T.headerInk:T.ink, fontWeight:700, fontSize:13, cursor:'pointer', fontFamily:'inherit' }}>{lbl}</button>
-          ))}
-        </div>
-        {(lowItems.length > 0 || lowIngredients.length > 0) && (
-          <div style={{ padding:'6px 12px', borderRadius:8, background:'rgba(184,140,40,0.12)', color:T.warn, fontSize:12, fontWeight:600 }}>
-            ⚠️ {lowItems.length + lowIngredients.length} artiklov z nizko zalogo
+
+      {/* Header statistike */}
+      <div style={{ padding:'14px 20px', background:T.surface, borderBottom:'1px solid '+T.line }}>
+        <div style={{ display:'flex', gap:16, alignItems:'center', marginBottom:12 }}>
+          <div>
+            <div style={{ fontSize:11, color:T.muted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em' }}>ZALOGA</div>
+            <div style={{ fontSize:20, fontWeight:800 }}>{allItems.length + allIngredients.length} artiklov</div>
           </div>
-        )}
-        <div style={{ position:'relative', flex:1, maxWidth:320 }}>
-          <div style={{ position:'absolute', left:11, top:'50%', transform:'translateY(-50%)', color:T.muted }}><KI name="search" size={14}/></div>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Išči…" style={{ width:'100%', padding:'8px 12px 8px 34px', borderRadius:9, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13, background:T.inputBg, outline:'none', boxSizing:'border-box' }}/>
+          {totalAlerts > 0 && (
+            <div onClick={()=>setFilter('nizko')} style={{ padding:'8px 14px', borderRadius:9, background:'rgba(168,50,50,0.1)', border:'1px solid rgba(168,50,50,0.2)', cursor:'pointer' }}>
+              <div style={{ fontSize:10, color:T.danger, fontWeight:700, textTransform:'uppercase' }}>POD MINIMUM</div>
+              <div style={{ fontSize:22, fontWeight:800, color:T.danger }}>{totalAlerts}</div>
+              <div style={{ fontSize:11, color:T.danger }}>opozorila</div>
+            </div>
+          )}
+          <div style={{ padding:'8px 14px', borderRadius:9, background:T.surface2, border:'1px solid '+T.line }}>
+            <div style={{ fontSize:10, color:T.muted, fontWeight:700, textTransform:'uppercase' }}>VREDNOST</div>
+            <div style={{ fontSize:22, fontWeight:800, fontVariantNumeric:'tabular-nums' }}>{eur(totalValue)}</div>
+            <div style={{ fontSize:11, color:T.muted }}>po nabavni</div>
+          </div>
+          <div style={{ marginLeft:'auto', display:'flex', gap:6, alignItems:'center' }}>
+            <button style={{ ...btnS, fontSize:12, display:'flex', alignItems:'center', gap:5 }}>
+              <KI name="print" size={13}/> Izvozi
+            </button>
+            <button onClick={()=>{/* TODO */}} style={{ ...btnP, fontSize:12 }}>
+              + Nov artikel
+            </button>
+          </div>
+        </div>
+
+        {/* Tabi + filtri */}
+        <div style={{ display:'flex', gap:10, alignItems:'center', flexWrap:'wrap' }}>
+          <div style={{ display:'flex', gap:2, background:T.surface3, padding:3, borderRadius:9 }}>
+            {[['items','Artikli'],['ingredients','Surovine']].map(([id,lbl])=>(
+              <button key={id} onClick={()=>{setTab(id);setFilter('vse')}} style={{ padding:'6px 14px', borderRadius:7, border:'none', background:tab===id?T.header:'transparent', color:tab===id?T.headerInk:T.ink, fontWeight:700, fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>{lbl}</button>
+            ))}
+          </div>
+          <div style={{ display:'flex', gap:4 }}>
+            {[['vse','Vse'],['nizko','↓ Pod minimum'],['razprodano','Razprodano']].map(([id,lbl])=>(
+              <button key={id} onClick={()=>setFilter(id)} style={{ padding:'6px 12px', borderRadius:7, border:'1px solid '+(filter===id?T.accent:T.line), background:filter===id?T.accentSoft:'transparent', color:filter===id?T.accent:T.ink, fontWeight:filter===id?700:500, fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>{lbl}</button>
+            ))}
+          </div>
+          <select value={sort} onChange={e=>setSort(e.target.value)} style={{ padding:'6px 10px', borderRadius:7, border:'1px solid '+T.line, fontSize:12, fontFamily:'inherit', background:T.surface, cursor:'pointer' }}>
+            <option value="name">A–Z</option>
+            <option value="stock">↑ Zaloga</option>
+            <option value="value">↑ Vrednost</option>
+            <option value="sold">↑ Najbolj prodajano (30d)</option>
+          </select>
+          <div style={{ position:'relative', flex:1, maxWidth:280 }}>
+            <div style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:T.muted }}><KI name="search" size={13}/></div>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Išči artikel ali šifro…" style={{ width:'100%', padding:'7px 10px 7px 30px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:12, background:T.inputBg, outline:'none', boxSizing:'border-box' }}/>
+          </div>
         </div>
       </div>
 
+      {/* Tabela */}
       <div style={{ flex:1, overflow:'auto' }}>
         {tab === 'items' && (
-          <table style={{ width:'100%', borderCollapse:'separate', borderSpacing:0 }}>
+          <table style={{ width:'100%', borderCollapse:'collapse' }}>
             <thead style={{ position:'sticky', top:0, background:T.surface2, zIndex:1 }}>
               <tr style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.06em' }}>
-                {['Artikel','Tip','Šifra','Cena','Zaloga','Status'].map((h,i)=>(
-                  <th key={i} style={{ padding:'12px', textAlign:i>=3?'right':'left', borderBottom:'1px solid '+T.line, fontWeight:700 }}>{h}</th>
+                {['Artikel','Šifra','Cena','Stanje','Min','Vrednost','Status','Akcije'].map((h,i)=>(
+                  <th key={i} style={{ padding:'11px 12px', textAlign:i>=2&&i<7?'right':i===7?'center':'left', borderBottom:'1px solid '+T.line }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {items.map((it,idx)=>{
-                const low = it.stock !== null && it.stock <= 5
-                const typeLabel = {simple:'Enostavni',recipe:'Normativ',ingredient:'Surovina'}[it.item_type||'simple']
+                const low = it.stock !== null && it.min_stock > 0 && it.stock <= it.min_stock
+                const zero = it.stock === 0
+                const value = (it.cost_price||0) * (it.stock||0)
+                const m = margin(it)
+                const sold30 = salesData[it.id] || 0
                 return (
-                  <tr key={it.id} style={{ background:idx%2?T.surface2:T.surface }}>
-                    <td style={{ padding:'11px 12px' }}><div style={{ fontWeight:600, fontSize:13 }}>{it.name}</div></td>
-                    <td style={{ padding:'11px 12px' }}>
-                      <span style={{ fontSize:10, fontWeight:700, padding:'2px 6px', borderRadius:4, background:it.item_type==='recipe'?'rgba(99,72,150,0.12)':T.accentSoft, color:it.item_type==='recipe'?'#634896':T.accent }}>{typeLabel}</span>
+                  <tr key={it.id} style={{ background:idx%2?T.surface2:T.surface, borderBottom:'1px solid '+T.lineSoft }}>
+                    <td style={{ padding:'10px 12px' }}>
+                      <div style={{ fontWeight:600, fontSize:13 }}>{it.name}</div>
+                      <div style={{ fontSize:10, color:T.muted, marginTop:2, display:'flex', gap:8 }}>
+                        {sold30 > 0 && <span>📦 {sold30}× / 30d</span>}
+                        {m !== null && <span style={{ color: Number(m)>50?T.accent:Number(m)>20?T.warn:T.danger }}>marža {m}%</span>}
+                      </div>
                     </td>
-                    <td style={{ padding:'11px 12px', fontSize:12, color:T.muted, fontFamily:'monospace' }}>{it.code||'—'}</td>
-                    <td style={{ padding:'11px 12px', textAlign:'right', fontWeight:600, fontVariantNumeric:'tabular-nums' }}>{eur(it.price)}</td>
-                    <td style={{ padding:'11px 12px', textAlign:'right', fontWeight:700, fontSize:14, fontVariantNumeric:'tabular-nums', color:it.stock===null?T.muted:low?T.danger:T.ink }}>
-                      {it.stock===null?'∞':it.stock} {it.unit}
+                    <td style={{ padding:'10px 12px', fontSize:11, color:T.muted, fontFamily:'monospace' }}>{it.code||'—'}</td>
+                    <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:600, fontVariantNumeric:'tabular-nums', fontSize:13 }}>{eur(it.price)}</td>
+                    <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:700, fontSize:14, fontVariantNumeric:'tabular-nums', color:zero?T.danger:low?T.warn:T.ink }}>
+                      {it.stock===null?<span style={{ color:T.muted }}>∞</span>:it.stock}
+                      <span style={{ fontSize:10, color:T.muted, fontWeight:400, marginLeft:3 }}>{it.unit||'kos'}</span>
                     </td>
-                    <td style={{ padding:'11px 12px' }}>
-                      <span style={{ fontSize:10, fontWeight:700, padding:'3px 7px', borderRadius:5, background:it.stock===null?T.accentSoft:low?'rgba(168,50,50,0.1)':T.accentSoft, color:it.stock===null?T.accent:low?T.danger:T.accent, textTransform:'uppercase' }}>
-                        {it.stock===null?'Neomejeno':low?'Nizko':'V redu'}
+                    <td style={{ padding:'10px 12px', textAlign:'right', color:T.muted, fontSize:12, fontVariantNumeric:'tabular-nums' }}>{it.min_stock||'—'}</td>
+                    <td style={{ padding:'10px 12px', textAlign:'right', fontVariantNumeric:'tabular-nums', fontSize:12, color:value>0?T.ink:T.muted }}>{value>0?eur(value):'—'}</td>
+                    <td style={{ padding:'10px 12px', textAlign:'right' }}>
+                      <span style={{ fontSize:10, fontWeight:700, padding:'3px 8px', borderRadius:5, whiteSpace:'nowrap',
+                        background: zero?'rgba(168,50,50,0.15)':low?'rgba(184,140,40,0.15)':T.accentSoft,
+                        color: zero?T.danger:low?T.warn:T.accent, textTransform:'uppercase' }}>
+                        {zero?'Razprodano':low?'Nizka zaloga':'V zalogi'}
                       </span>
+                    </td>
+                    <td style={{ padding:'10px 12px', textAlign:'center' }}>
+                      <div style={{ display:'flex', gap:4, justifyContent:'center' }}>
+                        <button onClick={async()=>{const q=prompt(`Nova zaloga za ${it.name}:`,it.stock);if(q!==null)await createClient().from('items').update({stock:Number(q)}).eq('id',it.id).then(()=>posData.refresh())}}
+                          style={{ width:28, height:28, borderRadius:7, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center' }}>+</button>
+                        <button onClick={()=>setSelectedItem(selectedItem?.id===it.id?null:it)}
+                          style={{ width:28, height:28, borderRadius:7, border:'1px solid '+(selectedItem?.id===it.id?T.accent:T.line), background:selectedItem?.id===it.id?T.accentSoft:T.surface, cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', justifyContent:'center' }}>📊</button>
+                      </div>
                     </td>
                   </tr>
                 )
               })}
-              {items.length===0 && <tr><td colSpan={6} style={{ padding:40, textAlign:'center', color:T.muted }}>Ni artiklov</td></tr>}
+              {items.length===0 && <tr><td colSpan={8} style={{ padding:40, textAlign:'center', color:T.muted }}>Ni artiklov za izbran filter</td></tr>}
             </tbody>
           </table>
         )}
 
         {tab === 'ingredients' && (
-          <table style={{ width:'100%', borderCollapse:'separate', borderSpacing:0 }}>
+          <table style={{ width:'100%', borderCollapse:'collapse' }}>
             <thead style={{ position:'sticky', top:0, background:T.surface2, zIndex:1 }}>
               <tr style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.06em' }}>
-                {['Surovina','Enota','Zaloga','Min. zaloga','Nabavna cena','Status'].map((h,i)=>(
-                  <th key={i} style={{ padding:'12px', textAlign:i>=2?'right':'left', borderBottom:'1px solid '+T.line, fontWeight:700 }}>{h}</th>
+                {['Surovina','Enota','Zaloga','Min','Nabavna cena','Vrednost','Status','Akcije'].map((h,i)=>(
+                  <th key={i} style={{ padding:'11px 12px', textAlign:i>=2&&i<7?'right':i===7?'center':'left', borderBottom:'1px solid '+T.line }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {ingredients.map((ig,idx)=>{
-                const low = ig.stock_qty <= (ig.min_stock||0)
+                const low = ig.stock_qty !== null && ig.stock_qty <= (ig.min_stock||0) && ig.min_stock > 0
+                const zero = ig.stock_qty === 0
+                const value = (ig.cost_price||0) * (ig.stock_qty||0)
                 return (
-                  <tr key={ig.id} style={{ background:idx%2?T.surface2:T.surface }}>
-                    <td style={{ padding:'11px 12px' }}><div style={{ fontWeight:600, fontSize:13 }}>{ig.name}</div><div style={{ fontSize:11, color:T.muted }}>{ig.supplier||''}</div></td>
-                    <td style={{ padding:'11px 12px', fontSize:13, color:T.muted }}>{ig.unit}</td>
-                    <td style={{ padding:'11px 12px', textAlign:'right', fontWeight:700, fontSize:14, fontVariantNumeric:'tabular-nums', color:low?T.danger:T.ink }}>{ig.stock_qty}</td>
-                    <td style={{ padding:'11px 12px', textAlign:'right', color:T.muted, fontVariantNumeric:'tabular-nums' }}>{ig.min_stock||0}</td>
-                    <td style={{ padding:'11px 12px', textAlign:'right', fontVariantNumeric:'tabular-nums' }}>{ig.cost_price?eur(ig.cost_price):'—'}</td>
-                    <td style={{ padding:'11px 12px' }}>
-                      <span style={{ fontSize:10, fontWeight:700, padding:'3px 7px', borderRadius:5, background:low?'rgba(168,50,50,0.1)':T.accentSoft, color:low?T.danger:T.accent, textTransform:'uppercase' }}>
-                        {low?'Nizko':'V redu'}
+                  <tr key={ig.id} style={{ background:idx%2?T.surface2:T.surface, borderBottom:'1px solid '+T.lineSoft }}>
+                    <td style={{ padding:'10px 12px' }}>
+                      <div style={{ fontWeight:600, fontSize:13 }}>{ig.name}</div>
+                      {ig.supplier && <div style={{ fontSize:11, color:T.muted }}>{ig.supplier}</div>}
+                    </td>
+                    <td style={{ padding:'10px 12px', fontSize:12, color:T.muted }}>{ig.unit}</td>
+                    <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:700, fontSize:14, fontVariantNumeric:'tabular-nums', color:zero?T.danger:low?T.warn:T.ink }}>{ig.stock_qty??'—'}</td>
+                    <td style={{ padding:'10px 12px', textAlign:'right', color:T.muted, fontSize:12 }}>{ig.min_stock||'—'}</td>
+                    <td style={{ padding:'10px 12px', textAlign:'right', fontVariantNumeric:'tabular-nums', fontSize:12 }}>
+                      <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', gap:6 }}>
+                        {ig.cost_price ? eur(ig.cost_price) : '—'}
+                        <button onClick={async()=>{const p=prompt(`Nova nabavna cena za ${ig.name} (${ig.unit}):`,ig.cost_price||'');if(p!==null)updateCostPrice(ig,p)}}
+                          style={{ width:20, height:20, borderRadius:5, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontSize:10, display:'flex', alignItems:'center', justifyContent:'center' }}>✏️</button>
+                      </div>
+                    </td>
+                    <td style={{ padding:'10px 12px', textAlign:'right', fontSize:12, fontVariantNumeric:'tabular-nums', color:value>0?T.ink:T.muted }}>{value>0?eur(value):'—'}</td>
+                    <td style={{ padding:'10px 12px', textAlign:'right' }}>
+                      <span style={{ fontSize:10, fontWeight:700, padding:'3px 8px', borderRadius:5,
+                        background: zero?'rgba(168,50,50,0.15)':low?'rgba(184,140,40,0.15)':T.accentSoft,
+                        color: zero?T.danger:low?T.warn:T.accent, textTransform:'uppercase' }}>
+                        {zero?'Razprodano':low?'Nizka zaloga':'V zalogi'}
                       </span>
+                    </td>
+                    <td style={{ padding:'10px 12px', textAlign:'center' }}>
+                      <button onClick={async()=>{const q=prompt(`Nova zaloga za ${ig.name} (${ig.unit}):`,ig.stock_qty);if(q!==null)await createClient().from('ingredients').update({stock_qty:Number(q)}).eq('id',ig.id).then(()=>posData.refresh())}}
+                        style={{ width:28, height:28, borderRadius:7, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontSize:14 }}>+</button>
                     </td>
                   </tr>
                 )
               })}
-              {ingredients.length===0 && <tr><td colSpan={6} style={{ padding:40, textAlign:'center', color:T.muted }}>Ni surovin. Dodaj jih v Nastavitve → Sestavine.</td></tr>}
+              {ingredients.length===0 && <tr><td colSpan={8} style={{ padding:40, textAlign:'center', color:T.muted }}>Ni surovin za izbran filter</td></tr>}
             </tbody>
           </table>
         )}
       </div>
+
+      {/* Mini statistika za izbran artikel */}
+      {selectedItem && (
+        <div style={{ borderTop:'2px solid '+T.accent, background:T.surface, padding:'16px 20px' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
+            <div style={{ fontWeight:700, fontSize:14 }}>📊 {selectedItem.name} — mini statistika</div>
+            <button onClick={()=>setSelectedItem(null)} style={{ marginLeft:'auto', background:'none', border:'none', cursor:'pointer', color:T.muted, fontSize:18 }}>×</button>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:12 }}>
+            {[
+              ['Prodano (30d)', salesData[selectedItem.id]||0, 'kos'],
+              ['Prihodek (30d)', eur((salesData[selectedItem.id]||0)*selectedItem.price), ''],
+              ['Marža', selectedItem.cost_price?margin(selectedItem)+'%':'N/A', ''],
+              ['Zaloga vrednost', eur((selectedItem.cost_price||0)*(selectedItem.stock||0)), ''],
+            ].map(([l,v,s])=>(
+              <div key={String(l)} style={{ padding:'10px 12px', background:T.surface2, borderRadius:9, border:'1px solid '+T.line }}>
+                <div style={{ fontSize:10, color:T.muted, fontWeight:700, textTransform:'uppercase' }}>{l}</div>
+                <div style={{ fontSize:18, fontWeight:800, marginTop:4, fontVariantNumeric:'tabular-nums' }}>{v}</div>
+                {s && <div style={{ fontSize:11, color:T.muted }}>{s}</div>}
+              </div>
+            ))}
+          </div>
+          {/* Zgodovina cen */}
+          <div>
+            <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>Zgodovina nabavnih cen</div>
+            {(priceHistory[selectedItem.id]||[]).length === 0 ? (
+              <div style={{ fontSize:12, color:T.muted }}>Ni zgodovine cen. Uredi nabavno ceno v Nastavitvah → Sestavine.</div>
+            ) : (
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                {(priceHistory[selectedItem.id]||[]).map((h:any, i:number) => (
+                  <div key={i} style={{ padding:'6px 10px', background:T.surface2, borderRadius:7, fontSize:12 }}>
+                    <span style={{ fontWeight:700, fontVariantNumeric:'tabular-nums' }}>{eur(h.cost_price)}</span>
+                    <span style={{ color:T.muted, marginLeft:6 }}>{new Date(h.recorded_at).toLocaleDateString('sl-SI')}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
