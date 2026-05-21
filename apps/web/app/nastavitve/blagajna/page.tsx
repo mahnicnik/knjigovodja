@@ -40,7 +40,7 @@ interface FursDevice {
 // ================================================================
 export default function BlagajnaPage() {
   const [tab, setTab] = useState<'certifikat' | 'prostori' | 'naprave' | 'test'>('certifikat')
-  const [config, setConfig] = useState<FursConfig>({ testMode: true, premises: [], devices: [] })
+  const [config, setConfig] = useState<FursConfig>({ testMode: true, premises: [], devices: [], certPassword: undefined, certExpiry: undefined, certSubject: undefined })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<{msg: string, ok: boolean} | null>(null)
@@ -429,7 +429,7 @@ export default function BlagajnaPage() {
       {/* ── MODALI ── */}
 
       {/* Premise modal */}
-      {premiseModal !== null && (
+      {premiseModal !== null && premiseModal !== undefined && (
         <div onClick={() => setPremiseModal(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div onClick={e => e.stopPropagation()} style={{ width: 520, background: '#fff', borderRadius: 14, padding: 24, boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -479,7 +479,7 @@ export default function BlagajnaPage() {
       )}
 
       {/* Device modal */}
-      {deviceModal !== null && (
+      {deviceModal !== null && deviceModal !== undefined && (
         <div onClick={() => setDeviceModal(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div onClick={e => e.stopPropagation()} style={{ width: 420, background: '#fff', borderRadius: 14, padding: 24, boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
