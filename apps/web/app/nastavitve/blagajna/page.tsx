@@ -142,7 +142,7 @@ export default function BlagajnaPage() {
     setTesting(true)
     setTestResult(null)
     try {
-      const res = await fetch('/api/furs/test')
+      const res = await fetch('/api/furs/test', { method: 'POST' })
       const data = await res.json()
       setTestResult(data)
     } catch (e: any) {
