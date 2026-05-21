@@ -68,7 +68,15 @@ export default function BlagajnaPage() {
         .single()
 
       if (data?.furs_config) {
-        setConfig(data.furs_config as FursConfig)
+        const fc = data.furs_config as any
+        setConfig({
+          testMode: fc.testMode ?? true,
+          premises: Array.isArray(fc.premises) ? fc.premises : [],
+          devices: Array.isArray(fc.devices) ? fc.devices : [],
+          certPassword: fc.certPassword,
+          certExpiry: fc.certExpiry,
+          certSubject: fc.certSubject,
+        })
       }
       setLoading(false)
     }
