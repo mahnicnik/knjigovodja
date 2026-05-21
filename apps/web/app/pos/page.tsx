@@ -3519,19 +3519,184 @@ function AutolockSection({ auth }) {
 
 // ─── FURS ─────────────────────────────────────────────────────
 function FursSection() {
+  const [settings, setSettings] = useState({
+    autoFurs: true,
+    showSkipFurs: true,
+    requirePinForSkip: false,
+  })
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [fursStatus, setFursStatus] = useState(null) // null=loading, true=ok, false=error
+  const [lastSync, setLastSync] = useState(null)
+  const [testMode, setTestMode] = useState(false)
+
+  useEffect(() => {
+    async function load() {
+      // Naloži pos_settings iz businesses tabele
+      const {data} = await createClient()
+        .from('businesses')
+        .select('pos_settings')
+        .eq('id', BUSINESS_ID)
+        .single()
+
+      if (data?.pos_settings?.furs) {
+        setSettings(s => ({ ...s, ...data.pos_settings.furs }))
+      }
+
+      // Preveri FURS status
+      try {
+        const res = await fetch('/api/furs/status')
+        if (res.ok) {
+          const d = await res.json()
+          setFursStatus(d.connected)
+          setLastSync(d.lastSync || null)
+          setTestMode(d.testMode || false)
+        } else {
+          setFursStatus(false)
+        }
+      } catch {
+        setFursStatus(false)
+      }
+    }
+    load()
+  }, [])
+
+  async function save(newSettings) {
+    setSaving(true)
+    try {
+      // Naloži obstoječe pos_settings
+      const {data} = await createClient()
+        .from('businesses')
+        .select('pos_settings')
+        .eq('id', BUSINESS_ID)
+        .single()
+
+      const existing = data?.pos_settings || {}
+      const updated = { ...existing, furs: newSettings }
+
+      const {error} = await createClient()
+        .from('businesses')
+        .update({ pos_settings: updated })
+        .eq('id', BUSINESS_ID)
+
+      if (error) throw error
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch(e) {
+      console.error(e)
+    }
+    setSaving(false)
+  }
+
+  function toggle(key) {
+    const next = { ...settings, [key]: !settings[key] }
+    setSettings(next)
+    save(next)
+  }
+
+  const statusColor = fursStatus === null ? T.muted : fursStatus ? T.accent : T.danger
+  const statusLabel = fursStatus === null ? 'Preverjam...' : fursStatus ? 'POVEZANO' : 'NI POVEZAVE'
+  const statusBg = fursStatus === null ? T.surface3 : fursStatus ? T.accentSoft : 'rgba(168,50,50,0.1)'
+
   return (
-    <div>
+    <div style={{ maxWidth:580 }}>
       <div style={{ fontSize:22, fontWeight:800, marginBottom:20 }}>FURS & DDV</div>
-      <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:20, marginBottom:12 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:16 }}>
-          <div style={{ flex:1 }}>
-            <div style={{ fontWeight:700, fontSize:14 }}>FURS davčna blagajna</div>
-            <div style={{ fontSize:12, color:T.muted, marginTop:4 }}>Nastavitve certifikata in poslovnih prostorov</div>
+
+      {/* Status kartice */}
+      <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:20, marginBottom:14 }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+          <div>
+            <div style={{ fontWeight:700, fontSize:15 }}>FURS davčna potrditev</div>
+            {lastSync && <div style={{ fontSize:12, color:T.muted, marginTop:3 }}>Zadnja sinhronizacija: {lastSync}</div>}
           </div>
+          <span style={{ fontSize:11, fontWeight:800, padding:'5px 12px', borderRadius:6, background:statusBg, color:statusColor, letterSpacing:'0.06em' }}>
+            {statusLabel}
+          </span>
         </div>
-        <div style={{ padding:'12px 14px', background:T.accentSoft, borderRadius:9, fontSize:13, color:T.accent }}>
-          FURS nastavitve (certifikat .p12, poslovni prostori, naprave) so v<br/>
-          <b>Računko → Nastavitve → FURS</b>
+
+        {/* Info blok */}
+        <div style={{ padding:'12px 14px', background:T.surface2, borderRadius:9, fontSize:12, color:T.muted, lineHeight:1.6 }}>
+          {fursStatus ? (
+            <>
+              <div style={{ color:T.ink, fontWeight:600, marginBottom:4 }}>
+                {testMode ? '🧪 TEST način (FURS Playground)' : '✅ Produkcijski način'}
+              </div>
+              Certifikat je aktiven. Računi se davčno potrjujejo pri FURS.<br/>
+              Za zamenjavo certifikata ali spremembo poslovnih prostorov pojdi v <b>Računko → Nastavitve → FURS</b>
+            </>
+          ) : fursStatus === false ? (
+            <>
+              <div style={{ color:T.danger, fontWeight:600, marginBottom:4 }}>⚠️ FURS ni dosegljiv</div>
+              Certifikat morda ni nastavljen ali je potekel. Preveri nastavitve v <b>Računko → Nastavitve → FURS</b>
+            </>
+          ) : (
+            'Preverjam FURS povezavo...'
+          )}
+        </div>
+      </div>
+
+      {/* POS nastavitve */}
+      <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:20, marginBottom:14 }}>
+        <div style={{ fontWeight:700, fontSize:14, marginBottom:16, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <span>POS nastavitve</span>
+          {saved && <span style={{ fontSize:11, color:T.accent, fontWeight:600 }}>✓ Shranjeno</span>}
+        </div>
+
+        {[
+          {
+            key: 'autoFurs',
+            label: 'Privzeto davčno potrdi vsak račun',
+            desc: 'Checkbox "Davčno potrdi" je privzeto označen pri plačilu',
+            icon: '✅'
+          },
+          {
+            key: 'showSkipFurs',
+            label: 'Pokaži gumb "Tiskaj brez FURS" v plačilu',
+            desc: 'Omogoči blagajniku da izda račun brez davčne potrditve (npr. za interne).',
+            icon: '🖨️'
+          },
+          {
+            key: 'requirePinForSkip',
+            label: 'Zahteva potrditev PIN za netiskane račune',
+            desc: 'Blagajnik mora vnesti PIN vodja/lastnik za vsak račun brez FURS',
+            icon: '🔐'
+          },
+        ].map(opt => (
+          <div key={opt.key} onClick={()=>toggle(opt.key)}
+            style={{ display:'flex', alignItems:'flex-start', gap:14, padding:'14px 0', borderBottom:'1px solid '+T.lineSoft, cursor:'pointer' }}>
+            <div style={{ marginTop:2 }}>
+              <div style={{ width:22, height:22, borderRadius:6, background: settings[opt.key] ? T.accent : T.surface3, border: '2px solid '+(settings[opt.key]?T.accent:T.line), display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.15s' }}>
+                {settings[opt.key] && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 13 4 4L20 6"/></svg>}
+              </div>
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:13, fontWeight:600, color:T.ink }}>
+                <span style={{ marginRight:6 }}>{opt.icon}</span>{opt.label}
+              </div>
+              <div style={{ fontSize:11, color:T.muted, marginTop:3, lineHeight:1.5 }}>{opt.desc}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* DDV stopnje info */}
+      <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:20 }}>
+        <div style={{ fontWeight:700, fontSize:14, marginBottom:14 }}>DDV stopnje (Slovenia)</div>
+        {[
+          { rate:'0%', label:'Oproščeno', desc:'Boni, vrednostni kuponi, finančne storitve', color:'#64748b' },
+          { rate:'9,5%', label:'Nižja stopnja', desc:'Hrana in pijača (za s seboj), hotelske storitve, kulturne prireditve', color:'#3a6e8f' },
+          { rate:'22%', label:'Splošna stopnja', desc:'Večina storitev in blaga — fitnes, fizioterapija, oblačila...', color:'#1f6b3a' },
+        ].map(d => (
+          <div key={d.rate} style={{ display:'flex', alignItems:'center', gap:14, padding:'10px 0', borderBottom:'1px solid '+T.lineSoft }}>
+            <div style={{ width:48, textAlign:'center', fontWeight:800, fontSize:16, color:d.color, fontVariantNumeric:'tabular-nums' }}>{d.rate}</div>
+            <div>
+              <div style={{ fontSize:13, fontWeight:600 }}>{d.label}</div>
+              <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>{d.desc}</div>
+            </div>
+          </div>
+        ))}
+        <div style={{ marginTop:12, fontSize:11, color:T.muted, lineHeight:1.5 }}>
+          💡 DDV stopnjo nastavljaš za vsak artikel posebej v <b>Kategorije & Artikli</b>
         </div>
       </div>
     </div>
