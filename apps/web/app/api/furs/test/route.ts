@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     // Pridobi davčno številko
     const { data: org } = await supabase
       .from('organizations')
-      .ect('tax_number')
+      .select('tax_number')
       .eq('id', member.org_id)
       .single()
 
