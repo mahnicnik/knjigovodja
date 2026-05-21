@@ -1258,6 +1258,7 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
     duration_min: booking.duration_min || 60,
     status: booking.status || 'scheduled',
     note: booking.note || '',
+    space_id: booking.space_id || '',
   })
   const [saving, setSaving] = useState(false)
   const [custSearch, setCustSearch] = useState(booking.customer_name || '')
@@ -1308,6 +1309,7 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
         note: data.note || null,
         reminder_sent: false,
         is_table: false,
+        space_id: data.space_id || null,
       }
 
       if (isNew) {
@@ -1485,6 +1487,25 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
           <textarea value={data.note} onChange={e=>setData(p=>({...p,note:e.target.value}))} rows={2}
             style={{ ...inp, resize:'vertical' }} placeholder="Posebne zahteve, opomba terapevtu..."/>
         </Field>
+
+        {/* Prostor + Status */}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+          <Field label="Prostor / ordinacija">
+            <select value={data.space_id} onChange={e=>setData(p=>(...p,space_id:e.target.value}))} style={inp}>
+              <option value="">— Brez prostora —</option>
+              {posData.spaces.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Status">
+            <select value={data.status} onChange={e=>setData(p=>({...p,status:e.target.value}))} style={inp}>
+              <option value="scheduled">Načrtovano</option>
+              <option value="confirmed">Potrjeno</option>
+              <option value="arrived">Prišel/a ✓</option>
+              <option value="no_show">Ni prišel ✗</option>
+              <option value="cancelled">Preklicano</option>
+            </select>
+          </Field>
+        </div>
 
         {/* Email opomnik info */}
         {isNew && data.customer_id && posData.customers.find(c=>c.id===data.customer_id)?.email && (
