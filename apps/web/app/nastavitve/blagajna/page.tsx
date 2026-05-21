@@ -61,21 +61,56 @@ export default function BlagajnaPage() {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const { data } = await supabase
-        .from('businesses')
-        .select('furs_config')
-        .eq('owner_user_id', (await supabase.auth.getUser()).data.user?.id || '')
-        .single()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setLoading(false); return }
 
-      if (data?.furs_config) {
-        const fc = data.furs_config as any
+      // Pridobi org_id
+      const { data: member } = await supabase
+        .from('org_members')
+        .select('org_id')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (member) {
+        // Naloži certifikat
+        const { data: cert } = await supabase
+          .from('furs_certificates')
+          .select('issuer, certificate_password, valid_to')
+          .eq('org_id', member.org_id)
+          .eq('is_active', true)
+          .maybeSingle()
+
+        // Naloži poslovne prostore
+        const { data: premises } = await supabase
+          .from('business_premises')
+          .select('*')
+          .eq('org_id', member.org_id)
+          .eq('is_active', true)
+
+        // Naloži naprave
+        const { data: devices } = await supabase
+          .from('electronic_devices')
+          .select('*')
+          .eq('org_id', member.org_id)
+          .eq('is_active', true)
+
         setConfig({
-          testMode: fc.testMode ?? true,
-          premises: Array.isArray(fc.premises) ? fc.premises : [],
-          devices: Array.isArray(fc.devices) ? fc.devices : [],
-          certPassword: fc.certPassword,
-          certExpiry: fc.certExpiry,
-          certSubject: fc.certSubject,
+          testMode: process.env.NEXT_PUBLIC_FURS_TEST_MODE === 'true',
+          premises: (premises || []).map(p => ({
+            id: p.id,
+            businessPremiseId: p.premise_id,
+            address: p.address || '',
+            postalCode: p.postal_code || '',
+            city: p.city || '',
+          })),
+          devices: (devices || []).map(d => ({
+            id: d.id,
+            electronicDeviceId: d.device_id,
+            premiseId: d.premise_id,
+          })),
+          certSubject: cert?.issuer,
+          certPassword: cert?.certificate_password,
+          certExpiry: cert?.valid_to,
         })
       }
       setLoading(false)
@@ -84,21 +119,9 @@ export default function BlagajnaPage() {
   }, [])
 
   async function saveConfig(updated: FursConfig) {
-    setSaving(true)
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      const { error } = await supabase
-        .from('businesses')
-        .update({ furs_config: updated })
-        .eq('owner_user_id', user?.id || '')
-
-      if (error) throw error
-      setConfig(updated)
-      showToast('Nastavitve shranjene')
-    } catch (e: any) {
-      showToast(e.message, false)
-    }
-    setSaving(false)
+    // saveConfig se ne uporablja več za prostore/naprave
+    // samo posodobi lokalni state
+    setConfig(updated)
   }
 
   async function uploadCert() {
@@ -151,57 +174,96 @@ export default function BlagajnaPage() {
     setTesting(false)
   }
 
-  function addPremise() {
+  async function addPremise() {
     if (!premiseModal?.businessPremiseId || !premiseModal?.address) {
       showToast('ID prostora in naslov sta obvezna', false)
       return
     }
-    const newPremise: FursPremise = {
-      id: premiseModal.id || Date.now().toString(),
-      businessPremiseId: premiseModal.businessPremiseId!,
-      address: premiseModal.address!,
-      postalCode: premiseModal.postalCode || '',
-      city: premiseModal.city || '',
-      cadastralNumber: premiseModal.cadastralNumber,
-      buildingNumber: premiseModal.buildingNumber,
-      buildingSectionNumber: premiseModal.buildingSectionNumber,
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Ni avtentikacije')
+
+      const { data: member } = await supabase
+        .from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+      if (!member) throw new Error('Org ni najdena')
+
+      if (premiseModal.id) {
+        // Update obstoječega
+        await supabase.from('business_premises').update({
+          premise_id: premiseModal.businessPremiseId,
+          address: premiseModal.address,
+          postal_code: premiseModal.postalCode || '',
+          city: premiseModal.city || '',
+        }).eq('id', premiseModal.id)
+      } else {
+        // Vstavi novega
+        await supabase.from('business_premises').insert({
+          org_id: member.org_id,
+          premise_id: premiseModal.businessPremiseId,
+          premise_type: 'static',
+          address: premiseModal.address,
+          postal_code: premiseModal.postalCode || '',
+          city: premiseModal.city || '',
+          is_active: true,
+        })
+      }
+
+      showToast('Poslovni prostor shranjen')
+      setPremiseModal(null)
+      // Reload
+      window.location.reload()
+    } catch(e: any) {
+      showToast(e.message, false)
     }
-    const premises = premiseModal.id
-      ? config.premises.map(p => p.id === premiseModal.id ? newPremise : p)
-      : [...config.premises, newPremise]
-    const updated = { ...config, premises }
-    saveConfig(updated)
-    setPremiseModal(null)
   }
 
-  function deletePremise(id: string) {
+  async function deletePremise(id: string) {
     if (!confirm('Izbrišem ta poslovni prostor?')) return
-    const updated = { ...config, premises: config.premises.filter(p => p.id !== id) }
-    saveConfig(updated)
+    await supabase.from('business_premises').update({ is_active: false }).eq('id', id)
+    showToast('Poslovni prostor izbrisan')
+    window.location.reload()
   }
 
-  function addDevice() {
+  async function addDevice() {
     if (!deviceModal?.electronicDeviceId || !deviceModal?.premiseId) {
       showToast('ID naprave in prostor sta obvezna', false)
       return
     }
-    const newDevice: FursDevice = {
-      id: deviceModal.id || Date.now().toString(),
-      electronicDeviceId: deviceModal.electronicDeviceId!,
-      premiseId: deviceModal.premiseId!,
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Ni avtentikacije')
+
+      const { data: member } = await supabase
+        .from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+      if (!member) throw new Error('Org ni najdena')
+
+      if (deviceModal.id) {
+        await supabase.from('electronic_devices').update({
+          device_id: deviceModal.electronicDeviceId,
+          premise_id: deviceModal.premiseId,
+        }).eq('id', deviceModal.id)
+      } else {
+        await supabase.from('electronic_devices').insert({
+          org_id: member.org_id,
+          premise_id: deviceModal.premiseId,
+          device_id: deviceModal.electronicDeviceId,
+          is_active: true,
+        })
+      }
+
+      showToast('Naprava shranjena')
+      setDeviceModal(null)
+      window.location.reload()
+    } catch(e: any) {
+      showToast(e.message, false)
     }
-    const devices = deviceModal.id
-      ? config.devices.map(d => d.id === deviceModal.id ? newDevice : d)
-      : [...config.devices, newDevice]
-    const updated = { ...config, devices }
-    saveConfig(updated)
-    setDeviceModal(null)
   }
 
-  function deleteDevice(id: string) {
+  async function deleteDevice(id: string) {
     if (!confirm('Izbrišem to napravo?')) return
-    const updated = { ...config, devices: config.devices.filter(d => d.id !== id) }
-    saveConfig(updated)
+    await supabase.from('electronic_devices').update({ is_active: false }).eq('id', id)
+    showToast('Naprava izbrisana')
+    window.location.reload()
   }
 
   if (loading) return (
