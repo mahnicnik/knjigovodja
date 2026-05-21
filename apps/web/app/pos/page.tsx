@@ -3249,10 +3249,62 @@ function HappyHourSection({ posData }) {
 function KuhinjaSection({ posData }) {
   const [saving, setSaving] = useState(null)
   const [toast, setToast] = useState(null)
+  const [tab, setTab] = useState('kds')
+  const [kdsEnabled, setKdsEnabled] = useState(false)
+  const [customerDisplay, setCustomerDisplay] = useState(false)
+  const [kdsOrders, setKdsOrders] = useState([])
+  const [now, setNow] = useState(new Date())
+
   function showToast(msg, ok=true) { setToast({msg,ok}); setTimeout(()=>setToast(null),3000) }
 
   const kitchenItems = posData.items.filter(i => i.kitchen)
   const nonKitchenItems = posData.items.filter(i => !i.kitchen)
+
+  // Tick vsako sekundo za časovnike
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  // Realtime fetch aktivnih KDS naročil
+  useEffect(() => {
+    if (!kdsEnabled) return
+    let sub
+
+    async function loadOrders() {
+      const {data} = await createClient()
+        .from('orders')
+        .select(`
+          id, created_at, status,
+          tables(name, spaces(name)),
+          order_lines(id, name, qty, unit_price, note, items(kitchen))
+        `)
+        .eq('business_id', BUSINESS_ID)
+        .in('status', ['open', 'in_progress'])
+        .order('created_at', { ascending: true })
+      setKdsOrders(data || [])
+    }
+
+    loadOrders()
+
+    // Supabase realtime subscription
+    sub = createClient()
+      .channel('kds_orders')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'orders',
+        filter: `business_id=eq.${BUSINESS_ID}`
+      }, () => loadOrders())
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'order_lines'
+      }, () => loadOrders())
+      .subscribe()
+
+    return () => { if (sub) createClient().removeChannel(sub) }
+  }, [kdsEnabled])
 
   async function toggleKitchen(item) {
     setSaving(item.id)
@@ -3260,61 +3312,184 @@ function KuhinjaSection({ posData }) {
       const {error} = await createClient().from('items').update({ kitchen: !item.kitchen }).eq('id', item.id)
       if (error) throw error
       posData.refresh()
-      showToast(item.kitchen ? `${item.name} odstranjen iz kuhinje` : `${item.name} dodan v kuhinjo`)
+      showToast(item.kitchen ? `${item.name} odstranjen` : `${item.name} dodan v kuhinjo`)
     } catch(e) { showToast(e.message,false) }
     setSaving(null)
   }
 
+  async function markDone(orderId) {
+    await createClient().from('orders').update({ status: 'ready' }).eq('id', orderId)
+    showToast('Naročilo označeno kot pripravljeno ✓')
+  }
+
+  function elapsedMin(createdAt) {
+    return Math.floor((now - new Date(createdAt)) / 60000)
+  }
+
+  function elapsedColor(min) {
+    if (min < 5) return '#1f6b3a'
+    if (min < 10) return '#b88c28'
+    return '#a83232'
+  }
+
+  // Skupni znesek za customer display (zadnje odprto naročilo)
+  const lastOrder = kdsOrders[kdsOrders.length - 1]
+  const customerTotal = lastOrder
+    ? (lastOrder.order_lines || []).reduce((s, l) => s + Number(l.unit_price || 0) * Number(l.qty || 1), 0)
+    : 0
+
   return (
-    <div>
-      <div style={{ marginBottom:20 }}>
-        <div style={{ fontSize:22, fontWeight:800 }}>Kuhinja & display</div>
-        <div style={{ fontSize:12, color:T.muted, marginTop:4 }}>
-          Označi artikle ki gredo v kuhinjo (bon za kuharja). KDS display prihaja.
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between' }}>
+        <div>
+          <div style={{ fontSize:22, fontWeight:800 }}>Kuhinja & display</div>
+          <div style={{ fontSize:12, color:T.muted, marginTop:4 }}>KDS prikaz naročil + customer display</div>
+        </div>
+        <div style={{ display:'flex', gap:8 }}>
+          <label style={{ display:'flex', alignItems:'center', gap:7, fontSize:13, cursor:'pointer', background:T.surface, padding:'8px 12px', borderRadius:9, border:'1px solid '+T.line }}>
+            <input type="checkbox" checked={kdsEnabled} onChange={e=>setKdsEnabled(e.target.checked)} style={{ accentColor:T.accent, width:15, height:15 }}/>
+            🍳 Kuhinjski display
+          </label>
+          <label style={{ display:'flex', alignItems:'center', gap:7, fontSize:13, cursor:'pointer', background:T.surface, padding:'8px 12px', borderRadius:9, border:'1px solid '+T.line }}>
+            <input type="checkbox" checked={customerDisplay} onChange={e=>setCustomerDisplay(e.target.checked)} style={{ accentColor:T.accent, width:15, height:15 }}/>
+            💰 Customer display
+          </label>
         </div>
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
-        {/* Kuhinja ON */}
-        <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, overflow:'hidden' }}>
-          <div style={{ padding:'12px 16px', background:T.accentSoft, borderBottom:'1px solid '+T.line }}>
-            <div style={{ fontWeight:700, fontSize:13, color:T.accent }}>🍳 Gre v kuhinjo ({kitchenItems.length})</div>
-          </div>
-          <div style={{ padding:8, maxHeight:400, overflowY:'auto' }}>
-            {kitchenItems.length === 0 && <div style={{ padding:20, textAlign:'center', color:T.muted, fontSize:12 }}>Nobeden artikel</div>}
-            {kitchenItems.map(it => (
-              <div key={it.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 10px', borderRadius:8, marginBottom:4, background:T.surface2 }}>
-                <div style={{ flex:1, fontSize:13, fontWeight:500 }}>{it.name}</div>
-                <button onClick={()=>toggleKitchen(it)} disabled={saving===it.id} style={{ ...btnS, padding:'5px 10px', fontSize:11, color:T.danger }}>
-                  {saving===it.id ? '...' : '✕ Odstrani'}
-                </button>
+      {/* Tabi */}
+      <div style={{ display:'flex', gap:2, background:T.surface3, padding:3, borderRadius:9, width:'fit-content' }}>
+        {[['kds','🍳 KDS naročila'],['artikli','📋 Artikli za kuhinjo']].map(([id,lbl])=>(
+          <button key={id} onClick={()=>setTab(id)} style={{ padding:'7px 16px', borderRadius:7, border:'none', background:tab===id?T.header:'transparent', color:tab===id?T.headerInk:T.ink, fontWeight:700, fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>{lbl}</button>
+        ))}
+      </div>
+
+      {/* KDS TAB */}
+      {tab === 'kds' && (
+        <div style={{ display:'grid', gridTemplateColumns: customerDisplay ? '1fr 320px' : '1fr', gap:12 }}>
+
+          {/* Naročila */}
+          <div>
+            {!kdsEnabled ? (
+              <div style={{ padding:40, textAlign:'center', color:T.muted, background:T.surface, borderRadius:12, border:'1px solid '+T.line }}>
+                <div style={{ fontSize:32, marginBottom:8 }}>🍳</div>
+                <div style={{ fontSize:14, fontWeight:600, color:T.ink }}>KDS je izklopljen</div>
+                <div style={{ fontSize:12, marginTop:6 }}>Vklopi "Kuhinjski display" zgoraj da vidiš aktivna naročila v realnem času</div>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Kuhinja OFF */}
-        <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, overflow:'hidden' }}>
-          <div style={{ padding:'12px 16px', background:T.surface2, borderBottom:'1px solid '+T.line }}>
-            <div style={{ fontWeight:700, fontSize:13, color:T.muted }}>📋 Ni v kuhinji ({nonKitchenItems.length})</div>
-          </div>
-          <div style={{ padding:8, maxHeight:400, overflowY:'auto' }}>
-            {nonKitchenItems.length === 0 && <div style={{ padding:20, textAlign:'center', color:T.muted, fontSize:12 }}>Vsi artikli so v kuhinji</div>}
-            {nonKitchenItems.map(it => (
-              <div key={it.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 10px', borderRadius:8, marginBottom:4, background:T.surface2 }}>
-                <div style={{ flex:1, fontSize:13, fontWeight:500, color:T.muted }}>{it.name}</div>
-                <button onClick={()=>toggleKitchen(it)} disabled={saving===it.id} style={{ ...btnS, padding:'5px 10px', fontSize:11, color:T.accent }}>
-                  {saving===it.id ? '...' : '+ Dodaj'}
-                </button>
+            ) : kdsOrders.length === 0 ? (
+              <div style={{ padding:40, textAlign:'center', color:T.muted, background:'#0d2818', borderRadius:12 }}>
+                <div style={{ fontSize:32, marginBottom:8 }}>✅</div>
+                <div style={{ fontSize:14, fontWeight:600, color:'#8FBF8F' }}>Ni aktivnih naročil</div>
+                <div style={{ fontSize:12, color:'#4a7c59', marginTop:6 }}>Kuhinja prosta</div>
               </div>
-            ))}
+            ) : (
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:10 }}>
+                {kdsOrders.map(order => {
+                  const min = elapsedMin(order.created_at)
+                  const color = elapsedColor(min)
+                  const kitchenLines = (order.order_lines || []).filter(l => l.items?.kitchen !== false)
+                  if (kitchenLines.length === 0) return null
+                  const tableName = order.tables?.name || 'Hitra prodaja'
+                  const spaceName = order.tables?.spaces?.name || ''
+                  return (
+                    <div key={order.id} style={{ background:'#0d2818', borderRadius:12, border:'2px solid '+color+'60', overflow:'hidden' }}>
+                      {/* Header naročila */}
+                      <div style={{ padding:'10px 14px', background:'rgba(255,255,255,0.05)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                        <div>
+                          <div style={{ fontWeight:800, fontSize:16, color:'#f6f1e8' }}>{tableName}</div>
+                          {spaceName && <div style={{ fontSize:11, color:'#4a7c59' }}>{spaceName}</div>}
+                        </div>
+                        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                          <div style={{ width:10, height:10, borderRadius:'50%', background:color, animation: min>=10 ? 'pulse 1s infinite' : 'none' }}/>
+                          <div style={{ fontSize:20, fontWeight:800, fontVariantNumeric:'tabular-nums', color }}>
+                            {min}<span style={{ fontSize:12, color:'#4a7c59' }}>min</span>
+                          </div>
+                        </div>
+                      </div>
+                      {/* Artikli */}
+                      <div style={{ padding:'10px 14px' }}>
+                        {kitchenLines.map((line, i) => (
+                          <div key={i} style={{ display:'flex', alignItems:'center', gap:10, padding:'6px 0', borderBottom: i<kitchenLines.length-1 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
+                            <div style={{ width:28, height:28, borderRadius:7, background:'rgba(255,255,255,0.08)', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:800, fontSize:14, color:color, flexShrink:0 }}>
+                              {line.qty}×
+                            </div>
+                            <div style={{ flex:1 }}>
+                              <div style={{ fontSize:14, fontWeight:600, color:'#f6f1e8' }}>{line.name}</div>
+                              {line.note && <div style={{ fontSize:11, color:'#b88c28', marginTop:2 }}>📝 {line.note}</div>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {/* Gumb pripravljeno */}
+                      <div style={{ padding:'8px 14px 12px' }}>
+                        <button onClick={()=>markDone(order.id)} style={{ width:'100%', padding:'9px', borderRadius:8, background:T.accent, color:'#fff', border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:13 }}>
+                          ✓ Pripravljeno
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Customer Display */}
+          {customerDisplay && (
+            <div style={{ background:'#0d2818', borderRadius:12, padding:24, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:300 }}>
+              <div style={{ fontSize:12, fontWeight:700, color:'#4a7c59', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:12 }}>SKUPAJ</div>
+              <div style={{ fontSize:48, fontWeight:900, color:'#e9b949', fontVariantNumeric:'tabular-nums', letterSpacing:'-0.02em' }}>
+                {eur(customerTotal)}
+              </div>
+              {lastOrder && (
+                <div style={{ fontSize:13, color:'#4a7c59', marginTop:16 }}>
+                  {(lastOrder.order_lines||[]).length} artiklov · {lastOrder.tables?.name || 'Hitra prodaja'}
+                </div>
+              )}
+              {!lastOrder && (
+                <div style={{ fontSize:13, color:'#4a7c59', marginTop:12 }}>Dobrodošli!</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ARTIKLI TAB */}
+      {tab === 'artikli' && (
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+          <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, overflow:'hidden' }}>
+            <div style={{ padding:'12px 16px', background:T.accentSoft, borderBottom:'1px solid '+T.line }}>
+              <div style={{ fontWeight:700, fontSize:13, color:T.accent }}>🍳 Gre v kuhinjo ({kitchenItems.length})</div>
+            </div>
+            <div style={{ padding:8, maxHeight:400, overflowY:'auto' }}>
+              {kitchenItems.length === 0 && <div style={{ padding:20, textAlign:'center', color:T.muted, fontSize:12 }}>Nobeden artikel</div>}
+              {kitchenItems.map(it => (
+                <div key={it.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 10px', borderRadius:8, marginBottom:4, background:T.surface2 }}>
+                  <div style={{ flex:1, fontSize:13, fontWeight:500 }}>{it.name}</div>
+                  <button onClick={()=>toggleKitchen(it)} disabled={saving===it.id} style={{ ...btnS, padding:'5px 10px', fontSize:11, color:T.danger }}>
+                    {saving===it.id ? '...' : '✕'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, overflow:'hidden' }}>
+            <div style={{ padding:'12px 16px', background:T.surface2, borderBottom:'1px solid '+T.line }}>
+              <div style={{ fontWeight:700, fontSize:13, color:T.muted }}>📋 Ni v kuhinji ({nonKitchenItems.length})</div>
+            </div>
+            <div style={{ padding:8, maxHeight:400, overflowY:'auto' }}>
+              {nonKitchenItems.length === 0 && <div style={{ padding:20, textAlign:'center', color:T.muted, fontSize:12 }}>Vsi so v kuhinji</div>}
+              {nonKitchenItems.map(it => (
+                <div key={it.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 10px', borderRadius:8, marginBottom:4, background:T.surface2 }}>
+                  <div style={{ flex:1, fontSize:13, fontWeight:500, color:T.muted }}>{it.name}</div>
+                  <button onClick={()=>toggleKitchen(it)} disabled={saving===it.id} style={{ ...btnS, padding:'5px 10px', fontSize:11, color:T.accent }}>
+                    {saving===it.id ? '...' : '+ Dodaj'}
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
-
-      <div style={{ marginTop:16, padding:'12px 14px', background:'rgba(184,140,40,0.08)', borderRadius:10, fontSize:12, color:T.warn, border:'1px solid rgba(184,140,40,0.2)' }}>
-        🖨️ <b>KDS (Kitchen Display System)</b> — prikaz naročil v kuhinji na zaslonu prihaja v naslednji verziji.
-      </div>
+      )}
 
       {toast && <Toast msg={toast.msg} ok={toast.ok}/>}
     </div>
