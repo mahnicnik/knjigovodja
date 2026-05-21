@@ -1532,6 +1532,66 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
 }
 
 // ================================================================
+// PS SCREEN
+// ================================================================
+
+function PackagesScreen({ posData, setSellPackageModal }) {
+  const [filter, setFilter] = React.useState('all')
+  const allPkgs = posData.customers.flatMap(c => (c.customer_packages||[]))
+  const now = new Date()
+  const weekFromNow = new Date(now); weekFromNow.setDate(now.getDate()+7)
+  const activeCount = allPkgs.filter(p => p.active).length
+  const expiringCount = allPkgs.filter(p => p.active && p.expires && new Date(p.expires) >= now && new Date(p.expires) <= weekFromNow).length
+  const expiredCount = allPkgs.filter(p => p.active && p.expires && new Date(p.expires) < now).length
+  const filtered = posData.packageTemplates.filter(p => filter === 'all' || (p.template_type||p.type) === filter)
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', minHeight:0 }}>
+      <div style={{ padding:'14px 20px', background:T.surface, borderBottom:'1px solid '+T.line }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:12 }}>
+          {[{label:'AKTIVNIH',value:activeCount,color:T.accent},{label:'POTEČEJO',value:expiringCount,color:'#b88c28'},{label:'POTEKLE',value:expiredCount,color:T.danger},{label:'PROMET',value:'—',color:T.ink}].map(s=>(
+            <div key={s.label} style={{ padding:'12px 16px', borderRadius:11, background:T.surface2, border:'1px solid '+T.line }}>
+              <div style={{ fontSize:9, fontWeight:700, color:T.muted, textTransform:'uppercase', marginBottom:6 }}>{s.label}</div>
+              <div style={{ fontSize:28, fontWeight:900, color:s.color }}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+          <button onClick={()=>setFilter('all')} style={{ padding:'5px 12px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:11, background:filter==='all'?T.header:T.face3, color:filter==='all'?T.headerInk:T.ink }}>Vsi</button>
+          {Object.entries(TEMPLATE_TYPES).map(([k,v])=>(<button key={k} onClick={()=>setFilter(k)} style={{ padding:'5px 12px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:11, background:filter===k?v.color:T.surface3, color:filter===k?'#fff':T.ink }}>{v.icon} {v.label}</button>))}
+        </div>
+      </div>
+      {posData.packageTemplates.length === 0 ? (
+        <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', color:T.muted, gap:12, padding:40, textAlign:'center' }}>
+          <div style={{ fontSize:40 }}>🎫</div>
+          <div style={{ fontSize:15, fontWeight:600, color:T.ink }}>Ni paketov</div>
+          <div style={{ fontSize:13 }}>Dodaj pakete v Nastavitvah</div>
+        </div>
+      ) : (
+        <div style={{ flex:1, overflow:'auto', padding:16, display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:1 alignContent:'start' }}>
+          {filtered.map(p => {
+            const ttype = p.template_type || p.type || 'visits'
+            const tconf = TEMPLATE_TYPES[ttype] || TEMPLATE_TYPES.visits
+            return (<div key={p.id} style={{ background:T.surface, borderRadius:13, border:'1px solid '+T.line, padding:18, display:'flex', flexDirection:'column' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+                <div style={{ width:40, height:40, borderRadius:10, background:tconf.color+'18', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20 }}>{tconf.icon}</div>
+                <div style={{ flex:1 }}><div style={{ fontSize:14, fontWeight:800 }}>{p.name}</div><span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:5, background:tconf.color+'18', color:tconf.color }}>{tconf.label}</span></div>
+              </div>
+              <div style={{ fontSize:28, fontWeight:900, color:tconf.color }}>{eur(p.price)}</div>
+              {p.description && <div style={{ fontSize:12, color:T.muted, marginTop:6, lineHeight:1.5 }}>{p.description}</div>}
+              <div style={{ fontSize:11, color:T.muted, marginTop:10, paddingTop:10, borderTop:'1px solid '+T.lineSoft, display:'flex', flexWrap:'wrap', gap:8 }}>
+                {p.validity_days && <span>📅 {p.validity_days} dni</span>}
+                {p.visits && <span>🎯 {p.visits}x</span>}
+              </div>
+              <button onClick={()=>setSellPackageModal(p)} style={{ ...btnP, marginTop:14, justifyContent:'center', background:tconf.color }}>Prodaj stranki</button>
+            </div>)
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ================================================================
 // CUSTOMERS SCREEN — full profile hub
 // ================================================================
 
