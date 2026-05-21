@@ -1747,6 +1747,9 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
             {activeTab === 'opombe' && (
               <CustomerNotesTab customer={selected} onSave={()=>posData.refresh()}/>
             )}
+            {activeTab === 'klinicno' && (
+              <CustomerClinicalTab customer={selected} posData={posData}/>
+            )}
           </div>
         </div>
       )}
