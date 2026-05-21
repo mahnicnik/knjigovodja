@@ -1491,7 +1491,7 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
         {/* Prostor + Status */}
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
           <Field label="Prostor / ordinacija">
-            <select value={data.space_id} onChange={e=>setData(p=>(...p,space_id:e.target.value}))} style={inp}>
+            <select value={data.space_id} onChange={e=>setData(p=>({...p,space_id:e.target.value}))} style={inp}>
               <option value="">— Brez prostora —</option>
               {posData.spaces.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
