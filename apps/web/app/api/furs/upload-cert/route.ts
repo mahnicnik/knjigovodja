@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
       .from('businesses')
       .select('furs_config')
       .eq('owner_user_id', user.id)
+      .limit(1)
       .single()
 
     const existing = (biz?.furs_config as any) || {}
@@ -57,6 +58,7 @@ export async function POST(req: NextRequest) {
         }
       })
       .eq('owner_user_id', user.id)
+      .limit(1)
 
     if (error) throw error
 
