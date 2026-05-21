@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
       invoiceType: 'invoice',
     }
 
-    const result = await confirmWithFurs(conig, testData)
+    const result = await confirmWithFurs(config, testData)
 
     if (result.success) {
       return NextResponse.json({ success: true, eor: result.eor, zoi: result.zoi, datetime: new Date().toLocaleString('sl-SI') })
