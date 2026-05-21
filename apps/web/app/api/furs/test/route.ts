@@ -18,36 +18,57 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })
 
-    // Beri iz businesses.furs_config
-    const { data: biz } = await supabase
-      .from('businesses')
-      .select('furs_config')
-      .eq('owner_user_id', user.id)
+    // Pridobi org_id
+    const { data: member } = await supabase
+      .from('org_members')
+      .select('org_id')
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (!member) return NextResponse.json({ error: 'Org ni najdena' }, { status: 404 })
+
+    // Beri certifikat iz furs_certificates tabele
+    const { data: cert } = await supabase
+      .from('furs_certificates')
+      .select('*')
+      .eq('org_id', member.org_id)
+      .eq('is_active', true)
+      .maybeSingle()
+    if (!cert) return NextResponse.json({ error: 'Certifikat ni naložen' }, { status: 400 })
+
+    // Pridobi poslovni prostor
+    const { data: premise } = await supabase
+      .from('business_premises')
+      .select('*')
+      .eq('org_id', member.org_id)
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle()
+
+    // Pridobi napravo
+    const { data: device } = premise ? await supabase
+      .from('electronic_devices')
+      .select('*')
+      .eq('premise_id', premise.id)
+      .eq('is_active', true)
+      .maybeSingle() : { data: null }
+
+    // Pridobi davčno številko
+    const { data: org } = await supabase
+      .from('organizations')
+      .ect('tax_number')
+      .eq('id', member.org_id)
       .single()
 
-    // Fallback na fixed business ID če owner_user_id ne ujame
-    let fc = biz?.furs_config as any
-    if (!fc?.certB64) {
-      const { data: biz2 } = await supabase
-        .from('businesses')
-        .select('furs_config')
-        .eq('id', '00000000-00-0000-0000-000000000001')
-        .single()
-      fc = biz2?.furs_config as any
-    }
-    if (!fc?.certB64) return NextResponse.json({ error: 'Certifikat ni naložen' }, { status: 400 })
-    if (!fc?.premises?.length) return NextResponse.json({ error: 'Poslovni prostor ni dodan' }, { status: 400 })
-
-    const premise = fc.premises[0]
-    const device = fc.devices?.[0]
-
-    const p12Buffer = Buffer.from(fc.certB64, 'base64')
-    const { privateKeyPem, certificatePem } = extractFromP12(p12Buffer, fc.certPassword)
+    const p12Buffer = Buffer.from(cert.certificate_data, 'base64')
+    const { privateKeyPem, certificatePem } = extractFromP12(
+      p12Buffer,
+      cert.certificate_password ?? ''
+    )
 
     const config: FursConfig = {
-      taxNumber: '91390419',
-      premiseId: premise.businessPremiseId,
-      deviceId: device?.electronicDeviceId ?? 'RACUNKO01',
+      taxNumber: org?.tax_number ?? '91390419',
+      premiseId: premise?.premise_id ?? 'SIRBFB01',
+      deviceId: device?.device_id ?? 'RACUNKO01',
       privateKeyPem,
       certificatePem,
       isTest: process.env.FURS_TEST_MODE !== 'false',
@@ -64,7 +85,12 @@ export async function POST(req: NextRequest) {
     const result = await confirmWithFurs(config, testData)
 
     if (result.success) {
-      return NextResponse.json({ success: true, eor: result.eor, zoi: result.zoi, datetime: new Date().toLocaleString('sl-SI') })
+      return NextResponse.json({
+        success: true,
+        eor: result.eor,
+        zoi: result.zoi,
+        datetime: new Date().toLocaleString('sl-SI')
+      })
     } else {
       return NextResponse.json({ success: false, error: result.errorMessage }, { status: 500 })
     }
