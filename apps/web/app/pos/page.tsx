@@ -1532,6 +1532,21 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
 }
 
 // ================================================================
+const TEMPLATE_TYPES = {
+  membership:   { label:'Claenarina',      icon:'inf',  color:'#1f6b3a' },
+  visits:       { label:'Karta obiskov',  icon:'target',  color:'#634896' },
+  gift_voucher: { label:'Darilni bon',    icon:'gift',  color:'#b88c28' },
+  service_bon:  { label:'Storitveni bon', icon:'bell',  color:'#0ea5e9' },
+  seasonal:     { label:'Sezonska',       icon:'flower',  color:'#ec4899' },
+  time_restrict:{ label:'Casovna',        icon:'clock',  color:'#f97316' },
+  group_class:  { label:'Skupinska',      icon:'group',  color:'#8b5cf6' },
+  prepaid:      { label:'Predplacilo',    icon:'money',  color:'#14b8a6' },
+}
+const ACTIVATION_TYPES = {
+  purchase:  'Ob nakupu',
+  first_use: 'Ob prvem obisku',
+  date:      'Na datum',
+}
 // PS SCREEN
 // ================================================================
 
