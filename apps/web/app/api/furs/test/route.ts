@@ -1,18 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { calculateZoi, confirmWithFurs, extractFromP12, type FursConfig, type FursInvoiceData } from '@/lib/furs'
+import { confirmWithFurs, extractFromP12, type FursConfig, type FursInvoiceData } from '@/lib/furs'
+
 async function getSupabase() {
   const cookieStore = await cookies()
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) { return cookieStore.get(name)?.value },
-        set() {}, remove() {},
-      },
-    }
+    { cookies: { get(name: string) { return cookieStore.get(name)?.value }, set() {}, remove() {} } }
   )
 }
 
@@ -22,48 +18,32 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })
 
-    const { data: member } = await supabase
-      .from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
-    if (!member) return NextResponse.json({ error: 'Org ni najdena' }, { status: 404 })
-
-    // Pridobi certifikat
-    const { data: cert } = await supabase
-      .from('furs_certificates')
-      .select('*')
-      .eq('org_id', member.org_id)
-      .eq('is_active', true)
-      .maybeSingle()
-
-    if (!cert) return NextResponse.json({ error: 'Certifikat ni naložen' }, { status: 400 })
-
-    // Pridobi prvi poslovni prostor + napravo
-    const { data: premise } = await supabase
-      .from('business_premises')
-      .select('*')
-      .eq('org_id', member.org_id)
-      .eq('is_active', true)
-      .limit(1)
-      .maybeSingle()
-
-    if (!premise) return NextResponse.json({ error: 'Poslovni prostor ni dodan' }, { status: 400 })
-
-    const { data: device } = await supabase
-      .from('electronic_devices')
-      .select('*')
-      .eq('premise_id', premise.id)
-      .eq('is_active', true)
-      .maybeSingle()
-
-    // Pridobi org davčno številko
-    const { data: org } = await supabase
-      .from('organizations')
-      .select('tax_number')
-      .eq('id', member.org_id)
+    // Beri iz businesses.furs_config
+    const { data: biz } = await supabase
+      .from('businesses')
+      .select('furs_config')
+      .eq('owner_user_id', user.id)
       .single()
 
-    if (!org?.tax_number) return NextResponse.json({ error: 'Davčna številka org ni nastavljena' }, { status: 400 })
+    const fc = biz?.furs_config as any
+    if (!fc?.certB64) return NextResponse.json({ error: 'Certifikat ni naložen' }, { status: 400 })
+    if (!fc?.premises?.length) return NextResponse.json({ error: 'Poslovni prostor ni dodan' }, { status: 400 })
 
-    // Testni klic — minimalni znesek €0.01
+    const premise = fc.premises[0]
+    const device = fc.devices?.[0]
+
+    const p12Buffer = Buffer.from(fc.certB64, 'base64')
+    const { privateKeyPem, certificatePem } = extractFromP12(p12Buffer, fc.certPassword)
+
+    const config: FursConfig = {
+      taxNumber: '91390419',
+      premiseId: premise.businessPremiseId,
+      deviceId: device?.electronicDeviceId ?? 'RACUNKO01',
+      privateKeyPem,
+      certificatePem,
+      isTest: process.env.FURS_TEST_MODE !== 'false',
+    }
+
     const testData: FursInvoiceData = {
       invoiceNumber: 1,
       issueDateTime: new Date(),
@@ -72,37 +52,13 @@ export async function POST(req: NextRequest) {
       invoiceType: 'invoice',
     }
 
-    // Parsiraj .p12 certifikat
-    const p12Buffer = Buffer.from(cert.certificate_data, 'base64')
-    const { privateKeyPem, certificatePem } = extractFromP12(p12Buffer, cert.certificate_password ?? 'test')
-
-    const config: FursConfig = {
-      taxNumber: org.tax_number,
-      premiseId: premise.premise_id,
-      deviceId: device?.device_id ?? 'RACUNKO01',
-      privateKeyPem,
-      certificatePem,
-      isTest: process.env.FURS_TEST_MODE !== 'false',
-    }
-
-    const result = await confirmWithFurs(config, testData)
-
-    // Log rezultat
-    await supabase.from('furs_log').insert({
-      org_id: member.org_id,
-      zoi: result.zoi,
-      eor: result.eor,
-      status: result.success ? 'success' : 'error',
-      error_message: result.errorMessage,
-      response_at: result.responseTime?.toISOString(),
-    })
+    const result = await confirmWithFurs(conig, testData)
 
     if (result.success) {
-      return NextResponse.json({ success: true, eor: result.eor, zoi: result.zoi })
+      return NextResponse.json({ success: true, eor: result.eor, zoi: result.zoi, datetime: new Date().toLocaleString('sl-SI') })
     } else {
       return NextResponse.json({ success: false, error: result.errorMessage }, { status: 500 })
     }
-
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
