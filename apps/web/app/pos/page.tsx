@@ -1424,8 +1424,7 @@ function BulkEmailModal({ customers, onClose }) {
             subject,
             html: `<div style="font-family:Inter,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px">
               <h2 style="color:#0d2818">${subject}</h2>
-              <div style="font-size:15px;line-height:1.7;color:#444">${body.replace(/
-/g,'<br/>')}</div>
+              <div style="font-size:15px;line-height:1.7;color:#444">${body.split(String.fromCharCode(10)).join('<br/>')}</div>
               <hr style="margin:24px 0;border-color:#e5e1d8"/>
               <p style="font-size:12px;color:#999">ŠIRM fitness&bar · Poljanska cesta 87</p>
             </div>`,
