@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
 export async function POST(req: NextRequest) {
@@ -9,11 +9,10 @@ export async function POST(req: NextRequest) {
     const supabaseAuth = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { cookies: { get(name: string) { return cookieStore.get(name)?.value }, set() {}, remove() {} } }
+      { cookies: { get(name) { return cookieStore.get(name)?.value }, set() {}, remove() {} } }
     )
-
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Ni avtentikacije, user=null' }, { status: 401 })
+    if (!user) return NextResponse.json({ error: 'Ni avtentikacije' }, { status: 401 })
 
     const formData = await req.formData()
     const certFile = formData.get('cert') as File
@@ -29,28 +28,35 @@ export async function POST(req: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // Najprej poskusi z owner_user_id
-    const { data: biz, error: bizErr } = await supabase
-      .from('businesses')
-      .select('id, furs_config')
-      .eq('owner_user_id', user.id)
+    // Pridobi org_id
+    const { data: member } = await supabase
+      .from('org_members')
+      .select('org_id')
+      .eq('user_id', user.id)
       .single()
 
-    if (bizErr || !biz) {
-      return NextResponse.json({ 
-        error: `Business ni najden. user_id=${user.id}, err=${bizErr?.message}` 
-      }, { status: 404 })
-    }
+    if (!member) return NextResponse.json({ error: 'Organizacija ni najdena' }, { status: 404 })
 
-    const existing = (biz.furs_config as any) || {}
-    const { error: updateErr } = await supabase
-      .from('businesses')
-      .update({ furs_config: { ...existing, certB64, certPassword: password, certSubject: subject, certExpiry: '' } })
-      .eq('id', biz.id)
+    // Deaktiviraj stare certifikate
+    await supabase
+      .from('furs_certificates')
+      .update({ is_active: false })
+      .eq('org_id', member.org_id)
 
-    if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
+    // Vstavi nov certifikat
+    const { error } = await supabase
+      .from('furs_certificates')
+      .insert({
+        org_id: member.org_id,
+        certificate_data: certB64,
+        certificate_password: password,
+        issuer: subject,
+        is_active: true,
+      })
 
-    return NextResponse.json({ success: true, subject, expiry: '', bizId: biz.id })
+    if (error) throw error
+
+    return NextResponse.json({ success: true, subject, expiry: '' })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
