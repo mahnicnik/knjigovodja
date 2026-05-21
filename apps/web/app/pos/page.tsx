@@ -1056,60 +1056,99 @@ function CalendarScreen({ posData }) {
 }
 
 // ================================================================
-// CUSTOMERS SCREEN — real DB
+// CUSTOMERS SCREEN — full profile hub
 // ================================================================
-function CustomersScreen({ posData, setActiveCustomer, setScreen }) {
+function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackageModal }) {
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState(null)
+  const [addModal, setAddModal] = useState(false)
+  const [customerPackages, setCustomerPackages] = useState([])
+  const [customerOrders, setCustomerOrders] = useState([])
+  const [loadingDetail, setLoadingDetail] = useState(false)
+  const [activeTab, setActiveTab] = useState('profil')
 
   const filtered = posData.customers.filter(c =>
-    !search || c.name.toLowerCase().includes(search.toLowerCase()) || (c.phone || '').includes(search))
-  const selected = posData.customers.find(c => c.id === selectedId) || posData.customers[0]
+    !search || c.name.toLowerCase().includes(search.toLowerCase()) ||
+    (c.phone||'').includes(search) || (c.email||'').toLowerCase().includes(search.toLowerCase()))
 
-  if (posData.customers.length === 0) {
-    return (
-      <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', color:T.muted, gap:12 }}>
-        <div style={{ fontSize:40 }}>👥</div>
-        <div style={{ fontSize:15, fontWeight:600, color:T.ink }}>Ni strank</div>
-        <div style={{ fontSize:13 }}>Dodaj stranke v <b>Nastavitvah → Stranke</b></div>
-      </div>
-    )
+  const selected = posData.customers.find(c => c.id === selectedId)
+
+  // Fetch customer detail ob izbiri
+  useEffect(() => {
+    if (!selectedId) return
+    setLoadingDetail(true)
+    async function load() {
+      const [pkgRes, ordRes] = await Promise.all([
+        createClient().from('customer_packages')
+          .select('*, package_templates(name, template_type, color, validity_days)')
+          .eq('customer_id', selectedId)
+          .order('active', { ascending: false })
+          .order('created_at', { ascending: false }),
+        createClient().from('orders')
+          .select('id, created_at, payments(amount, method)')
+          .eq('customer_id', selectedId)
+          .order('created_at', { ascending: false })
+          .limit(20),
+      ])
+      setCustomerPackages(pkgRes.data || [])
+      setCustomerOrders(ordRes.data || [])
+      setLoadingDetail(false)
+    }
+    load()
+  }, [selectedId, posData.customers])
+
+  const statusColor = (c) => {
+    const pkgs = customerPackages.filter(p => p.active)
+    if (pkgs.length === 0) return T.muted
+    const near = pkgs.some(p => {
+      if (!p.expires) return false
+      const days = Math.floor((new Date(p.expires) - new Date()) / 86400000)
+      return days <= 7
+    })
+    const lowVisits = pkgs.some(p => p.remaining !== null && p.remaining <= 2)
+    if (near || lowVisits) return T.warn
+    return T.accent
   }
 
-  const MemberDot = ({ pkgs }) => {
-    const { status } = H.memberStatus(pkgs)
-    const colors = { active:'#1f6b3a', expiring:'#e9b949', critical:'#d97628', expired:'#a83232', none:'#9a9890' }
-    return <span style={{ display:'inline-block', width:8, height:8, borderRadius:999, background:colors[status]||'#999', marginRight:5 }}/>
-  }
+  const initials = (name) => name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()
 
   return (
     <div style={{ flex:1, display:'flex', minHeight:0 }}>
-      <div style={{ width:320, background:T.surface, borderRight:'1px solid '+T.line, display:'flex', flexDirection:'column', flexShrink:0 }}>
-        <div style={{ padding:'12px 14px', borderBottom:'1px solid '+T.line }}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-            <div style={{ fontSize:15, fontWeight:700 }}>{filtered.length} strank</div>
+      {/* Leva lista */}
+      <div style={{ width:280, background:T.surface, borderRight:'1px solid '+T.line, display:'flex', flexDirection:'column', flexShrink:0 }}>
+        <div style={{ padding:'12px 12px 8px', borderBottom:'1px solid '+T.line }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:T.muted }}>{filtered.length} strank</div>
+            <button onClick={()=>setAddModal(true)} style={{ ...btnP, padding:'6px 10px', fontSize:11 }}>+ Nova</button>
           </div>
           <div style={{ position:'relative' }}>
-            <div style={{ position:'absolute', left:11, top:'50%', transform:'translateY(-50%)', color:T.muted }}><KI name="search" size={14}/></div>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Išči stranko…" style={{ width:'100%', padding:'9px 12px 9px 34px', borderRadius:9, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13, background:T.inputBg, outline:'none', boxSizing:'border-box' }}/>
+            <div style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:T.muted }}><KI name="search" size={13}/></div>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Ime, telefon, email…"
+              style={{ width:'100%', padding:'8px 10px 8px 32px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:12, background:T.inputBg, outline:'none', boxSizing:'border-box' }}/>
           </div>
         </div>
         <div style={{ flex:1, overflowY:'auto', padding:6 }}>
+          {filtered.length === 0 && (
+            <div style={{ padding:24, textAlign:'center', color:T.muted, fontSize:12 }}>
+              {search ? 'Ni rezultatov' : 'Ni strank — dodaj prvo'}
+            </div>
+          )}
           {filtered.map(c => {
             const active = c.id === selectedId
-            const pkgs = c.customer_packages || []
+            const hasActivePkg = (c.customer_packages||[]).some(p=>p.active)
             return (
-              <button key={c.id} onClick={() => setSelectedId(c.id)} style={{ width:'100%', padding:'10px', borderRadius:9, marginBottom:2, background: active ? T.accentSoft : 'transparent', border:'none', cursor:'pointer', fontFamily:'inherit', color:T.ink, textAlign:'left', display:'flex', alignItems:'center', gap:10 }}>
-                <div style={{ width:38, height:38, borderRadius:999, background:T.surface3, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:13 }}>
-                  {c.name.split(' ').map(w => w[0]).slice(0, 2).join('')}
+              <button key={c.id} onClick={()=>{setSelectedId(c.id);setActiveTab('profil')}}
+                style={{ width:'100%', padding:'10px 10px', borderRadius:9, marginBottom:2, background:active?T.accentSoft:'transparent', border:'1px solid '+(active?T.accent:'transparent'), cursor:'pointer', fontFamily:'inherit', color:T.ink, textAlign:'left', display:'flex', alignItems:'center', gap:9 }}>
+                <div style={{ width:36, height:36, borderRadius:999, background:active?T.accent:T.surface3, color:active?'#fff':T.ink, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:12, flexShrink:0 }}>
+                  {initials(c.name)}
                 </div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:600, fontSize:13 }}>
-                    <MemberDot pkgs={pkgs}/>{c.name}
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontWeight:600, fontSize:13, display:'flex', alignItems:'center', gap:5 }}>
+                    {hasActivePkg && <span style={{ width:7, height:7, borderRadius:'50%', background:T.accent, flexShrink:0, display:'inline-block' }}/>}
+                    <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.name}</span>
                   </div>
-                  <div style={{ fontSize:11, color:T.muted, marginTop:1 }}>
-                    {c.phone || 'brez telefona'}
-                    {Number(c.prepaid) > 0 && <span style={{ color:T.accent, marginLeft:6 }}>· {eur(c.prepaid)}</span>}
+                  <div style={{ fontSize:11, color:T.muted, marginTop:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                    {c.phone || c.email || 'brez kontakta'}
                   </div>
                 </div>
               </button>
@@ -1118,64 +1157,467 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen }) {
         </div>
       </div>
 
-      {selected && (
-        <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0, background:T.bg, overflowY:'auto', padding:24 }}>
-          <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:'20px 24px', marginBottom:16 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:16 }}>
-              <div style={{ width:64, height:64, borderRadius:999, background:T.surface3, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:22 }}>
-                {selected.name.split(' ').map(w => w[0]).slice(0, 2).join('')}
+      {/* Desna stran — profil */}
+      {!selected ? (
+        <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', color:T.muted, gap:8 }}>
+          <div style={{ fontSize:36 }}>👤</div>
+          <div style={{ fontSize:14, fontWeight:600, color:T.ink }}>Izberi stranko</div>
+          <div style={{ fontSize:12 }}>ali dodaj novo s klikom + Nova</div>
+        </div>
+      ) : (
+        <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0, background:T.bg }}>
+
+          {/* Profil header */}
+          <div style={{ background:T.surface, borderBottom:'1px solid '+T.line, padding:'16px 20px' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+              <div style={{ width:52, height:52, borderRadius:999, background:T.accent, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:800, fontSize:18, flexShrink:0 }}>
+                {initials(selected.name)}
               </div>
               <div style={{ flex:1 }}>
-                <div style={{ fontSize:22, fontWeight:800 }}>{selected.name}</div>
-                <div style={{ fontSize:12, color:T.muted, marginTop:4, display:'flex', gap:14 }}>
-                  {selected.phone && <span>{selected.phone}</span>}
-                  {selected.email && <span>{selected.email}</span>}
+                <div style={{ fontSize:20, fontWeight:800 }}>{selected.name}</div>
+                <div style={{ fontSize:12, color:T.muted, marginTop:2, display:'flex', gap:12, flexWrap:'wrap' }}>
+                  {selected.phone && <span>📞 {selected.phone}</span>}
+                  {selected.email && <span>✉️ {selected.email}</span>}
+                  {selected.birth_date && <span>🎂 {new Date(selected.birth_date).toLocaleDateString('sl-SI')}</span>}
                 </div>
               </div>
-              <button onClick={() => { setActiveCustomer(selected); setScreen('sale') }} style={{ padding:'9px 14px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', background:T.accent, color:'#fff', border:'none', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', gap:6 }}>
-                <KI name="receipt" size={14}/> Nov račun
-              </button>
-              <CustomerEditButton customer={selected} onSave={() => posData.refresh()}/>
+              <div style={{ display:'flex', gap:6 }}>
+                <button onClick={()=>{setActiveCustomer(selected);setScreen('sale')}}
+                  style={{ ...btnP, padding:'9px 14px', fontSize:12, display:'flex', alignItems:'center', gap:6 }}>
+                  <KI name="receipt" size={14}/> Na blagajno
+                </button>
+              </div>
             </div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
-              {[['Točke', selected.points || 0, selected.tier], ['Predplačilo', eur(selected.prepaid || 0), Number(selected.prepaid)>0?'na voljo':'brez'], ['Paketi', (selected.customer_packages||[]).filter(p=>p.active).length, 'aktivnih']].map(([l,v,s]) => (
-                <div key={l} style={{ padding:'12px 14px', background:T.surface2, borderRadius:10, border:'1px solid '+T.line }}>
-                  <div style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em' }}>{l}</div>
-                  <div style={{ fontSize:22, fontWeight:800, marginTop:4, fontVariantNumeric:'tabular-nums' }}>{v}</div>
-                  <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>{s}</div>
-                </div>
+
+            {/* Tabs */}
+            <div style={{ display:'flex', gap:0, marginTop:14, borderBottom:'2px solid '+T.line }}>
+              {[['profil','👤 Profil'],['kartice','🎫 Kartice & paketi'],['zgodovina','📋 Zgodovina']].map(([id,lbl])=>(
+                <button key={id} onClick={()=>setActiveTab(id)} style={{ padding:'8px 16px', background:'none', border:'none', borderBottom: activeTab===id?'2px solid '+T.accent:'2px solid transparent', marginBottom:-2, cursor:'pointer', fontFamily:'inherit', fontWeight:activeTab===id?700:500, fontSize:13, color:activeTab===id?T.accent:T.muted }}>
+                  {lbl}
+                </button>
               ))}
             </div>
           </div>
-          {(selected.customer_packages||[]).filter(p=>p.active).length > 0 && (
-            <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:16 }}>
-              <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:12 }}>Aktivni paketi</div>
-              {(selected.customer_packages||[]).filter(p=>p.active).map((p, i) => {
-                const pct = p.total ? p.remaining / p.total : 1
-                return (
-                  <div key={i} style={{ padding:14, borderRadius:10, background:'rgba(99,72,150,0.06)', border:'1px solid rgba(99,72,150,0.18)', marginBottom:8 }}>
-                    <div style={{ display:'flex', alignItems:'baseline', gap:10, marginBottom:8 }}>
-                      <div style={{ flex:1, fontWeight:700, fontSize:14 }}>{p.name}</div>
-                      {p.remaining !== null && (
-                        <div style={{ fontSize:18, fontWeight:800, color:'#634896', fontVariantNumeric:'tabular-nums' }}>
-                          {p.remaining}<span style={{ fontSize:13, color:T.muted }}>/{p.total}</span>
-                        </div>
-                      )}
-                    </div>
-                    {p.total && (
-                      <div style={{ height:6, borderRadius:999, background:'rgba(99,72,150,0.15)', overflow:'hidden' }}>
-                        <div style={{ height:'100%', width:(pct*100)+'%', background:'#634896', borderRadius:999 }}/>
-                      </div>
-                    )}
-                    <div style={{ fontSize:11, color:T.muted, marginTop:8 }}>Velja do: <b style={{ color:T.ink }}>{p.expires}</b></div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+
+          {/* Tab vsebina */}
+          <div style={{ flex:1, overflowY:'auto', padding:20 }}>
+
+            {/* PROFIL TAB */}
+            {activeTab === 'profil' && (
+              <CustomerProfileEditTab customer={selected} onSave={()=>posData.refresh()}/>
+            )}
+
+            {/* KARTICE TAB */}
+            {activeTab === 'kartice' && (
+              <CustomerPackagesTab
+                customer={selected}
+                packages={customerPackages}
+                posData={posData}
+                loading={loadingDetail}
+                onRefresh={()=>{
+                  posData.refresh()
+                  setSelectedId(s=>s) // trigger useEffect
+                }}
+                setSellPackageModal={(tmpl)=>setSellPackageModal({...tmpl, _preselectedCustomer: selected})}
+                setScreen={setScreen}
+                setActiveCustomer={setActiveCustomer}
+              />
+            )}
+
+            {/* ZGODOVINA TAB */}
+            {activeTab === 'zgodovina' && (
+              <CustomerHistoryTab orders={customerOrders} loading={loadingDetail}/>
+            )}
+          </div>
         </div>
       )}
+
+      {/* Dodaj stranko modal */}
+      {addModal && <AddCustomerModal onClose={()=>setAddModal(false)} onSaved={(id)=>{posData.refresh();setSelectedId(id);setAddModal(false)}}/>}
     </div>
+  )
+}
+
+// ─── Profile Edit Tab ─────────────────────────────────────────
+function CustomerProfileEditTab({ customer, onSave }) {
+  const [data, setData] = useState({...customer})
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => { setData({...customer}); setSaved(false) }, [customer.id])
+
+  async function save() {
+    setSaving(true)
+    try {
+      const {error} = await createClient().from('customers').update({
+        name: data.name, phone: data.phone||null, email: data.email||null,
+        birth_date: data.birth_date||null, address: data.address||null,
+        notes: data.notes||null, gender: data.gender||null,
+        marketing_consent: !!data.marketing_consent,
+        notification_email: data.notification_email !== false,
+        tier: data.tier||null,
+      }).eq('id', customer.id)
+      if (error) throw error
+      setSaved(true); onSave()
+      setTimeout(()=>setSaved(false), 3000)
+    } catch(e) { alert(e.message) }
+    setSaving(false)
+  }
+
+  return (
+    <div style={{ maxWidth:520 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+        <Field label="Ime in priimek *">
+          <input value={data?.name||''} onChange={e=>setData(p=>({...p,name:e.target.value}))} style={inp}/>
+        </Field>
+        <Field label="Spol">
+          <select value={data?.gender||''} onChange={e=>setData(p=>({...p,gender:e.target.value}))} style={inp}>
+            <option value="">—</option>
+            <option value="m">Moški</option>
+            <option value="f">Ženski</option>
+            <option value="other">Drugo</option>
+          </select>
+        </Field>
+        <Field label="Telefon">
+          <input value={data?.phone||''} onChange={e=>setData(p=>({...p,phone:e.target.value}))} placeholder="+386 41 123 456" style={inp}/>
+        </Field>
+        <Field label="Datum rojstva">
+          <input type="date" value={data?.birth_date||''} onChange={e=>setData(p=>({...p,birth_date:e.target.value}))} style={inp}/>
+        </Field>
+        <Field label="Email">
+          <input type="email" value={data?.email||''} onChange={e=>setData(p=>({...p,email:e.target.value}))} placeholder="ana@gmail.com" style={inp}/>
+        </Field>
+        <Field label="Tip člana">
+          <select value={data?.tier||''} onChange={e=>setData(p=>({...p,tier:e.target.value}))} style={inp}>
+            <option value="">Redni</option>
+            <option value="silver">Silver</option>
+            <option value="gold">Gold</option>
+            <option value="vip">VIP</option>
+          </select>
+        </Field>
+      </div>
+      <div style={{ marginTop:12 }}>
+        <Field label="Naslov">
+          <input value={data?.address||''} onChange={e=>setData(p=>({...p,address:e.target.value}))} placeholder="Ulica 1, 1000 Ljubljana" style={inp}/>
+        </Field>
+      </div>
+      <div style={{ marginTop:12 }}>
+        <Field label="Interne opombe (vidne samo vam)">
+          <textarea value={data?.notes||''} onChange={e=>setData(p=>({...p,notes:e.target.value}))} rows={3}
+            style={{ ...inp, resize:'vertical' }} placeholder="Alergije, preference, posebnosti..."/>
+        </Field>
+      </div>
+      <div style={{ display:'flex', gap:20, marginTop:12 }}>
+        <label style={{ display:'flex', alignItems:'center', gap:7, fontSize:13, cursor:'pointer' }}>
+          <input type="checkbox" checked={data?.notification_email!==false} onChange={e=>setData(p=>({...p,notification_email:e.target.checked}))} style={{ accentColor:T.accent }}/>
+          📧 Email obvestila o kartah
+        </label>
+        <label style={{ display:'flex', alignItems:'center', gap:7, fontSize:13, cursor:'pointer' }}>
+          <input type="checkbox" checked={!!data?.marketing_consent} onChange={e=>setData(p=>({...p,marketing_consent:e.target.checked}))} style={{ accentColor:T.accent }}/>
+          📣 Privolitev za marketing
+        </label>
+      </div>
+      <div style={{ display:'flex', gap:8, marginTop:16, alignItems:'center' }}>
+        <button onClick={save} disabled={saving} style={{ ...btnP, opacity:saving?0.6:1 }}>
+          {saving?'Shranjujem...':'Shrani spremembe'}
+        </button>
+        {saved && <span style={{ fontSize:12, color:T.accent, fontWeight:600 }}>✓ Shranjeno</span>}
+      </div>
+    </div>
+  )
+}
+
+// ─── Customer Packages Tab ────────────────────────────────────
+function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, setSellPackageModal, setScreen, setActiveCustomer }) {
+  const [actionLoading, setActionLoading] = useState(null)
+  const [toast, setToast] = useState(null)
+  function showToast(msg, ok=true) { setToast({msg,ok}); setTimeout(()=>setToast(null),3000) }
+
+  const active = packages.filter(p=>p.active)
+  const inactive = packages.filter(p=>!p.active)
+
+  const pkgColor = (p) => p.package_templates?.color || '#634896'
+  const tconf = (p) => TEMPLATE_TYPES[p.template_type || p.package_templates?.template_type] || TEMPLATE_TYPES.visits
+
+  // Dodaj obisk (odšteje 1)
+  async function useVisit(pkg) {
+    if (!pkg.remaining || pkg.remaining <= 0) { showToast('Ni več obiskov!', false); return }
+    setActionLoading(pkg.id + '_use')
+    try {
+      const updates = { remaining: pkg.remaining - 1 }
+      // Aktiviraj ob prvem obisku
+      if (!pkg.activated_at && pkg.activation_type === 'first_use') {
+        const now = new Date()
+        updates.activated_at = now.toISOString()
+        if (pkg.package_templates?.validity_days) {
+          const exp = new Date(now)
+          exp.setDate(exp.getDate() + pkg.package_templates.validity_days)
+          updates.expires = exp.toISOString().split('T')[0]
+        }
+      }
+      if (updates.remaining === 0) updates.active = false
+      const {error} = await createClient().from('customer_packages').update(updates).eq('id', pkg.id)
+      if (error) throw error
+      showToast('✓ Obisk zabeležen')
+      onRefresh()
+    } catch(e) { showToast(e.message, false) }
+    setActionLoading(null)
+  }
+
+  // Zamrzni / odmrzni
+  async function toggleFreeze(pkg) {
+    setActionLoading(pkg.id + '_freeze')
+    try {
+      if (pkg.frozen_at) {
+        // Odmrzni — podaljšaj expires za čas zamrznitve
+        const frozenDays = Math.floor((new Date() - new Date(pkg.frozen_at)) / 86400000)
+        let newExpires = pkg.expires
+        if (pkg.expires && frozenDays > 0) {
+          const exp = new Date(pkg.expires)
+          exp.setDate(exp.getDate() + frozenDays)
+          newExpires = exp.toISOString().split('T')[0]
+        }
+        await createClient().from('customer_packages').update({ frozen_at: null, frozen_until: null, expires: newExpires }).eq('id', pkg.id)
+        showToast('Kartica odmrznjena. Veljavnost podaljšana za ' + frozenDays + ' dni.')
+      } else {
+        await createClient().from('customer_packages').update({ frozen_at: new Date().toISOString() }).eq('id', pkg.id)
+        showToast('Kartica zamrznjena. Čas se ne šteje.')
+      }
+      onRefresh()
+    } catch(e) { showToast(e.message, false) }
+    setActionLoading(null)
+  }
+
+  // Prekliči / deaktiviraj
+  async function deactivate(pkg) {
+    if (!confirm(`Deaktiviram kartico "${pkg.name}"?`)) return
+    setActionLoading(pkg.id + '_del')
+    await createClient().from('customer_packages').update({ active: false }).eq('id', pkg.id)
+    showToast('Kartica deaktivirana')
+    onRefresh()
+    setActionLoading(null)
+  }
+
+  if (loading) return <div style={{ padding:32, textAlign:'center', color:T.muted }}>Nalagam...</div>
+
+  return (
+    <div>
+      {/* CTA */}
+      <div style={{ display:'flex', gap:8, marginBottom:20, flexWrap:'wrap' }}>
+        <button onClick={()=>{setActiveCustomer(customer);setScreen('packages')}}
+          style={{ ...btnP, display:'flex', alignItems:'center', gap:6 }}>
+          🎫 Kupi kartico / paket
+        </button>
+        <button onClick={()=>{setActiveCustomer(customer);setScreen('sale')}}
+          style={{ ...btnS, display:'flex', alignItems:'center', gap:6 }}>
+          <KI name="receipt" size={13}/> Nova prodaja
+        </button>
+      </div>
+
+      {/* Aktivne kartice */}
+      {active.length === 0 && inactive.length === 0 && (
+        <div style={{ padding:32, textAlign:'center', color:T.muted, background:T.surface, borderRadius:12, border:'1px solid '+T.line }}>
+          <div style={{ fontSize:32, marginBottom:8 }}>🎫</div>
+          Ta stranka nima nobene kartice ali paketa.<br/>
+          <span style={{ fontSize:12 }}>Klikni "Kupi kartico" da ji prodaš prvo.</span>
+        </div>
+      )}
+
+      {active.length > 0 && (
+        <div style={{ marginBottom:16 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>
+            Aktivne ({active.length})
+          </div>
+          {active.map(pkg => {
+            const tc = tconf(pkg)
+            const daysLeft = pkg.expires ? Math.floor((new Date(pkg.expires) - new Date()) / 86400000) : null
+            const isFrozen = !!pkg.frozen_at
+            const isNearExpiry = daysLeft !== null && daysLeft <= 7
+            const barPct = pkg.total && pkg.remaining !== null ? (pkg.remaining / pkg.total * 100) : null
+
+            return (
+              <div key={pkg.id} style={{ padding:16, borderRadius:12, marginBottom:10, background:T.surface, border:'2px solid '+(isFrozen?'#94a3b8':isNearExpiry?T.warn:tc.color)+'40', position:'relative', opacity:isFrozen?0.7:1 }}>
+                {isFrozen && (
+                  <div style={{ position:'absolute', top:10, right:10, fontSize:10, fontWeight:800, background:'#64748b', color:'#fff', padding:'2px 8px', borderRadius:5 }}>❄️ ZAMRZNJENO</div>
+                )}
+                <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+                  <div style={{ width:38, height:38, borderRadius:9, background:tc.color+'18', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20 }}>{tc.icon}</div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontWeight:700, fontSize:14 }}>{pkg.name}</div>
+                    <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>
+                      {tc.label}
+                      {pkg.purchase_price && <span> · Plačano: {eur(pkg.purchase_price)}</span>}
+                    </div>
+                  </div>
+                  {pkg.remaining !== null && (
+                    <div style={{ textAlign:'right' }}>
+                      <div style={{ fontSize:22, fontWeight:800, fontVariantNumeric:'tabular-nums', color:pkg.remaining<=2?T.danger:tc.color }}>
+                        {pkg.remaining}
+                      </div>
+                      {pkg.total && <div style={{ fontSize:10, color:T.muted }}>/ {pkg.total} obiskov</div>}
+                    </div>
+                  )}
+                </div>
+
+                {/* Progress bar za obiske */}
+                {barPct !== null && (
+                  <div style={{ height:6, borderRadius:999, background:T.surface3, overflow:'hidden', marginBottom:10 }}>
+                    <div style={{ height:'100%', width:barPct+'%', background:pkg.remaining<=2?T.danger:tc.color, borderRadius:999, transition:'width 0.3s' }}/>
+                  </div>
+                )}
+
+                {/* Datum izteka */}
+                {pkg.expires && (
+                  <div style={{ fontSize:12, color:isNearExpiry?T.warn:T.muted, fontWeight:isNearExpiry?700:400, marginBottom:10 }}>
+                    {isNearExpiry ? '⚠️ ' : '📅 '}
+                    Poteče: {new Date(pkg.expires).toLocaleDateString('sl-SI')}
+                    {daysLeft !== null && <span style={{ marginLeft:6 }}>({daysLeft < 0 ? 'poteklo' : daysLeft === 0 ? 'danes' : `čez ${daysLeft} dni`})</span>}
+                  </div>
+                )}
+
+                {/* Gumbi */}
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                  {pkg.remaining !== null && pkg.remaining > 0 && !isFrozen && (
+                    <button onClick={()=>useVisit(pkg)} disabled={actionLoading===pkg.id+'_use'}
+                      style={{ ...btnP, padding:'7px 12px', fontSize:12, background:tc.color }}>
+                      {actionLoading===pkg.id+'_use' ? '...' : '✓ Dodaj obisk'}
+                    </button>
+                  )}
+                  <button onClick={()=>toggleFreeze(pkg)} disabled={!!actionLoading}
+                    style={{ ...btnS, padding:'7px 12px', fontSize:12 }}>
+                    {isFrozen ? '❄️ Odmrzni' : '⏸ Zamrzni'}
+                  </button>
+                  <button onClick={()=>deactivate(pkg)} disabled={!!actionLoading}
+                    style={{ ...btnS, padding:'7px 12px', fontSize:12, color:T.danger }}>
+                    Deaktiviraj
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Pretekle kartice */}
+      {inactive.length > 0 && (
+        <div>
+          <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>
+            Pretekle / neaktivne ({inactive.length})
+          </div>
+          {inactive.map(pkg => (
+            <div key={pkg.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', background:T.surface2, borderRadius:9, marginBottom:6, opacity:0.6 }}>
+              <div style={{ fontSize:16 }}>{(tconf(pkg)||{}).icon||'🎫'}</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, fontWeight:600 }}>{pkg.name}</div>
+                <div style={{ fontSize:11, color:T.muted }}>
+                  {pkg.expires ? `Poteklo: ${new Date(pkg.expires).toLocaleDateString('sl-SI')}` : 'Porabljeno'}
+                </div>
+              </div>
+              {pkg.purchase_price && <div style={{ fontSize:12, color:T.muted }}>{eur(pkg.purchase_price)}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {toast && <Toast msg={toast.msg} ok={toast.ok}/>}
+    </div>
+  )
+}
+
+// ─── Customer History Tab ─────────────────────────────────────
+function CustomerHistoryTab({ orders, loading }) {
+  if (loading) return <div style={{ padding:32, textAlign:'center', color:T.muted }}>Nalagam...</div>
+  if (orders.length === 0) return (
+    <div style={{ padding:32, textAlign:'center', color:T.muted, background:T.surface, borderRadius:12, border:'1px solid '+T.line }}>
+      <div style={{ fontSize:28, marginBottom:8 }}>📋</div>
+      Ni še nobenih nakupov
+    </div>
+  )
+  return (
+    <div>
+      <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>
+        Zadnjih {orders.length} naročil
+      </div>
+      {orders.map((o, idx) => {
+        const payment = (o.payments||[])[0]
+        const total = (o.payments||[]).reduce((s,p)=>s+Number(p.amount||0),0)
+        const methodIcon = { cash:'💶', card:'💳', bon:'🎫', prep:'💰' }[payment?.method] || '💳'
+        return (
+          <div key={o.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'11px 14px', background: idx%2?T.surface2:T.surface, borderRadius:9, marginBottom:4 }}>
+            <div style={{ fontSize:20 }}>{methodIcon}</div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:13, fontWeight:600 }}>{new Date(o.created_at).toLocaleDateString('sl-SI', { day:'numeric', month:'long', year:'numeric' })}</div>
+              <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>
+                {new Date(o.created_at).toLocaleTimeString('sl-SI', { hour:'2-digit', minute:'2-digit' })}
+                {payment?.method && <span> · {payment.method}</span>}
+              </div>
+            </div>
+            <div style={{ fontWeight:800, fontSize:15, fontVariantNumeric:'tabular-nums' }}>{eur(total)}</div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── Add Customer Modal ───────────────────────────────────────
+function AddCustomerModal({ onClose, onSaved }) {
+  const [data, setData] = useState({ name:'', phone:'', email:'', gender:'', notification_email:true })
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    if (!data.name.trim()) return alert('Ime je obvezno')
+    setSaving(true)
+    try {
+      const {data:saved, error} = await createClient().from('customers').insert({
+        business_id: BUSINESS_ID,
+        name: data.name,
+        phone: data.phone||null,
+        email: data.email||null,
+        gender: data.gender||null,
+        notification_email: data.notification_email,
+        points: 0,
+        prepaid: 0,
+        tier: 'regular',
+      }).select().single()
+      if (error) throw error
+      onSaved(saved.id)
+    } catch(e) { alert(e.message) }
+    setSaving(false)
+  }
+
+  return (
+    <Modal open onClose={onClose} width={420}>
+      <ModalHeader title="Nova stranka" onClose={onClose}/>
+      <div style={{ padding:'20px 22px', display:'flex', flexDirection:'column', gap:12 }}>
+        <Field label="Ime in priimek *">
+          <input value={data.name} onChange={e=>setData(p=>({...p,name:e.target.value}))} placeholder="Ana Novak" style={inp} autoFocus/>
+        </Field>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+          <Field label="Telefon">
+            <input value={data.phone} onChange={e=>setData(p=>({...p,phone:e.target.value}))} placeholder="+386 41 123 456" style={inp}/>
+          </Field>
+          <Field label="Spol">
+            <select value={data.gender} onChange={e=>setData(p=>({...p,gender:e.target.value}))} style={inp}>
+              <option value="">—</option>
+              <option value="m">Moški</option>
+              <option value="f">Ženski</option>
+            </select>
+          </Field>
+        </div>
+        <Field label="Email">
+          <input type="email" value={data.email} onChange={e=>setData(p=>({...p,email:e.target.value}))} placeholder="ana@gmail.com" style={inp}/>
+        </Field>
+        <label style={{ display:'flex', alignItems:'center', gap:7, fontSize:13, cursor:'pointer' }}>
+          <input type="checkbox" checked={data.notification_email} onChange={e=>setData(p=>({...p,notification_email:e.target.checked}))} style={{ accentColor:T.accent }}/>
+          Pošiljaj email obvestila o kartah
+        </label>
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:4 }}>
+          <button onClick={onClose} style={btnS}>Prekliči</button>
+          <button onClick={save} disabled={saving} style={{...btnP,opacity:saving?0.6:1}}>{saving?'Shranjujem...':'Dodaj stranko'}</button>
+        </div>
+      </div>
+    </Modal>
   )
 }
 
@@ -3150,7 +3592,7 @@ function CustomerEditButton({ customer, onSave }) {
 // SELL PACKAGE MODAL — prodaja paketa stranki
 // ================================================================
 function SellPackageModal({ template, posData, onClose, auth }) {
-  const [customerId, setCustomerId] = useState('')
+  const [customerId, setCustomerId] = useState(template?._preselectedCustomer?.id || '')
   const [custSearch, setCustSearch] = useState('')
   const [activationType, setActivationType] = useState(template.activation_type||'purchase')
   const [fixedDate, setFixedDate] = useState('')
@@ -3402,7 +3844,7 @@ function KlasikApp() {
           {screen==='floor'     && <FloorScreen spaces={posData.spaces} setActiveTable={setActiveTable} setScreen={setScreen}/>}
           {screen==='sale'      && <SaleScreen activeTable={activeTable} activeCustomer={activeCustomer} cart={cart} setCart={setCart} addItem={addItem} adjustQty={adjustQty} setPaymentOpen={setPaymentOpen} totals={totals} setActiveCustomer={setActiveCustomer} posData={posData} happyHourActive={happyHourActive} setHappyHourActive={setHappyHourActive}/>}
           {screen==='calendar'  && <CalendarScreen posData={posData}/>}
-          {screen==='customers' && <CustomersScreen posData={posData} setActiveCustomer={setActiveCustomer} setScreen={setScreen}/>}
+          {screen==='customers' && <CustomersScreen posData={posData} setActiveCustomer={setActiveCustomer} setScreen={setScreen} setSellPackageModal={setSellPackageModal}/>}
           {screen==='packages'  && <PackagesScreen posData={posData} setSellPackageModal={setSellPackageModal}/>}
           {screen==='inventory' && <InventoryScreen posData={posData}/>}
           {screen==='reports'   && <ReportsScreen posData={posData}/>}
