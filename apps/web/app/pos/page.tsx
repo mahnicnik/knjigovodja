@@ -2443,6 +2443,14 @@ function StoritveCrudSection({ posData }) {
               <input type="number" min="5" step="5" value={modal?.duration_min||60} onChange={e=>setModal(p=>({...p,duration_min:e.target.value}))} style={inp}/>
             </Field>
           </div>
+          <Field label="DDV stopnja *">
+            <select value={modal?.vat_rate??''} onChange={e=>setModal(p=>({...p,vat_rate:e.target.value}))} style={inp}>
+              <option value="">— izberi DDV —</option>
+              <option value={0}>0% (oproščeno)</option>
+              <option value={9.5}>9.5% (storitve)</option>
+              <option value={22}>22% (splošna)</option>
+            </select>
+          </Field>
           <Field label="Barva (za prikaz v koledarju)">
             <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
               {SVC_COLORS.map(c=>(
