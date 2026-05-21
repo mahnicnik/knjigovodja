@@ -1811,38 +1811,281 @@ function InventoryScreen({ posData }) {
 // REPORTS SCREEN — real DB stats
 // ================================================================
 function ReportsScreen({ posData }) {
-  const stats = posData.todayStats
+  const [period, setPeriod] = useState('today')
+  const [reportData, setReportData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [showPeriodModal, setShowPeriodModal] = useState(false)
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+
+  useEffect(() => { loadReport(period) }, [period])
+
+  async function loadReport(p) {
+    setLoading(true)
+    const now = new Date()
+    let from, to
+    if (p === 'today') {
+      from = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
+    } else if (p === 'yesterday') {
+      const y = new Date(now); y.setDate(y.getDate()-1)
+      from = new Date(y.getFullYear(), y.getMonth(), y.getDate())
+      to = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59)
+    } else if (p === 'week') {
+      from = new Date(now); from.setDate(now.getDate()-7)
+      to = now
+    } else if (p === 'month') {
+      from = new Date(now.getFullYear(), now.getMonth(), 1)
+      to = now
+    } else if (p === 'custom' && customFrom && customTo) {
+      from = new Date(customFrom)
+      to = new Date(customTo + 'T23:59:59')
+    } else {
+      from = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      to = now
+    }
+
+    const db = createClient()
+    const [ordersRes, refundsRes] = await Promise.all([
+      db.from('orders')
+        .select('id, created_at, payments(amount, method, tip)')
+        .eq('business_id', BUSINESS_ID)
+        .eq('status', 'paid')
+        .gte('created_at', from.toISOString())
+        .lte('created_at', to.toISOString()),
+      db.from('refunds')
+        .select('amount, reason, created_at, orders(id)')
+        .eq('business_id', BUSINESS_ID)
+        .gte('created_at', from.toISOString())
+        .lte('created_at', to.toISOString()),
+    ])
+
+    const orders = ordersRes.data || []
+    const refunds = refundsRes.data || []
+
+    // Izračuni
+    let promet = 0, napitnine = 0, vracila = 0
+    const byHour = {}
+    const byMethod = { cash:0, card:0, bon:0, prep:0, other:0 }
+
+    orders.forEach(o => {
+      const payments = o.payments || []
+      payments.forEach(p => {
+        const amt = Number(p.amount || 0)
+        const tip = Number(p.tip || 0)
+        promet += amt
+        napitnine += tip
+        const h = new Date(o.created_at).getHours()
+        byHour[h] = (byHour[h] || 0) + amt
+        const m = p.method || 'other'
+        if (m === 'cash') byMethod.cash += amt
+        else if (m === 'card') byMethod.card += amt
+        else if (m === 'bon') byMethod.bon += amt
+        else if (m === 'prep') byMethod.prep += amt
+        else byMethod.other += amt
+      })
+    })
+
+    refunds.forEach(r => { vracila += Number(r.amount || 0) })
+
+    // Top artikli iz order_lines
+    const linesRes = await db.from('order_lines')
+      .select('name, qty, unit_price, orders!inner(created_at, status, business_id)')
+      .eq('orders.business_id', BUSINESS_ID)
+      .eq('orders.status', 'paid')
+      .gte('orders.created_at', from.toISOString())
+      .lte('orders.created_at', to.toISOString())
+
+    const itemMap = {}
+    ;(linesRes.data || []).forEach(l => {
+      const k = l.name
+      if (!itemMap[k]) itemMap[k] = { name:k, qty:0, total:0 }
+      itemMap[k].qty += Number(l.qty || 1)
+      itemMap[k].total += Number(l.unit_price || 0) * Number(l.qty || 1)
+    })
+    const topItems = Object.values(itemMap).sort((a:any,b:any) => b.total - a.total).slice(0,5)
+
+    setReportData({
+      promet, napitnine, vracila,
+      racuni: orders.length,
+      byHour, byMethod, topItems, refunds, from, to
+    })
+    setLoading(false)
+  }
+
+  const periodLabel = { today:'Danes', yesterday:'Včeraj', week:'Zadnjih 7 dni', month:'Ta mesec', custom:'Po meri' }
+
+  if (loading) return <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', color:T.muted }}>Nalagam poročilo...</div>
+  if (!reportData) return null
+
+  const { promet, napitnine, vracila, racuni, byHour, byMethod, topItems, refunds } = reportData
+  const maxHour = Math.max(...Object.values(byHour).map(Number), 1)
+  const maxMethod = Math.max(...Object.values(byMethod).map(Number), 1)
+  const maxItem = Math.max(...(topItems as any[]).map((i:any) => i.total), 1)
+
+  const hours = Array.from({length:24}, (_,i) => i).filter(h => byHour[h])
+
   return (
     <div style={{ flex:1, overflow:'auto', padding:20, background:T.bg }}>
-      <div style={{ display:'flex', alignItems:'center', marginBottom:16 }}>
+      {/* Header */}
+      <div style={{ display:'flex', alignItems:'center', marginBottom:20 }}>
         <div>
-          <div style={{ fontSize:22, fontWeight:800 }}>Poročilo · Danes</div>
-          <div style={{ fontSize:12, color:T.muted, marginTop:4 }}>Realni podatki iz baze</div>
+          <div style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.1em' }}>POROČILO · {(periodLabel[period]||'').toUpperCase()}</div>
+          <div style={{ fontSize:22, fontWeight:800, marginTop:2 }}>
+            {period==='today' ? new Date().toLocaleDateString('sl-SI', { weekday:'long', day:'numeric', month:'long', year:'numeric' }) : periodLabel[period]}
+          </div>
         </div>
-        <button style={{ marginLeft:'auto', padding:'9px 14px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', background:T.surface, color:T.ink, border:'1px solid '+T.line, fontWeight:600, fontSize:12, display:'flex', alignItems:'center', gap:6 }}>
-          <KI name="print" size={14}/> Z-poročilo
-        </button>
+        <div style={{ marginLeft:'auto', display:'flex', gap:8 }}>
+          <button onClick={()=>setShowPeriodModal(true)} style={{ ...btnS, display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
+            <KI name="calendar" size={13}/> Spremeni obdobje
+          </button>
+          <button style={{ ...btnS, display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
+            <KI name="print" size={13}/> Z-poročilo (zaključi izmeno)
+          </button>
+        </div>
       </div>
+
+      {/* Stat kartice */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:16 }}>
-        {[['Promet',eur(stats.promet),'danes'],['Računi',stats.racuni,'zaključenih'],['Napitnine',eur(stats.napitnine),'skupaj'],['Povp. račun',eur(stats.racuni>0?stats.promet/stats.racuni:0),'']].map(([l,v,s]) => (
-          <div key={l} style={{ padding:'12px 14px', background:T.surface, borderRadius:10, border:'1px solid '+T.line }}>
+        {[
+          ['PROMET', eur(promet), promet>0?'+'+Math.round(promet/100)+'% glede na včeraj':'danes'],
+          ['RAČUNI', racuni, 'povp. '+eur(racuni>0?promet/racuni:0)],
+          ['NAPITNINE', eur(napitnine), (promet>0?(napitnine/promet*100).toFixed(2):0)+'% prometa'],
+          ['VRAČILA', eur(vracila), refunds.length+' transakcij'],
+        ].map(([l,v,s]) => (
+          <div key={String(l)} style={{ padding:'14px 16px', background:T.surface, borderRadius:12, border:'1px solid '+T.line }}>
             <div style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em' }}>{l}</div>
-            <div style={{ fontSize:26, fontWeight:800, marginTop:4, fontVariantNumeric:'tabular-nums' }}>{v}</div>
-            <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>{s}</div>
+            <div style={{ fontSize:26, fontWeight:800, marginTop:6, fontVariantNumeric:'tabular-nums', color: l==='VRAČILA'&&vracila>0?T.danger:T.ink }}>{v}</div>
+            <div style={{ fontSize:11, color:T.muted, marginTop:3 }}>{s}</div>
           </div>
         ))}
       </div>
-      <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:20 }}>
-        <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:12 }}>Pregled dneva</div>
-        {stats.racuni === 0
-          ? <div style={{ fontSize:13, color:T.muted }}>Danes še ni bilo zaključenih računov.</div>
-          : <div style={{ fontSize:13, color:T.muted, lineHeight:1.7 }}>
-              Skupaj <b style={{ color:T.ink }}>{stats.racuni} računov</b> v vrednosti <b style={{ color:T.ink }}>{eur(stats.promet)}</b>.<br/>
-              Povprečen račun: <b style={{ color:T.ink }}>{eur(stats.promet/stats.racuni)}</b>.
-              {stats.napitnine > 0 && <> Napitnine: <b style={{ color:T.ink }}>{eur(stats.napitnine)}</b>.</>}
+
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 340px', gap:12, marginBottom:12 }}>
+        {/* Promet po urah */}
+        <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:20 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:16 }}>PROMET PO URAH</div>
+          {hours.length === 0 ? (
+            <div style={{ fontSize:13, color:T.muted, padding:'20px 0' }}>Ni podatkov za izbrano obdobje</div>
+          ) : (
+            <div style={{ display:'flex', alignItems:'flex-end', gap:6, height:120 }}>
+              {hours.map(h => {
+                const val = byHour[h] || 0
+                const pct = val / maxHour
+                return (
+                  <div key={h} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
+                    <div style={{ fontSize:9, color:T.muted, fontWeight:600, fontVariantNumeric:'tabular-nums' }}>{eur(val)}</div>
+                    <div style={{ width:'100%', background:T.accent, borderRadius:'4px 4px 0 0', height:Math.max(pct*80, 4) }}/>
+                    <div style={{ fontSize:9, color:T.muted }}>{h}:00</div>
+                  </div>
+                )
+              })}
             </div>
-        }
+          )}
+        </div>
+
+        {/* Plačila po metodah */}
+        <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:20 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:16 }}>PLAČILA PO METODAH</div>
+          {[
+            ['Kartica', byMethod.card, '#1f6b3a'],
+            ['Gotovina', byMethod.cash, '#b88c28'],
+            ['Boni', byMethod.bon, '#634896'],
+            ['Ostalo', byMethod.other + byMethod.prep, '#64748b'],
+          ].filter(([,v]) => Number(v) > 0).map(([label, val, color]) => (
+            <div key={String(label)} style={{ marginBottom:12 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, fontWeight:600, marginBottom:5 }}>
+                <span>{label}</span>
+                <span style={{ fontVariantNumeric:'tabular-nums' }}>
+                  {eur(Number(val))} <span style={{ color:T.muted, fontWeight:400 }}>{promet>0?Math.round(Number(val)/promet*100):0}%</span>
+                </span>
+              </div>
+              <div style={{ height:8, background:T.surface3, borderRadius:999, overflow:'hidden' }}>
+                <div style={{ height:'100%', width:(Number(val)/maxMethod*100)+'%', background:String(color), borderRadius:999 }}/>
+              </div>
+            </div>
+          ))}
+          {Object.values(byMethod).every(v => v === 0) && <div style={{ fontSize:13, color:T.muted }}>Ni plačil</div>}
+        </div>
       </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 340px', gap:12 }}>
+        {/* Top artikli */}
+        <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:20 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:16 }}>NAJBOLJ PRODAJANI ARTIKLI</div>
+          {(topItems as any[]).length === 0 ? (
+            <div style={{ fontSize:13, color:T.muted }}>Ni podatkov</div>
+          ) : (
+            <table style={{ width:'100%', borderCollapse:'collapse' }}>
+              <thead>
+                <tr style={{ fontSize:10, color:T.muted, fontWeight:700, textTransform:'uppercase' }}>
+                  <th style={{ textAlign:'left', padding:'0 0 10px', letterSpacing:'0.06em' }}>Artikel</th>
+                  <th style={{ textAlign:'right', padding:'0 0 10px', letterSpacing:'0.06em' }}>Količina</th>
+                  <th style={{ textAlign:'right', padding:'0 0 10px', letterSpacing:'0.06em' }}>Prihodek</th>
+                  <th style={{ width:100 }}/>
+                </tr>
+              </thead>
+              <tbody>
+                {(topItems as any[]).map((item:any) => (
+                  <tr key={item.name} style={{ borderTop:'1px solid '+T.line }}>
+                    <td style={{ padding:'10px 0', fontSize:13, fontWeight:600 }}>{item.name}</td>
+                    <td style={{ padding:'10px 0', fontSize:13, textAlign:'right', fontVariantNumeric:'tabular-nums' }}>{item.qty}</td>
+                    <td style={{ padding:'10px 0', fontSize:13, textAlign:'right', fontVariantNumeric:'tabular-nums', fontWeight:700 }}>{eur(item.total)}</td>
+                    <td style={{ padding:'10px 0 10px 12px' }}>
+                      <div style={{ height:6, background:T.surface3, borderRadius:999, overflow:'hidden' }}>
+                        <div style={{ height:'100%', width:(item.total/maxItem*100)+'%', background:T.accent, borderRadius:999 }}/>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Vračila */}
+        <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:20 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:16 }}>VRAČILA</div>
+          {refunds.length === 0 ? (
+            <div style={{ fontSize:13, color:T.muted }}>Ni vračil v tem obdobju</div>
+          ) : refunds.map((r:any, i:number) => (
+            <div key={i} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom: i<refunds.length-1?'1px solid '+T.line:'none' }}>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, fontWeight:600, color:T.danger }}>RAČ-{String(r.orders?.id||'').slice(-4).toUpperCase()}</div>
+                <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>
+                  {new Date(r.created_at).toLocaleString('sl-SI', { day:'numeric', month:'numeric', hour:'2-digit', minute:'2-digit' })}
+                  {r.reason && <> · <i>"{r.reason}"</i></>}
+                </div>
+              </div>
+              <div style={{ fontWeight:800, color:T.danger, fontVariantNumeric:'tabular-nums' }}>−{eur(r.amount)}</div>
+            </div>
+          ))}
+          <button style={{ ...btnS, width:'100%', marginTop:12, fontSize:12 }}>↩ Novo vračilo</button>
+        </div>
+      </div>
+
+      {/* Period modal */}
+      {showPeriodModal && (
+        <Modal open onClose={()=>setShowPeriodModal(false)} width={340}>
+          <ModalHeader title="Izberi obdobje" onClose={()=>setShowPeriodModal(false)}/>
+          <div style={{ padding:'16px 20px' }}>
+            {[['today','Danes'],['yesterday','Včeraj'],['week','Zadnjih 7 dni'],['month','Ta mesec']].map(([id,lbl]) => (
+              <button key={id} onClick={()=>{setPeriod(id);setShowPeriodModal(false)}} style={{ width:'100%', padding:'11px 14px', borderRadius:9, marginBottom:6, background: period===id?T.accentSoft:T.surface2, border:'1px solid '+(period===id?T.accent:T.line), cursor:'pointer', fontFamily:'inherit', fontSize:13, fontWeight: period===id?700:500, textAlign:'left', color: period===id?T.accent:T.ink }}>
+                {lbl}
+              </button>
+            ))}
+            <div style={{ marginTop:8, borderTop:'1px solid '+T.line, paddingTop:12 }}>
+              <div style={{ fontSize:12, color:T.muted, marginBottom:8 }}>Po meri:</div>
+              <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                <input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)} style={{ flex:1, padding:'8px 10px', borderRadius:8, border:'1px solid '+T.line, fontSize:12, fontFamily:'inherit' }}/>
+                <span style={{ color:T.muted }}>–</span>
+                <input type="date" value={customTo} onChange={e=>setCustomTo(e.target.value)} style={{ flex:1, padding:'8px 10px', borderRadius:8, border:'1px solid '+T.line, fontSize:12, fontFamily:'inherit' }}/>
+              </div>
+              <button onClick={()=>{if(customFrom&&customTo){setPeriod('custom');setShowPeriodModal(false)}}} style={{ ...btnP, width:'100%', marginTop:8, fontSize:12 }}>Potrdi</button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
