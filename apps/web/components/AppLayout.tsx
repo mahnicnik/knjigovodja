@@ -136,9 +136,9 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
         .eq('user_id', user.id).single()
 
       if (prefs) {
-        if (prefs.nav_hidden) setHiddenHrefs(new Set(prefs.nav_hidden))
-        if (prefs.nav_order) setSectionOrder(prefs.nav_order)
-        if (prefs.quick_actions) setQaHrefs(prefs.quick_actions)
+        if (Array.isArray(prefs.nav_hidden)) setHiddenHrefs(new Set(prefs.nav_hidden))
+        if (Array.isArray(prefs.nav_order)) setSectionOrder(prefs.nav_order)
+        if (Array.isArray(prefs.quick_actions)) setQaHrefs(prefs.quick_actions)
       }
     }
     load()
