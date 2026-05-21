@@ -117,6 +117,7 @@ function usePosData() {
   const [packageTemplates, setPackageTemplates] = useState([])
   const [services, setServices] = useState([])
   const [ingredients, setIngredients] = useState([])
+  const [notifications, setNotifications] = useState([])
   const [todayStats, setTodayStats] = useState({ promet: 0, racuni: 0, napitnine: 0 })
   const [businessProfile, setBusinessProfile] = useState('all')
   const [loading, setLoading] = useState(true)
@@ -148,6 +149,10 @@ function usePosData() {
         setServices(svcs)
         setTodayStats(stats)
         setIngredients((await createClient().from('ingredients').select('*, item_ingredients(qty_used, item_id)').eq('business_id', BUSINESS_ID).order('name')).data || [])
+        // Generiraj in fetch notifikacije
+        await createClient().rpc('generate_pos_notifications', { p_business_id: BUSINESS_ID })
+        const notifRes = await createClient().from('pos_notifications').select('*, customers(name, email)').eq('business_id', BUSINESS_ID).eq('dismissed', false).order('created_at', { ascending: false })
+        setNotifications(notifRes.data || [])
         // Fetch business profile
         const { data: bizData } = await createClient().from('businesses').select('profile_type').eq('id', BUSINESS_ID).single()
         if (bizData?.profile_type) setBusinessProfile(bizData.profile_type)
@@ -172,7 +177,7 @@ function usePosData() {
     return [{ id: 'cat-fav', name: 'Priljubljeno', icon: '★', color: '#E9B949' }, ...categories]
   }, [categories])
 
-  return { categories: categoriesWithFav, items, spaces, customers, staffList, packageTemplates, services, ingredients, todayStats, businessProfile, setBusinessProfile, loading, itemsIn, refresh }
+  return { categories: categoriesWithFav, items, spaces, customers, staffList, packageTemplates, services, ingredients, notifications, setNotifications, todayStats, businessProfile, setBusinessProfile, loading, itemsIn, refresh }
 }
 
 // ================================================================
@@ -1130,6 +1135,7 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen }) {
               <button onClick={() => { setActiveCustomer(selected); setScreen('sale') }} style={{ padding:'9px 14px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', background:T.accent, color:'#fff', border:'none', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', gap:6 }}>
                 <KI name="receipt" size={14}/> Nov račun
               </button>
+              <CustomerEditButton customer={selected} onSave={() => posData.refresh()}/>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
               {[['Točke', selected.points || 0, selected.tier], ['Predplačilo', eur(selected.prepaid || 0), Number(selected.prepaid)>0?'na voljo':'brez'], ['Paketi', (selected.customer_packages||[]).filter(p=>p.active).length, 'aktivnih']].map(([l,v,s]) => (
@@ -1174,9 +1180,30 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen }) {
 }
 
 // ================================================================
-// PACKAGES SCREEN — real DB
+// PACKAGES SCREEN — prodaja paketov
 // ================================================================
-function PackagesScreen({ posData }) {
+const TEMPLATE_TYPES = {
+  membership:    { label:'Članarina',      icon:'🏅', color:'#1f6b3a', desc:'Neomejen dostop za X dni' },
+  visits:        { label:'Karta obiskov',  icon:'🎫', color:'#3a6e8f', desc:'N obiskov, poteče po X dneh' },
+  gift_voucher:  { label:'Darilni bon (€)', icon:'🎁', color:'#c26a3a', desc:'Vrednostni bon v evrih' },
+  service_bon:   { label:'Bon za storitev',icon:'🎟️', color:'#7b61b8', desc:'1× specifična storitev' },
+  seasonal:      { label:'Sezonska karta', icon:'☀️', color:'#b88c28', desc:'Velja od-do datum' },
+  time_restrict: { label:'Časovna karta',  icon:'⏰', color:'#3a8f8f', desc:'Samo ob določenem času' },
+  group_class:   { label:'Skupinska karta',icon:'👥', color:'#8f3a6e', desc:'N skupinskih vadb' },
+  prepaid:       { label:'Dobroimetje',    icon:'💰', color:'#4a7c59', desc:'Predplačilo na račun stranke' },
+}
+
+const ACTIVATION_TYPES = {
+  purchase:   'Takoj ob nakupu',
+  first_use:  'Ob prvem obisku',
+  fixed_date: 'Na določen datum',
+}
+
+function PackagesScreen({ posData, setSellPackageModal }) {
+  const [filter, setFilter] = useState('all')
+
+  const filtered = posData.packageTemplates.filter(p => filter === 'all' || (p.template_type||p.type) === filter)
+
   if (posData.packageTemplates.length === 0) {
     return (
       <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', color:T.muted, gap:12, padding:40, textAlign:'center' }}>
@@ -1186,28 +1213,44 @@ function PackagesScreen({ posData }) {
       </div>
     )
   }
+
   return (
-    <div style={{ flex:1, overflow:'auto', padding:20, background:T.bg }}>
-      <div style={{ display:'flex', alignItems:'center', marginBottom:20 }}>
-        <div>
-          <div style={{ fontSize:22, fontWeight:800 }}>Kartice & paketi</div>
-          <div style={{ fontSize:13, color:T.muted, marginTop:4 }}>Predloge paketov za prodajo strankam.</div>
+    <div style={{ flex:1, display:'flex', flexDirection:'column', minHeight:0 }}>
+      <div style={{ padding:'12px 20px', background:T.surface, borderBottom:'1px solid '+T.line, display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+        <div style={{ fontSize:16, fontWeight:700 }}>Paketi & kartice</div>
+        <div style={{ display:'flex', gap:4, flex:1, flexWrap:'wrap' }}>
+          <button onClick={()=>setFilter('all')} style={{ padding:'5px 12px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:11, background:filter==='all'?T.header:T.surface3, color:filter==='all'?T.headerInk:T.ink }}>Vsi</button>
+          {Object.entries(TEMPLATE_TYPES).map(([k,v])=>(
+            <button key={k} onClick={()=>setFilter(k)} style={{ padding:'5px 12px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:11, background:filter===k?v.color:T.surface3, color:filter===k?'#fff':T.ink }}>{v.icon} {v.label}</button>
+          ))}
         </div>
       </div>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:12 }}>
-        {posData.packageTemplates.map(p => {
-          const typeColor = p.type==='unlimited'?'#1f6b3a':p.type==='visits'?'#3a6e8f':p.type==='time-restricted'?'#e9b949':'#7b61b8'
-          const typeLabel = p.type==='unlimited'?'Neomejen':p.type==='visits'?(p.visits+'x'):p.type==='time-restricted'?'Časovno':'Ostalo'
+
+      <div style={{ flex:1, overflow:'auto', padding:16, display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:12, alignContent:'start' }}>
+        {filtered.map(p => {
+          const ttype = p.template_type || p.type || 'visits'
+          const tconf = TEMPLATE_TYPES[ttype] || TEMPLATE_TYPES.visits
           return (
-            <div key={p.id} style={{ background:T.surface, borderRadius:13, border:'1px solid '+T.line, padding:18, position:'relative' }}>
-              <span style={{ position:'absolute', top:14, right:14, fontSize:10, fontWeight:800, padding:'4px 9px', borderRadius:5, background:typeColor+'18', color:typeColor, textTransform:'uppercase', letterSpacing:'0.05em' }}>{typeLabel}</span>
-              <div style={{ fontSize:16, fontWeight:800, paddingRight:80 }}>{p.name}</div>
-              <div style={{ fontSize:34, fontWeight:900, fontVariantNumeric:'tabular-nums', letterSpacing:'-0.02em', marginTop:10, lineHeight:1 }}>{eur(p.price)}</div>
-              <div style={{ fontSize:12, color:T.muted, lineHeight:1.5, marginTop:10, minHeight:32 }}>{p.description}</div>
-              <div style={{ fontSize:11, color:T.muted, marginTop:10, paddingTop:10, borderTop:'1px solid '+T.lineSoft, fontWeight:600 }}>
-                Veljavnost: <b style={{ color:T.ink }}>{p.validity_days} dni</b>
-                {p.hours_from && <span> · {p.hours_from}–{p.hours_to}</span>}
+            <div key={p.id} style={{ background:T.surface, borderRadius:13, border:'1px solid '+T.line, padding:18, position:'relative', display:'flex', flexDirection:'column' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
+                <div style={{ width:40, height:40, borderRadius:10, background:tconf.color+'18', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20 }}>{tconf.icon}</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:14, fontWeight:800 }}>{p.name}</div>
+                  <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:5, background:tconf.color+'18', color:tconf.color }}>{tconf.label}</span>
+                </div>
               </div>
+              <div style={{ fontSize:28, fontWeight:900, fontVariantNumeric:'tabular-nums', letterSpacing:'-0.02em', color:tconf.color }}>{eur(p.price)}</div>
+              {p.description && <div style={{ fontSize:12, color:T.muted, marginTop:6, lineHeight:1.5 }}>{p.description}</div>}
+              <div style={{ fontSize:11, color:T.muted, marginTop:10, paddingTop:10, borderTop:'1px solid '+T.lineSoft, display:'flex', flexWrap:'wrap', gap:8 }}>
+                {p.validity_days && <span>📅 {p.validity_days} dni</span>}
+                {p.visits && <span>🎯 {p.visits}×</span>}
+                {p.activation_type && <span>⚡ {ACTIVATION_TYPES[p.activation_type]||p.activation_type}</span>}
+                {p.auto_renew && <span>🔄 Auto-obnova</span>}
+                {p.time_from && <span>⏰ {p.time_from}–{p.time_to}</span>}
+              </div>
+              <button onClick={()=>setSellPackageModal(p)} style={{ ...btnP, marginTop:14, justifyContent:'center', background:tconf.color }}>
+                Prodaj stranki
+              </button>
             </div>
           )
         })}
@@ -2108,18 +2151,42 @@ function SpacesSection({ posData }) {
   )
 }
 
-// ─── Packages Admin CRUD ──────────────────────────────────────
+// ─── Packages Admin CRUD — vse vrste ─────────────────────────
 function PackagesAdminSection({ posData }) {
   const [modal, setModal] = useState(null)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
   function showToast(msg, ok=true) { setToast({msg,ok}); setTimeout(()=>setToast(null),3000) }
+  const ttype = modal?.template_type || 'visits'
 
   async function save() {
-    if (!modal?.name?.trim()||!modal?.price) { showToast('Ime in cena sta obvezna',false); return }
+    if (!modal?.name?.trim()) { showToast('Ime je obvezno',false); return }
+    if (!modal?.price && ttype !== 'service_bon') { showToast('Cena je obvezna',false); return }
     setSaving(true)
     try {
-      const payload = { business_id:BUSINESS_ID, name:modal.name, price:Number(modal.price), type:modal.type||'unlimited', validity_days:Number(modal.validity_days||30), visits:modal.type==='visits'?Number(modal.visits||10):null, description:modal.description||null, archived:false }
+      const payload = {
+        business_id: BUSINESS_ID,
+        name: modal.name,
+        price: Number(modal.price||0),
+        template_type: ttype,
+        activation_type: modal.activation_type||'purchase',
+        validity_days: modal.validity_days?Number(modal.validity_days):null,
+        visits: ['visits','group_class'].includes(ttype) ? Number(modal.visits||10) : null,
+        monetary_value: ttype==='gift_voucher' ? Number(modal.monetary_value||0) : null,
+        time_from: modal.time_from||null,
+        time_to: modal.time_to||null,
+        days_of_week: modal.days_of_week||[],
+        auto_renew: !!modal.auto_renew,
+        vat_rate: Number(modal.vat_rate||22),
+        notify_before_days: Number(modal.notify_before_days||7),
+        fixed_start_date: modal.fixed_start_date||null,
+        fixed_end_date: modal.fixed_end_date||null,
+        description: modal.description||null,
+        color: modal.color||(TEMPLATE_TYPES[ttype]?.color||'#1f6b3a'),
+        archived: false,
+        // legacy fields
+        type: ttype === 'visits' ? 'visits' : ttype === 'membership' ? 'unlimited' : 'unlimited',
+      }
       if (modal.id) {
         const {error} = await createClient().from('package_templates').update(payload).eq('id',modal.id)
         if (error) throw error
@@ -2138,64 +2205,153 @@ function PackagesAdminSection({ posData }) {
     posData.refresh(); showToast('Paket izbrisan')
   }
 
-  const typeColors = { unlimited:'#1f6b3a', visits:'#3a6e8f', 'time-restricted':'#e9b949' }
-  const typeLabels = { unlimited:'Neomejen', visits:'Po obiskih', 'time-restricted':'Časovno' }
+  const DAYS = [['pon','Pon'],['tor','Tor'],['sre','Sre'],['čet','Čet'],['pet','Pet'],['sob','Sob'],['ned','Ned']]
 
   return (
     <div>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
-        <div style={{ fontSize:22, fontWeight:800 }}>Paketi & Kartice</div>
-        <button onClick={()=>setModal({type:'unlimited',validity_days:30})} style={btnP}>+ Dodaj paket</button>
-      </div>
-      {posData.packageTemplates.map(p => (
-        <div key={p.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background:T.surface, borderRadius:12, marginBottom:8, border:'1px solid '+T.line }}>
-          <div style={{ flex:1 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
-              <span style={{ fontWeight:700, fontSize:14 }}>{p.name}</span>
-              <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:5, background:(typeColors[p.type]||'#888')+'18', color:typeColors[p.type]||'#888', textTransform:'uppercase' }}>{typeLabels[p.type]||p.type}</span>
-            </div>
-            <div style={{ fontSize:11, color:T.muted }}>
-              Veljavnost: {p.validity_days} dni
-              {p.visits&&<span> · {p.visits} obiskov</span>}
-              {p.description&&<span> · {p.description}</span>}
-            </div>
-          </div>
-          <div style={{ fontSize:18, fontWeight:800, fontVariantNumeric:'tabular-nums' }}>{eur(p.price)}</div>
-          <button onClick={()=>setModal({...p})} style={btnS}><KI name="edit" size={14}/></button>
-          <button onClick={()=>remove(p.id,p.name)} style={{...btnS,color:T.danger}}><KI name="trash" size={14}/></button>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+        <div>
+          <div style={{ fontSize:22, fontWeight:800 }}>Paketi & Kartice</div>
+          <div style={{ fontSize:12, color:T.muted, marginTop:4 }}>Predloge za prodajo strankam — članaraine, kartice, boni.</div>
         </div>
-      ))}
+        <button onClick={()=>setModal({template_type:'visits',activation_type:'purchase',validity_days:30,visits:10,vat_rate:22,notify_before_days:7,days_of_week:[]})} style={btnP}>+ Dodaj paket</button>
+      </div>
+
+      {/* Gruppiran prikaz */}
+      {Object.entries(TEMPLATE_TYPES).map(([typeKey, typeConf]) => {
+        const typePackages = posData.packageTemplates.filter(p => (p.template_type||p.type||'visits') === typeKey || (typeKey==='visits' && p.type==='visits' && !p.template_type) || (typeKey==='membership' && p.type==='unlimited' && !p.template_type))
+        if (typePackages.length === 0) return null
+        return (
+          <div key={typeKey} style={{ marginBottom:16 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, display:'flex', alignItems:'center', gap:6 }}>
+              <span style={{ fontSize:14 }}>{typeConf.icon}</span> {typeConf.label}
+            </div>
+            {typePackages.map(p => (
+              <div key={p.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', background:T.surface, borderRadius:10, marginBottom:6, border:'1px solid '+T.line }}>
+                <div style={{ width:36, height:36, borderRadius:8, background:typeConf.color+'18', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>{typeConf.icon}</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:700, fontSize:14 }}>{p.name}</div>
+                  <div style={{ fontSize:11, color:T.muted, marginTop:2, display:'flex', gap:10, flexWrap:'wrap' }}>
+                    {p.validity_days && <span>📅 {p.validity_days} dni</span>}
+                    {p.visits && <span>🎯 {p.visits}×</span>}
+                    {p.activation_type && <span>⚡ {ACTIVATION_TYPES[p.activation_type]||''}</span>}
+                    {p.auto_renew && <span>🔄 Auto</span>}
+                    {p.description && <span style={{ color:T.mutedSoft }}>· {p.description}</span>}
+                  </div>
+                </div>
+                <div style={{ fontSize:18, fontWeight:800, fontVariantNumeric:'tabular-nums', color:typeConf.color }}>{eur(p.price)}</div>
+                <button onClick={()=>setModal({...p, template_type: p.template_type||p.type||'visits', days_of_week:p.days_of_week||[]})} style={btnS}><KI name="edit" size={14}/></button>
+                <button onClick={()=>remove(p.id,p.name)} style={{...btnS,color:T.danger}}><KI name="trash" size={14}/></button>
+              </div>
+            ))}
+          </div>
+        )
+      })}
       {posData.packageTemplates.length===0 && <div style={{ padding:40, textAlign:'center', color:T.muted, background:T.surface, borderRadius:12, border:'1px solid '+T.line }}>Ni paketov</div>}
 
-      <Modal open={!!modal} onClose={()=>setModal(null)} width={440}>
-        <ModalHeader title={modal?.id?'Uredi paket':'Nov paket'} onClose={()=>setModal(null)}/>
-        <div style={{ padding:'20px 22px', display:'flex', flexDirection:'column', gap:12 }}>
-          <Field label="Ime paketa *">
-            <input value={modal?.name||''} onChange={e=>setModal(p=>({...p,name:e.target.value}))} placeholder="Mesečna karta, 10× vstopnica..." style={inp} autoFocus/>
+      <Modal open={!!modal} onClose={()=>setModal(null)} width={500}>
+        <ModalHeader title={modal?.id ? 'Uredi paket' : 'Nov paket'} onClose={()=>setModal(null)}/>
+        <div style={{ padding:'20px 22px', display:'flex', flexDirection:'column', gap:12, maxHeight:'75vh', overflowY:'auto' }}>
+
+          {/* Tip */}
+          <Field label="Tip paketa *">
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:5 }}>
+              {Object.entries(TEMPLATE_TYPES).map(([k,v])=>{
+                const sel = ttype === k
+                return (
+                  <div key={k} onClick={()=>setModal(p=>({...p,template_type:k}))} style={{ padding:'8px 4px', borderRadius:9, border:'2px solid '+(sel?v.color:T.line), cursor:'pointer', textAlign:'center', background:sel?v.color+'18':T.surface }}>
+                    <div style={{ fontSize:18 }}>{v.icon}</div>
+                    <div style={{ fontSize:10, fontWeight:700, color:sel?v.color:T.muted, marginTop:3, lineHeight:1.2 }}>{v.label}</div>
+                  </div>
+                )
+              })}
+            </div>
           </Field>
+
+          <Field label="Ime paketa *">
+            <input value={modal?.name||''} onChange={e=>setModal(p=>({...p,name:e.target.value}))} placeholder="Letna članarain, 10× vstopnica, Darilni bon..." style={inp} autoFocus/>
+          </Field>
+
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-            <Field label="Cena (€) *">
+            <Field label={ttype==='gift_voucher'?'Vrednost bona (€) *':'Cena (€) *'}>
               <input type="number" step="0.01" min="0" value={modal?.price||''} onChange={e=>setModal(p=>({...p,price:e.target.value}))} style={inp}/>
             </Field>
-            <Field label="Veljavnost (dni)">
-              <input type="number" min="1" value={modal?.validity_days||30} onChange={e=>setModal(p=>({...p,validity_days:e.target.value}))} style={inp}/>
+            <Field label="DDV stopnja *">
+              <select value={modal?.vat_rate??22} onChange={e=>setModal(p=>({...p,vat_rate:e.target.value}))} style={inp}>
+                <option value={0}>0% (bon, kuponi)</option>
+                <option value={9.5}>9.5% (storitve)</option>
+                <option value={22}>22% (splošna)</option>
+              </select>
             </Field>
           </div>
-          <Field label="Tip">
-            <select value={modal?.type||'unlimited'} onChange={e=>setModal(p=>({...p,type:e.target.value}))} style={inp}>
-              <option value="unlimited">Neomejen (dni)</option>
-              <option value="visits">Po obiskih</option>
-              <option value="time-restricted">Časovno omejen</option>
-            </select>
+
+          {/* Aktivacija */}
+          <Field label="Začetek veljavnosti">
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:5 }}>
+              {Object.entries(ACTIVATION_TYPES).map(([k,v])=>{
+                const sel = (modal?.activation_type||'purchase') === k
+                return <div key={k} onClick={()=>setModal(p=>({...p,activation_type:k}))} style={{ padding:'8px 6px', borderRadius:8, border:'2px solid '+(sel?T.accent:T.line), cursor:'pointer', textAlign:'center', background:sel?T.accentSoft:T.surface, fontSize:11, fontWeight:600, color:sel?T.accent:T.muted }}>{v}</div>
+              })}
+            </div>
           </Field>
-          {modal?.type==='visits' && (
-            <Field label="Število obiskov">
+
+          {/* Trajanje */}
+          {ttype !== 'seasonal' && (
+            <Field label="Veljavnost (dni od aktivacije)">
+              <input type="number" min="1" value={modal?.validity_days||''} onChange={e=>setModal(p=>({...p,validity_days:e.target.value}))} placeholder="30, 90, 365..." style={inp}/>
+            </Field>
+          )}
+
+          {/* Sezonski datumi */}
+          {ttype === 'seasonal' && (
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+              <Field label="Začetek sezone *"><input type="date" value={modal?.fixed_start_date||''} onChange={e=>setModal(p=>({...p,fixed_start_date:e.target.value}))} style={inp}/></Field>
+              <Field label="Konec sezone *"><input type="date" value={modal?.fixed_end_date||''} onChange={e=>setModal(p=>({...p,fixed_end_date:e.target.value}))} style={inp}/></Field>
+            </div>
+          )}
+
+          {/* Obiski */}
+          {['visits','group_class'].includes(ttype) && (
+            <Field label="Število obiskov *">
               <input type="number" min="1" value={modal?.visits||10} onChange={e=>setModal(p=>({...p,visits:e.target.value}))} style={inp}/>
             </Field>
           )}
+
+          {/* Časovna omejitev */}
+          {ttype === 'time_restrict' && (
+            <>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                <Field label="Veljavno od"><input type="time" value={modal?.time_from||'06:00'} onChange={e=>setModal(p=>({...p,time_from:e.target.value}))} style={inp}/></Field>
+                <Field label="Veljavno do"><input type="time" value={modal?.time_to||'12:00'} onChange={e=>setModal(p=>({...p,time_to:e.target.value}))} style={inp}/></Field>
+              </div>
+              <Field label="Veljavni dnevi">
+                <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
+                  {DAYS.map(([id,lbl])=>{
+                    const sel = (modal?.days_of_week||[]).includes(id)
+                    return <button key={id} onClick={()=>setModal(p=>({...p,days_of_week:sel?(p.days_of_week||[]).filter(x=>x!==id):[...(p.days_of_week||[]),id]}))} style={{ padding:'6px 10px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:11, background:sel?T.accent:T.surface3, color:sel?'#fff':T.ink }}>{lbl}</button>
+                  })}
+                </div>
+              </Field>
+            </>
+          )}
+
+          {/* Opozorila */}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <Field label="Opozorilo pred iztekom (dni)">
+              <input type="number" min="1" value={modal?.notify_before_days||7} onChange={e=>setModal(p=>({...p,notify_before_days:e.target.value}))} style={inp}/>
+            </Field>
+            <div style={{ display:'flex', flexDirection:'column', justifyContent:'flex-end', paddingBottom:4 }}>
+              <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, cursor:'pointer' }}>
+                <input type="checkbox" checked={!!modal?.auto_renew} onChange={e=>setModal(p=>({...p,auto_renew:e.target.checked}))} style={{ accentColor:T.accent }}/>
+                Avtomatska obnova
+              </label>
+            </div>
+          </div>
+
           <Field label="Opis (neobvezno)">
-            <input value={modal?.description||''} onChange={e=>setModal(p=>({...p,description:e.target.value}))} placeholder="Kratek opis paketa..." style={inp}/>
+            <input value={modal?.description||''} onChange={e=>setModal(p=>({...p,description:e.target.value}))} placeholder="Kratek opis..." style={inp}/>
           </Field>
+
           <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
             <button onClick={()=>setModal(null)} style={btnS}>Prekliči</button>
             <button onClick={save} disabled={saving} style={{...btnP,opacity:saving?0.6:1}}>{saving?'Shranjujem...':'Shrani'}</button>
@@ -2843,6 +2999,297 @@ const inp = { width:'100%', padding:'10px 12px', borderRadius:8, border:'0.5px s
 const btnP = { background:'#0D1F12', color:'#fff', border:0, borderRadius:8, padding:'9px 18px', fontSize:13, fontWeight:500, cursor:'pointer', display:'flex', alignItems:'center', gap:6, fontFamily:'inherit' }
 const btnS = { background:'#fff', color:'#666', border:'0.5px solid rgba(0,0,0,0.12)', borderRadius:8, padding:'8px 12px', fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', gap:5, fontFamily:'inherit' }
 
+
+// ================================================================
+// BELL NOTIFICATIONS
+// ================================================================
+function BellNotifications({ notifications, notifOpen, setNotifOpen, posData }) {
+  const unread = notifications.filter(n => !n.read && !n.dismissed)
+  const sevColor = { danger:T.danger, warning:T.warn, info:T.accent }
+
+  async function dismiss(id) {
+    await createClient().from('pos_notifications').update({ dismissed:true }).eq('id', id)
+    posData.refresh()
+  }
+
+  async function markAllRead() {
+    await createClient().from('pos_notifications').update({ read:true }).eq('business_id', BUSINESS_ID).eq('dismissed', false)
+    posData.refresh()
+  }
+
+  return (
+    <div style={{ position:'relative' }}>
+      <button onClick={()=>setNotifOpen(o=>!o)} style={{ position:'relative', width:36, height:36, borderRadius:10, background:'rgba(255,255,255,0.08)', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:T.headerInk }}>
+        <KI name="bell" size={18}/>
+        {unread.length > 0 && (
+          <span style={{ position:'absolute', top:-4, right:-4, width:18, height:18, borderRadius:'50%', background:T.danger, color:'#fff', fontSize:10, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', border:'2px solid '+T.header }}>
+            {unread.length > 9 ? '9+' : unread.length}
+          </span>
+        )}
+      </button>
+
+      {notifOpen && (
+        <>
+          <div onClick={()=>setNotifOpen(false)} style={{ position:'fixed', inset:0, zIndex:44 }}/>
+          <div style={{ position:'absolute', top:'calc(100% + 8px)', right:0, zIndex:45, width:360, maxHeight:480, background:'#fff', color:T.ink, borderRadius:13, boxShadow:'0 16px 48px rgba(0,0,0,0.22)', border:'1px solid '+T.line, overflow:'hidden', display:'flex', flexDirection:'column' }}>
+            <div style={{ padding:'14px 16px', borderBottom:'1px solid '+T.line, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <div style={{ fontWeight:700, fontSize:14 }}>Opozorila <span style={{ fontSize:12, color:T.muted, fontWeight:500 }}>({unread.length} novih)</span></div>
+              {unread.length > 0 && <button onClick={markAllRead} style={{ fontSize:11, color:T.accent, background:'none', border:0, cursor:'pointer', fontWeight:600 }}>Označi vse kot prebrano</button>}
+            </div>
+            <div style={{ overflowY:'auto', flex:1 }}>
+              {notifications.length === 0 && (
+                <div style={{ padding:32, textAlign:'center', color:T.muted, fontSize:13 }}>
+                  <div style={{ fontSize:28, marginBottom:8 }}>🎉</div>
+                  Ni aktivnih opozoril
+                </div>
+              )}
+              {notifications.map(n => (
+                <div key={n.id} style={{ padding:'12px 16px', borderBottom:'1px solid '+T.lineSoft, background:n.read?T.surface:T.surface2, display:'flex', gap:10, alignItems:'flex-start' }}>
+                  <div style={{ width:8, height:8, borderRadius:'50%', background:sevColor[n.severity]||T.muted, marginTop:5, flexShrink:0 }}/>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:13, fontWeight: n.read?400:600, lineHeight:1.4 }}>{n.message}</div>
+                    <div style={{ fontSize:11, color:T.muted, marginTop:3 }}>{new Date(n.created_at).toLocaleDateString('sl-SI')}</div>
+                  </div>
+                  <button onClick={()=>dismiss(n.id)} title="Opusti" style={{ background:'none', border:0, cursor:'pointer', color:T.muted, padding:2, flexShrink:0 }}>✕</button>
+                </div>
+              ))}
+            </div>
+            {notifications.length > 0 && (
+              <div style={{ padding:'10px 16px', borderTop:'1px solid '+T.line }}>
+                <button onClick={async()=>{ await createClient().from('pos_notifications').update({dismissed:true}).eq('business_id',BUSINESS_ID); posData.refresh(); setNotifOpen(false) }}
+                  style={{ width:'100%', padding:'8px', borderRadius:8, background:T.surface2, border:'1px solid '+T.line, cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:12, color:T.muted }}>
+                  Počisti vse
+                </button>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ================================================================
+// CUSTOMER EDIT BUTTON + MODAL
+// ================================================================
+function CustomerEditButton({ customer, onSave }) {
+  const [open, setOpen] = useState(false)
+  const [data, setData] = useState(null)
+  const [saving, setSaving] = useState(false)
+
+  function openModal() {
+    setData({ ...customer })
+    setOpen(true)
+  }
+
+  async function save() {
+    setSaving(true)
+    try {
+      const {error} = await createClient().from('customers').update({
+        name: data.name, phone: data.phone, email: data.email,
+        birth_date: data.birth_date||null, address: data.address||null,
+        notes: data.notes||null, gender: data.gender||null,
+        marketing_consent: !!data.marketing_consent,
+        notification_email: data.notification_email !== false,
+      }).eq('id', customer.id)
+      if (error) throw error
+      setOpen(false); onSave()
+    } catch(e) { alert(e.message) }
+    setSaving(false)
+  }
+
+  return (
+    <>
+      <button onClick={openModal} style={{ ...btnS, padding:'9px 14px', fontSize:12, display:'flex', alignItems:'center', gap:6 }}>
+        <KI name="edit" size={14}/> Uredi profil
+      </button>
+      <Modal open={open} onClose={()=>setOpen(false)} width={460}>
+        <ModalHeader title="Uredi profil stranke" onClose={()=>setOpen(false)}/>
+        <div style={{ padding:'20px 22px', display:'flex', flexDirection:'column', gap:12, maxHeight:'70vh', overflowY:'auto' }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <Field label="Ime in priimek *"><input value={data?.name||''} onChange={e=>setData(p=>({...p,name:e.target.value}))} style={inp}/></Field>
+            <Field label="Spol">
+              <select value={data?.gender||''} onChange={e=>setData(p=>({...p,gender:e.target.value}))} style={inp}>
+                <option value="">—</option>
+                <option value="m">Moški</option>
+                <option value="f">Ženski</option>
+                <option value="other">Drugo</option>
+              </select>
+            </Field>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <Field label="Telefon"><input value={data?.phone||''} onChange={e=>setData(p=>({...p,phone:e.target.value}))} style={inp}/></Field>
+            <Field label="Datum rojstva"><input type="date" value={data?.birth_date||''} onChange={e=>setData(p=>({...p,birth_date:e.target.value}))} style={inp}/></Field>
+          </div>
+          <Field label="Email"><input type="email" value={data?.email||''} onChange={e=>setData(p=>({...p,email:e.target.value}))} style={inp}/></Field>
+          <Field label="Naslov"><input value={data?.address||''} onChange={e=>setData(p=>({...p,address:e.target.value}))} placeholder="Ulica 1, 1000 Ljubljana" style={inp}/></Field>
+          <Field label="Interne opombe">
+            <textarea value={data?.notes||''} onChange={e=>setData(p=>({...p,notes:e.target.value}))} rows={3} style={{ ...inp, resize:'vertical' }} placeholder="Alergije, preference, posebnosti..."/>
+          </Field>
+          <div style={{ display:'flex', gap:16 }}>
+            <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, cursor:'pointer' }}>
+              <input type="checkbox" checked={data?.notification_email!==false} onChange={e=>setData(p=>({...p,notification_email:e.target.checked}))} style={{ accentColor:T.accent }}/>
+              Email obvestila (izteki kart)
+            </label>
+            <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, cursor:'pointer' }}>
+              <input type="checkbox" checked={!!data?.marketing_consent} onChange={e=>setData(p=>({...p,marketing_consent:e.target.checked}))} style={{ accentColor:T.accent }}/>
+              Privolitev za marketing
+            </label>
+          </div>
+          <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+            <button onClick={()=>setOpen(false)} style={btnS}>Prekliči</button>
+            <button onClick={save} disabled={saving} style={{...btnP,opacity:saving?0.6:1}}>{saving?'Shranjujem...':'Shrani'}</button>
+          </div>
+        </div>
+      </Modal>
+    </>
+  )
+}
+
+// ================================================================
+// SELL PACKAGE MODAL — prodaja paketa stranki
+// ================================================================
+function SellPackageModal({ template, posData, onClose, auth }) {
+  const [customerId, setCustomerId] = useState('')
+  const [custSearch, setCustSearch] = useState('')
+  const [activationType, setActivationType] = useState(template.activation_type||'purchase')
+  const [fixedDate, setFixedDate] = useState('')
+  const [notes, setNotes] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [toast, setToast] = useState(null)
+  const tconf = TEMPLATE_TYPES[template.template_type||'visits'] || TEMPLATE_TYPES.visits
+
+  function showToast(msg, ok=true) { setToast({msg,ok}); setTimeout(()=>setToast(null),3000) }
+
+  const filtCust = posData.customers.filter(c => !custSearch || c.name.toLowerCase().includes(custSearch.toLowerCase()) || (c.phone||'').includes(custSearch))
+  const selCust = posData.customers.find(c => c.id === customerId)
+
+  function calcExpiry() {
+    let start = new Date()
+    if (activationType === 'fixed_date' && fixedDate) start = new Date(fixedDate)
+    if (template.validity_days) {
+      const exp = new Date(start)
+      exp.setDate(exp.getDate() + Number(template.validity_days))
+      return exp.toISOString().split('T')[0]
+    }
+    if (template.fixed_end_date) return template.fixed_end_date
+    return null
+  }
+
+  async function sell() {
+    if (!customerId) { showToast('Izberi stranko',false); return }
+    setSaving(true)
+    try {
+      const now = new Date().toISOString()
+      const expiresAt = calcExpiry()
+      const payload = {
+        customer_id: customerId,
+        template_id: template.id,
+        template_type: template.template_type||'visits',
+        activation_type: activationType,
+        name: template.name,
+        active: true,
+        remaining: template.visits||null,
+        total: template.visits||null,
+        monetary_balance: template.monetary_value||null,
+        expires: expiresAt,
+        activated_at: activationType === 'purchase' ? now : null,
+        valid_from: activationType === 'fixed_date' && fixedDate ? fixedDate : null,
+        purchase_price: template.price,
+        notes: notes||null,
+        sold_by_staff_id: auth?.user?.id||null,
+      }
+      const {error} = await createClient().from('customer_packages').insert(payload)
+      if (error) throw error
+
+      // Ustvari naročilo + plačilo
+      const orderId = await posData.refresh ? null : null
+      showToast(`✓ ${template.name} prodana stranki ${selCust?.name}`)
+      setTimeout(() => { posData.refresh(); onClose() }, 1500)
+    } catch(e) { showToast(e.message,false) }
+    setSaving(false)
+  }
+
+  return (
+    <Modal open={true} onClose={onClose} width={500}>
+      <ModalHeader title={`Prodaj: ${template.name}`} onClose={onClose}/>
+      <div style={{ padding:'20px 22px', display:'flex', flexDirection:'column', gap:14 }}>
+
+        {/* Info kartica */}
+        <div style={{ padding:14, borderRadius:10, background:tconf.color+'10', border:'1px solid '+tconf.color+'30', display:'flex', gap:12 }}>
+          <div style={{ fontSize:28 }}>{tconf.icon}</div>
+          <div>
+            <div style={{ fontWeight:700, fontSize:15 }}>{template.name}</div>
+            <div style={{ fontSize:12, color:T.muted, marginTop:4, display:'flex', gap:10, flexWrap:'wrap' }}>
+              <span>💰 {eur(template.price)}</span>
+              {template.validity_days && <span>📅 {template.validity_days} dni</span>}
+              {template.visits && <span>🎯 {template.visits} obiskov</span>}
+              {template.monetary_value && <span>💳 vrednost {eur(template.monetary_value)}</span>}
+            </div>
+          </div>
+        </div>
+
+        {/* Stranka */}
+        <Field label="Stranka *">
+          {selCust ? (
+            <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', background:T.accentSoft, borderRadius:9 }}>
+              <div style={{ flex:1, fontWeight:600, color:T.accent }}>{selCust.name} {selCust.phone && `· ${selCust.phone}`}</div>
+              <button onClick={()=>setCustomerId('')} style={{ background:'none', border:0, cursor:'pointer', color:T.accent }}><KI name="x" size={14}/></button>
+            </div>
+          ) : (
+            <>
+              <input value={custSearch} onChange={e=>setCustSearch(e.target.value)} placeholder="Išči stranko po imenu ali telefonu..." style={{ ...inp, marginBottom:6 }}/>
+              <div style={{ maxHeight:160, overflowY:'auto', border:'1px solid '+T.line, borderRadius:8, background:T.surface }}>
+                {filtCust.slice(0,8).map(c=>(
+                  <button key={c.id} onClick={()=>{setCustomerId(c.id);setCustSearch('')}} style={{ width:'100%', padding:'9px 12px', background:'transparent', border:0, borderBottom:'1px solid '+T.lineSoft, cursor:'pointer', fontFamily:'inherit', color:T.ink, textAlign:'left', fontSize:13, display:'flex', alignItems:'center', gap:10 }}>
+                    <div style={{ width:28, height:28, borderRadius:'50%', background:T.surface3, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700 }}>{c.name.split(' ').map(w=>w[0]).join('')}</div>
+                    <div><div style={{ fontWeight:600 }}>{c.name}</div><div style={{ fontSize:11, color:T.muted }}>{c.phone}</div></div>
+                  </button>
+                ))}
+                {filtCust.length === 0 && <div style={{ padding:16, textAlign:'center', color:T.muted, fontSize:12 }}>Ni strank</div>}
+              </div>
+            </>
+          )}
+        </Field>
+
+        {/* Aktivacija */}
+        <Field label="Začetek veljavnosti">
+          <div style={{ display:'flex', gap:5 }}>
+            {Object.entries(ACTIVATION_TYPES).map(([k,v])=>{
+              const sel = activationType === k
+              return <button key={k} onClick={()=>setActivationType(k)} style={{ flex:1, padding:'8px 4px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:11, background:sel?T.accent:T.surface3, color:sel?'#fff':T.muted }}>{v}</button>
+            })}
+          </div>
+          {activationType === 'fixed_date' && (
+            <input type="date" value={fixedDate} onChange={e=>setFixedDate(e.target.value)} style={{ ...inp, marginTop:6 }}/>
+          )}
+        </Field>
+
+        {/* Datum izteka — preview */}
+        {calcExpiry() && (
+          <div style={{ padding:'10px 14px', background:T.surface2, borderRadius:9, fontSize:12, color:T.muted }}>
+            📅 Poteče: <b style={{ color:T.ink }}>{new Date(calcExpiry()).toLocaleDateString('sl-SI')}</b>
+            {activationType === 'first_use' && <span style={{ color:T.warn }}> (šteje od prvega obisku)</span>}
+          </div>
+        )}
+
+        <Field label="Opomba (neobvezno)">
+          <input value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Posebnosti, dogovor..." style={inp}/>
+        </Field>
+
+        {toast && <div style={{ padding:'9px 12px', borderRadius:8, background:toast.ok?T.accentSoft:'rgba(168,50,50,0.10)', color:toast.ok?T.accent:T.danger, fontSize:12, fontWeight:600 }}>{toast.msg}</div>}
+
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end', paddingTop:4 }}>
+          <button onClick={onClose} style={btnS}>Prekliči</button>
+          <button onClick={sell} disabled={saving||!customerId} style={{ ...btnP, background:tconf.color, opacity:(saving||!customerId)?0.5:1 }}>
+            {saving ? '⏳ Shranjujem...' : `✓ Prodaj ${eur(template.price)}`}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 // ================================================================
 // MAIN APP
 // ================================================================
@@ -2871,6 +3318,8 @@ function KlasikApp() {
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [receipt, setReceipt] = useState(null)
   const [now, setNow] = useState(new Date())
+  const [notifOpen, setNotifOpen] = useState(false)
+  const [sellPackageModal, setSellPackageModal] = useState(null)
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 30000); return () => clearInterval(t) }, [])
   useEffect(() => { if (!nav.includes(screen)) setScreen(nav[0] || 'sale') }, [profileId])
@@ -2922,6 +3371,7 @@ function KlasikApp() {
               {String(now.getHours()).padStart(2,"0")}:{String(now.getMinutes()).padStart(2,"0")}
             </div>
           </div>
+          <BellNotifications notifications={posData.notifications} notifOpen={notifOpen} setNotifOpen={setNotifOpen} posData={posData} />
           <UserAvatar user={auth.user} onLock={auth.lock}/>
         </div>
       </div>
@@ -2953,7 +3403,7 @@ function KlasikApp() {
           {screen==='sale'      && <SaleScreen activeTable={activeTable} activeCustomer={activeCustomer} cart={cart} setCart={setCart} addItem={addItem} adjustQty={adjustQty} setPaymentOpen={setPaymentOpen} totals={totals} setActiveCustomer={setActiveCustomer} posData={posData} happyHourActive={happyHourActive} setHappyHourActive={setHappyHourActive}/>}
           {screen==='calendar'  && <CalendarScreen posData={posData}/>}
           {screen==='customers' && <CustomersScreen posData={posData} setActiveCustomer={setActiveCustomer} setScreen={setScreen}/>}
-          {screen==='packages'  && <PackagesScreen posData={posData}/>}
+          {screen==='packages'  && <PackagesScreen posData={posData} setSellPackageModal={setSellPackageModal}/>}
           {screen==='inventory' && <InventoryScreen posData={posData}/>}
           {screen==='reports'   && <ReportsScreen posData={posData}/>}
           {screen==='admin'     && <AdminScreen auth={auth} posData={posData}/>}
@@ -2970,6 +3420,7 @@ function KlasikApp() {
           posData.refresh()
         }}/>
       <ReceiptToast data={receipt} onClose={() => setReceipt(null)}/>
+      {sellPackageModal && <SellPackageModal template={sellPackageModal} posData={posData} onClose={()=>setSellPackageModal(null)} auth={auth}/>}
       {auth.locked && <LockScreen auth={auth}/>}
     </div>
   )
