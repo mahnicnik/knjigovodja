@@ -1,8 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 
 export async function POST(req: NextRequest) {
   try {
+    const cookieStore = await cookies()
+    const supabaseAuth = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) { return cookieStore.get(name)?.value },
+          set() {}, remove() {},
+        },
+      }
+    )
+
+    const { data: { user } } = await supabaseAuth.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Ni avtentikacije' }, { status: 401 })
+
     const formData = await req.formData()
     const certFile = formData.get('cert') as File
     const password = formData.get('password') as string
@@ -19,15 +36,6 @@ export async function POST(req: NextRequest) {
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
-
-    const anonClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { global: { headers: { cookie: req.headers.get('cookie') || '' } } }
-    )
-
-    const { data: { user } } = await anonClient.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Ni avtentikacije' }, { status: 401 })
 
     const { data: biz } = await supabase
       .from('businesses')
