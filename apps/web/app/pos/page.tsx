@@ -1643,60 +1643,170 @@ const ACTIVATION_TYPES = {
 
 function PackagesScreen({ posData, setSellPackageModal }) {
   const [filter, setFilter] = useState('all')
+  const [statsFilter, setStatsFilter] = useState(null) // null | 'active' | 'expiring' | 'expired'
+  const [monthlyRevenue, setMonthlyRevenue] = useState(0)
+  const [statsDetail, setStatsDetail] = useState(null)
+
+  // Izračunaj statistike iz customer_packages
+  const allPkgs = posData.customers.flatMap(c => (c.customer_packages||[]))
+  const now = new Date()
+  const weekFromNow = new Date(now); weekFromNow.setDate(now.getDate()+7)
+
+  const activeCount = allPkgs.filter(p => p.active).length
+  const expiringCount = allPkgs.filter(p => {
+    if (!p.active || !p.expires) return false
+    const exp = new Date(p.expires)
+    return exp >= now && exp <= weekFromNow
+  }).length
+  const expiredCount = allPkgs.filter(p => {
+    if (!p.active) return false
+    if (!p.expires) return false
+    return new Date(p.expires) < now
+  }).length
+
+  // Naloži promet ta mesec od paketov
+  useEffect(() => {
+    async function load() {
+      const from = new Date(now.getFullYear(), now.getMonth(), 1)
+      const { data } = await createClient()
+        .from('customer_packages')
+        .select('purchase_price, created_at')
+        .eq('business_id', BUSINESS_ID)
+        .gte('created_at', from.toISOString())
+      if (data) setMonthlyRevenue(data.reduce((s,p) => s+Number(p.purchase_price||0), 0))
+    }
+    load()
+  }, [])
+
+  // Prikaži detail za stats klik
+  function showDetail(type) {
+    if (statsFilter === type) { setStatsFilter(null); setStatsDetail(null); return }
+    setStatsFilter(type)
+    let pkgs = []
+    if (type === 'active') pkgs = allPkgs.filter(p => p.active)
+    else if (type === 'expiring') pkgs = allPkgs.filter(p => {
+      if (!p.active || !p.expires) return false
+      const exp = new Date(p.expires)
+      return exp >= now && exp <= weekFromNow
+    })
+    else if (type === 'expired') pkgs = allPkgs.filter(p => p.active && p.expires && new Date(p.expires) < now)
+
+    // Dodaj ime stranke
+    const withCustomer = pkgs.map(p => {
+      const customer = posData.customers.find(c => (c.customer_packages||[]).some(cp => cp.id === p.id))
+      return { ...p, customerName: customer?.name || '?' }
+    })
+    setStatsDetail(withCustomer)
+  }
 
   const filtered = posData.packageTemplates.filter(p => filter === 'all' || (p.template_type||p.type) === filter)
 
-  if (posData.packageTemplates.length === 0) {
-    return (
-      <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', color:T.muted, gap:12, padding:40, textAlign:'center' }}>
-        <div style={{ fontSize:40 }}>🎫</div>
-        <div style={{ fontSize:15, fontWeight:600, color:T.ink }}>Ni paketov</div>
-        <div style={{ fontSize:13 }}>Dodaj pakete v <b>Nastavitvah → Paketi</b></div>
-      </div>
-    )
-  }
-
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', minHeight:0 }}>
-      <div style={{ padding:'12px 20px', background:T.surface, borderBottom:'1px solid '+T.line, display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
-        <div style={{ fontSize:16, fontWeight:700 }}>Paketi & kartice</div>
-        <div style={{ display:'flex', gap:4, flex:1, flexWrap:'wrap' }}>
-          <button onClick={()=>setFilter('all')} style={{ padding:'5px 12px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:11, background:filter==='all'?T.header:T.surface3, color:filter==='all'?T.headerInk:T.ink }}>Vsi</button>
-          {Object.entries(TEMPLATE_TYPES).map(([k,v])=>(
-            <button key={k} onClick={()=>setFilter(k)} style={{ padding:'5px 12px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:11, background:filter===k?v.color:T.surface3, color:filter===k?'#fff':T.ink }}>{v.icon} {v.label}</button>
+
+      {/* Statistika na vrhu */}
+      <div style={{ padding:'14px 20px', background:T.surface, borderBottom:'1px solid '+T.line }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:12 }}>
+          {[
+            { key:'active', label:'AKTIVNIH ČLANOV', value:activeCount, sub:'zelena oznaka', color:T.accent, bg:T.accentSoft },
+            { key:'expiring', label:'POTEČEJO TA TEDEN', value:expiringCount, sub:'rumena/oranžna', color:'#b88c28', bg:'rgba(184,140,40,0.1)' },
+            { key:'expired', label:'POTEKLE (ČAKAJO PODALJŠANJE)', value:expiredCount, sub:'rdeča oznaka', color:T.danger, bg:'rgba(168,50,50,0.08)' },
+            { key:'revenue', label:'PROMET TA MESEC', value:eur(monthlyRevenue), sub:'vse stranke', color:T.ink, bg:T.surface2 },
+          ].map(s => (
+            <div key={s.key} onClick={()=>s.key!=='revenue'&&showDetail(s.key)}
+              style={{ padding:'12px 16px', borderRadius:11, background: statsFilter===s.key?s.bg:T.surface2, border:'1px solid '+(statsFilter===s.key?s.color:T.line), cursor:s.key!=='revenue'?'pointer':'default', transition:'all 0.15s' }}>
+              <div style={{ fontSize:9, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>{s.label}</div>
+              <div style={{ fontSize:28, fontWeight:900, fontVariantNumeric:'tabular-nums', color:s.color }}>{s.value}</div>
+              <div style={{ fontSize:11, color:T.muted, marginTop:4 }}>{s.sub}</div>
+            </div>
           ))}
+        </div>
+
+        {/* Filtri */}
+        <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+          <div style={{ fontSize:15, fontWeight:700 }}>Kartice & paketi</div>
+          <div style={{ fontSize:12, color:T.muted }}>Predloge paketov, ki jih lahko prodaš strankam. Vse je urejljivo.</div>
+          <div style={{ marginLeft:'auto', display:'flex', gap:4, flexWrap:'wrap' }}>
+            <button onClick={()=>setFilter('all')} style={{ padding:'5px 12px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:11, background:filter==='all'?T.header:T.surface3, color:filter==='all'?T.headerInk:T.ink }}>Vsi</button>
+            {Object.entries(TEMPLATE_TYPES).map(([k,v]:any)=>(
+              <button key={k} onClick={()=>setFilter(k)} style={{ padding:'5px 12px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:11, background:filter===k?v.color:T.surface3, color:filter===k?'#fff':T.ink }}>{v.icon} {v.label}</button>
+            ))}
+          </div>
+          <button onClick={()=>{/* TODO */}} style={{ ...btnP, fontSize:12 }}>+ Nov paket</button>
         </div>
       </div>
 
-      <div style={{ flex:1, overflow:'auto', padding:16, display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:12, alignContent:'start' }}>
-        {filtered.map(p => {
-          const ttype = p.template_type || p.type || 'visits'
-          const tconf = TEMPLATE_TYPES[ttype] || TEMPLATE_TYPES.visits
-          return (
-            <div key={p.id} style={{ background:T.surface, borderRadius:13, border:'1px solid '+T.line, padding:18, position:'relative', display:'flex', flexDirection:'column' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
-                <div style={{ width:40, height:40, borderRadius:10, background:tconf.color+'18', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20 }}>{tconf.icon}</div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:14, fontWeight:800 }}>{p.name}</div>
-                  <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:5, background:tconf.color+'18', color:tconf.color }}>{tconf.label}</span>
+      {/* Detail panel za stats */}
+      {statsDetail && (
+        <div style={{ background:'rgba(31,107,58,0.04)', borderBottom:'2px solid '+T.accent, padding:'12px 20px', maxHeight:200, overflow:'auto' }}>
+          <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>
+            {statsFilter==='active'?'Aktivne kartice':statsFilter==='expiring'?'Potečejo ta teden':'Potekle kartice'} ({statsDetail.length})
+          </div>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+            {statsDetail.map((p,i) => {
+              const daysLeft = p.expires ? Math.floor((new Date(p.expires).getTime()-now.getTime())/86400000) : null
+              return (
+                <div key={i} style={{ padding:'8px 12px', background:T.surface, borderRadius:9, border:'1px solid '+T.line, fontSize:12, minWidth:180 }}>
+                  <div style={{ fontWeight:700 }}>{p.customerName}</div>
+                  <div style={{ color:T.muted, fontSize:11, marginTop:2 }}>{p.name}</div>
+                  {p.expires && (
+                    <div style={{ fontSize:11, marginTop:3, color: daysLeft !== null && daysLeft < 0 ? T.danger : daysLeft !== null && daysLeft <= 7 ? T.warn : T.muted }}>
+                      {daysLeft !== null && daysLeft < 0 ? `Poteklo pred ${Math.abs(daysLeft)} dni` : daysLeft !== null ? `Čez ${daysLeft} dni` : ''}
+                    </div>
+                  )}
+                  {p.remaining !== null && <div style={{ fontSize:11, color:T.muted }}>{p.remaining} obiskov</div>}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Paketi grid */}
+      {posData.packageTemplates.length === 0 ? (
+        <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', color:T.muted, gap:12, padding:40, textAlign:'center' }}>
+          <div style={{ fontSize:40 }}>🎫</div>
+          <div style={{ fontSize:15, fontWeight:600, color:T.ink }}>Ni paketov</div>
+          <div style={{ fontSize:13 }}>Dodaj pakete v <b>Nastavitvah → Paketi</b></div>
+        </div>
+      ) : (
+        <div style={{ flex:1, overflow:'auto', padding:16, display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:12, alignContent:'start' }}>
+          {filtered.map(p => {
+            const ttype = p.template_type || p.type || 'visits'
+            const tconf = TEMPLATE_TYPES[ttype] || TEMPLATE_TYPES.visits
+            // Koliko aktivnih strank ima ta paket
+            const activeSold = allPkgs.filter(cp => cp.template_id === p.id && cp.active).length
+            return (
+              <div key={p.id} style={{ background:T.surface, borderRadius:13, border:'1px solid '+T.line, padding:18, display:'flex', flexDirection:'column' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+                  <div style={{ width:40, height:40, borderRadius:10, background:tconf.color+'18', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20 }}>{tconf.icon}</div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14, fontWeight:800 }}>{p.name}</div>
+                    <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:5, background:tconf.color+'18', color:tconf.color }}>{tconf.label}</span>
+                  </div>
+                  {activeSold > 0 && <div style={{ fontSize:11, fontWeight:700, color:T.accent, background:T.accentSoft, padding:'3px 8px', borderRadius:6 }}>{activeSold} aktivnih</div>}
+                </div>
+                <div style={{ fontSize:28, fontWeight:900, fontVariantNumeric:'tabular-nums', letterSpacing:'-0.02em', color:tconf.color }}>{eur(p.price)}</div>
+                {p.description && <div style={{ fontSize:12, color:T.muted, marginTop:6, lineHeight:1.5 }}>{p.description}</div>}
+                <div style={{ fontSize:11, color:T.muted, marginTop:10, paddingTop:10, borderTop:'1px solid '+T.lineSoft, display:'flex', flexWrap:'wrap', gap:8 }}>
+                  {p.validity_days && <span>📅 {p.validity_days} dni</span>}
+                  {p.visits && <span>🎯 {p.visits}×</span>}
+                  {p.activation_type && <span>⚡ {ACTIVATION_TYPES[p.activation_type]||p.activation_type}</span>}
+                  {p.auto_renew && <span>🔄 Auto-obnova</span>}
+                  {p.time_from && <span>⏰ {p.time_from}–{p.time_to}</span>}
+                </div>
+                <div style={{ display:'flex', gap:6, marginTop:14 }}>
+                  <button onClick={()=>setSellPackageModal(p)} style={{ ...btnP, flex:1, justifyContent:'center', background:tconf.color }}>
+                    Prodaj
+                  </button>
+                  <button style={{ ...btnS, padding:'8px 10px' }}>✏️</button>
+                  <button style={{ ...btnS, padding:'8px 10px' }}>📋</button>
                 </div>
               </div>
-              <div style={{ fontSize:28, fontWeight:900, fontVariantNumeric:'tabular-nums', letterSpacing:'-0.02em', color:tconf.color }}>{eur(p.price)}</div>
-              {p.description && <div style={{ fontSize:12, color:T.muted, marginTop:6, lineHeight:1.5 }}>{p.description}</div>}
-              <div style={{ fontSize:11, color:T.muted, marginTop:10, paddingTop:10, borderTop:'1px solid '+T.lineSoft, display:'flex', flexWrap:'wrap', gap:8 }}>
-                {p.validity_days && <span>📅 {p.validity_days} dni</span>}
-                {p.visits && <span>🎯 {p.visits}×</span>}
-                {p.activation_type && <span>⚡ {ACTIVATION_TYPES[p.activation_type]||p.activation_type}</span>}
-                {p.auto_renew && <span>🔄 Auto-obnova</span>}
-                {p.time_from && <span>⏰ {p.time_from}–{p.time_to}</span>}
-              </div>
-              <button onClick={()=>setSellPackageModal(p)} style={{ ...btnP, marginTop:14, justifyContent:'center', background:tconf.color }}>
-                Prodaj stranki
-              </button>
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
