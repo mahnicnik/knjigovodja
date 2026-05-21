@@ -992,72 +992,528 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
 // ================================================================
 function CalendarScreen({ posData }) {
   const [view, setView] = useState('day')
-  const hours = Array.from({length:13}, (_, i) => 8 + i)
-  const today = new Date()
-  const days = ['Pon','Tor','Sre','Čet','Pet','Sob','Ned']
-  const daysFull = ['Ponedeljek','Torek','Sreda','Četrtek','Petek','Sobota','Nedelja']
+  const [currentDate, setCurrentDate] = useState(new Date())
+  const [bookings, setBookings] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [bookingModal, setBookingModal] = useState(null) // null | {} | booking obj
+  const [selectedStaff, setSelectedStaff] = useState('all')
+  const [selectedSpace, setSelectedSpace] = useState('all')
+
+  const hours = Array.from({length:14}, (_, i) => 7 + i) // 7:00 - 20:00
+  const HOUR_H = 60 // px per hour
   const months = ['januar','februar','marec','april','maj','junij','julij','avgust','september','oktober','november','december']
-  const monday = new Date(today)
-  monday.setDate(today.getDate() - ((today.getDay() + 6) % 7))
-  const weekDates = days.map((_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d })
-  const staff = posData.staffList.filter(s => ['Terapevt','Trener','Lastnik'].includes(s.role)).slice(0, 5)
+  const daysShort = ['Ned','Pon','Tor','Sre','Čet','Pet','Sob']
+  const daysFull = ['Nedelja','Ponedeljek','Torek','Sreda','Četrtek','Petek','Sobota']
+
+  // Terapevti (staff s posebnimi vlogami)
+  const therapists = posData.staffList.filter(s => s.role && ['Terapevt','Trener','Lastnik','Fizioterapevt','Trener'].includes(s.role))
+  const filteredStaff = selectedStaff === 'all' ? therapists : therapists.filter(s => s.id === selectedStaff)
+
+  // Teden datumi
+  const getWeekDates = (d) => {
+    const mon = new Date(d)
+    mon.setDate(d.getDate() - ((d.getDay()+6)%7))
+    return Array.from({length:7}, (_, i) => { const dd = new Date(mon); dd.setDate(mon.getDate()+i); return dd })
+  }
+  const weekDates = getWeekDates(currentDate)
+
+  // Naloži rezervacije
+  useEffect(() => {
+    loadBookings()
+  }, [currentDate, view])
+
+  async function loadBookings() {
+    setLoading(true)
+    let from, to
+    if (view === 'day') {
+      from = new Date(currentDate); from.setHours(0,0,0,0)
+      to = new Date(currentDate); to.setHours(23,59,59,999)
+    } else {
+      from = new Date(weekDates[0]); from.setHours(0,0,0,0)
+      to = new Date(weekDates[6]); to.setHours(23,59,59,999)
+    }
+    const {data} = await createClient()
+      .from('bookings')
+      .select('*, customers(id,name,phone,email,customer_packages(id,name,active,remaining,template_id)), staff(id,name,color,role), services(id,name,duration_min,color)')
+      .eq('business_id', BUSINESS_ID)
+      .gte('start_at', from.toISOString())
+      .lte('start_at', to.toISOString())
+      .order('start_at', { ascending: true })
+    setBookings(data || [])
+    setLoading(false)
+  }
+
+  function navigate(dir) {
+    const d = new Date(currentDate)
+    if (view === 'day') d.setDate(d.getDate() + dir)
+    else d.setDate(d.getDate() + dir*7)
+    setCurrentDate(d)
+  }
+
+  function goToday() { setCurrentDate(new Date()) }
+
+  const isToday = (d) => {
+    const t = new Date()
+    return d.getDate()===t.getDate() && d.getMonth()===t.getMonth() && d.getFullYear()===t.getFullYear()
+  }
+
+  // Barva po statusu
+  const statusStyle = (status) => ({
+    scheduled: { bg:'#1f6b3a20', border:'#1f6b3a', text:'#1f6b3a' },
+    confirmed:  { bg:'#1f6b3a35', border:'#1f6b3a', text:'#0d2818' },
+    arrived:    { bg:'#e9b94930', border:'#b88c28', text:'#7a5c10' },
+    no_show:    { bg:'rgba(168,50,50,0.12)', border:'#a83232', text:'#a83232' },
+    cancelled:  { bg:'#f4efe5', border:'#d0ccc5', text:'#9a9890' },
+  }[status] || { bg:'#e8f4fd', border:'#3b82f6', text:'#1e40af' })
+
+  // Booking pozicija v grid
+  function bookingPos(b) {
+    const start = new Date(b.start_at)
+    const startH = start.getHours() + start.getMinutes()/60
+    const topPct = (startH - 7) * HOUR_H
+    const height = Math.max((b.duration_min || 60) / 60 * HOUR_H, 24)
+    return { top: topPct, height }
+  }
+
+  const headerDate = view === 'day'
+    ? `${daysFull[currentDate.getDay()]}, ${currentDate.getDate()}. ${months[currentDate.getMonth()]} ${currentDate.getFullYear()}`
+    : `${weekDates[0].getDate()}. ${months[weekDates[0].getMonth()]} – ${weekDates[6].getDate()}. ${months[weekDates[6].getMonth()]} ${weekDates[6].getFullYear()}`
+
+  const cols = view === 'day' ? filteredStaff : weekDates
 
   return (
-    <div style={{ flex:1, display:'flex', flexDirection:'column', minHeight:0 }}>
-      <div style={{ padding:'12px 18px', background:T.surface, borderBottom:'1px solid '+T.line, display:'flex', alignItems:'center', gap:10 }}>
-        <div style={{ fontSize:16, fontWeight:700 }}>{daysFull[(today.getDay()+6)%7]}, {today.getDate()}. {months[today.getMonth()]} {today.getFullYear()}</div>
-        <div style={{ display:'flex', gap:2, background:T.surface3, padding:3, borderRadius:8, marginLeft:16 }}>
-          {['day','week'].map(v => (
-            <button key={v} onClick={() => setView(v)} style={{ padding:'6px 14px', borderRadius:6, cursor:'pointer', fontFamily:'inherit', border:'none', fontWeight:700, fontSize:12, background: view===v ? T.header : 'transparent', color: view===v ? T.headerInk : T.ink }}>
-              {v==='day' ? 'Dan' : 'Teden'}
-            </button>
+    <div style={{ flex:1, display:'flex', flexDirection:'column', minHeight:0, background:T.bg }}>
+
+      {/* Header toolbar */}
+      <div style={{ padding:'10px 16px', background:T.surface, borderBottom:'1px solid '+T.line, display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+        {/* Navigacija */}
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <button onClick={()=>navigate(-1)} style={{ ...btnS, padding:'6px 10px', fontSize:14 }}>‹</button>
+          <button onClick={goToday} style={{ ...btnS, padding:'6px 12px', fontSize:12, fontWeight:700 }}>Danes</button>
+          <button onClick={()=>navigate(1)} style={{ ...btnS, padding:'6px 10px', fontSize:14 }}>›</button>
+        </div>
+
+        <div style={{ fontSize:14, fontWeight:700, marginLeft:4 }}>{headerDate}</div>
+
+        {/* View toggle */}
+        <div style={{ display:'flex', gap:2, background:T.surface3, padding:3, borderRadius:8 }}>
+          {[['day','Dan'],['week','Teden']].map(([v,l])=>(
+            <button key={v} onClick={()=>setView(v)} style={{ padding:'5px 12px', borderRadius:6, cursor:'pointer', fontFamily:'inherit', border:'none', fontWeight:700, fontSize:11, background:view===v?T.header:'transparent', color:view===v?T.headerInk:T.ink }}>{l}</button>
           ))}
         </div>
-        <button style={{ marginLeft:'auto', padding:'8px 14px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', background:T.accent, color:'#fff', border:'none', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', gap:6 }}>
-          <KI name="plus" size={14}/> Nova rezervacija
+
+        {/* Filter po terapevtu */}
+        {view === 'day' && therapists.length > 1 && (
+          <select value={selectedStaff} onChange={e=>setSelectedStaff(e.target.value)}
+            style={{ padding:'6px 10px', borderRadius:8, border:'1px solid '+T.line, fontSize:12, fontFamily:'inherit', background:T.surface }}>
+            <option value="all">Vsi terapevti</option>
+            {therapists.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        )}
+
+        <button onClick={()=>setBookingModal({})} style={{ marginLeft:'auto', ...btnP, display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
+          <KI name="plus" size={13}/> Nova rezervacija
         </button>
       </div>
-      <div style={{ flex:1, overflow:'auto' }}>
-        {staff.length === 0 ? (
+
+      {/* Glavna vsebina */}
+      <div style={{ flex:1, overflow:'auto', position:'relative' }}>
+        {therapists.length === 0 && view === 'day' ? (
           <div style={{ padding:60, textAlign:'center', color:T.muted }}>
-            <div style={{ fontSize:13 }}>Dodaj zaposlene v <b>Nastavitvah → Zaposleni</b> da se prikažejo v koledarju.</div>
+            <div style={{ fontSize:32, marginBottom:8 }}>👥</div>
+            <div style={{ fontSize:13 }}>Dodaj zaposlene z vlogo Terapevt/Trener v <b>Nastavitvah → Zaposleni</b></div>
           </div>
         ) : (
-          <div style={{ minWidth:600, display:'grid', gridTemplateColumns:'56px repeat('+staff.length+', 1fr)', background:T.surface }}>
-            <div style={{ background:T.surface2, borderBottom:'1px solid '+T.line, borderRight:'1px solid '+T.line }}/>
-            {staff.map(s => (
-              <div key={s.id} style={{ background:T.surface2, borderBottom:'1px solid '+T.line, borderRight:'1px solid '+T.lineSoft, padding:'10px 12px' }}>
-                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                  <div style={{ width:28, height:28, borderRadius:999, background:s.color||T.accent, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:11 }}>
-                    {s.name.split(' ').map(w => w[0]).join('')}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight:700, fontSize:13 }}>{s.name}</div>
-                    <div style={{ fontSize:10, color:T.muted }}>{s.role}</div>
-                  </div>
+          <div style={{ display:'flex', minWidth: view==='day'?`${56+Math.max(cols.length,1)*180}px`:'900px' }}>
+
+            {/* Ura stolpec */}
+            <div style={{ width:52, flexShrink:0, background:T.surface2, borderRight:'1px solid '+T.line, paddingTop:48 }}>
+              {hours.map(h=>(
+                <div key={h} style={{ height:HOUR_H, borderTop:'1px solid '+T.lineSoft, padding:'3px 6px', fontSize:10, fontWeight:700, color:T.muted, fontVariantNumeric:'tabular-nums' }}>
+                  {String(h).padStart(2,'0')}:00
                 </div>
-              </div>
-            ))}
-            {hours.map((hh, hi) => (
-              <React.Fragment key={hh}>
-                <div style={{ background:T.surface2, borderRight:'1px solid '+T.line, borderTop: hi===0?'none':'1px solid '+T.lineSoft, padding:'4px 8px', fontSize:11, fontWeight:700, color:T.muted, fontVariantNumeric:'tabular-nums', minHeight:60 }}>
-                  {String(hh).padStart(2,'0')}:00
-                </div>
-                {staff.map(s => (
-                  <div key={s.id} style={{ borderRight:'1px solid '+T.lineSoft, borderTop: hi===0?'none':'1px solid '+T.lineSoft, minHeight:60, padding:2, background:T.surface, cursor:'pointer' }}/>
-                ))}
-              </React.Fragment>
-            ))}
+              ))}
+            </div>
+
+            {/* Stolpci */}
+            <div style={{ flex:1, display:'grid', gridTemplateColumns:`repeat(${Math.max(cols.length,1)}, 1fr)` }}>
+
+              {/* Header vrstica */}
+              {(view === 'day' ? filteredStaff : weekDates).map((col, ci) => {
+                const isStaff = view === 'day'
+                const s = isStaff ? col : null
+                const d = isStaff ? null : col
+                const todayCol = !isStaff && isToday(d)
+                return (
+                  <div key={ci} style={{ height:48, background: todayCol?T.accentSoft:T.surface2, borderBottom:'1px solid '+T.line, borderRight:'1px solid '+T.lineSoft, padding:'8px 10px', display:'flex', alignItems:'center', gap:8, position:'sticky', top:0, zIndex:2 }}>
+                    {isStaff ? (
+                      <>
+                        <div style={{ width:28, height:28, borderRadius:999, background:s.color||T.accent, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:10, flexShrink:0 }}>
+                          {s.name.split(' ').map(w=>w[0]).join('').slice(0,2)}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight:700, fontSize:12 }}>{s.name}</div>
+                          <div style={{ fontSize:9, color:T.muted }}>{s.role}</div>
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ textAlign:'center', width:'100%' }}>
+                        <div style={{ fontSize:10, color:T.muted, fontWeight:700 }}>{daysShort[d.getDay()]}</div>
+                        <div style={{ fontSize:18, fontWeight:800, color:todayCol?T.accent:T.ink }}>{d.getDate()}</div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+
+              {/* Urne celice + rezervacije */}
+              {(view === 'day' ? filteredStaff : weekDates).map((col, ci) => {
+                const colDate = view === 'day' ? currentDate : col
+                const colStaffId = view === 'day' ? col.id : null
+
+                const colBookings = bookings.filter(b => {
+                  const bd = new Date(b.start_at)
+                  const sameDay = bd.getDate()===colDate.getDate() && bd.getMonth()===colDate.getMonth()
+                  const sameStaff = view === 'week' || !colStaffId || b.staff_id === colStaffId
+                  return sameDay && sameStaff
+                })
+
+                return (
+                  <div key={ci} style={{ borderRight:'1px solid '+T.lineSoft, position:'relative', background:T.surface }}>
+                    {/* Urne linije */}
+                    {hours.map(h=>(
+                      <div key={h} style={{ height:HOUR_H, borderTop:'1px solid '+T.lineSoft, cursor:'pointer' }}
+                        onClick={()=>{
+                          const d = new Date(colDate)
+                          d.setHours(h,0,0,0)
+                          setBookingModal({ start_at: d.toISOString(), staff_id: colStaffId })
+                        }}/>
+                    ))}
+
+                    {/* Rezervacije */}
+                    {colBookings.map(b => {
+                      const {top, height} = bookingPos(b)
+                      const ss = statusStyle(b.status)
+                      const svc = b.services
+                      const cust = b.customers
+                      return (
+                        <div key={b.id} onClick={()=>setBookingModal(b)}
+                          style={{ position:'absolute', top, left:2, right:2, height:height-2, borderRadius:7, background:svc?.color?svc.color+'25':ss.bg, border:'2px solid '+(svc?.color||ss.border), cursor:'pointer', overflow:'hidden', padding:'3px 7px', zIndex:1 }}>
+                          <div style={{ fontWeight:700, fontSize:11, color:svc?.color||ss.text, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                            {cust?.name || b.customer_name || 'Neznana stranka'}
+                          </div>
+                          {height > 40 && (
+                            <div style={{ fontSize:10, color:T.muted, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                              {svc?.name || 'Storitev'} · {b.duration_min||60} min
+                            </div>
+                          )}
+                          {height > 55 && b.status === 'no_show' && (
+                            <div style={{ fontSize:9, fontWeight:800, color:T.danger }}>⚠️ NI PRIŠEL</div>
+                          )}
+                        </div>
+                      )
+                    })}
+
+                    {/* Trenutni čas indikator */}
+                    {isToday(colDate) && (() => {
+                      const now = new Date()
+                      const nowH = now.getHours() + now.getMinutes()/60
+                      if (nowH < 7 || nowH > 21) return null
+                      return (
+                        <div style={{ position:'absolute', top:(nowH-7)*HOUR_H, left:0, right:0, height:2, background:'#ef4444', zIndex:3 }}>
+                          <div style={{ position:'absolute', left:-4, top:-4, width:10, height:10, borderRadius:'50%', background:'#ef4444' }}/>
+                        </div>
+                      )
+                    })()}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         )}
       </div>
+
+      {/* Booking modal */}
+      {bookingModal !== null && (
+        <BookingModal
+          booking={bookingModal}
+          posData={posData}
+          onClose={()=>setBookingModal(null)}
+          onSaved={()=>{ loadBookings(); setBookingModal(null) }}
+        />
+      )}
     </div>
+  )
+}
+
+// ─── Booking Modal ─────────────────────────────────────────────
+function BookingModal({ booking, posData, onClose, onSaved }) {
+  const isNew = !booking.id
+  const [data, setData] = useState({
+    customer_id: booking.customer_id || '',
+    customer_name: booking.customer_name || '',
+    staff_id: booking.staff_id || '',
+    service_id: booking.service_id || '',
+    start_at: booking.start_at ? new Date(booking.start_at).toISOString().slice(0,16) : new Date().toISOString().slice(0,16),
+    duration_min: booking.duration_min || 60,
+    status: booking.status || 'scheduled',
+    note: booking.note || '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [custSearch, setCustSearch] = useState(booking.customer_name || '')
+  const [showCustList, setShowCustList] = useState(false)
+  const [activePkgs, setActivePkgs] = useState([])
+  const [selectedPkg, setSelectedPkg] = useState(booking.customer_package_id || '')
+  const [toast, setToast] = useState(null)
+  function showToast(msg, ok=true) { setToast({msg,ok}); setTimeout(()=>setToast(null),3000) }
+
+  const therapists = posData.staffList.filter(s => s.role && ['Terapevt','Trener','Lastnik','Fizioterapevt'].includes(s.role))
+  const custResults = posData.customers.filter(c =>
+    custSearch && c.name.toLowerCase().includes(custSearch.toLowerCase())
+  ).slice(0,6)
+
+  // Naloži aktivne pakete stranke
+  useEffect(() => {
+    if (!data.customer_id) { setActivePkgs([]); return }
+    async function load() {
+      const {data:pkgs} = await createClient()
+        .from('customer_packages')
+        .select('*, package_templates(name,template_type)')
+        .eq('customer_id', data.customer_id)
+        .eq('active', true)
+      setActivePkgs(pkgs || [])
+    }
+    load()
+  }, [data.customer_id])
+
+  // Ko izbereš storitev → nastavi trajanje
+  useEffect(() => {
+    if (!data.service_id) return
+    const svc = posData.services.find(s => s.id === data.service_id)
+    if (svc?.duration_min) setData(p => ({ ...p, duration_min: svc.duration_min }))
+  }, [data.service_id])
+
+  async function save() {
+    setSaving(true)
+    try {
+      const payload = {
+        business_id: BUSINESS_ID,
+        customer_id: data.customer_id || null,
+        customer_name: custSearch,
+        staff_id: data.staff_id || null,
+        service_id: data.service_id || null,
+        start_at: new Date(data.start_at).toISOString(),
+        duration_min: Number(data.duration_min),
+        status: data.status,
+        note: data.note || null,
+        reminder_sent: false,
+        is_table: false,
+      }
+
+      if (isNew) {
+        const {error} = await createClient().from('bookings').insert(payload)
+        if (error) throw error
+      } else {
+        const {error} = await createClient().from('bookings').update(payload).eq('id', booking.id)
+        if (error) throw error
+      }
+
+      // Pošlji email opomnik (12h pred terminom)
+      if (data.customer_id && isNew) {
+        const cust = posData.customers.find(c => c.id === data.customer_id)
+        if (cust?.email) {
+          const termDate = new Date(data.start_at)
+          const svc = posData.services.find(s => s.id === data.service_id)
+          fetch('/api/email/send', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({
+              to: cust.email,
+              subject: `Opomnik: ${svc?.name || 'termin'} – ${termDate.toLocaleDateString('sl-SI')}`,
+              customerName: cust.name,
+              html: `<div style="font-family:Inter,sans-serif;padding:32px 24px;max-width:560px">
+                <h2 style="color:#0d2818">Opomnik za termin</h2>
+                <p>Spoštovani ${cust.name},</p>
+                <p>Opominjamo vas, da imate rezerviran termin:</p>
+                <div style="background:#f4efe5;padding:16px;border-radius:10px;margin:16px 0">
+                  <b>${svc?.name || 'Termin'}</b><br/>
+                  📅 ${termDate.toLocaleDateString('sl-SI', {weekday:'long',day:'numeric',month:'long'})}<br/>
+                  ⏰ ${termDate.toLocaleTimeString('sl-SI', {hour:'2-digit',minute:'2-digit'})}
+                  ${data.duration_min ? ` · ${data.duration_min} min` : ''}
+                </div>
+                <p>V primeru odpovedi nas prosimo obvestite vsaj 24 ur vnaprej.</p>
+                <p>Lep pozdrav,<br/><b>Ekipa ŠIRM</b></p>
+              </div>`
+            })
+          }).catch(()=>{})
+        }
+      }
+
+      onSaved()
+    } catch(e) { showToast(e.message, false) }
+    setSaving(false)
+  }
+
+  async function deleteBooking() {
+    if (!confirm('Izbrišem to rezervacijo?')) return
+    await createClient().from('bookings').delete().eq('id', booking.id)
+    onSaved()
+  }
+
+  async function markStatus(status) {
+    await createClient().from('bookings').update({ status }).eq('id', booking.id)
+    // Če "arrived" in ima paket → odštej obisk
+    if (status === 'arrived' && selectedPkg) {
+      const pkg = activePkgs.find(p => p.id === selectedPkg)
+      if (pkg && pkg.remaining > 0) {
+        const updates: any = { remaining: pkg.remaining - 1 }
+        if (updates.remaining === 0) updates.active = false
+        if (!pkg.activated_at && pkg.activation_type === 'first_use') {
+          updates.activated_at = new Date().toISOString()
+          if (pkg.package_templates?.validity_days) {
+            const exp = new Date()
+            exp.setDate(exp.getDate() + pkg.package_templates.validity_days)
+            updates.expires = exp.toISOString().split('T')[0]
+          }
+        }
+        await createClient().from('customer_packages').update(updates).eq('id', selectedPkg)
+        showToast('✓ Obisk zabeležen + odštet iz kartice')
+      }
+    } else if (status === 'arrived') {
+      showToast('✓ Prihod zabeležen')
+    }
+    onSaved()
+  }
+
+  const statusOptions = [
+    { id:'scheduled', label:'Načrtovano', color:'#1f6b3a' },
+    { id:'confirmed', label:'Potrjeno', color:'#0d2818' },
+    { id:'arrived', label:'Prišel/a', color:'#b88c28' },
+    { id:'no_show', label:'Ni prišel', color:'#a83232' },
+    { id:'cancelled', label:'Preklicano', color:'#9a9890' },
+  ]
+
+  return (
+    <Modal open onClose={onClose} width={520}>
+      <ModalHeader title={isNew ? '📅 Nova rezervacija' : '📅 Uredi rezervacijo'} onClose={onClose}/>
+      <div style={{ padding:'18px 22px', display:'flex', flexDirection:'column', gap:12, maxHeight:'80vh', overflowY:'auto' }}>
+
+        {/* Status gumbi (samo za obstoječe) */}
+        {!isNew && (
+          <div>
+            <label style={{ fontSize:11, color:T.muted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', display:'block', marginBottom:6 }}>Status</label>
+            <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
+              {statusOptions.map(s=>(
+                <button key={s.id} onClick={()=>markStatus(s.id)}
+                  style={{ padding:'6px 12px', borderRadius:7, border:'2px solid '+(data.status===s.id?s.color:T.line), background:data.status===s.id?s.color+'15':'transparent', color:data.status===s.id?s.color:T.muted, fontWeight:700, fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Stranka */}
+        <div style={{ position:'relative' }}>
+          <label style={{ fontSize:12, color:T.muted, display:'block', marginBottom:5 }}>Stranka</label>
+          <input value={custSearch} onChange={e=>{setCustSearch(e.target.value);setShowCustList(true);setData(p=>({...p,customer_id:''}))}}
+            onFocus={()=>setShowCustList(true)}
+            placeholder="Išči stranko..." style={inp}/>
+          {showCustList && custResults.length > 0 && (
+            <div style={{ position:'absolute', top:'100%', left:0, right:0, background:T.surface, border:'1px solid '+T.line, borderRadius:9, boxShadow:'0 8px 24px rgba(0,0,0,0.12)', zIndex:50 }}>
+              {custResults.map(c=>(
+                <div key={c.id} onClick={()=>{
+                  setData(p=>({...p,customer_id:c.id,customer_name:c.name}))
+                  setCustSearch(c.name); setShowCustList(false)
+                }} style={{ padding:'10px 14px', cursor:'pointer', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid '+T.lineSoft }}>
+                  <div style={{ width:30, height:30, borderRadius:999, background:T.accent, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:11 }}>
+                    {c.name.split(' ').map(w=>w[0]).join('').slice(0,2)}
+                  </div>
+                  <div>
+                    <div style={{ fontSize:13, fontWeight:600 }}>{c.name}</div>
+                    <div style={{ fontSize:11, color:T.muted }}>{c.phone||c.email||'brez kontakta'}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Aktivni paketi stranke */}
+        {activePkgs.length > 0 && (
+          <div>
+            <label style={{ fontSize:12, color:T.muted, display:'block', marginBottom:5 }}>Uporabi kartico (odšteje obisk ob prihodu)</label>
+            <select value={selectedPkg} onChange={e=>setSelectedPkg(e.target.value)} style={inp}>
+              <option value="">— Brez kartice (plačilo ob obisku) —</option>
+              {activePkgs.map(p=>(
+                <option key={p.id} value={p.id}>
+                  {p.name} {p.remaining!==null?`(${p.remaining} obiskov)`:''} 
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+          {/* Storitev */}
+          <Field label="Storitev">
+            <select value={data.service_id} onChange={e=>setData(p=>({...p,service_id:e.target.value}))} style={inp}>
+              <option value="">— Izberi storitev —</option>
+              {posData.services.map(s=><option key={s.id} value={s.id}>{s.name} ({s.duration_min} min)</option>)}
+            </select>
+          </Field>
+
+          {/* Terapevt */}
+          <Field label="Terapevt / trener">
+            <select value={data.staff_id} onChange={e=>setData(p=>({...p,staff_id:e.target.value}))} style={inp}>
+              <option value="">— Izberi —</option>
+              {therapists.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </Field>
+        </div>
+
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 120px', gap:10 }}>
+          <Field label="Datum in čas *">
+            <input type="datetime-local" value={data.start_at} onChange={e=>setData(p=>({...p,start_at:e.target.value}))} style={inp}/>
+          </Field>
+          <Field label="Trajanje (min)">
+            <input type="number" value={data.duration_min} onChange={e=>setData(p=>({...p,duration_min:e.target.value}))} min="15" step="15" style={inp}/>
+          </Field>
+        </div>
+
+        <Field label="Opomba">
+          <textarea value={data.note} onChange={e=>setData(p=>({...p,note:e.target.value}))} rows={2}
+            style={{ ...inp, resize:'vertical' }} placeholder="Posebne zahteve, opomba terapevtu..."/>
+        </Field>
+
+        {/* Email opomnik info */}
+        {isNew && data.customer_id && posData.customers.find(c=>c.id===data.customer_id)?.email && (
+          <div style={{ padding:'8px 12px', background:T.accentSoft, borderRadius:8, fontSize:11, color:T.accent }}>
+            📧 Stranka bo prejela email potrditev takoj po shranjevanju
+          </div>
+        )}
+
+        <div style={{ display:'flex', gap:8, justifyContent:'space-between', marginTop:4 }}>
+          {!isNew ? (
+            <button onClick={deleteBooking} style={{ ...btnS, color:T.danger, fontSize:12 }}>🗑 Izbriši</button>
+          ) : <div/>}
+          <div style={{ display:'flex', gap:8 }}>
+            <button onClick={onClose} style={btnS}>Prekliči</button>
+            <button onClick={save} disabled={saving} style={{ ...btnP, opacity:saving?0.6:1 }}>
+              {saving?'Shranjujem...':isNew?'Rezerviraj':'Shrani'}
+            </button>
+          </div>
+        </div>
+      </div>
+      {toast && <Toast msg={toast.msg} ok={toast.ok}/>}
+    </Modal>
   )
 }
 
 // ================================================================
 // CUSTOMERS SCREEN — full profile hub
 // ================================================================
+
 function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackageModal }) {
   const [search, setSearch] = useState('')
   const [tierFilter, setTierFilter] = useState('vse')
