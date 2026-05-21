@@ -116,6 +116,7 @@ function usePosData() {
   const [staffList, setStaffList] = useState([])
   const [packageTemplates, setPackageTemplates] = useState([])
   const [services, setServices] = useState([])
+  const [ingredients, setIngredients] = useState([])
   const [todayStats, setTodayStats] = useState({ promet: 0, racuni: 0, napitnine: 0 })
   const [businessProfile, setBusinessProfile] = useState('all')
   const [loading, setLoading] = useState(true)
@@ -136,6 +137,7 @@ function usePosData() {
           pos.packageTemplates.list(),
           pos.services.list(),
           pos.reports.dailyStats(),
+          createClient().from('ingredients').select('*').eq('business_id', BUSINESS_ID).order('name'),
         ])
         setCategories(cats)
         setItems(itms)
@@ -145,6 +147,7 @@ function usePosData() {
         setPackageTemplates(pkgs)
         setServices(svcs)
         setTodayStats(stats)
+        setIngredients((await createClient().from('ingredients').select('*, item_ingredients(qty_used, item_id)').eq('business_id', BUSINESS_ID).order('name')).data || [])
         // Fetch business profile
         const { data: bizData } = await createClient().from('businesses').select('profile_type').eq('id', BUSINESS_ID).single()
         if (bizData?.profile_type) setBusinessProfile(bizData.profile_type)
@@ -169,7 +172,7 @@ function usePosData() {
     return [{ id: 'cat-fav', name: 'Priljubljeno', icon: '★', color: '#E9B949' }, ...categories]
   }, [categories])
 
-  return { categories: categoriesWithFav, items, spaces, customers, staffList, packageTemplates, services, todayStats, businessProfile, setBusinessProfile, loading, itemsIn, refresh }
+  return { categories: categoriesWithFav, items, spaces, customers, staffList, packageTemplates, services, ingredients, todayStats, businessProfile, setBusinessProfile, loading, itemsIn, refresh }
 }
 
 // ================================================================
@@ -466,6 +469,24 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         fursEor,
         fursZoi,
       })
+
+      // Odštej surovine za recipe artikle
+      try {
+        for (const line of cart) {
+          if (line.item_type === 'recipe') {
+            const {data: normLines} = await createClient().from('item_ingredients').select('ingredient_id, qty_used').eq('item_id', line.id)
+            if (normLines && normLines.length > 0) {
+              for (const nl of normLines) {
+                const {data: ig} = await createClient().from('ingredients').select('stock_qty').eq('id', nl.ingredient_id).single()
+                if (ig) {
+                  const newQty = Math.max(0, (ig.stock_qty || 0) - (nl.qty_used * line.qty))
+                  await createClient().from('ingredients').update({ stock_qty: newQty }).eq('id', nl.ingredient_id)
+                }
+              }
+            }
+          }
+        }
+      } catch(normErr) { console.warn('Normativ odštevanje ni uspelo:', normErr) }
 
       onComplete({
         method,
@@ -1196,51 +1217,106 @@ function PackagesScreen({ posData }) {
 }
 
 // ================================================================
-// INVENTORY SCREEN — real DB
+// INVENTORY SCREEN — artikli + surovine
 // ================================================================
 function InventoryScreen({ posData }) {
   const [search, setSearch] = useState('')
-  const items = posData.items.filter(i => !search || i.name.toLowerCase().includes(search.toLowerCase()))
+  const [tab, setTab] = useState('items')
+
+  const items = posData.items.filter(i => i.item_type !== 'ingredient' && (!search || i.name.toLowerCase().includes(search.toLowerCase())))
+  const ingredients = posData.ingredients.filter(i => !search || i.name.toLowerCase().includes(search.toLowerCase()))
+
+  const lowItems = items.filter(i => i.stock !== null && i.stock <= 5)
+  const lowIngredients = ingredients.filter(i => i.stock_qty !== null && i.stock_qty <= (i.min_stock || 0))
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', minHeight:0 }}>
-      <div style={{ padding:'14px 20px', background:T.surface, borderBottom:'1px solid '+T.line, display:'flex', gap:14, alignItems:'center' }}>
-        <div style={{ fontSize:16, fontWeight:700 }}>{posData.items.length} artiklov</div>
-        <div style={{ position:'relative', flex:1, maxWidth:360 }}>
+      <div style={{ padding:'12px 20px', background:T.surface, borderBottom:'1px solid '+T.line, display:'flex', gap:14, alignItems:'center', flexWrap:'wrap' }}>
+        <div style={{ display:'flex', gap:2, background:T.surface3, padding:3, borderRadius:9 }}>
+          {[['items','Artikli'],['ingredients','Surovine']].map(([id,lbl])=>(
+            <button key={id} onClick={()=>setTab(id)} style={{ padding:'7px 16px', borderRadius:7, border:'none', background:tab===id?T.header:'transparent', color:tab===id?T.headerInk:T.ink, fontWeight:700, fontSize:13, cursor:'pointer', fontFamily:'inherit' }}>{lbl}</button>
+          ))}
+        </div>
+        {(lowItems.length > 0 || lowIngredients.length > 0) && (
+          <div style={{ padding:'6px 12px', borderRadius:8, background:'rgba(184,140,40,0.12)', color:T.warn, fontSize:12, fontWeight:600 }}>
+            ⚠️ {lowItems.length + lowIngredients.length} artiklov z nizko zalogo
+          </div>
+        )}
+        <div style={{ position:'relative', flex:1, maxWidth:320 }}>
           <div style={{ position:'absolute', left:11, top:'50%', transform:'translateY(-50%)', color:T.muted }}><KI name="search" size={14}/></div>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Išči artikel…" style={{ width:'100%', padding:'8px 12px 8px 34px', borderRadius:9, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13, background:T.inputBg, outline:'none', boxSizing:'border-box' }}/>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Išči…" style={{ width:'100%', padding:'8px 12px 8px 34px', borderRadius:9, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13, background:T.inputBg, outline:'none', boxSizing:'border-box' }}/>
         </div>
       </div>
+
       <div style={{ flex:1, overflow:'auto' }}>
-        <table style={{ width:'100%', borderCollapse:'separate', borderSpacing:0 }}>
-          <thead style={{ position:'sticky', top:0, background:T.surface2, zIndex:1 }}>
-            <tr style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.06em' }}>
-              {['Artikel','Šifra','Cena','Stanje','Status'].map((h, i) => (
-                <th key={i} style={{ padding:'12px', textAlign: i>=2?'right':'left', borderBottom:'1px solid '+T.line, fontWeight:700 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((it, idx) => (
-              <tr key={it.id} style={{ background: idx%2?T.surface2:T.surface }}>
-                <td style={{ padding:'11px 12px' }}><div style={{ fontWeight:600, fontSize:13 }}>{it.name}</div></td>
-                <td style={{ padding:'11px 12px', fontSize:12, color:T.muted, fontFamily:'monospace' }}>{it.code}</td>
-                <td style={{ padding:'11px 12px', textAlign:'right', fontWeight:600, fontVariantNumeric:'tabular-nums' }}>{eur(it.price)}</td>
-                <td style={{ padding:'11px 12px', textAlign:'right', fontWeight:700, fontSize:14, fontVariantNumeric:'tabular-nums', color: it.stock===null?T.muted:it.stock<=0?T.danger:it.low_stock&&it.stock<=it.low_stock?T.warn:T.ink }}>
-                  {it.stock===null?'∞':it.stock}
-                </td>
-                <td style={{ padding:'11px 12px' }}>
-                  <span style={{ fontSize:10, fontWeight:700, padding:'3px 7px', borderRadius:5, background: it.stock===null?T.accentSoft:it.stock<=0?'rgba(168,50,50,0.1)':it.low_stock&&it.stock<=it.low_stock?'rgba(184,140,40,0.12)':T.accentSoft, color: it.stock===null?T.accent:it.stock<=0?T.danger:it.low_stock&&it.stock<=it.low_stock?T.warn:T.accent, textTransform:'uppercase', letterSpacing:'0.05em' }}>
-                    {it.stock===null?'Neomejeno':it.stock<=0?'Ni':'V zalogi'}
-                  </span>
-                </td>
+        {tab === 'items' && (
+          <table style={{ width:'100%', borderCollapse:'separate', borderSpacing:0 }}>
+            <thead style={{ position:'sticky', top:0, background:T.surface2, zIndex:1 }}>
+              <tr style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.06em' }}>
+                {['Artikel','Tip','Šifra','Cena','Zaloga','Status'].map((h,i)=>(
+                  <th key={i} style={{ padding:'12px', textAlign:i>=3?'right':'left', borderBottom:'1px solid '+T.line, fontWeight:700 }}>{h}</th>
+                ))}
               </tr>
-            ))}
-            {items.length === 0 && (
-              <tr><td colSpan={5} style={{ padding:40, textAlign:'center', color:T.muted }}>Ni artiklov. Dodaj jih v Nastavitvah.</td></tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {items.map((it,idx)=>{
+                const low = it.stock !== null && it.stock <= 5
+                const typeLabel = {simple:'Enostavni',recipe:'Normativ',ingredient:'Surovina'}[it.item_type||'simple']
+                return (
+                  <tr key={it.id} style={{ background:idx%2?T.surface2:T.surface }}>
+                    <td style={{ padding:'11px 12px' }}><div style={{ fontWeight:600, fontSize:13 }}>{it.name}</div></td>
+                    <td style={{ padding:'11px 12px' }}>
+                      <span style={{ fontSize:10, fontWeight:700, padding:'2px 6px', borderRadius:4, background:it.item_type==='recipe'?'rgba(99,72,150,0.12)':T.accentSoft, color:it.item_type==='recipe'?'#634896':T.accent }}>{typeLabel}</span>
+                    </td>
+                    <td style={{ padding:'11px 12px', fontSize:12, color:T.muted, fontFamily:'monospace' }}>{it.code||'—'}</td>
+                    <td style={{ padding:'11px 12px', textAlign:'right', fontWeight:600, fontVariantNumeric:'tabular-nums' }}>{eur(it.price)}</td>
+                    <td style={{ padding:'11px 12px', textAlign:'right', fontWeight:700, fontSize:14, fontVariantNumeric:'tabular-nums', color:it.stock===null?T.muted:low?T.danger:T.ink }}>
+                      {it.stock===null?'∞':it.stock} {it.unit}
+                    </td>
+                    <td style={{ padding:'11px 12px' }}>
+                      <span style={{ fontSize:10, fontWeight:700, padding:'3px 7px', borderRadius:5, background:it.stock===null?T.accentSoft:low?'rgba(168,50,50,0.1)':T.accentSoft, color:it.stock===null?T.accent:low?T.danger:T.accent, textTransform:'uppercase' }}>
+                        {it.stock===null?'Neomejeno':low?'Nizko':'V redu'}
+                      </span>
+                    </td>
+                  </tr>
+                )
+              })}
+              {items.length===0 && <tr><td colSpan={6} style={{ padding:40, textAlign:'center', color:T.muted }}>Ni artiklov</td></tr>}
+            </tbody>
+          </table>
+        )}
+
+        {tab === 'ingredients' && (
+          <table style={{ width:'100%', borderCollapse:'separate', borderSpacing:0 }}>
+            <thead style={{ position:'sticky', top:0, background:T.surface2, zIndex:1 }}>
+              <tr style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.06em' }}>
+                {['Surovina','Enota','Zaloga','Min. zaloga','Nabavna cena','Status'].map((h,i)=>(
+                  <th key={i} style={{ padding:'12px', textAlign:i>=2?'right':'left', borderBottom:'1px solid '+T.line, fontWeight:700 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {ingredients.map((ig,idx)=>{
+                const low = ig.stock_qty <= (ig.min_stock||0)
+                return (
+                  <tr key={ig.id} style={{ background:idx%2?T.surface2:T.surface }}>
+                    <td style={{ padding:'11px 12px' }}><div style={{ fontWeight:600, fontSize:13 }}>{ig.name}</div><div style={{ fontSize:11, color:T.muted }}>{ig.supplier||''}</div></td>
+                    <td style={{ padding:'11px 12px', fontSize:13, color:T.muted }}>{ig.unit}</td>
+                    <td style={{ padding:'11px 12px', textAlign:'right', fontWeight:700, fontSize:14, fontVariantNumeric:'tabular-nums', color:low?T.danger:T.ink }}>{ig.stock_qty}</td>
+                    <td style={{ padding:'11px 12px', textAlign:'right', color:T.muted, fontVariantNumeric:'tabular-nums' }}>{ig.min_stock||0}</td>
+                    <td style={{ padding:'11px 12px', textAlign:'right', fontVariantNumeric:'tabular-nums' }}>{ig.cost_price?eur(ig.cost_price):'—'}</td>
+                    <td style={{ padding:'11px 12px' }}>
+                      <span style={{ fontSize:10, fontWeight:700, padding:'3px 7px', borderRadius:5, background:low?'rgba(168,50,50,0.1)':T.accentSoft, color:low?T.danger:T.accent, textTransform:'uppercase' }}>
+                        {low?'Nizko':'V redu'}
+                      </span>
+                    </td>
+                  </tr>
+                )
+              })}
+              {ingredients.length===0 && <tr><td colSpan={6} style={{ padding:40, textAlign:'center', color:T.muted }}>Ni surovin. Dodaj jih v Nastavitve → Sestavine.</td></tr>}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   )
@@ -1300,6 +1376,7 @@ function AdminScreen({ auth, posData }) {
     { id:'categories', label:'Kategorije & Artikli',  icon:'grid'     },
     { id:'storitve',   label:'Storitve',              icon:'calendar' },
     { id:'packages',   label:'Paketi',                icon:'package'  },
+    { id:'sestavine',  label:'Sestavine & Normativ',  icon:'scale'    },
     { id:'happyhour',  label:'Happy hour',            icon:'happy'    },
     { id:'kuhinja',    label:'Kuhinja & display',     icon:'receipt'  },
     { id:'autolock',   label:'Avt. zaklepanje',       icon:'pin'      },
@@ -1321,6 +1398,7 @@ function AdminScreen({ auth, posData }) {
         {section==='categories' && <CatalogSection posData={posData}/>}
         {section==='spaces'     && <SpacesSection posData={posData}/>}
         {section==='packages'   && <PackagesAdminSection posData={posData}/>}
+        {section==='sestavine'  && <SestavineSection posData={posData}/>}
         {section==='storitve'   && <StoritveCrudSection posData={posData}/>}
         {section==='happyhour'  && <HappyHourSection posData={posData}/>}
         {section==='kuhinja'    && <KuhinjaSection posData={posData}/>}
@@ -1427,10 +1505,54 @@ function StaffSection({ posData }) {
   )
 }
 
+// ─── Emoji Picker ─────────────────────────────────────────────
+const EMOJI_GROUPS = [
+  { label:'Pijača',    emojis:['🍺','🍻','🍷','🥂','🍾','🥃','🍸','🍹','🧃','🥤','🧋','☕','🍵','🫖','🧉','🍶'] },
+  { label:'Hrana',     emojis:['🍕','🍔','🌮','🌯','🥙','🥗','🍜','🍝','🍲','🥘','🫕','🥩','🍖','🍗','🥓','🧆','🥚','🍳','🥞','🧇','🥐','🥖','🫓','🧀','🥗','🫙','🍱'] },
+  { label:'Sladko',    emojis:['🍰','🎂','🧁','🍩','🍪','🍫','🍬','🍭','🍦','🍨','🍧','🍮','🥧'] },
+  { label:'Fitnes',    emojis:['💪','🏋️','🤸','🧘','🏃','🚴','🏊','⚽','🏀','🎾','🥊','🏆','🎯','🧗','🏄','🤾'] },
+  { label:'Zdravje',   emojis:['💆','🧖','💅','💊','🩺','🩹','🫀','🧬','🌿','🧴','🛁','💈'] },
+  { label:'Storitve',  emojis:['✂️','🪥','🧹','🔑','🪴','📋','🗓️','⏰','📞','💻','🖨️','📱'] },
+  { label:'Ostalo',    emojis:['🎫','🎁','🛍️','📦','⭐','🌟','✨','🔖','🏷️','💰','💳','🧾','🪙'] },
+]
+
+function EmojiPicker({ value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const [group, setGroup] = useState(0)
+  return (
+    <div style={{ position:'relative' }}>
+      <button type="button" onClick={()=>setOpen(o=>!o)} style={{ width:52, height:52, borderRadius:10, border:'1px solid rgba(0,0,0,0.15)', background:'#fff', fontSize:26, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+        {value||'📦'}
+      </button>
+      {open && (
+        <>
+          <div onClick={()=>setOpen(false)} style={{ position:'fixed', inset:0, zIndex:100 }}/>
+          <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:101, background:'#fff', borderRadius:12, boxShadow:'0 12px 40px rgba(0,0,0,0.2)', border:'1px solid rgba(0,0,0,0.08)', width:300, padding:10 }}>
+            <div style={{ display:'flex', gap:4, marginBottom:8, flexWrap:'wrap' }}>
+              {EMOJI_GROUPS.map((g,i)=>(
+                <button key={i} onClick={()=>setGroup(i)} style={{ padding:'3px 8px', borderRadius:6, border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:600, background:group===i?'#0D1F12':'#f0ede8', color:group===i?'#fff':'#666' }}>{g.label}</button>
+              ))}
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(8,1fr)', gap:3 }}>
+              {EMOJI_GROUPS[group].emojis.map(e=>(
+                <button key={e} onClick={()=>{ onChange(e); setOpen(false) }} style={{ width:32, height:32, border:'none', background:'transparent', cursor:'pointer', fontSize:18, borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center' }}
+                  onMouseEnter={ev=>ev.target.style.background='#f0ede8'} onMouseLeave={ev=>ev.target.style.background='transparent'}>
+                  {e}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ─── Catalog (Kategorije + Artikli) CRUD ──────────────────────
 function CatalogSection({ posData }) {
   const [catModal, setCatModal] = useState(null)
   const [itemModal, setItemModal] = useState(null)
+  const [normModal, setNormModal] = useState(null)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
   const [activeTab, setActiveTab] = useState('categories')
@@ -1462,24 +1584,41 @@ function CatalogSection({ posData }) {
 
   async function saveItem() {
     if (!itemModal?.name?.trim()) { showToast('Ime je obvezno',false); return }
-    if (!itemModal.price || Number(itemModal.price)<=0) { showToast('Cena mora biti > 0',false); return }
+    const itemType = itemModal?.item_type || 'simple'
+    if (itemType !== 'ingredient' && (!itemModal.price || Number(itemModal.price)<=0)) { showToast('Prodajna cena mora biti > 0',false); return }
+    if (itemModal.vat_rate===undefined || itemModal.vat_rate==='') { showToast('DDV stopnja je obvezna ★',false); return }
     setSaving(true)
     try {
       const payload = {
         business_id:BUSINESS_ID, category_id:itemModal.category_id||null,
-        name:itemModal.name, code:itemModal.code||null, price:Number(itemModal.price),
-        unit:itemModal.unit||'kos', vat_rate:Number(itemModal.vat_rate||22),
+        name:itemModal.name, code:itemModal.code||null,
+        price:itemModal.price?Number(itemModal.price):0,
+        unit:itemModal.unit||'kos', vat_rate:Number(itemModal.vat_rate),
         stock:itemModal.stock!=null&&itemModal.stock!==''?Number(itemModal.stock):null,
         fav:!!itemModal.fav, kitchen:!!itemModal.kitchen, bookable:!!itemModal.bookable,
         duration_min:itemModal.bookable&&itemModal.duration_min?Number(itemModal.duration_min):null,
+        item_type: itemType,
         archived:false,
       }
+      let savedId = itemModal.id
       if (itemModal.id) {
         const {error} = await createClient().from('items').update(payload).eq('id',itemModal.id)
         if (error) throw error
       } else {
-        const {error} = await createClient().from('items').insert(payload)
+        const {data, error} = await createClient().from('items').insert(payload).select().single()
         if (error) throw error
+        savedId = data.id
+      }
+      // Shrani normativ če je recipe tip
+      if (itemType === 'recipe' && savedId) {
+        await createClient().from('item_ingredients').delete().eq('item_id', savedId)
+        const normLines = (itemModal.normativ||[]).filter(n=>n.ingredient_id&&n.qty_used)
+        if (normLines.length > 0) {
+          const {error} = await createClient().from('item_ingredients').insert(
+            normLines.map(n=>({ item_id:savedId, ingredient_id:n.ingredient_id, qty_used:Number(n.qty_used) }))
+          )
+          if (error) throw error
+        }
       }
       setItemModal(null); posData.refresh(); showToast(itemModal.id?'Artikel posodobljen':'Artikel dodan')
     } catch(e) { showToast(e.message,false) }
@@ -1536,7 +1675,10 @@ function CatalogSection({ posData }) {
                 <div style={{ fontSize:11, color:T.muted, fontFamily:'monospace' }}>{it.code||'—'} · DDV {it.vat_rate}% · {it.unit}</div>
               </div>
               <div style={{ fontWeight:700, fontSize:14, minWidth:60, textAlign:'right', fontVariantNumeric:'tabular-nums' }}>{eur(it.price)}</div>
-              <button onClick={()=>setItemModal({...it})} style={btnS}><KI name="edit" size={14}/></button>
+              <button onClick={async()=>{
+                const {data:normData} = await createClient().from('item_ingredients').select('*').eq('item_id',it.id)
+                setItemModal({...it,normativ:normData||[]})
+              }} style={btnS}><KI name="edit" size={14}/></button>
               <button onClick={()=>deleteItem(it.id,it.name)} style={{...btnS,color:T.danger}}><KI name="trash" size={14}/></button>
             </div>
           ))}
@@ -1552,7 +1694,7 @@ function CatalogSection({ posData }) {
             <input value={catModal?.name||''} onChange={e=>setCatModal(p=>({...p,name:e.target.value}))} placeholder="Bar, Fitness, Kava..." style={inp} autoFocus/>
           </Field>
           <Field label="Emoji">
-            <input value={catModal?.icon||'📦'} onChange={e=>setCatModal(p=>({...p,icon:e.target.value}))} style={{...inp,width:60}}/>
+            <EmojiPicker value={catModal?.icon||'📦'} onChange={icon=>setCatModal(p=>({...p,icon}))}/>
           </Field>
           <Field label="Barva">
             <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
@@ -1569,25 +1711,57 @@ function CatalogSection({ posData }) {
       </Modal>
 
       {/* Artikel modal */}
-      <Modal open={!!itemModal} onClose={()=>setItemModal(null)} width={480}>
+      <Modal open={!!itemModal} onClose={()=>setItemModal(null)} width={520}>
         <ModalHeader title={itemModal?.id?'Uredi artikel':'Nov artikel'} onClose={()=>setItemModal(null)}/>
-        <div style={{ padding:'20px 22px', display:'flex', flexDirection:'column', gap:12, maxHeight:'65vh', overflowY:'auto' }}>
+        <div style={{ padding:'20px 22px', display:'flex', flexDirection:'column', gap:12, maxHeight:'72vh', overflowY:'auto' }}>
+
+          {/* Tip artikla */}
+          <Field label="Tip artikla *">
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:6 }}>
+              {[
+                { id:'simple',     label:'Enostaven',   desc:'Pivo, vstopnina, kava', icon:'🛍️' },
+                { id:'recipe',     label:'Z normativom', desc:'Točeno vino, koktajl',  icon:'🧪' },
+                { id:'ingredient', label:'Surovina',     desc:'Vino 1L, moka 1kg',     icon:'📦' },
+              ].map(t=>{
+                const sel = (itemModal?.item_type||'simple') === t.id
+                return (
+                  <div key={t.id} onClick={()=>setItemModal(p=>({...p,item_type:t.id}))} style={{ padding:'10px 8px', borderRadius:9, border:'2px solid '+(sel?T.accent:T.line), cursor:'pointer', textAlign:'center', background:sel?T.accentSoft:T.surface }}>
+                    <div style={{ fontSize:20 }}>{t.icon}</div>
+                    <div style={{ fontSize:12, fontWeight:700, color:sel?T.accent:T.ink, marginTop:4 }}>{t.label}</div>
+                    <div style={{ fontSize:10, color:T.muted, marginTop:2 }}>{t.desc}</div>
+                  </div>
+                )
+              })}
+            </div>
+          </Field>
+
           <Field label="Ime artikla / storitve *">
             <input value={itemModal?.name||''} onChange={e=>setItemModal(p=>({...p,name:e.target.value}))} placeholder="Espresso, Masaža, Vstopnina..." style={inp} autoFocus/>
           </Field>
+
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-            <Field label="Cena (€) *">
-              <input type="number" step="0.01" min="0" value={itemModal?.price||''} onChange={e=>setItemModal(p=>({...p,price:e.target.value}))} placeholder="0.00" style={inp}/>
-            </Field>
+            {(itemModal?.item_type||'simple') !== 'ingredient' && (
+              <Field label="Prodajna cena (€) *">
+                <input type="number" step="0.01" min="0" value={itemModal?.price||''} onChange={e=>setItemModal(p=>({...p,price:e.target.value}))} placeholder="0.00" style={inp}/>
+              </Field>
+            )}
+            {(itemModal?.item_type||'simple') === 'ingredient' && (
+              <Field label="Nabavna cena (€)">
+                <input type="number" step="0.01" min="0" value={itemModal?.price||''} onChange={e=>setItemModal(p=>({...p,price:e.target.value}))} placeholder="0.00" style={inp}/>
+              </Field>
+            )}
             <Field label="Enota">
               <select value={itemModal?.unit||'kos'} onChange={e=>setItemModal(p=>({...p,unit:e.target.value}))} style={inp}>
-                {['kos','dl','kg','ura','paket','obisk'].map(u=><option key={u} value={u}>{u}</option>)}
+                {['kos','dl','cl','ml','L','g','kg','ura','paket','obisk','porcija'].map(u=><option key={u} value={u}>{u}</option>)}
               </select>
             </Field>
           </div>
+
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-            <Field label="DDV stopnja">
-              <select value={itemModal?.vat_rate??22} onChange={e=>setItemModal(p=>({...p,vat_rate:e.target.value}))} style={inp}>
+            <Field label="DDV stopnja *">
+              <select value={itemModal?.vat_rate??''} onChange={e=>setItemModal(p=>({...p,vat_rate:e.target.value}))}
+                style={{ ...inp, border: (itemModal?.vat_rate===undefined||itemModal?.vat_rate==='')?'1.5px solid '+T.warn:inp.border }}>
+                <option value="">— izberi DDV —</option>
                 <option value={0}>0% (oproščeno)</option>
                 <option value={9.5}>9.5% (hrana, pijača)</option>
                 <option value={22}>22% (splošna)</option>
@@ -1597,25 +1771,62 @@ function CatalogSection({ posData }) {
               <input value={itemModal?.code||''} onChange={e=>setItemModal(p=>({...p,code:e.target.value.toUpperCase()}))} placeholder="K01" style={{...inp,fontFamily:'monospace'}}/>
             </Field>
           </div>
-          <Field label="Kategorija">
-            <select value={itemModal?.category_id||''} onChange={e=>setItemModal(p=>({...p,category_id:e.target.value||null}))} style={inp}>
-              <option value="">Brez kategorije</option>
-              {realCategories.map(c=><option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Zaloga (pusti prazno za neomejeno)">
+
+          {(itemModal?.item_type||'simple') !== 'ingredient' && (
+            <Field label="Kategorija">
+              <select value={itemModal?.category_id||''} onChange={e=>setItemModal(p=>({...p,category_id:e.target.value||null}))} style={inp}>
+                <option value="">Brez kategorije</option>
+                {realCategories.map(c=><option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+              </select>
+            </Field>
+          )}
+
+          <Field label={(itemModal?.item_type||'simple')==='ingredient'?'Zaloga v skladišču':'Zaloga (pusti prazno za neomejeno)'}>
             <input type="number" min="0" value={itemModal?.stock??''} onChange={e=>setItemModal(p=>({...p,stock:e.target.value}))} placeholder="∞" style={inp}/>
           </Field>
-          <div style={{ display:'flex', gap:16 }}>
-            <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, cursor:'pointer' }}>
-              <input type="checkbox" checked={!!itemModal?.fav} onChange={e=>setItemModal(p=>({...p,fav:e.target.checked}))} style={{ accentColor:T.accent }}/>
-              Priljubljeno ★
-            </label>
-            <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, cursor:'pointer' }}>
-              <input type="checkbox" checked={!!itemModal?.kitchen} onChange={e=>setItemModal(p=>({...p,kitchen:e.target.checked}))} style={{ accentColor:T.accent }}/>
-              Pošlji v kuhinjo
-            </label>
-          </div>
+
+          {/* Normativ — samo za recipe tip */}
+          {(itemModal?.item_type||'simple') === 'recipe' && (
+            <div style={{ background:T.surface2, borderRadius:10, padding:14, border:'1px solid '+T.line }}>
+              <div style={{ fontWeight:700, fontSize:13, marginBottom:10, display:'flex', alignItems:'center', gap:6 }}>
+                🧪 Normativ <span style={{ fontSize:11, color:T.muted, fontWeight:500 }}>— katere surovine porabi ta artikel</span>
+              </div>
+              {(itemModal?.normativ||[]).map((n,i)=>(
+                <div key={i} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:6 }}>
+                  <select value={n.ingredient_id||''} onChange={e=>{const nv=[...(itemModal.normativ||[])];nv[i]={...nv[i],ingredient_id:e.target.value};setItemModal(p=>({...p,normativ:nv}))}} style={{ ...inp, flex:2 }}>
+                    <option value="">— izberi surovino —</option>
+                    {posData.ingredients.map(ig=><option key={ig.id} value={ig.id}>{ig.name} ({ig.unit})</option>)}
+                  </select>
+                  <input type="number" step="0.01" min="0" value={n.qty_used||''} onChange={e=>{const nv=[...(itemModal.normativ||[])];nv[i]={...nv[i],qty_used:e.target.value};setItemModal(p=>({...p,normativ:nv}))}} placeholder="Qty" style={{ ...inp, width:80, flex:0 }}/>
+                  <span style={{ fontSize:11, color:T.muted, minWidth:24 }}>
+                    {posData.ingredients.find(ig=>ig.id===n.ingredient_id)?.unit||''}
+                  </span>
+                  <button onClick={()=>setItemModal(p=>({...p,normativ:(p.normativ||[]).filter((_,j)=>j!==i)}))} style={{ background:'none', border:0, cursor:'pointer', color:T.danger, padding:4 }}>✕</button>
+                </div>
+              ))}
+              {posData.ingredients.length === 0 ? (
+                <div style={{ fontSize:12, color:T.muted, padding:'8px 0' }}>Najprej dodaj surovine v <b>Nastavitve → Sestavine</b></div>
+              ) : (
+                <button onClick={()=>setItemModal(p=>({...p,normativ:[...(p.normativ||[]),{ingredient_id:'',qty_used:''}]}))} style={{ ...btnS, padding:'6px 12px', fontSize:12, marginTop:4 }}>
+                  + Dodaj surovino
+                </button>
+              )}
+            </div>
+          )}
+
+          {(itemModal?.item_type||'simple') !== 'ingredient' && (
+            <div style={{ display:'flex', gap:16 }}>
+              <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, cursor:'pointer' }}>
+                <input type="checkbox" checked={!!itemModal?.fav} onChange={e=>setItemModal(p=>({...p,fav:e.target.checked}))} style={{ accentColor:T.accent }}/>
+                Priljubljeno ★
+              </label>
+              <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, cursor:'pointer' }}>
+                <input type="checkbox" checked={!!itemModal?.kitchen} onChange={e=>setItemModal(p=>({...p,kitchen:e.target.checked}))} style={{ accentColor:T.accent }}/>
+                Pošlji v kuhinjo
+              </label>
+            </div>
+          )}
+
           <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:4 }}>
             <button onClick={()=>setItemModal(null)} style={btnS}>Prekliči</button>
             <button onClick={saveItem} disabled={saving} style={{...btnP,opacity:saving?0.6:1}}>{saving?'Shranjujem...':'Shrani'}</button>
@@ -1996,6 +2207,152 @@ function PackagesAdminSection({ posData }) {
   )
 }
 
+
+// ─── Sestavine / Surovine CRUD ───────────────────────────────
+function SestavineSection({ posData }) {
+  const [modal, setModal] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [toast, setToast] = useState(null)
+  const UNITS = ['L','dl','cl','ml','kg','g','kos','paket','steklenica']
+  function showToast(msg, ok=true) { setToast({msg,ok}); setTimeout(()=>setToast(null),3000) }
+
+  async function save() {
+    if (!modal?.name?.trim()) { showToast('Ime je obvezno',false); return }
+    if (!modal?.unit) { showToast('Enota je obvezna',false); return }
+    setSaving(true)
+    try {
+      const payload = {
+        business_id: BUSINESS_ID,
+        name: modal.name,
+        unit: modal.unit,
+        stock_qty: Number(modal.stock_qty||0),
+        cost_price: modal.cost_price?Number(modal.cost_price):null,
+        min_stock: Number(modal.min_stock||0),
+        supplier: modal.supplier||null,
+      }
+      if (modal.id) {
+        const {error} = await createClient().from('ingredients').update(payload).eq('id',modal.id)
+        if (error) throw error
+      } else {
+        const {error} = await createClient().from('ingredients').insert(payload)
+        if (error) throw error
+      }
+      setModal(null); posData.refresh(); showToast(modal.id?'Surovina posodobljena':'Surovina dodana')
+    } catch(e) { showToast(e.message,false) }
+    setSaving(false)
+  }
+
+  async function remove(id, name) {
+    if (!confirm(`Izbrišem surovino "${name}"? Normativi ki jo uporabljajo bodo prizadeti.`)) return
+    try {
+      const {error} = await createClient().from('ingredients').delete().eq('id',id)
+      if (error) throw error
+      posData.refresh(); showToast('Surovina izbrisana')
+    } catch(e) { showToast(e.message,false) }
+  }
+
+  async function updateStock(ig) {
+    const qty = prompt(`Nova zaloga za ${ig.name} (${ig.unit}):`, ig.stock_qty)
+    if (qty === null) return
+    await createClient().from('ingredients').update({ stock_qty: Number(qty) }).eq('id',ig.id)
+    posData.refresh(); showToast('Zaloga posodobljena')
+  }
+
+  return (
+    <div>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+        <div>
+          <div style={{ fontSize:22, fontWeight:800 }}>Sestavine & Surovine</div>
+          <div style={{ fontSize:12, color:T.muted, marginTop:4 }}>
+            Surovine za normative — vino po litrih, moka po kg, itd. Ob prodaji normativnih artiklov se zaloga samodejno odšteje.
+          </div>
+        </div>
+        <button onClick={()=>setModal({unit:'L',stock_qty:0,min_stock:0})} style={btnP}>+ Dodaj surovino</button>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:16, marginTop:12 }}>
+        {[
+          ['Skupaj surovin', posData.ingredients.length, ''],
+          ['Nizka zaloga', posData.ingredients.filter(i=>i.stock_qty<=(i.min_stock||0)&&i.min_stock>0).length, 'opozorilo'],
+          ['Artiklov z normativom', posData.items.filter(i=>i.item_type==='recipe').length, ''],
+        ].map(([l,v,s])=>(
+          <div key={l} style={{ padding:'12px 14px', background:T.surface, borderRadius:10, border:'1px solid '+T.line }}>
+            <div style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em' }}>{l}</div>
+            <div style={{ fontSize:24, fontWeight:800, marginTop:4, color:s==='opozorilo'&&v>0?T.danger:T.ink }}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      {posData.ingredients.length === 0 ? (
+        <div style={{ padding:40, textAlign:'center', color:T.muted, background:T.surface, borderRadius:12, border:'1px solid '+T.line }}>
+          <div style={{ fontSize:32, marginBottom:8 }}>📦</div>
+          Ni surovin — dodajte prvo
+        </div>
+      ) : posData.ingredients.map(ig=>{
+        const low = ig.stock_qty <= (ig.min_stock||0) && ig.min_stock > 0
+        return (
+          <div key={ig.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', background:T.surface, borderRadius:10, marginBottom:6, border:'1px solid '+(low?'rgba(168,50,50,0.3)':T.line) }}>
+            <div style={{ width:40, height:40, borderRadius:9, background:low?'rgba(168,50,50,0.1)':T.surface3, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>
+              📦
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontWeight:700, fontSize:14 }}>{ig.name}</div>
+              <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>
+                {ig.unit} · Min: {ig.min_stock||0} {ig.unit}
+                {ig.supplier && <span> · {ig.supplier}</span>}
+                {ig.cost_price && <span> · nab. {eur(ig.cost_price)}</span>}
+              </div>
+            </div>
+            <div style={{ textAlign:'right' }}>
+              <div style={{ fontSize:20, fontWeight:800, fontVariantNumeric:'tabular-nums', color:low?T.danger:T.ink }}>{ig.stock_qty}</div>
+              <div style={{ fontSize:11, color:T.muted }}>{ig.unit}</div>
+            </div>
+            {low && <div style={{ fontSize:10, fontWeight:700, color:T.danger, background:'rgba(168,50,50,0.1)', padding:'3px 7px', borderRadius:5 }}>NIZKO</div>}
+            <button onClick={()=>updateStock(ig)} title="Posodobi zalogo" style={{ ...btnS, padding:'7px 10px', fontSize:12 }}>📥</button>
+            <button onClick={()=>setModal({...ig})} style={btnS}><KI name="edit" size={14}/></button>
+            <button onClick={()=>remove(ig.id,ig.name)} style={{...btnS,color:T.danger}}><KI name="trash" size={14}/></button>
+          </div>
+        )
+      })}
+
+      <Modal open={!!modal} onClose={()=>setModal(null)} width={440}>
+        <ModalHeader title={modal?.id?'Uredi surovino':'Nova surovina'} onClose={()=>setModal(null)}/>
+        <div style={{ padding:'20px 22px', display:'flex', flexDirection:'column', gap:12 }}>
+          <Field label="Ime surovine *">
+            <input value={modal?.name||''} onChange={e=>setModal(p=>({...p,name:e.target.value}))} placeholder="Refošk, Moka, Olje..." style={inp} autoFocus/>
+          </Field>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <Field label="Enota *">
+              <select value={modal?.unit||'L'} onChange={e=>setModal(p=>({...p,unit:e.target.value}))} style={inp}>
+                {UNITS.map(u=><option key={u} value={u}>{u}</option>)}
+              </select>
+            </Field>
+            <Field label="Trenutna zaloga">
+              <input type="number" min="0" step="0.01" value={modal?.stock_qty||0} onChange={e=>setModal(p=>({...p,stock_qty:e.target.value}))} style={inp}/>
+            </Field>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <Field label="Minimalna zaloga (opozorilo)">
+              <input type="number" min="0" step="0.01" value={modal?.min_stock||0} onChange={e=>setModal(p=>({...p,min_stock:e.target.value}))} style={inp}/>
+            </Field>
+            <Field label="Nabavna cena (€)">
+              <input type="number" min="0" step="0.01" value={modal?.cost_price||''} onChange={e=>setModal(p=>({...p,cost_price:e.target.value}))} placeholder="0.00" style={inp}/>
+            </Field>
+          </div>
+          <Field label="Dobavitelj (neobvezno)">
+            <input value={modal?.supplier||''} onChange={e=>setModal(p=>({...p,supplier:e.target.value}))} placeholder="Vino d.o.o." style={inp}/>
+          </Field>
+          <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+            <button onClick={()=>setModal(null)} style={btnS}>Prekliči</button>
+            <button onClick={save} disabled={saving} style={{...btnP,opacity:saving?0.6:1}}>{saving?'Shranjujem...':'Shrani'}</button>
+          </div>
+        </div>
+      </Modal>
+      {toast && <Toast msg={toast.msg} ok={toast.ok}/>}
+    </div>
+  )
+}
 
 // ─── Storitve CRUD ────────────────────────────────────────────
 function StoritveCrudSection({ posData }) {
