@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     const supabaseAuth = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { cookies: { get(name) { return cookieStore.get(name)?.value }, set() {}, remove() {} } }
+      { cookies: { get(name: string) { return cookieStore.get(name)?.value }, set() {}, remove() {} } }
     )
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Ni avtentikacije' }, { status: 401 })
@@ -28,7 +28,6 @@ export async function POST(req: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // Pridobi org_id
     const { data: member } = await supabase
       .from('org_members')
       .select('org_id')
@@ -37,22 +36,15 @@ export async function POST(req: NextRequest) {
 
     if (!member) return NextResponse.json({ error: 'Organizacija ni najdena' }, { status: 404 })
 
-    // Deaktiviraj stare certifikate
-    await supabase
-      .from('furs_certificates')
-      .update({ is_active: false })
-      .eq('org_id', member.org_id)
-
-    // Vstavi nov certifikat
     const { error } = await supabase
       .from('furs_certificates')
-      .insert({
+      .upsert({
         org_id: member.org_id,
         certificate_data: certB64,
         certificate_password: password,
         issuer: subject,
         is_active: true,
-      })
+      }, { onConflict: 'org_id' })
 
     if (error) throw error
 
