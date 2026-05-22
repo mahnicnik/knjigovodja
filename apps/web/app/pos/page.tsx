@@ -2977,8 +2977,8 @@ function InventoryScreen({ posData }) {
         {/* Tabi + filtri */}
         <div style={{ display:'flex', gap:10, alignItems:'center', flexWrap:'wrap' }}>
           <div style={{ display:'flex', gap:2, background:T.surface3, padding:3, borderRadius:9 }}>
-            {[['items','Artikli'],['ingredients','Surovine']].map(([id,lbl])=>(
-              <button key={id} onClick={()=>{setTab(id);setFilter('vse')}} style={{ padding:'6px 14px', borderRadius:7, border:'none', background:tab===id?T.header:'transparent', color:tab===id?T.headerInk:T.ink, fontWeight:700, fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>{lbl}</button>
+            {[['items','Artikli'],['ingredients','Surovine'],['deliveries','Dobavnice']].map(([id,lbl])=>(
+              <button key={id} onClick={()=>{setTab(id);setFilter('vse');if(id==='deliveries'&&!deliveriesLoaded){createClient().from('deliveries').select('*').eq('business_id',BUSINESS_ID).order('document_date',{ascending:false}).then(({data})=>{setDeliveries(data||[]);setDeliveriesLoaded(true)})}}} style={{ padding:'6px 14px', borderRadius:7, border:'none', background:tab===id?T.header:'transparent', color:tab===id?T.headerInk:T.ink, fontWeight:700, fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>{lbl}</button>
             ))}
           </div>
           <div style={{ display:'flex', gap:4 }}>
@@ -3058,6 +3058,35 @@ function InventoryScreen({ posData }) {
           </table>
         )}
 
+        {tab === 'deliveries' && (
+          <div style={{ padding:'0 2px' }}>
+            {deliveries.length === 0 ? (
+              <div style={{ padding:40, textAlign:'center', color:T.muted, fontSize:13 }}>Še ni uvoženih dobavnic</div>
+            ) : (
+              <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                <thead style={{ position:'sticky', top:0, background:T.surface2, zIndex:1 }}>
+                  <tr style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.06em' }}>
+                    {['Datum','Dobavitelj','Dokument','Brez DDV','DDV','Z DDV'].map((h,i)=>(
+                      <th key={i} style={{ padding:'11px 12px', textAlign:i>=3?'right':'left', borderBottom:'1olid '+T.line }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {deliveries.map((d,idx)=>(
+                    <tr key={d.id} style={{ background:idx%2?T.surface2:T.surface, borderBottom:'1px solid '+T.lineSoft }}>
+                      <td style={{ padding:'10px 12px', fontSize:13 }}>{d.document_date||'—'}</td>
+                      <td style={{ padding:'10px 12px', fontWeight:600, fontSize:13 }}>{d.supplier||'—'}</td>
+                      <td style={{ padding:'10px 12px', fontSize:12, color:T.muted, fontFamily:'monospace' }}>{d.document_number||'—'}</td>
+                      <td style={{ padding:'10px 12px', textAlign:'right', fontSize:12, fontVariantNumeric:'tabular-nums' }}>{d.total_ex_vat?'€'+Number(d.total_ex_vat).toFixed(2):'—'}</td>
+                      <td style={{ padding:'10px 12px', textAlign:'right', fontSize:12, fontVariantNumeric:'tabular-nums', color:T.muted }}>{d.total_vat?'€'+Number(d.total_vat).toF</td>
+                      <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:700, fontSize:13, fontVariantNumeric:'tabular-nums' }}>{d.total_inc_vat?'€'+Number(d.total_inc_vat).toFixed(2):'—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
         {tab === 'ingredients' && (
           <table style={{ width:'100%', borderCollapse:'collapse' }}>
             <thead style={{ position:'sticky', top:0, background:T.surface2, zIndex:1 }}>
