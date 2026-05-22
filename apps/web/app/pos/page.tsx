@@ -2676,6 +2676,268 @@ function InventoryScreen({ posData }) {
   )
 }
 
+
+// ================================================================
+// Z-REPORT MODAL — zaključek izmene
+// ================================================================
+function ZReportModal({ posData, onClose }) {
+  const [loading, setLoading] = useState(true)
+  const [data, setData] = useState(null)
+  const [cashOpening, setCashOpening] = useState('0')
+  const [cashClosing, setCashClosing] = useState('0')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [reportNumber, setReportNumber] = useState(1)
+
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  async function loadData() {
+    setLoading(true)
+    const db = createClient()
+    const today = new Date()
+    const from = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    const to = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59)
+
+    // Naloži naročila danes
+    const { data: orders } = await db
+      .from('orders')
+      .select('id, created_at, payments(amount, method, tip)')
+      .eq('business_id', BUSINESS_ID)
+      .eq('status', 'paid')
+      .gte('created_at', from.toISOString())
+      .lte('created_at', to.toISOString())
+
+    // Naloži vračila danes
+    const { data: refunds } = await db
+      .from('refunds')
+      .select('amount')
+      .eq('business_id', BUSINESS_ID)
+      .gte('created_at', from.toISOString())
+      .lte('created_at', to.toISOString())
+
+    // Pridobi zadnjo Z-poročilo številko
+    const { data: lastZ } = await db
+      .from('z_reports')
+      .select('report_number')
+      .eq('business_id', BUSINESS_ID)
+      .order('report_number', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    setReportNumber((lastZ?.report_number || 0) + 1)
+
+    // Izračuni
+    let cash = 0, card = 0, bon = 0, other = 0, tips = 0
+    const ords = orders || []
+
+    ords.forEach(o => {
+      ;(o.payments || []).forEach(p => {
+        const amt = Number(p.amount || 0)
+        const tip = Number(p.tip || 0)
+        tips += tip
+        if (p.method === 'cash') cash += amt
+        else if (p.method === 'card') card += amt
+        else if (p.method === 'bon') bon += amt
+        else other += amt
+      })
+    })
+
+    const totalRefunds = (refunds || []).reduce((s, r) => s + Number(r.amount || 0), 0)
+    const totalRevenue = cash + card + bon + other
+
+    setData({
+      date: today,
+      orderCount: ords.length,
+      cash, card, bon, other, tips,
+      totalRevenue,
+      totalRefunds,
+      netRevenue: totalRevenue - totalRefunds,
+    })
+    setLoading(false)
+  }
+
+  async function closeShift() {
+    if (!data) return
+    setSaving(true)
+    try {
+      const db = createClient()
+
+      // Shrani Z-poročilo v DB
+      const { data: zReport, error } = await db.from('z_reports').insert({
+        business_id: BUSINESS_ID,
+        report_number: reportNumber,
+        opened_at: new Date(data.date.getFullYear(), data.date.getMonth(), data.date.getDate()).toISOString(),
+        closed_at: new Date().toISOString(),
+        cash_opening: Number(cashOpening),
+        cash_closing: Number(cashClosing),
+        total_cash: data.cash,
+        total_card: data.card,
+        total_bon: data.bon,
+        total_other: data.other,
+        total_revenue: data.totalRevenue,
+        total_refunds: data.totalRefunds,
+        order_count: data.orderCount,
+        sent_to_racunko: false,
+      }).select().single()
+
+      if (error) throw error
+
+      // Pošlji email z Z-poročilom na lastnika
+      const biz = posData.businessProfile
+      const ownerEmail = posData.staffList.find(s => s.role === 'Lastnik')?.email
+
+      if (ownerEmail || biz?.email) {
+        await fetch('/api/email/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: ownerEmail || biz?.email,
+            subject: `Z-poročilo #${reportNumber} — ${data.date.toLocaleDateString('sl-SI')}`,
+            html: buildZReportHTML(data, reportNumber, cashOpening, cashClosing),
+          })
+        })
+      }
+
+      setSaved(true)
+      setTimeout(() => { setSaved(false); onClose() }, 2000)
+    } catch (e) {
+      alert(e.message)
+    }
+    setSaving(false)
+  }
+
+  function buildZReportHTML(d, num, opening, closing) {
+    const dateStr = d.date.toLocaleDateString('sl-SI', { weekday:'long', day:'numeric', month:'long', year:'numeric' })
+    return `<!DOCTYPE html>
+<html lang="sl">
+<head><meta charset="UTF-8"><title>Z-poročilo #${num}</title></head>
+<body style="font-family:monospace;max-width:400px;margin:0 auto;padding:20px;background:#fff;color:#000">
+<div style="text-align:center;border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:16px">
+  <div style="font-size:18px;font-weight:bold">ŠIRM fitness&bar</div>
+  <div style="font-size:12px">Poljanska cesta 87, 4224 Gorenja vas</div>
+  <div style="font-size:12px">ID: ${new Date().getTime()}</div>
+</div>
+<div style="text-align:center;margin-bottom:16px">
+  <div style="font-size:16px;font-weight:bold">Z-POROČILO #${num}</div>
+  <div style="font-size:12px">${dateStr}</div>
+  <div style="font-size:12px">Zaključeno: ${new Date().toLocaleTimeString('sl-SI', {hour:'2-digit',minute:'2-digit'})}</div>
+</div>
+<div style="border-top:1px solid #000;border-bottom:1px solid #000;padding:10px 0;margin-bottom:12px">
+  <div style="display:flex;justify-content:space-between"><span>Gotovina (odprtje):</span><span>${Number(opening).toFixed(2)} €</span></div>
+  <div style="display:flex;justify-content:space-between"><span>Gotovina (zaključek):</span><span>${Number(closing).toFixed(2)} €</span></div>
+</div>
+<div style="margin-bottom:12px">
+  <div style="font-weight:bold;margin-bottom:6px">PLAČILA PO METODAH:</div>
+  <div style="display:flex;justify-content:space-between"><span>Gotovina:</span><span>${d.cash.toFixed(2)} €</span></div>
+  <div style="display:flex;justify-content:space-between"><span>Kartica:</span><span>${d.card.toFixed(2)} €</span></div>
+  <div style="display:flex;justify-content:space-between"><span>Boni:</span><span>${d.bon.toFixed(2)} €</span></div>
+  <div style="display:flex;justify-content:space-between"><span>Ostalo:</span><span>${d.other.toFixed(2)} €</span></div>
+</div>
+<div style="border-top:2px solid #000;padding-top:10px;margin-bottom:12px">
+  <div style="display:flex;justify-content:space-between"><span>Skupni promet:</span><span>${d.totalRevenue.toFixed(2)} €</span></div>
+  <div style="display:flex;justify-content:space-between"><span>Vračila:</span><span>-${d.totalRefunds.toFixed(2)} €</span></div>
+  <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:14px"><span>NETO PROMET:</span><span>${d.netRevenue.toFixed(2)} €</span></div>
+  <div style="display:flex;justify-content:space-between"><span>Število računov:</span><span>${d.orderCount}</span></div>
+  <div style="display:flex;justify-content:space-between"><span>Napitnine:</span><span>${d.tips.toFixed(2)} €</span></div>
+</div>
+<div style="text-align:center;font-size:11px;color:#666;border-top:1px solid #ccc;padding-top:10px">
+  Generirano: Računko POS · ${new Date().toLocaleString('sl-SI')}
+</div>
+</body></html>`
+  }
+
+  const Row = ({ label, value, bold = false, danger = false }) => (
+    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px solid '+T.lineSoft }}>
+      <span style={{ fontSize:13, color: danger ? T.danger : T.ink, fontWeight: bold ? 700 : 400 }}>{label}</span>
+      <span style={{ fontSize:13, fontWeight: bold ? 800 : 600, fontVariantNumeric:'tabular-nums', color: danger ? T.danger : bold ? T.ink : T.muted }}>{value}</span>
+    </div>
+  )
+
+  return (
+    <Modal open onClose={onClose} width={480}>
+      <ModalHeader title={`🖨️ Z-poročilo #${reportNumber} — Zaključek izmene`} onClose={onClose}/>
+      <div style={{ padding:'20px 22px', maxHeight:'80vh', overflowY:'auto' }}>
+        {loading ? (
+          <div style={{ padding:40, textAlign:'center', color:T.muted }}>Nalagam podatke...</div>
+        ) : !data ? null : (
+          <>
+            <div style={{ padding:'12px 14px', background:T.accentSoft, borderRadius:10, marginBottom:16, fontSize:13, color:T.accent, fontWeight:600 }}>
+              📅 {data.date.toLocaleDateString('sl-SI', { weekday:'long', day:'numeric', month:'long', year:'numeric' })}
+            </div>
+
+            {/* Gotovina */}
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>STANJE BLAGAJNE</div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                <Field label="Gotovina ob odprtju (€)">
+                  <input type="number" value={cashOpening} onChange={e=>setCashOpening(e.target.value)} min="0" step="0.01" style={inp}/>
+                </Field>
+                <Field label="Gotovina ob zaključku (€)">
+                  <input type="number" value={cashClosing} onChange={e=>setCashClosing(e.target.value)} min="0" step="0.01" style={inp}/>
+                </Field>
+              </div>
+            </div>
+
+            {/* Plačila */}
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>PLAČILA PO METODAH</div>
+              <div style={{ background:T.surface, borderRadius:10, border:'1px solid '+T.line, padding:'4px 14px' }}>
+                <Row label="💶 Gotovina" value={eur(data.cash)}/>
+                <Row label="💳 Kartica" value={eur(data.card)}/>
+                <Row label="🎫 Boni / paketi" value={eur(data.bon)}/>
+                <Row label="💰 Ostalo" value={eur(data.other)}/>
+              </div>
+            </div>
+
+            {/* Skupaj */}
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>SKUPAJ</div>
+              <div style={{ background:T.surface, borderRadius:10, border:'1px solid '+T.line, padding:'4px 14px' }}>
+                <Row label="Skupni promet" value={eur(data.totalRevenue)}/>
+                <Row label="Vračila" value={`-${eur(data.totalRefunds)}`} danger={data.totalRefunds > 0}/>
+                <Row label="Napitnine" value={eur(data.tips)}/>
+                <Row label="Število računov" value={data.orderCount}/>
+                <Row label="NETO PROMET" value={eur(data.netRevenue)} bold/>
+              </div>
+            </div>
+
+            {/* Razlika v gotovini */}
+            {cashClosing !== '0' && (
+              <div style={{ padding:'10px 14px', borderRadius:9, marginBottom:16, background: Math.abs(Number(cashClosing) - Number(cashOpening) - data.cash) < 0.01 ? T.accentSoft : 'rgba(184,140,40,0.1)', border:'1px solid '+(Math.abs(Number(cashClosing) - Number(cashOpening) - data.cash) < 0.01 ? T.accent : T.warn) }}>
+                <div style={{ fontSize:13, fontWeight:600 }}>
+                  {Math.abs(Number(cashClosing) - Number(cashOpening) - data.cash) < 0.01
+                    ? '✅ Gotovina se ujema'
+                    : `⚠️ Razlika v gotovini: ${eur(Math.abs(Number(cashClosing) - Number(cashOpening) - data.cash))}`
+                  }
+                </div>
+              </div>
+            )}
+
+            <div style={{ fontSize:12, color:T.muted, marginBottom:16 }}>
+              📧 Z-poročilo bo avtomatsko poslano na email lastnika in shranjeno v bazi.
+            </div>
+
+            {saved && (
+              <div style={{ padding:'12px 14px', background:T.accentSoft, borderRadius:9, marginBottom:12, fontSize:13, fontWeight:700, color:T.accent }}>
+                ✅ Z-poročilo #${reportNumber} shranjeno in poslano!
+              </div>
+            )}
+
+            <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+              <button onClick={onClose} style={btnS}>Prekliči</button>
+              <button onClick={closeShift} disabled={saving || saved} style={{ ...btnP, opacity:saving?0.7:1 }}>
+                {saving ? 'Zaključujem...' : saved ? '✓ Zaključeno' : `🖨️ Zaključi izmeno #${reportNumber}`}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
 // ================================================================
 // REPORTS SCREEN — real DB stats
 // ================================================================
@@ -2684,6 +2946,7 @@ function ReportsScreen({ posData }) {
   const [reportData, setReportData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showPeriodModal, setShowPeriodModal] = useState(false)
+  const [showZReport, setShowZReport] = useState(false)
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
 
@@ -2808,7 +3071,7 @@ function ReportsScreen({ posData }) {
           <button onClick={()=>setShowPeriodModal(true)} style={{ ...btnS, display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
             <KI name="calendar" size={13}/> Spremeni obdobje
           </button>
-          <button style={{ ...btnS, display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
+          <button onClick={()=>setShowZReport(true)} style={{ ...btnP, display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
             <KI name="print" size={13}/> Z-poročilo (zaključi izmeno)
           </button>
         </div>
@@ -2932,6 +3195,8 @@ function ReportsScreen({ posData }) {
           <button style={{ ...btnS, width:'100%', marginTop:12, fontSize:12 }}>↩ Novo vračilo</button>
         </div>
       </div>
+
+      {showZReport && <ZReportModal posData={posData} onClose={()=>setShowZReport(false)}/>}
 
       {/* Period modal */}
       {showPeriodModal && (
