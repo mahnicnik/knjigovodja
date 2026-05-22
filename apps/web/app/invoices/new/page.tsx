@@ -134,7 +134,7 @@ export default function NewInvoicePage() {
                     onChange={e => setClientTaxNumber(e.target.value)}
                     onKeyDown={e => e.key==='Enter' && lookupByTaxNumber(clientTaxNumber)}
                     placeholder="SI12345678 ali 12345678" className={inp} style={{flex:1}} />
-                  <button onClick={()=>lookupByTaxNumber(clientTaxNumber)} disaed={taxLookupLoading}
+                  <button onClick={()=>lookupByTaxNumber(clientTaxNumber)} disabled={taxLookupLoading}
                     style={{padding:'8px 14px',borderRadius:8,background:'#0d2818',color:'#fff',border:'none',cursor:'pointer',fontSize:12,fontWeight:600,whiteSpace:'nowrap'}}>
                     {taxLookupLoading?'...':'Poišči'}
                   </button>
