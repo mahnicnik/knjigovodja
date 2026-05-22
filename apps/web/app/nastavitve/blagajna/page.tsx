@@ -442,19 +442,24 @@ export default function BlagajnaPage() {
             </button>
             {openFaq===1&&(
               <div style={{padding:'4px 20px 20px',background:'#fff',borderTop:'1px solid #e5e1d8'}}>
-                {[
-                  {num:1,icon:'🖥',title:'Registrirajte vsak prostor pri FURS',desc:'eDavki.durs.si → Davčna blagajna → Poslovni prostori → Dodaj. Za vsako lokacijo vnesite unikatni ID (npr. SIRBFB01, TRZNICA1).'},
-                  {num:2,icon:'🖨',title:'Registrirajte vsako napravo',desc:'Za vsako blagajno na vsakem prostoru dodajte napravo z evidenčno številko (npr. RACUNK001, RACUNK002).'},
-                  {num:3,icon:'⚙',title:'Dodajte v Računko',desc:'Tukaj dodajte vse prostore in naprave z istimi ID-ji kot pri FURS. En certifikat pokriva vse         {num:4,icon:'🔑',title:'Ob prijavi izberite blagajno',desc:'Ko se zaposleni prijavi s PIN-om, izbere katero lokacijo/blagajno odpre. Sistem si zapomni zadnjo izbiro.'},
-                ].map(step=>(
-                  <div key={step.num} style={{display:'flex',gap:14,padding:'14px 0',borderBottom:'1px solid #f0ede8'}}>
-                    <div style={{width:36,height:36,borderRadius:999,background:'#0d2818',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900,fontSize:15,flexShrink:0}}>{step.num}</div>
-                    <div>
-                      <div style={{fontWeight:700,fontSize:13,color:'#0d2818',marginBottom:4}}>{step.icon} {step.title}</div>
-                      <div style={{fontSize:12,color:'#666',lineHeight:1.6}}>{step.desc}</div>
+                {[1,2,3,4].map(i => {
+                  const steps = [
+                    {num:1,icon:"🖥",title:"Registrirajte vsak prostor pri FURS",desc:"eDavki.durs.si - Davčnlagajna - Poslovni prostori - Dodaj."},
+                    {num:2,icon:"🖨",title:"Registrirajte vsako napravo",desc:"Za vsako blagajno dodajte napravo z evidenčno številko (npr. RACUNK001)."},
+                    {num:3,icon:"⚙",title:"Dodajte v Računko",desc:"Dodajte vse prostore in naprave z istimi ID-ji kot pri FURS."},
+                    {num:4,icon:"🔑",title:"Ob prijavi izberite blagajno",desc:"Ko se zaposleni prijavi s PIN-om, izbere katero lokacijo odpre."},
+                  ];
+                  const step = steps[i-1];
+                  return (
+                    <div key={step.num} style={{display:"flex",gap:14,padding:"14px 0",borderBottom:"1px solid #f0ede8"}}>
+                      <div style={{width:36,height:36,borderRadius:999,background:"#0d2818",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:1ink:0}}>{step.num}</div>
+                      <div>
+                        <div style={{fontWeight:700,fontSize:13,color:"#0d2818",marginBottom:4}}>{step.icon} {step.title}</div>
+                        <div style={{fontSize:12,color:"#666",lineHeight:1.6}}>{step.desc}</div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 <div style={{marginTop:12,padding:'10px 14px',background:'rgba(31,107,58,0.08)',borderRadius:9,fontSize:12,color:'#1f6b3a'}}>
                 En certifikat pokriva VSE lokacije istega davčnega zavezanca — ni potreben ločen certifikat za vsako tržnico.
                 </div>
