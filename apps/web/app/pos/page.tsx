@@ -2571,13 +2571,59 @@ function DobavnicaImportModal({ posData, onClose, onImported }) {
   async function doImport() {
     setImporting(true)
     const newLog = []
+    const sb = createClient()
+
+    // 1. Shrani glavo dobavnice
+    let deliveryId = null
+    try {
+      const selectedArtikli = (result?.artikli || []).filter((_,i) => selected[i])
+      const { data: delivery, error: deliveryErr } = await sb.from('deliveries').insert({
+        business_id: BUSINESS_ID,
+        supplier: result?.dobavitelj || null,
+        document_number: result?.stevilka_dokumenta || null,
+        document_date: result?.datum || null,
+        total_ex_vat: result?.skupaj_brez_ddv || null,
+        total_vat: result?.skupaj_ddv || null,
+        total_inc_vat: result?.skupaj_z_ddv || null,
+      }).select().single()
+      if (deliveryErr) throw deliveryErr
+      deliveryId = delivery.id
+
+      // 2. Shrani vrstice dobavnice
+      if (selectedArtikli.length > 0) {
+        const lines = selectedArtikli.map(a => ({
+          delivery_id: deliveryId,
+          item_id: a.ujemanje_id || null,
+          item_name: a.naziv,
+          ean: a.ean || null,
+          quantity: Number(a.kolicina || 0),
+          unit: a.enota || 'kos',
+          price_ex_vat: Number(a.cena_brez_ddv || 0),
+          discount_pct: Number(a.popust_procent || 0),
+          net_price_ex_vat: Number(a.neto_cena_brez_ddv || 0),
+          vat_rate: Number(a.ddv_stopnja || 22),
+          net_price_inc_vat: Number(a.neto_cena_z_ddv || 0),
+          total_ex_vat: Number(a.vrednost_brez_ddv || 0),
+          total_inc_vat: Number(a.vrednost_z_ddv || 0),
+        }))
+        await sb.from('delivery_lines').insert(lines)
+      }
+    } catch(e) {
+      console.error('delivery save error:', e)
+    }
+
+    // 3. Posodobi zaloge artiklov
     for (const [idx, artikel] of (result?.artikli || []).entries()) {
       if (!selected[idx]) continue
       try {
         if (artikel.ujemanje_id) {
           const item = posData.items.find(i => i.id === artikel.ujemanje_id)
           const newStock = (item?.stock || 0) + Number(artikel.kolicina || 0)
-          await createClient().from('items').update({ stock: newStock, cost_price: artikel.neto_cena_brez_ddv || null, barcode: artikel.ean || undefined }).eq('id', artikel.ujemanje_id)
+          await sb.from('items').update({
+            stock: newStock,
+            cost_price: artikel.neto_cena_brez_ddv || null,
+            barcode: artikel.ean || undefined,
+          }).eq('id', artikel.ujemanje_id)
           newLog.push({ name: artikel.naziv, ok: true, msg: '+' + artikel.kolicina + ' kos' })
         } else {
           newLog.push({ name: artikel.naziv, ok: false, msg: 'Nov artikel - dodaj rocno' })

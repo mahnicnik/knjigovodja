@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
             {
               type: 'text',
               text: `Iz te slovenske dobavnice izlušči SAMO glavne produkte (NE embalaže, NE zabojev, NE steklenic).
-Za vsak artikel poišči ujemanje med obstoječimi artikli v blagajni (primerjaj po EAN/barcode najprej, potem po imenu).
+Za vsak artikel poišči ujemanje med obstoječimi artikli po EAN/barcode najprej, potem po imenu.
 Odgovori SAMO z validnim JSON-om, brez markdown blokov, brez razlag.${itemsContext}
 
 JSON struktura:
@@ -66,7 +66,7 @@ JSON struktura:
       "kolicina": 160,
       "enota": "kos",
       "cena_brez_ddv": 1.1989,
-      "popust_procent": 12,
+      "popust_procent": 12.0,
       "neto_cena_brez_ddv": 1.0575,
       "ddv_stopnja": 22,
       "neto_cena_z_ddv": 1.29,
