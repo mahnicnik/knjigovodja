@@ -150,11 +150,15 @@ export default function NewInvoicePage() {
               </div>
               <div>
                 <label style={{ fontSize:'11px', color:'#888', display:'block', marginBottom:'4px' }}>Davčna številka stranke</label>
-                <div style={{position:'relative'}}>
+                <div style={{display:'flex',gap:6}}>
                   <input value={clientTaxNumber} 
                     onChange={e => setClientTaxNumber(e.target.value)}
-                    placeholder="SI12345678" className={inp} />
-                  {taxLookupLoading && <span style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',fontSize:12,color:'#666'}}>Iščem...</span>}
+                    onKeyDown={e => e.key==='Enter' && lookupByTaxNumber(clientTaxNumber)}
+                    placeholder="SI12345678 ali 12345678" className={inp} style={{flex:1}} />
+                  <button onClick={()=>lookupByTaxNumber(clientTaxNumber)} disaed={taxLookupLoading}
+                    style={{padding:'8px 14px',borderRadius:8,background:'#0d2818',color:'#fff',border:'none',cursor:'pointer',fontSize:12,fontWeight:600,whiteSpace:'nowrap'}}>
+                    {taxLookupLoading?'...':'Poišči'}
+                  </button>
                 </div>
               {taxLookupError && <div style={{fontSize:11,color:'#a83232',marginTop:4}}>{taxLookupError}</div>}
                 <div style={{fontSize:11,color:'#1f6b3a',marginTop:4}}>Vnesi davčno številko za avtopolnitev podatkov o podjetju</div>
