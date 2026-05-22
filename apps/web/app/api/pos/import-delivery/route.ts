@@ -108,7 +108,7 @@ JSON struktura:
       .trim();
 
     const parsed = JSON.parse(cleaned);
-    return NextResponse.json({ success: true, data: parsed });
+    return NextResponse.json(parsed);
 
   } catch (err) {
     console.error('[import-delivery] error:', err);
