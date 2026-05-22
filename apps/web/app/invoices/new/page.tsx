@@ -339,6 +339,14 @@ export default function NewInvoicePage() {
                       {taxLookupLoading?'...':'Poišči'}
                     </button>
                   </div>
+                <div style={{marginTop:12}}>
+                  <label style={{fontSize:"11px",color:"#888",display:"block",marginBottom:"4px"}}>Naslov stranke</label>
+                  <input value={clientAddress} onChange={e=>setClientAddress(e.target.value)} placeholder="Ulica 1, 1000 Ljubljana" className={inp}/>
+                </div>
+                <div style={{marginTop:8}}>
+                  <label style={{fontSize:"11px",color:"#888",display:"block",marginBottom:"4px"}}>IBAN stranke</label>
+                  <input value={clientIban} onChange={e=>setClientIban(e.target.value)} placeholder="SI56 1234 5678 9012 345" className={inp}/>
+                </div>
                 </div>
               </div>
             </div>
