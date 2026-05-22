@@ -452,7 +452,7 @@ export default function BlagajnaPage() {
                   const step = steps[i-1];
                   return (
                     <div key={step.num} style={{display:"flex",gap:14,padding:"14px 0",borderBottom:"1px solid #f0ede8"}}>
-                      <div style={{width:36,height:36,borderRadius:999,background:"#0d2818",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:1ink:0}}>{step.num}</div>
+                      <div style={{width:36,height:36,borderRadius:999,background:"#0d2818",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:15,flexShrink:0}}>{step.num}</div>
                       <div>
                         <div style={{fontWeight:700,fontSize:13,color:"#0d2818",marginBottom:4}}>{step.icon} {step.title}</div>
                         <div style={{fontSize:12,color:"#666",lineHeight:1.6}}>{step.desc}</div>
