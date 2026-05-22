@@ -181,6 +181,27 @@ function usePosData() {
 }
 
 // ================================================================
+// ================================================================
+// MULTI-BLAGAJNA — premise + device iz localStorage
+// ================================================================
+const ACTIVE_PREMISE_KEY = 'racunko_active_premise'
+const ACTIVE_DEVICE_KEY  = 'racunko_active_device'
+
+function getActivePremise() {
+  try { return JSON.parse(localStorage.getItem(ACTIVE_PREMISE_KEY) || 'null') } catch { return null }
+}
+function setActivePremise(p) {
+  if (p) localStorage.setItem(ACTIVE_PREMISE_KEY, JSON.stringify(p))
+  else localStorage.removeItem(ACTIVE_PREMISE_KEY)
+}
+function getActiveDevice() {
+  try { return JSON.parse(localStorage.getItem(ACTIVE_DEVICE_KEY) || 'null') } catch { return null }
+}
+function setActiveDevice(d) {
+  if (d) localStorage.setItem(ACTIVE_DEVICE_KEY, JSON.stringify(d))
+  else localStorage.removeItem(ACTIVE_DEVICE_KEY)
+}
+
 // AUTH HOOK — real PIN login iz DB
 // ================================================================
 function useAuthState(autoLockMs = 60000) {
@@ -696,6 +717,139 @@ function UserAvatar({ user, onLock }) {
 }
 
 // ================================================================
+
+// ================================================================
+// PREMISE SELECT SCREEN — izbira lokacije in blagajne
+// ================================================================
+function PremiseSelectScreen({ auth, onSelected }) {
+  const [premises, setPremises] = useState([])
+  const [devices, setDevices] = useState([])
+  const [selectedPremise, setSelectedPremise] = useState(null)
+  const [selectedDevice, setSelectedDevice] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    async function load() {
+      const db = createClient()
+      const [premRes, devRes] = await Promise.all([
+        db.from('business_premises').select('*').eq('org_id', auth.orgId || '').eq('is_active', true),
+        db.from('electronic_devices').select('*').eq('org_id', auth.orgId || '').eq('is_active', true),
+      ])
+      const prems = premRes.data || []
+      const devs = devRes.data || []
+      setPremises(prems)
+      setDevices(devs)
+
+      // Preveri če imamo shranjeno izbiro
+      const savedPremise = getActivePremise()
+      const savedDevice = getActiveDevice()
+      if (savedPremise && prems.find(p => p.id === savedPremise.id)) {
+        setSelectedPremise(savedPremise)
+      } else if (prems.length === 1) {
+        setSelectedPremise(prems[0])
+      }
+      if (savedDevice && devs.find(d => d.id === savedDevice.id)) {
+        setSelectedDevice(savedDevice)
+      }
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  const premiseDevices = devices.filter(d => d.premise_id === selectedPremise?.id)
+
+  function confirm() {
+    if (!selectedPremise) return
+    setSaving(true)
+    setActivePremise(selectedPremise)
+    setActiveDevice(selectedDevice || premiseDevices[0] || null)
+    setTimeout(() => onSelected(selectedPremise, selectedDevice || premiseDevices[0] || null), 300)
+  }
+
+  if (loading) return (
+    <div style={{ minHeight:'100vh', background:T.header, display:'flex', alignItems:'center', justifyContent:'center', color:T.headerInk }}>
+      Nalagam...
+    </div>
+  )
+
+  // Če je samo en prostor in ena naprava → samodejno nadaljuj
+  if (premises.length === 1 && devices.length <= 1) {
+    setActivePremise(premises[0])
+    setActiveDevice(devices[0] || null)
+    onSelected(premises[0], devices[0] || null)
+    return null
+  }
+
+  return (
+    <div style={{ minHeight:'100vh', background:T.header, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
+      <div style={{ width:'100%', maxWidth:480 }}>
+        {/* Logo */}
+        <div style={{ textAlign:'center', marginBottom:32 }}>
+          <div style={{ width:48, height:48, borderRadius:12, background:T.brand, display:'inline-flex', alignItems:'center', justifyContent:'center', fontWeight:900, fontSize:22, color:T.header, marginBottom:12 }}>R</div>
+          <div style={{ color:T.headerInk, fontWeight:800, fontSize:20 }}>Izberi blagajno</div>
+          <div style={{ color:'rgba(246,241,232,0.5)', fontSize:13, marginTop:4 }}>
+            Prijavljen: {auth.name} · {auth.role}
+          </div>
+        </div>
+
+        {/* Poslovni prostori */}
+        <div style={{ marginBottom:20 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:'rgba(246,241,232,0.5)', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:10 }}>Poslovni prostor / lokacija</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {premises.map(p => (
+              <button key={p.id} onClick={() => { setSelectedPremise(p); setSelectedDevice(null) }}
+                style={{ padding:'14px 16px', borderRadius:11, border:'2px solid '+(selectedPremise?.id===p.id?T.brand:'rgba(255,255,255,0.1)'), background:selectedPremise?.id===p.id?'rgba(233,185,73,0.15)':'rgba(255,255,255,0.05)', cursor:'pointer', fontFamily:'inherit', color:T.headerInk, textAlign:'left', display:'flex', alignItems:'center', gap:12 }}>
+                <div style={{ width:40, height:40, borderRadius:9, background:selectedPremise?.id===p.id?T.brand:'rgba(255,255,255,0.1)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>
+                  🏪
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:700, fontSize:14 }}>{p.premise_id}</div>
+                  <div style={{ fontSize:12, color:'rgba(246,241,232,0.6)', marginTop:2 }}>{p.address}{p.city?`, ${p.city}`:''}</div>
+                </div>
+                {selectedPremise?.id===p.id && <div style={{ color:T.brand, fontSize:18 }}>✓</div>}
+              </button>
+            ))}
+            {premises.length === 0 && (
+              <div style={{ padding:'20px', borderRadius:11, border:'1px solid rgba(255,255,255,0.1)', color:'rgba(246,241,232,0.5)', fontSize:13, textAlign:'center' }}>
+                Ni poslovnih prostorov.<br/>
+                <span style={{ fontSize:11 }}>Dodaj jih v Nastavitve → FURS → Poslovni prostori</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Naprave za izbrani prostor */}
+        {selectedPremise && premiseDevices.length > 1 && (
+          <div style={{ marginBottom:20 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:'rgba(246,241,232,0.5)', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:10 }}>Blagajna / naprava</div>
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+              {premiseDevices.map(d => (
+                <button key={d.id} onClick={() => setSelectedDevice(d)}
+                  style={{ padding:'10px 16px', borderRadius:9, border:'2px solid '+(selectedDevice?.id===d.id?T.brand:'rgba(255,255,255,0.1)'), background:selectedDevice?.id===d.id?'rgba(233,185,73,0.15)':'rgba(255,255,255,0.05)', cursor:'pointer', fontFamily:'inherit', color:T.headerInk, fontWeight:selectedDevice?.id===d.id?700:500, fontSize:13 }}>
+                  🖨️ {d.device_id}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Potrdi */}
+        <button onClick={confirm} disabled={!selectedPremise || saving}
+          style={{ width:'100%', padding:'14px', borderRadius:11, background:selectedPremise?T.brand:'rgba(255,255,255,0.1)', color:T.header, border:'none', cursor:selectedPremise?'pointer':'not-allowed', fontFamily:'inherit', fontWeight:800, fontSize:15, marginTop:8 }}>
+          {saving ? 'Nalagam...' : selectedPremise ? `Odpri blagajno — ${selectedPremise.premise_id}` : 'Izberi poslovni prostor'}
+        </button>
+
+        {/* Zamenjaj blagajno */}
+        <button onClick={() => { setActivePremise(null); setActiveDevice(null); setSelectedPremise(null); setSelectedDevice(null) }}
+          style={{ width:'100%', padding:'10px', borderRadius:9, background:'transparent', color:'rgba(246,241,232,0.4)', border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:12, marginTop:8 }}>
+          ↩ Prijavi se z drugim PIN-om
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // FLOOR SCREEN — real DB spaces + tables
 // ================================================================
 function FloorScreen({ spaces, setActiveTable, setScreen }) {
@@ -5470,6 +5624,9 @@ function KlasikApp() {
   const nav = profile.nav.filter(s => { const p = screenPerm[s]; if (!p) return true; return auth.permissions[p] })
 
   const [screen, setScreen] = useState('sale')
+  const [activePremise, setActivePremiseState] = useState(getActivePremise())
+  const [activeDevice, setActiveDeviceState] = useState(getActiveDevice())
+  const [showPremiseSelect, setShowPremiseSelect] = useState(!getActivePremise() && false)
   const [activeTable, setActiveTable] = useState(null)
   const [activeCustomer, setActiveCustomer] = useState(null)
   const [cart, setCart] = useState([])
