@@ -5687,6 +5687,7 @@ function KlasikApp() {
               {String(now.getHours()).padStart(2,"0")}:{String(now.getMinutes()).padStart(2,"0")}
             </div>
           </div>
+          {activePremise && <div style={{ fontSize:10, fontWeight:700, color:'#e9b949', background:'rgba(233,185,73,0.15)', padding:'4px 8px', borderRadius:6, letterSpacing:'0.04em' }}>📍 {activePremise.premise_id}</div>}
           <BellNotifications notifications={posData.notifications} notifOpen={notifOpen} setNotifOpen={setNotifOpen} posData={posData} />
           <UserAvatar user={auth.user} onLock={auth.lock}/>
         </div>
