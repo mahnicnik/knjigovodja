@@ -36,27 +36,6 @@ export default function NewInvoicePage() {
     window.addEventListener('resize', check)
   
 
-  async function lookupByTaxNumber(taxNum: string) {
-    const clean = taxNum.replace('SI','').replace('si','').trim()
-    if (clean.length < 7) return
-    setTaxLookupLoading(true)
-    setTaxLookupError('')
-    try {
-      const res = await fetch(`/api/company-lookup?tax=${clean}`)
-      if (!res.ok) throw new Error('Ni najdeno')
-      const data = await res.json()
-      if (data?.dolgo_ime) {
-        setClientName(data.dolgo_ime)
-        // naslov: data.naslov je informativno
-      } else {
-        setTaxLookupError('Podjetje ni najdeno')
-      }
-    } catch(e) {
-      setTaxLookupError('Iskanje ni uspelo')
-    }
-    setTaxLookupLoading(false)
-  }
-
   return () => window.removeEventListener('resize', check)
   }, [])
 
@@ -279,6 +258,28 @@ export default function NewInvoicePage() {
   }
 
   // ── DESKTOP LAYOUT (original) ──
+
+  async function lookupByTaxNumber(taxNum: string) {
+    const clean = taxNum.replace('SI','').replace('si','').trim()
+    if (clean.length < 7) return
+    setTaxLookupLoading(true)
+    setTaxLookupError('')
+    try {
+      const res = await fetch(`/api/company-lookup?tax=${clean}`)
+      if (!res.ok) throw new Error('Ni najdeno')
+      const data = await res.json()
+      if (data?.dolgo_ime) {
+        setClientName(data.dolgo_ime)
+        // naslov: data.naslov je informativno
+      } else {
+        setTaxLookupError('Podjetje ni najdeno')
+      }
+    } catch(e) {
+      setTaxLookupError('Iskanje ni uspelo')
+    }
+    setTaxLookupLoading(false)
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
