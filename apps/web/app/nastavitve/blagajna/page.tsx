@@ -361,6 +361,22 @@ export default function BlagajnaPage() {
               FURS digitalno potrdilo dobite na <a href="https://edavki.durs.si" target="_blank" style={{ color: '#1f6b3a' }}>eDavki.durs.si</a> → Davčna blagajna → Registracija certifikata.<br />
               Datoteka ima končnico <b>.p12</b> ali <b>.pfx</b>.
             </div>
+            <div style={{marginTop:20}}>
+              {[
+                {q:'Kako pridobim certifikat?',a:'Pojdite na eDavki.durs.si - Davcna blagajna - Registracija certifikata. Certifikat izda SIGEN-CA brezplacno. Prenesite .p12 datoteko.'},
+                {q:'Ali potrebujem certifikat za vsako blagajno?',a:'Ne - en certifikat pokriva VSE poslovne prostore istega davcnega zavezanca (s.p. ali d.o.o.).'},
+                {q:'Certifikat je nalozeni ampak test ne deluje?',a:'Preverite da imate dodan vsaj en poslovni prostor in napravo. Test zahteva vse tri elemente.'},
+                {q:'Kdaj certifikat potece?',a:'FURS certifikati so veljavni 5 let. Ko potece, pridobite novega na eDavki in ga nalozite tukaj.'},
+              ].map((faq,i)=>(
+                <div key={i} style={{background:'#fff',borderRadius:10,border:'1px solid #e5e1d8',marginBottom:8,overflow:'hidden'}}>
+                  <button onClick={()=>setOpenFaq(openFaq===i?null:i)} style={{width:'100%',padding:'13px 16px',background:'none',border:'none',cursor:'pointer',textAlign:'left',display:'flex',justifyContent:'space-between',alignItems:'center',fontFamily:'inherit'}}>
+                    <span style={{fontWeight:600,fontSize:13,color:'#0d2818'}}>? {faq.q}</span>
+                    <span style={{color:'#1f6b3a',fontSize:14}}>{openFaq===i?'(skrij)':'(pokazi)'}</span>
+                  </button>
+                  {openFaq===i&&<div style={{padding:'0 16px 14px',fontSize:13,color:'#555',lineHeight:1.7}}>{faq.a}</div>}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
