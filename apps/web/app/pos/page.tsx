@@ -2792,7 +2792,7 @@ function InventoryScreen({ posData }) {
             <button onClick={()=>exportInventory(allItems,allIngredients)} style={{ ...btnS, fontSize:12, display:'flex', alignItems:'center', gap:5 }}>
               <KI name="print" size={13}/> Izvozi
             </button>
-            <button onClick={()=>{/* TODO */}} style={{ ...btnP, fontSize:12 }}>
+            <button onClick={()=>setItemModal({vat_rate:9.5,unit:'kos',fav:false,kitchen:false,bookable:false})} style={{ ...btnP, fontSize:12 }}>
               + Nov artikel
             </button>
           </div>
