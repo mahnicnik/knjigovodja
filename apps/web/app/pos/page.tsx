@@ -2710,6 +2710,86 @@ function InventoryScreen({ posData }) {
         if (item) map[item.id] = (map[item.id]||0) + Number(l.qty||1)
       })
       setSalesData(map)
+        {invToast && (
+          <div style={{ position:'fixed', bottom:24, left:'50%', transform:'translateX(-50%)', background:invToast.ok?T.accent:T.danger, color:'#fff', padding:'10px 22px', borderRadius:10, fontWeight:600, fontSize:14, zIndex:9999, boxShadow:'0 4px 20px rgba(0,0,0,0.18)' }}>
+            {invToast.msg}
+          </div>
+        )}
+        {!!itemModal && (
+          <Modal open onClose={()=>setItemModal(null)} width={520}>
+            <ModalHeader title={itemModal?.id?'Uredi artikel':'Nov artikel'} onClose={()=>setItemModal(null)}/>
+            <div style={{ padding:'20px 22px', display:'flex', flexDirection:'column', gap:12, maxHeight:'72vh', overflowY:'auto' }}>
+              <Field label="Tip artikla *">
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:6 }}>
+                  {[
+                    { id:'simple', label:'Enostaven', desc:'Pivo, vstopnina, kava', icon:'🛍️' },
+                    { id:'recipe', label:'Z normativom', desc:'Točeno vino, koktajl', icon:'🧪' },
+                    { id:'ingredient', label:'Surovina', desc:'Vino 1L, moka 1kg', icon:'📦' },
+                  ].map(t=>{
+                    const sel = (itemModal?.item_type||'simple') === t.id
+                    return (
+                      <div key={t.id} onClick={()=>setItemModal(p=>({...p,item_type:t.id}))} style={{ padding:'10px 8px', borderRadius:9, border:'2px solid '+(sel?T.accent:T.line), cursor:'pointer', textAlign:'center', background:sel?T.accentSoft:T.surface }}>
+                        <div style={{ fontSize:20 }}>{t.icon}</div>
+                        <div style={{ fontSize:12, fontWeight:700, color:sel?T.accent:T.ink, marginTop:4 }}>{t.label}</div>
+                        <div style={{ fontSize:10, color:T.muted, marginTop:2 }}>{t.desc}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </Field>
+              <Field label="Ime artikla / storitve *">
+                <input value={itemModal?.name||''} onChange={e=>setItemModal(p=>({...p,name:e.target.value}))} placeholder="Espresso, Masaža, Vstopnina..." style={inp} autoFocus/>
+              </Field>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                {(itemModal?.item_type||'simple') !== 'ingredient' && (
+                  <Field label="Prodajna cena (€) *">
+                    <input type="number" step="0.01" min="0" value={itemModal?.price||''} onChange={e=>setItemModal(p=>({...p,price:e.target.value}))} placeholder="0.00" style={inp}/>
+                  </Field>
+                )}
+                {(itemModal?.item_type||'simple') === 'ingredient' && (
+                  <Field label="Nabavna cena (€)">
+                    <input type="number" step="0.01" min="0" value={itemModal?.price||''} onChange={e=>setItemModal(p=>({...p,price:e.target.value}))} placeholder="0.00" style={inp}/>
+                  </Field>
+                )}
+                <Field label="Enota">
+                  <select value={itemModal?.unit||'kos'} onChange={e=>setItemModal(p=>({...p,unit:e.target.value}))} style={inp}>
+                    {['kos','dl','cl','ml','L','g','kg','ura','paket','obisk','porcija'].map(u=><option key={u} value={u}>{u}</option>)}
+                  </select>
+                </Field>
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                <Field label="DDV stopnja *">
+                  <select value={itemModal?.vat_rate??''} onChange={e=>setItemModal(p=>({...p,vat_rate:e.target.value}))} style={inp}>
+                    <option value="">— izberi DDV —</option>
+                    <option value={0}>0% (oproščeno)</option>
+                    <option value={9.5}>9.5% (hrana, pijača)</option>
+                    <option value={22}>22% (splošna)</option>
+                  </select>
+                </Field>
+                <Field label="Šifra (koda)">
+                  <input value={itemModal?.code||''} onChange={e=>setItemModal(p=>({...p,code:e.target.value.toUpperCase()}))} placeholder="K01" style={{...inp,fontFamily:'monospace'}}/>
+                </Field>
+              </div>
+              {(itemModal?.item_type||'simple') !== 'ingredient' && (
+                <Field label="Kategorija">
+                  <select value={itemModal?.category_id||''} onChange={e=>setItemModal(p=>({...p,category_id:e.target.value||null}))} style={inp}>
+                    <option value="">Brez kategorije</option>
+                    {realCategories.map(c=><option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+                  </select>
+                </Field>
+              )}
+              <Field label={(itemModal?.item_type||'simple')==='ingredient'?'Zaloga v skladišču':'Zaloga (pusti prazno za neomejeno)'}>
+                <input type="number" min="0" value={itemModal?.stock??''} onChange={e=>setItemModal(p=>({...p,stock:e.target.value}))} placeholder="∞" style={inp}/>
+              </Field>
+              <div style={{ display:'flex', gap:10, justifyContent:'flex-end', marginTop:4 }}>
+                {itemModal?.id && <button onClick={()=>deleteItem(itemModal.id,itemModal.name)} style={{ ...btnS, color:T.danger }}>Izbriši</button>}
+                <button onClick={()=>setItemModal(null)} style={btnS}>Prekliči</button>
+                <button onClick={saveItem} disabled={saving} style={{ ...btnP, opacity:saving?0.7:1 }}>{saving?'Shranjujem...':'Shrani'}</button>
+              </div>
+            </div>
+          </Modal>
+        )}
+// ================================================================
     }
     loadSales()
   }, [])
@@ -3287,88 +3367,6 @@ function ZReportModal({ posData, onClose }) {
   )
 }
 
-// ================================================================
-// INVENTORY ITEM MODAL
-// ================================================================
-        {invToast && (
-          <div style={{ position:'fixed', bottom:24, left:'50%', transform:'translateX(-50%)', background:invToast.ok?T.accent:T.danger, color:'#fff', padding:'10px 22px', borderRadius:10, fontWeight:600, fontSize:14, zIndex:9999, boxShadow:'0 4px 20px rgba(0,0,0,0.18)' }}>
-            {invToast.msg}
-          </div>
-        )}
-        {!!itemModal && (
-          <Modal open onClose={()=>setItemModal(null)} width={520}>
-            <ModalHeader title={itemModal?.id?'Uredi artikel':'Nov artikel'} onClose={()=>setItemModal(null)}/>
-            <div style={{ padding:'20px 22px', display:'flex', flexDirection:'column', gap:12, maxHeight:'72vh', overflowY:'auto' }}>
-              <Field label="Tip artikla *">
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:6 }}>
-                  {[
-                    { id:'simple', label:'Enostaven', desc:'Pivo, vstopnina, kava', icon:'🛍️' },
-                    { id:'recipe', label:'Z normativom', desc:'Točeno vino, koktajl', icon:'🧪' },
-                    { id:'ingredient', label:'Surovina', desc:'Vino 1L, moka 1kg', icon:'📦' },
-                  ].map(t=>{
-                    const sel = (itemModal?.item_type||'simple') === t.id
-                    return (
-                      <div key={t.id} onClick={()=>setItemModal(p=>({...p,item_type:t.id}))} style={{ padding:'10px 8px', borderRadius:9, border:'2px solid '+(sel?T.accent:T.line), cursor:'pointer', textAlign:'center', background:sel?T.accentSoft:T.surface }}>
-                        <div style={{ fontSize:20 }}>{t.icon}</div>
-                        <div style={{ fontSize:12, fontWeight:700, color:sel?T.accent:T.ink, marginTop:4 }}>{t.label}</div>
-                        <div style={{ fontSize:10, color:T.muted, marginTop:2 }}>{t.desc}</div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </Field>
-              <Field label="Ime artikla / storitve *">
-                <input value={itemModal?.name||''} onChange={e=>setItemModal(p=>({...p,name:e.target.value}))} placeholder="Espresso, Masaža, Vstopnina..." style={inp} autoFocus/>
-              </Field>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-                {(itemModal?.item_type||'simple') !== 'ingredient' && (
-                  <Field label="Prodajna cena (€) *">
-                    <input type="number" step="0.01" min="0" value={itemModal?.price||''} onChange={e=>setItemModal(p=>({...p,price:e.target.value}))} placeholder="0.00" style={inp}/>
-                  </Field>
-                )}
-                {(itemModal?.item_type||'simple') === 'ingredient' && (
-                  <Field label="Nabavna cena (€)">
-                    <input type="number" step="0.01" min="0" value={itemModal?.price||''} onChange={e=>setItemModal(p=>({...p,price:e.target.value}))} placeholder="0.00" style={inp}/>
-                  </Field>
-                )}
-                <Field label="Enota">
-                  <select value={itemModal?.unit||'kos'} onChange={e=>setItemModal(p=>({...p,unit:e.target.value}))} style={inp}>
-                    {['kos','dl','cl','ml','L','g','kg','ura','paket','obisk','porcija'].map(u=><option key={u} value={u}>{u}</option>)}
-                  </select>
-                </Field>
-              </div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-                <Field label="DDV stopnja *">
-                  <select value={itemModal?.vat_rate??''} onChange={e=>setItemModal(p=>({...p,vat_rate:e.target.value}))} style={inp}>
-                    <option value="">— izberi DDV —</option>
-                    <option value={0}>0% (oproščeno)</option>
-                    <option value={9.5}>9.5% (hrana, pijača)</option>
-                    <option value={22}>22% (splošna)</option>
-                  </select>
-                </Field>
-                <Field label="Šifra (koda)">
-                  <input value={itemModal?.code||''} onChange={e=>setItemModal(p=>({...p,code:e.target.value.toUpperCase()}))} placeholder="K01" style={{...inp,fontFamily:'monospace'}}/>
-                </Field>
-              </div>
-              {(itemModal?.item_type||'simple') !== 'ingredient' && (
-                <Field label="Kategorija">
-                  <select value={itemModal?.category_id||''} onChange={e=>setItemModal(p=>({...p,category_id:e.target.value||null}))} style={inp}>
-                    <option value="">Brez kategorije</option>
-                    {realCategories.map(c=><option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
-                  </select>
-                </Field>
-              )}
-              <Field label={(itemModal?.item_type||'simple')==='ingredient'?'Zaloga v skladišču':'Zaloga (pusti prazno za neomejeno)'}>
-                <input type="number" min="0" value={itemModal?.stock??''} onChange={e=>setItemModal(p=>({...p,stock:e.target.value}))} placeholder="∞" style={inp}/>
-              </Field>
-              <div style={{ display:'flex', gap:10, justifyContent:'flex-end', marginTop:4 }}>
-                {itemModal?.id && <button onClick={()=>deleteItem(itemModal.id,itemModal.name)} style={{ ...btnS, color:T.danger }}>Izbriši</button>}
-                <button onClick={()=>setItemModal(null)} style={btnS}>Prekliči</button>
-                <button onClick={saveItem} disabled={saving} style={{ ...btnP, opacity:saving?0.7:1 }}>{saving?'Shranjujem...':'Shrani'}</button>
-              </div>
-            </div>
-          </Modal>
-        )}
 // ================================================================
 // REPORTS SCREEN — real DB stats
 // ================================================================
