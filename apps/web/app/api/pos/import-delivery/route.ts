@@ -14,7 +14,6 @@ export async function POST(req: NextRequest) {
     const contentType = req.headers.get('content-type') || '';
 
     if (contentType.includes('multipart/form-data')) {
-      // Frontend pošilja FormData z 'file' poljem
       const formData = await req.formData();
       const file = formData.get('file') as File | null;
       if (!file) {
@@ -24,25 +23,21 @@ export async function POST(req: NextRequest) {
       base64 = Buffer.from(arrayBuffer).toString('base64');
 
     } else if (contentType.includes('application/json')) {
-      // Frontend pošilja JSON z base64 ali fileData poljem
       const body = await req.json();
-      if (body.base64) {
+      if (body.pdfBase64) {
+        base64 = body.pdfBase64;
+      } else if (body.base64) {
         base64 = body.base64;
       } else if (body.fileData) {
-        // Odstrani data URL prefix če obstaja: "data:application/pdf;base64,..."
         base64 = body.fileData.replace(/^data:[^;]+;base64,/, '');
       } else {
-        return NextResponse.json({ error: 'Manjka base64 ali fileData polje v JSON' }, { status: 400 });
+        return NextResponse.json({ error: 'Manjka pdfBase64 polje v JSON' }, { status: 400 });
       }
 
     } else {
-      // Fallback: poskusi kot raw binary body
       const arrayBuffer = await req.arrayBuffer();
       if (!arrayBuffer.byteLength) {
-        return NextResponse.json(
-          { error: `Nepodprt Content-Type: ${contentType}` },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: `Nepodprt Content-Type: ${contentType}` }, { status: 400 });
       }
       base64 = Buffer.from(arrayBuffer).toString('base64');
     }
