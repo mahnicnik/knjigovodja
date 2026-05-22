@@ -2539,6 +2539,7 @@ function InventoryScreen({ posData }) {
   const [selectedItem, setSelectedItem] = useState(null)
   const [salesData, setSalesData] = useState({})
   const [priceHistory, setPriceHistory] = useState({})
+  const [dobavnicaModal, setDobavnicaModal] = useState(false)
 
   const allItems = posData.items.filter(i => i.item_type !== 'ingredient')
   const allIngredients = posData.ingredients
