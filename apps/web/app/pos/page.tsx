@@ -2748,6 +2748,22 @@ function InventoryScreen({ posData }) {
     return ((item.price - item.cost_price) / item.price * 100).toFixed(0)
   }
 
+
+  async function exportInventory(items, ingredients) {
+    const XLSX = await import('xlsx')
+    const date = new Date().toLocaleDateString('sl-SI').replace(/\./g,'-')
+    const itemRows = [['Artikel','Sifra','Kategorija','Prod. cena','Nab. cena','Zaloga','Min zaloga','Vrednost','DDV %'],...items.map(i=>[i.name,i.sku||'',i.category||'',i.price||0,i.cost_price||0,i.stock||0,i.min_stock||0,((i.cost_price||0)*(i.stock||0)).toFixed(2),i.vat_rate||22])]
+    const ingrRows = [['Surovina','Enota','Nab. cena','Zaloga','Min zaloga','Vrednost'],...ingredients.map(i=>[i.name,i.unit||'',i.cost_price||0,i.stock_qty||0,i.min_stock||0,((i.cost_price||0)*(i.stock_qty||0)).toFixed(2)])]
+    const tI = items.reduce((s,i)=>s+(i.cost_price||0)*(i.stock||0),0)
+    const tG = ingredients.reduce((s,i)=>s+(i.cost_price||0)*(i.stock_qty||0),0)
+    const sumRows = [['INVENTURA'],['Datum:',date],[''],['Artikli',tI.toFixed(2)],['Surovine',tG.toFixed(2)],['SKUPAJ',(tI+tG).toFixed(2)]]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(itemRows), 'Artikli')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ingrRows), 'Surovine')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sumRows), 'Skupaj')
+    XLSX.writeFile(wb, 'inventura-'+date+'.xlsx')
+  }
+
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', minHeight:0 }}>
       {dobavnicaModal && <DobavnicaImportModal posData={posData} onClose={()=>setDobavnicaModal(false)} onImported={()=>{posData.refresh();setDobavnicaModal(false)}}/> }
@@ -2773,7 +2789,7 @@ function InventoryScreen({ posData }) {
           </div>
           <div style={{ marginLeft:'auto', display:'flex', gap:6, alignItems:'center' }}>
             <button onClick={()=>setDobavnicaModal(true)} style={{ ...btnS, fontSize:12, display:'flex', alignItems:'center', gap:5 }}>Uvozi dobavnico</button>
-            <button style={{ ...btnS, fontSize:12, display:'flex', alignItems:'center', gap:5 }}>
+            <button onClick={()=>exportInventory(allItems,allIngredients)} style={{ ...btnS, fontSize:12, display:'flex', alignItems:'center', gap:5 }}>
               <KI name="print" size={13}/> Izvozi
             </button>
             <button onClick={()=>{/* TODO */}} style={{ ...btnP, fontSize:12 }}>
