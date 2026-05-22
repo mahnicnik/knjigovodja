@@ -2750,6 +2750,7 @@ function InventoryScreen({ posData }) {
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', minHeight:0 }}>
+      {dobavnicaModal && <DobavnicaImportModal posData={posData} onClose={()=>setDobavnicaModal(false)} onImported={()=>{posData.refresh();setDobavnicaModal(false)}}/> }
 
       {/* Header statistike */}
       <div style={{ padding:'14px 20px', background:T.surface, borderBottom:'1px solid '+T.line }}>
