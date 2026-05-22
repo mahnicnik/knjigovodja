@@ -311,7 +311,12 @@ export default function NewInvoicePage() {
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">Davčna številka stranke</label>
-                  <input value={clientTaxNumber} onChange={e => setClientTaxNumber(e.target.value)} placeholder="SI12345678" className={inp} />
+                  <div style={{display:'flex',gap:6}}>
+                    <input value={clientTaxNumber} onChange={e=>setClientTaxNumber(e.target.value)} onKeyDown={e=>e.key==='Enter'&&lookupByTaxNumber(clientTaxNumber)} placeholder="SI12345678" className={inp} style={{flex:1}}/>
+                    <button onClick={()=>lookupByTaxNumber(clientTaxNumber)} disabled={taxLookupLoading} style={{padding:'8px 14px',borderRadius:8,background:'#0d2818',color:'#fff',border:'none',cursor:'pointer',fontSize:12,fontWeight:600}}>
+                      {taxLookupLoading?'...':'Poišči'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
