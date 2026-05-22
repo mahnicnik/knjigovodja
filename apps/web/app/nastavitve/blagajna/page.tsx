@@ -361,21 +361,34 @@ export default function BlagajnaPage() {
               FURS digitalno potrdilo dobite na <a href="https://edavki.durs.si" target="_blank" style={{ color: '#1f6b3a' }}>eDavki.durs.si</a> → Davčna blagajna → Registracija certifikata.<br />
               Datoteka ima končnico <b>.p12</b> ali <b>.pfx</b>.
             </div>
-            <div style={{marginTop:20}}>
-              {[
-                {q:'Kako pridobim certifikat?',a:'Pojdite na eDavki.durs.si - Davcna blagajna - Registracija certifikata. Certifikat izda SIGEN-CA brezplacno. Prenesite .p12 datoteko.'},
-                {q:'Ali potrebujem certifikat za vsako blagajno?',a:'Ne - en certifikat pokriva VSE poslovne prostore istega davcnega zavezanca (s.p. ali d.o.o.).'},
-                {q:'Certifikat je nalozeni ampak test ne deluje?',a:'Preverite da imate dodan vsaj en poslovni prostor in napravo. Test zahteva vse tri elemente.'},
-                {q:'Kdaj certifikat potece?',a:'FURS certifikati so veljavni 5 let. Ko potece, pridobite novega na eDavki in ga nalozite tukaj.'},
-              ].map((faq,i)=>(
-                <div key={i} style={{background:'#fff',borderRadius:10,border:'1px solid #e5e1d8',marginBottom:8,overflow:'hidden'}}>
-                  <button onClick={()=>setOpenFaq(openFaq===i?null:i)} style={{width:'100%',padding:'13px 16px',background:'none',border:'none',cursor:'pointer',textAlign:'left',display:'flex',justifyContent:'space-between',alignItems:'center',fontFamily:'inherit'}}>
-                    <span style={{fontWeight:600,fontSize:13,color:'#0d2818'}}>? {faq.q}</span>
-                    <span style={{color:'#1f6b3a',fontSize:14}}>{openFaq===i?'(skrij)':'(pokazi)'}</span>
-                  </button>
-                  {openFaq===i&&<div style={{padding:'0 16px 14px',fontSize:13,color:'#555',lineHeight:1.7}}>{faq.a}</div>}
+            <div style={{marginTop:20,border:'1px solid #e5e1d8',borderRadius:12,overflow:'hidden'}}>
+              <button onClick={()=>setOpenFaq(openFaq===0?null:0)} style={{width:'100%',padding:'16px 20px',background:openFaq===0?'#f4efe5':'#fff',border:'none',cursor:'pointer',textAlign:'left',display:'flex',justifyContent:'space-between',alignItems:'center',fontFamily:'inherit'}}>
+                <span style={{fontWeight:700,fontSize:14,color:'#0d2818',display:'flex',alignItems:'center',gap:8}}>
+                  <span style={{color:'#e9b949',fontSize:18}}>?</span> Kako nastavim certifikat?
+                </span>
+                <span style={{color:'#1f6b3a'}}>{openFaq===0?'▲':'▼'}</span>
+              </button>
+              {openFaq===0&&(
+                <div style={{padding:'4px 20px 20px',background:'#fff',borderTop:'1px solid #e5e1d8'}}>
+                  {[
+                    {num:1,icon:'🖥',title:'Pridobite certifikat',desc:'Pojdite na eDavki.durs.si → Davčna blagajna → Registracija certifikata. SIGEN-CA ga izda brezplačno.'},
+                    {num:2,icon:'⬆',title:'Naložite v Računko',desc:'Kliknite na polje zgoraj, izberite .p12 datoteko in vnesite geslo. En certifikat pokriva VSE lokacije.'},
+                    {num:3,icon:'🏢',title:'Dodajte poslovni prostor',desc:'V tabu Poslovni prostori dodajte vsako lokacijo z ID-jem ki ste ga registrirali pri FURS (npr. SIRBFB01).'},
+                    {num:4,icon:'🧪',title:'Testirajte povezavo',desc:'V tabu Test povezave preverite da certifikat deluje. Prikazati se mora EOR in ZOI koda.'},
+map(step=>(
+                    <div key={step.num} style={{display:'flex',gap:14,padding:'14px 0',borderBottom:'1px solid #f0ede8'}}>
+                      <div style={{width:36,height:36,borderRadius:999,background:'#0d2818',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900,fontSize:15,flexShrink:0}}>{step.num}</div>
+                      <div>
+                        <div style={{fontWeight:700,fontSize:13,color:'#0d2818',marginBottom:4}}>{step.icon} {step.title}</div>
+                        <div style={{fontSize:12,color:'#666',lineHeight:1.6}}>{step.desc}</div>
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{marginTop:12,padding:'10px 14px',background:'rgba(31,107,58,0.08)',borderRadius:9,fontSize:12,color:'#1f6b3a'}}>
+                    En certifikat pokriva VSE poslovne prostore istega davčnega zavezanca.
+                  </div>
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </div>
