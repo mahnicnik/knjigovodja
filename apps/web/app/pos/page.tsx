@@ -2577,7 +2577,7 @@ function DobavnicaImportModal({ posData, onClose, onImported }) {
         if (artikel.ujemanje_id) {
           const item = posData.items.find(i => i.id === artikel.ujemanje_id)
           const newStock = (item?.stock || 0) + Number(artikel.kolicina || 0)
-          await createClient().from('items').update({ stock: newStock, cost_price: artikel.nabavna_cena || item?.cost_price }).eq('id', artikel.ujemanje_id)
+          await createClient().from('items').update({ stock: newStock }).eq('id', artikel.ujemanje_id)
           newLog.push({ name: artikel.naziv, ok: true, msg: '+' + artikel.kolicina + ' kos' })
         } else {
           newLog.push({ name: artikel.naziv, ok: false, msg: 'Nov artikel - dodaj rocno' })
