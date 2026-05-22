@@ -20,6 +20,8 @@ export default function NewInvoicePage() {
   const [clientName, setClientName] = useState('')
   const [clientEmail, setClientEmail] = useState('')
   const [clientTaxNumber, setClientTaxNumber] = useState('')
+  const [taxLookupLoading, setTaxLookupLoading] = useState(false)
+  const [taxLookupError, setTaxLookupError] = useState('')
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0])
   const [dueDate, setDueDate] = useState(new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0])
   const [items, setItems] = useState<LineItem[]>([{ description: '', quantity: 1, unit_price: 0, vat_rate: 22 }])
@@ -32,7 +34,29 @@ export default function NewInvoicePage() {
     const check = () => setIsMobile(window.innerWidth < 768)
     check()
     window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
+  
+  async function lookupByTaxNumber(taxNum: string) {
+    const clean = taxNum.replace('SI','').replace('si','').trim()
+    if (clean.length < 7) return
+    setTaxLookupLoading(true)
+    setTaxLookupError('')
+    try {
+      const res = await fetch(`/api/company-lookup?tax=${clean}`)
+      if (!res.ok) throw new Error('Ni najdeno')
+      const data = await res.json()
+      if (data?.dolgo_ime) {
+        setClientName(data.dolgo_ime)
+        if (data.naslov) setClientAddress(data.naslov + (data.posta ? ', ' + data.posta : ''))
+      } else {
+        setTaxLookupError('Podjetje ni najdeno')
+      }
+    } catch(e) {
+      setTaxLookupError('Iskanje ni uspelo')
+    }
+    setTaxLookupLoading(false)
+  }
+
+  return () => window.removeEventListener('resize', check)
   }, [])
 
   useEffect(() => {
@@ -125,7 +149,15 @@ export default function NewInvoicePage() {
               </div>
               <div>
                 <label style={{ fontSize:'11px', color:'#888', display:'block', marginBottom:'4px' }}>Davčna številka stranke</label>
-                <input value={clientTaxNumber} onChange={e => setClientTaxNumber(e.target.value)} placeholder="SI12345678" className={inp} />
+                <div style={{position:'relative'}}>
+                  <input value={clientTaxNumber} 
+                    onChange={e => setClientTaxNumber(e.target.value)}
+                    onBlur={e => lookupByTaxNumber(e.target.value)}
+                    placeholder="SI12345678" className={inp} />
+                  {taxLookupLoading && <span style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',fontSize:12,color:'#666'}}>Iščem...</span>}
+                </div>
+              {taxLookupError && <div style={{fontSize:11,color:'#a83232',marginTop:4}}>{taxLookupError}</div>}
+                <div style={{fontSize:11,color:'#1f6b3a',marginTop:4}}>Vnesi davčno številko za avtopolnitev podatkov o podjetju</div>
               </div>
             </div>
           </div>
