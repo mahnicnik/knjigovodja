@@ -10,18 +10,42 @@ const anthropic = new Anthropic({
 
 export async function POST(req: NextRequest) {
   try {
-    const formData = await req.formData();
-    const file = formData.get('file') as File | null;
+    let base64: string;
+    const contentType = req.headers.get('content-type') || '';
 
-    if (!file) {
-      return NextResponse.json({ error: 'Datoteka manjka' }, { status: 400 });
-    }
-    if (file.type !== 'application/pdf') {
-      return NextResponse.json({ error: 'Samo PDF datoteke' }, { status: 400 });
-    }
+    if (contentType.includes('multipart/form-data')) {
+      // Frontend pošilja FormData z 'file' poljem
+      const formData = await req.formData();
+      const file = formData.get('file') as File | null;
+      if (!file) {
+        return NextResponse.json({ error: 'Datoteka manjka (FormData)' }, { status: 400 });
+      }
+      const arrayBuffer = await file.arrayBuffer();
+      base64 = Buffer.from(arrayBuffer).toString('base64');
 
-    const arrayBuffer = await file.arrayBuffer();
-    const base64 = Buffer.from(arrayBuffer).toString('base64');
+    } else if (contentType.includes('application/json')) {
+      // Frontend pošilja JSON z base64 ali fileData poljem
+      const body = await req.json();
+      if (body.base64) {
+        base64 = body.base64;
+      } else if (body.fileData) {
+        // Odstrani data URL prefix če obstaja: "data:application/pdf;base64,..."
+        base64 = body.fileData.replace(/^data:[^;]+;base64,/, '');
+      } else {
+        return NextResponse.json({ error: 'Manjka base64 ali fileData polje v JSON' }, { status: 400 });
+      }
+
+    } else {
+      // Fallback: poskusi kot raw binary body
+      const arrayBuffer = await req.arrayBuffer();
+      if (!arrayBuffer.byteLength) {
+        return NextResponse.json(
+          { error: `Nepodprt Content-Type: ${contentType}` },
+          { status: 400 }
+        );
+      }
+      base64 = Buffer.from(arrayBuffer).toString('base64');
+    }
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
@@ -80,6 +104,7 @@ export async function POST(req: NextRequest) {
 
     const parsed = JSON.parse(cleaned);
     return NextResponse.json({ success: true, data: parsed });
+
   } catch (err) {
     console.error('[import-delivery] error:', err);
     return NextResponse.json(
