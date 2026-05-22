@@ -46,7 +46,7 @@ export default function NewInvoicePage() {
       const data = await res.json()
       if (data?.dolgo_ime) {
         setClientName(data.dolgo_ime)
-        if (data.naslov) setClientAddress(data.naslov + (data.posta ? ', ' + data.posta : ''))
+        // naslov: data.naslov je informativno
       } else {
         setTaxLookupError('Podjetje ni najdeno')
       }
