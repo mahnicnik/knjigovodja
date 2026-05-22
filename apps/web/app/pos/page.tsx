@@ -2959,8 +2959,8 @@ function InventoryScreen({ posData }) {
           <table style={{ width:'100%', borderCollapse:'collapse' }}>
             <thead style={{ position:'sticky', top:0, background:T.surface2, zIndex:1 }}>
               <tr style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.06em' }}>
-                {['Artikel','Šifra','Cena','Stanje','Min','Vrednost','Status','Akcije'].map((h,i)=>(
-                  <th key={i} style={{ padding:'11px 12px', textAlign:i>=2&&i<7?'right':i===7?'center':'left', borderBottom:'1px solid '+T.line }}>{h}</th>
+                {['Artikel','Šifra','Prod. cena','Nab. cena','Stanje','Min','Vrednost','Status','Akcije'].map((h,i)=>(
+                  <th key={i} style={{ padding:'11px 12px', textAlign:i>=2&&i<8?'right':i===8?'center':'left', borderBottom:'1px solid '+T.line }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -2981,7 +2981,8 @@ function InventoryScreen({ posData }) {
                       </div>
                     </td>
                     <td style={{ padding:'10px 12px', fontSize:11, color:T.muted, fontFamily:'monospace' }}>{it.code||'—'}</td>
-                    <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:600, fontVariantNumeric:'tabular-nums', fontSize:13 }}>{eur(it.price)}</td>
+                    <td style={{ ing:'10px 12px', textAlign:'right', fontWeight:600, fontVariantNumeric:'tabular-nums', fontSize:13 }}>{eur(it.price)}</td>
+                    <td style={{ padding:'10px 12px', textAlign:'right', fontSize:12, color:it.cost_price?T.ink:T.muted, fontVariantNumeric:'tabular-nums' }}>{it.cost_price?eur(it.cost_price):'—'}</td>
                     <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:700, fontSize:14, fontVariantNumeric:'tabular-nums', color:zero?T.danger:low?T.warn:T.ink }}>
                       {it.stock===null?<span style={{ color:T.muted }}>∞</span>:it.stock}
                       <span style={{ fontSize:10, color:T.muted, fontWeight:400, marginLeft:3 }}>{it.unit||'kos'}</span>
