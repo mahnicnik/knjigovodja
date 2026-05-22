@@ -51,6 +51,7 @@ export default function BlagajnaPage() {
   const [deviceModal, setDeviceModal] = useState<Partial<FursDevice> | null>(null)
   const [testResult, setTestResult] = useState<any>(null)
   const [testing, setTesting] = useState(false)
+  const [openFaq, setOpenFaq] = useState<number | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   function showToast(msg: string, ok = true) {
