@@ -35,6 +35,7 @@ export default function NewInvoicePage() {
     check()
     window.addEventListener('resize', check)
   
+
   async function lookupByTaxNumber(taxNum: string) {
     const clean = taxNum.replace('SI','').replace('si','').trim()
     if (clean.length < 7) return
@@ -152,7 +153,6 @@ export default function NewInvoicePage() {
                 <div style={{position:'relative'}}>
                   <input value={clientTaxNumber} 
                     onChange={e => setClientTaxNumber(e.target.value)}
-                    onBlur={e => lookupByTaxNumber(e.target.value)}
                     placeholder="SI12345678" className={inp} />
                   {taxLookupLoading && <span style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',fontSize:12,color:'#666'}}>Iščem...</span>}
                 </div>
