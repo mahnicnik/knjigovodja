@@ -2531,6 +2531,132 @@ function AddCustomerModal({ onClose, onSaved }) {
   )
 }
 
+
+function DobavnicaImportModal({ posData, onClose, onImported }) {
+  const [step, setStep] = React.useState('upload')
+  const [loading, setLoading] = React.useState(false)
+  const [result, setResult] = React.useState(null)
+  const [error, setError] = React.useState('')
+  const [selected, setSelected] = React.useState({})
+  const [importing, setImporting] = React.useState(false)
+  const [log, setLog] = React.useState([])
+  const fileRef = React.useRef(null)
+
+  async function handleFile(f) {
+    if (!f || f.type !== 'application/pdf') { setError('Prosim nalozi PDF datoteko'); return }
+    setLoading(true); setError('')
+    try {
+      const base64 = await new Promise((res, rej) => {
+        const r = new FileReader()
+        r.onload = () => res(r.result.split(',')[1])
+        r.onerror = rej
+        r.readAsDataURL(f)
+      })
+      const resp = await fetch('/api/pos/import-delivery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pdfBase64: base64, items: posData.items.map(i => ({ id: i.id, name: i.name })) }),
+      })
+      if (!resp.ok) { const e = await resp.json(); throw new Error(e.error || 'Napaka') }
+      const data = await resp.json()
+      setResult(data)
+      const sel = {}
+      data.artikli?.forEach((a, i) => { sel[i] = true })
+      setSelected(sel)
+      setStep('preview')
+    } catch(e) { setError(e.message) }
+    setLoading(false)
+  }
+
+  async function doImport() {
+    setImporting(true)
+    const newLog = []
+    for (const [idx, artikel] of (result?.artikli || []).entries()) {
+      if (!selected[idx]) continue
+      try {
+        if (artikel.ujemanje_id) {
+          const item = posData.items.find(i => i.id === artikel.ujemanje_id)
+          const newStock = (item?.stock || 0) + Number(artikel.kolicina || 0)
+          await createClient().from('items').update({ stock: newStock, cost_price: artikel.nabavna_cena || item?.cost_price }).eq('id', artikel.ujemanje_id)
+          newLog.push({ name: artikel.naziv, ok: true, msg: '+' + artikel.kolicina + ' kos' })
+        } else {
+          newLog.push({ name: artikel.naziv, ok: false, msg: 'Nov artikel - dodaj rocno' })
+        }
+      } catch(e) { newLog.push({ name: artikel.naziv, ok: false, msg: e.message }) }
+    }
+    setLog(newLog); setStep('done'); setImporting(false)
+  }
+
+  return (
+    <Modal open onClose={onClose} width={580}>
+      <ModalHeader title="Uvoz dobavnice (AI)" onClose={onClose}/>
+      <div style={{ padding:'20px 22px', maxHeight:'75vh', overflowY:'auto' }}>
+        {step === 'upload' && (
+          <div>
+            <div style={{ fontSize:13, color:T.muted, marginBottom:16 }}>Nalozi PDF dobavnico — AI bo samodejno prepoznal artikle, kolicine in cene.</div>
+            <div onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();handleFile(e.dataTransfer.files[0])}}
+            style={{ border:'2px dashed '+T.line, borderRadius:12, padding:40, textAlign:'center', cursor:'pointer', background:T.surface2 }}>
+              <div style={{ fontSize:40, marginBottom:12 }}>PDF</div>
+              <div style={{ fontWeight:700, fontSize:15, marginBottom:6 }}>Povleci PDF sem ali klikni za izbiro</div>
+              <div style={{ fontSize:12, color:T.muted }}>PDF dobavnice ali racuni dobaviteljev</div>
+              <input ref={fileRef} type="file" accept=".pdf" style={{ display:'none' }} onChange={e=>handleFile(e.target.files?.[0])}/>
+            </div>
+            {loading && <div style={{ marginTop:16, padding:'14px 16px', background:T.accentSoft, borderRadius:10, fontSize:13, color:T.accent }}>AI analizira dobavnico...</div>}
+            {error && <div style={{ marginTop:12, padding:'12px 14px', background:'rgba(168,50,50,0.1)', borderRadius:9, fontSize:13, color:T.danger }}>{error}</div>}
+          </div>
+        )}
+        {step === 'preview' && result && (
+          <div>
+            <div style={{ padding:'12px 14px', background:T.accentSoft, borderRadius:10, marginBottom:16, fontSize:13 }}>
+              <div style={{ fontWeight:700, marginBottom:4 }}>{result.dobavitelj || 'Neznan dobavitelj'}</div>
+              <div style={{ color:T.muted, display:'flex', gap:16 }}>
+                {result.datum && <span>{result.datum}</span>}
+                {result.stevilka && <span>St: {result.stevilka}</span>}
+                {result.skupaj_z_ddv && <span>{eur(result.skupaj_z_ddv)}</span>}
+              </div>
+            </div>
+            <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', marginBottom:10 }}>ARTIKLI ({result.artikli?.length || 0})</div>
+            {result.artikli?.map((a, i) => (
+              <div key={i} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', background:selected[i]?T.surface:T.surface3, borderRadius:10, marginBottom:6, border:'1px solid '+T.line, opacity:selected[i]?1:0.55 }}>
+                <input type="checkbox" checked={!!selected[i]} onChange={e=>setSelected(p=>({...p,[i]:e.target.checked}))} style={{ accentColor:T.accent, width:16, height:16 }}/>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:600, fontSize:13 }}>{a.naziv}</div>
+                  {a.ujemanje_ime && <div style={{ fontSize:11, color:T.accent }}>= {a.ujemanje_ime}</div>}
+                  {!a.ujemanje_id && <div style={{ fontSize:11, color:T.warn }}>Nov artikel - dodaj rocno</div>}
+                </div>
+                <div style={{ textAlign:'right', fontSize:12 }}>
+                  <div style={{ fontWeight:700 }}>{a.kolicina} {a.enota || 'kos'}</div>
+                  {a.nabavna_cena && <div style={{ color:T.muted }}>{eur(a.nabavna_cena)}</div>}
+                </div>
+              </div>
+            ))}
+            <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:16 }}>
+              <button onClick={()=>setStep('upload')} style={btnS}>Nazaj</button>
+              <button onClick={doImport} disabled={importing} style={{ ...btnP, opacity:importing?0.7:1 }}>
+                {importing ? 'Uvazam...' : 'Uvozi ' + Object.values(selected).filter(Boolean).length + ' artiklov'}
+              </button>
+            </div>
+          </div>
+        )}
+        {step === 'done' && (
+          <div>
+            <div style={{ fontSize:16, fontWeight:800, marginBottom:16 }}>Uvoz zakljucen</div>
+            {log.map((l, i) => (
+              <div key={i} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px', borderRadius:8, marginBottom:5, background:l.ok?T.accentSoft:'rgba(168,50,50,0.08)' }}>
+                <span>{l.ok ? 'OK' : 'X'}</span>
+                <div style={{ flex:1 }}><div style={{ fontSize:13, fontWeight:600 }}>{l.name}</div><div style={{ fontSize:11, color:T.muted }}>{l.msg}</div></div>
+              </div>
+            ))}
+            <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:16 }}>
+              <button onClick={onImported} style={btnP}>Zapri in osvezi</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
 function InventoryScreen({ posData }) {
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState('items')
