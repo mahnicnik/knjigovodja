@@ -3078,7 +3078,7 @@ function InventoryScreen({ posData }) {
                       <td style={{ padding:'10px 12px', fontWeight:600, fontSize:13 }}>{d.supplier||'—'}</td>
                       <td style={{ padding:'10px 12px', fontSize:12, color:T.muted, fontFamily:'monospace' }}>{d.document_number||'—'}</td>
                       <td style={{ padding:'10px 12px', textAlign:'right', fontSize:12, fontVariantNumeric:'tabular-nums' }}>{d.total_ex_vat?'€'+Number(d.total_ex_vat).toFixed(2):'—'}</td>
-                      <td style={{ padding:'10px 12px', textAlign:'right', fontSize:12, fontVariantNumeric:'tabular-nums', color:T.muted }}>{d.total_vat?'€'+Number(d.total_vat).toF</td>
+                      <td style={{ padding:'10px 12px', textAlign:'right', fontSize:12, fontVariantNumeric:'tabular-nums', color:T.muted }}>{d.total_vat?'€'+Number(d.total_vat).toFixed(2):'—'}</td>
                       <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:700, fontSize:13, fontVariantNumeric:'tabular-nums' }}>{d.total_inc_vat?'€'+Number(d.total_inc_vat).toFixed(2):'—'}</td>
                     </tr>
                   ))}
