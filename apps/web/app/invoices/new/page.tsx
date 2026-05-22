@@ -147,6 +147,16 @@ export default function NewInvoicePage() {
               </div>
             </div>
           </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:12}}>
+              <div>
+                <label style={{fontSize:"11px",color:"#888",display:"block",marginBottom:"4px"}}>Naslov stranke</label>
+                <input value={clientAddress} onChange={e=>setClientAddress(e.target.value)} placeholder="Ulica 1, 1000 Ljubljana" className={inp}/>
+              </div>
+              <div>
+                <label style={{fontSize:"11px",color:"#888",display:"block",marginBottom:"4px"}}>IBAN stranke</label>
+                <input value={clientIban} onChange={e=>setClientIban(e.target.value)} placeholder="SI56 1234 5678 9012 345" className={inp}/>
+              </div>
+            </div>
 
           {/* Datumi */}
           <div style={{ background:'#fff', borderRadius:'12px', border:'0.5px solid rgba(0,0,0,0.08)', padding:'16px' }}>
