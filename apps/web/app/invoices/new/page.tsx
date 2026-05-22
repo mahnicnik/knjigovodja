@@ -243,6 +243,14 @@ export default function NewInvoicePage() {
                 <div style={{ fontSize:'10px', color:'rgba(255,255,255,0.4)', marginBottom:'2px' }}>Sklic</div>
                 <div style={{ fontFamily:'monospace', fontSize:'12px', color:'rgba(255,255,255,0.8)' }}>SI00 {invoiceNumber}</div>
               </div>
+              {clientAddress && <div style={{ background:'rgba(255,255,255,0.06)', borderRadius:'8px', padding:'8px 12px', marginTop:'4px' }}>
+                <div style={{ fontSize:'10px', color:'rgba(255,255,255,0.4)', marginBottom:'2px' }}>Naslov stranke</div>
+                <div style={{ fontSize:'12px', color:'rgba(255,255,255,0.8)' }}>{clientAddress}</div>
+              </div>}
+              {clientIban && <div style={{ background:'rgba(255,255,255,0.06)', borderRadius:'8px', padding:'8px 12px', marginTop:'4px' }}>
+                <div style={{ fontSize:'10px', color:'rgba(255,255,255,0.4)', marginBottom:'2px' }}>IBAN stranke</div>
+                <div style={{ fontFamily:'monospace', fontSize:'12px', color:'rgba(255,255,255,0.8)' }}>{clientIban}</div>
+              </div>}
             </div>
           </div>
         </div>
