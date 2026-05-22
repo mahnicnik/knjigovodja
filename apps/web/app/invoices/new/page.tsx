@@ -20,6 +20,8 @@ export default function NewInvoicePage() {
   const [clientName, setClientName] = useState('')
   const [clientEmail, setClientEmail] = useState('')
   const [clientTaxNumber, setClientTaxNumber] = useState('')
+  const [clientAddress, setClientAddress] = useState('')
+  const [clientIban, setClientIban] = useState('')
   const [taxLookupLoading, setTaxLookupLoading] = useState(false)
   const [taxLookupError, setTaxLookupError] = useState('')
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0])
@@ -71,6 +73,7 @@ export default function NewInvoicePage() {
     const { error } = await supabase.from('issued_invoices').insert({
       org_id: org.id, invoice_number: invoiceNumber, invoice_type: 'invoice',
       client_name: clientName, client_email: clientEmail, client_tax_number: clientTaxNumber,
+      client_address: clientAddress, client_iban: clientIban,
       issue_date: issueDate, due_date: dueDate, line_items: items,
       amount_net: subtotal, vat_amount: vatAmount, amount_total: total,
       status, notes, reference: `SI00 ${invoiceNumber}`,
@@ -270,7 +273,8 @@ export default function NewInvoicePage() {
       const data = await res.json()
       if (data?.dolgo_ime) {
         setClientName(data.dolgo_ime)
-        // naslov: data.naslov je informativno
+        if (data.naslov) setClientAddress(data.naslov + (data['pošta'] ? ', ' + data['pošta'] : ''))
+        if (data.transakcijski_računi) setClientIban(data.transakcijski_računi)
       } else {
         setTaxLookupError('Podjetje ni najdeno')
       }
