@@ -375,7 +375,7 @@ export default function BlagajnaPage() {
                     {num:2,icon:'⬆',title:'Naložite v Računko',desc:'Kliknite na polje zgoraj, izberite .p12 datoteko in vnesite geslo. En certifikat pokriva VSE lokacije.'},
                     {num:3,icon:'🏢',title:'Dodajte poslovni prostor',desc:'V tabu Poslovni prostori dodajte vsako lokacijo z ID-jem ki ste ga registrirali pri FURS (npr. SIRBFB01).'},
                     {num:4,icon:'🧪',title:'Testirajte povezavo',desc:'V tabu Test povezave preverite da certifikat deluje. Prikazati se mora EOR in ZOI koda.'},
-map(step=>(
+                  ].map(step=>(
                     <div key={step.num} style={{display:'flex',gap:14,padding:'14px 0',borderBottom:'1px solid #f0ede8'}}>
                       <div style={{width:36,height:36,borderRadius:999,background:'#0d2818',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900,fontSize:15,flexShrink:0}}>{step.num}</div>
                       <div>
