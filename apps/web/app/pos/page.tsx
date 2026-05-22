@@ -2645,6 +2645,7 @@ function InventoryScreen({ posData }) {
             <div style={{ fontSize:11, color:T.muted }}>po nabavni</div>
           </div>
           <div style={{ marginLeft:'auto', display:'flex', gap:6, alignItems:'center' }}>
+            <button onClick={()=>setDobavnicaModal(true)} style={{ ...btnS, fontSize:12, display:'flex', alignItems:'center', gap:5 }}>Uvozi dobavnico</button>
             <button style={{ ...btnS, fontSize:12, display:'flex', alignItems:'center', gap:5 }}>
               <KI name="print" size={13}/> Izvozi
             </button>
