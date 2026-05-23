@@ -3798,7 +3798,6 @@ function AdminScreen({ auth, posData }) {
     { id:'categories', label:'Kategorije & Artikli',  icon:'grid'     },
     { id:'storitve',   label:'Storitve',              icon:'calendar' },
     { id:'packages',   label:'Paketi',                icon:'package'  },
-    { id:'sestavine',  label:'Sestavine & Normativ',  icon:'scale'    },
     { id:'happyhour',  label:'Happy hour',            icon:'happy'    },
     { id:'kuhinja',    label:'Kuhinja & display',     icon:'receipt'  },
     { id:'autolock',   label:'Avt. zaklepanje',       icon:'pin'      },
@@ -3820,7 +3819,6 @@ function AdminScreen({ auth, posData }) {
         {section==='categories' && <CatalogSection posData={posData}/>}
         {section==='spaces'     && <SpacesSection posData={posData}/>}
         {section==='packages'   && <PackagesAdminSection posData={posData}/>}
-        {section==='sestavine'  && <SestavineSection posData={posData}/>}
         {section==='storitve'   && <StoritveCrudSection posData={posData}/>}
         {section==='happyhour'  && <HappyHourSection posData={posData}/>}
         {section==='kuhinja'    && <KuhinjaSection posData={posData}/>}
@@ -4058,7 +4056,7 @@ function CatalogSection({ posData }) {
   return (
     <div>
       <div style={{ display:'flex', gap:0, marginBottom:20, background:T.surface, borderRadius:10, padding:4, width:'fit-content', border:'1px solid '+T.line }}>
-        {[['categories','Kategorije'],['items','Artikli']].map(([id,lbl]) => (
+        {[['categories','Kategorije'],['items','Artikli'],['surovine','Surovine']].map(([id,lbl]) => (
           <button key={id} onClick={()=>setActiveTab(id)} style={{ padding:'8px 18px', borderRadius:8, border:'none', background:activeTab===id?T.accent:'transparent', color:activeTab===id?'#fff':T.ink, fontWeight:600, fontSize:13, cursor:'pointer', fontFamily:'inherit' }}>{lbl}</button>
         ))}
       </div>
@@ -4084,6 +4082,7 @@ function CatalogSection({ posData }) {
         </div>
       )}
 
+      {activeTab==='surovine' && <SestavineSection posData={posData}/>}
       {activeTab==='items' && (
         <div>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
