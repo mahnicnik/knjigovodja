@@ -1044,7 +1044,7 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
   const [splitOpen, setSplitOpen] = useState(false)
   const [splitParts, setSplitParts] = useState(2)
   const [splitPaid, setSplitPaid] = useState([])
-  const [splitSelected, setSplitSelected] = useState({})
+  const [splitQty, setSplitQty] = useState({})
   const [pickCustomer, setPickCustomer] = useState(false)
   const [custSearch, setCustSearch] = useState('')
 
@@ -1168,27 +1168,43 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
               Izberi artikle za to osebo, nato klikni Plačaj. Po plačilu se nadaljuje z ostalimi.
             </div>
             <div style={{ marginBottom:12 }}>
-              {cart.map((line, idx) => {
-                const checked = !splitPaid.includes(line.lineId) && (splitSelected[line.lineId] !== false)
-                const alreadyPaid = splitPaid.includes(line.lineId)
+              {cart.map((line) => {
+                const alreadyPaidQty = splitPaid.filter(p => p.lineId === line.lineId).reduce((s,p)=>s+p.qty,0)
+                const availableQty = line.qty - alreadyPaidQty
+                const selectedQty = splitQty[line.lineId] || 0
+                if (availableQty <= 0) return (
+                  <div key={line.lineId} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', borderRadius:9, marginBottom:6, border:'1px solid '+T.line, background:T.surface2, opacity:0.4 }}>
+                    <div style={{ flex:1, fontWeight:600, fontSize:13 }}>{line.name}</div>
+                    <span style={{ fontSize:11, color:T.accent, fontWeight:700 }}>✓ Plačano</span>
+                  </div>
+                )
                 return (
-                  <div key={line.lineId} onClick={()=>{if(alreadyPaid)return;setSplitSelected(p=>({...p,[line.lineId]:!checked}))}}
-                    style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', borderRadius:9, marginBottom:6, border:'1px solid '+T.line, background:alreadyPaid?T.surface2:checked?T.accentSoft:T.surface, opacity:alreadyPaid?0.4:1, cursor:alreadyPaid?'default':'pointer' }}>
-                    <input type="checkbox" checked={checked && !alreadyPaid} disabled={alreadyPaid} readOnly style={{ accentColor:T.accent, width:16, height:16 }}/>
+                  <div key={line.lineId} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', borderRadius:9, marginBottom:6, border:'1px solid '+(selectedQty>0?T.accent:T.line), background:selectedQty>0?T.accentSoft:T.surface }}>
                     <div style={{ flex:1 }}>
                       <div style={{ fontWeight:600, fontSize:13 }}>{line.name}</div>
-                      {line.qty > 1 && <div style={{ fontSize:11, color:T.muted }}>{line.qty}× {eur(line.price)}</div>}
+                      <div style={{ fontSize:11, color:T.muted }}>Na voljo: {availableQty}× {eur(line.price)}</div>
                     </div>
-                    <div style={{ fontWeight:700, fontSize:13 }}>{eur(line.price * line.qty)}</div>
-                    {alreadyPaid && <span style={{ fontSize:10, color:T.accent, fontWeight:700 }}>✓</span>}
+                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      <button onClick={()=>setSplitQty(p=>({...p,[line.lineId]:Math.max(0,(p[line.lineId]||0)-1)}))}
+                        style={{ width:28, height:28, borderRadius:7, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontFamily:'inherit', fontSize:16, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center' }}>−</button>
+                      <div style={{ minWidth:28, textAlign:'center', fontWeight:700, fontSize:15 }}>{selectedQty}</div>
+                      <button onClick={()=>setSplitQty(p=>({...p,[line.lineId]:Math.min(availableQty,(p[line.lineId]||0)+1)}))}
+                        style={{ width:28, height:28, borderRadius:7, border:'none', background:T.accentSoft, color:T.accent, cursor:'pointer', fontFamily:'inherit', fontSize:16, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center' }}>+</button>
+                    </div>
+                    <div style={{ fontWeight:700, fontSize:13, minWidth:60, textAlign:'right' }}>{eur(line.price * selectedQty)}</div>
                   </div>
                 )
               })}
             </div>
             {(() => {
-              const selectedLines = cart.filter(l => !splitPaid.includes(l.lineId) && splitSelected[l.lineId] !== false)
+              const selectedLines = cart.filter(l => (splitQty[l.lineId]||0) > 0).map(l => ({...l, qty: splitQty[l.lineId]}))
               const selectedTotal = selectedLines.reduce((s,l)=>s+l.price*l.qty,0)
-              const remaining = cart.filter(l => !splitPaid.includes(l.lineId) && splitSelected[l.lineId] === false)
+              const totalPaidQty = cart.reduce((s,l)=>s+(splitPaid.filter(p=>p.lineId===l.lineId).reduce((ss,p)=>ss+p.qty,0)),0)
+              const totalQty = cart.reduce((s,l)=>s+l.qty,0)
+              const remaining = cart.filter(l => {
+                const paidQty = splitPaid.filter(p=>p.lineId===l.lineId).reduce((s,p)=>s+p.qty,0)
+                return l.qty - paidQty - (splitQty[l.lineId]||0) > 0
+              })
               return (
                 <div>
                   <div style={{ display:'flex', justifyContent:'space-between', fontWeight:700, fontSize:15, marginBottom:12, padding:'10px 12px', background:T.accentSoft, borderRadius:9 }}>
@@ -1197,22 +1213,28 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
                   </div>
                   {remaining.length > 0 && (
                     <div style={{ fontSize:12, color:T.muted, marginBottom:12, textAlign:'center' }}>
-                      Preostalo po plačilu: {eur(remaining.reduce((s,l)=>s+l.price*l.qty,0))}
+                      Preostalo po plačilu: {eur(remaining.reduce((s,l)=>{
+                        const paidQty = splitPaid.filter(p=>p.lineId===l.lineId).reduce((ss,p)=>ss+p.qty,0)
+                        return s + l.price*(l.qty-paidQty-(splitQty[l.lineId]||0))
+                      },0))}
                     </div>
                   )}
                   <div style={{ display:'flex', gap:8 }}>
                     <button onClick={()=>setSplitOpen(false)} style={{ flex:1, padding:'11px', borderRadius:8, border:'1px solid '+T.line, background:'transparent', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:13 }}>Prekliči</button>
                     <button disabled={selectedLines.length===0} onClick={()=>{
                       setSplitOpen(false)
-                      setPaymentOpen({ discount:cartDiscount, splitLines: selectedLines, onSplitPaid: (paidLineIds) => {
-                        setSplitPaid(p=>[...p,...paidLineIds])
-                        const remaining2 = cart.filter(l => ![...splitPaid,...paidLineIds].includes(l.lineId))
-                        if(remaining2.length === 0) {
+                      setPaymentOpen({ discount:cartDiscount, splitLines: selectedLines, onSplitPaid: (paidItems) => {
+                        setSplitPaid(p=>[...p,...paidItems.map(l=>({lineId:l.lineId,qty:l.qty}))])
+                        setSplitQty({})
+                        const allPaid = cart.every(l => {
+                          const newPaidQty = [...splitPaid,...paidItems.map(x=>({lineId:x.lineId,qty:x.qty}))].filter(p=>p.lineId===l.lineId).reduce((s,p)=>s+p.qty,0)
+                          return newPaidQty >= l.qty
+                        })
+                        if(allPaid) {
                           setCart([])
                           setSplitPaid([])
-                          setSplitSelected({})
+                          setSplitQty({})
                         } else {
-                          setSplitSelected({})
                           setSplitOpen(true)
                         }
                       }})
