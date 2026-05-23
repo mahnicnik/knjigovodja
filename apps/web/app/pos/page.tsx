@@ -5874,8 +5874,8 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData }) 
           </div>
         </>
       )}
-    </div>
       {orderListOpen && <OrderListModal posData={posData} onClose={()=>setOrderListOpen(false)}/>}
+    </div>
   )
 }
 
