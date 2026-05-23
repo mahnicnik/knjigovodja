@@ -54,9 +54,9 @@ const CFG = {
     { id: 'never', label: 'Nikoli',    ms: 0      },
   ],
   profiles: [
-    { id: 'all',      name: 'Vse v enem',       icon: '🌐', nav: ['floor','sale','calendar','customers','packages','inventory','reports','admin'] },
-    { id: 'rest',     name: 'Restavracija',      icon: '🍽', nav: ['floor','sale','calendar','customers','inventory','reports','admin'] },
-    { id: 'bar',      name: 'Bar / Kavarna',     icon: '🍺', nav: ['floor','sale','customers','inventory','reports','admin'] },
+    { id: 'all',      name: 'Vse v enem',       icon: '🌐', nav: ['floor','sale','calendar','customers','packages','inventory','orders','reports','admin'] },
+    { id: 'rest',     name: 'Restavracija',      icon: '🍽', nav: ['floor','sale','calendar','customers','inventory','orders','reports','admin'] },
+    { id: 'bar',      name: 'Bar / Kavarna',     icon: '🍺', nav: ['floor','sale','customers','inventory','orders','reports','admin'] },
     { id: 'storitve', name: 'Storitve',           icon: '💆', nav: ['calendar','customers','packages','sale','reports','admin'] },
     { id: 'trznica',  name: 'Tržnica / Stojnica', icon: '🥕', nav: ['sale','inventory','reports','admin'] },
   ],
@@ -666,6 +666,7 @@ const SCREENS = {
   customers: { label:'Stranke',         icon:'users'    },
   packages:  { label:'Paketi',          icon:'package'  },
   inventory: { label:'Zaloga',          icon:'box'      },
+  orders:    { label:'Računi',           icon:'receipt'  },
   reports:   { label:'Poročila',        icon:'chart'    },
   admin:     { label:'Nastavitve',      icon:'settings' },
 }
@@ -3705,6 +3706,207 @@ function ZReportModal({ posData, onClose }) {
   )
 }
 
+
+// ================================================================
+// ORDERS SCREEN — pregled računov
+// ================================================================
+function OrdersScreen({ posData, auth }) {
+  const [orders, setOrders] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [selectedOrder, setSelectedOrder] = useState(null)
+  const [orderLines, setOrderLines] = useState([])
+  const [orderPayment, setOrderPayment] = useState(null)
+  const [period, setPeriod] = useState('today')
+  const [search, setSearch] = useState('')
+
+  const METHOD_LABELS = { cash:'Gotovina', card:'Kartica', bon:'Bon', prep:'Predplačilo', split:'Deljeno' }
+
+  async function loadOrders() {
+    setLoading(true)
+    const sb = createClient()
+    let from = new Date()
+    if (period === 'today') { from.setHours(0,0,0,0) }
+    else if (period === 'week') { from.setDate(from.getDate()-7) }
+    else if (period === 'month') { from.setDate(1); from.setHours(0,0,0,0) }
+    else { from = new Date('2020-01-01') }
+
+    const { data } = await sb
+      .from('orders')
+      .select('*, payments(method, amount, furs_zoi, furs_eor, paid_at), spaces(name)')
+      .eq('business_id', BUSINESS_ID)
+      .eq('status', 'paid')
+      .gte('closed_at', from.toISOString())
+      .order('closed_at', { ascending: false })
+      .limit(200)
+    setOrders(data || [])
+    setLoading(false)
+  }
+
+  async function loadOrderDetail(order) {
+    setSelectedOrder(order)
+    const sb = createClient()
+    const { data: lines } = await sb.from('order_lines').select('*').eq('order_id', order.id).order('id')
+    setOrderLines(lines || [])
+    setOrderPayment(order.payments?.[0] || null)
+  }
+
+  useEffect(() => { loadOrders() }, [period])
+
+  const filtered = orders.filter(o =>
+    !search || String(o.number).includes(search) ||
+    (o.payments?.[0]?.furs_eor || '').toLowerCase().includes(search.toLowerCase())
+  )
+
+  const totalFiltered = filtered.reduce((s,o) => s + Number(o.total||0), 0)
+
+  function printReceipt(order, lines, payment) {
+    const w = window.open('', '_blank', 'width=400,height=600')
+    const methodLabel = METHOD_LABELS[payment?.method] || payment?.method || '—'
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+    <style>body{font-family:monospace;font-size:12px;margin:20px;max-width:300px}
+    .center{text-align:center}.bold{font-weight:bold}.line{border-top:1px dashed #000;margin:8px 0}
+    .row{display:flex;justify-content:space-between}</style></head><body>
+    <div class="center bold" style="font-size:16px">ŠIRM fitness&bar</div>
+    <div class="center">Poljanska cesta 87, 4224 Gorenja vas</div>
+    <div class="line"></div>
+    <div class="row"><span>Račun št.:</span><span>${order.number || order.id.slice(-6)}</span></div>
+    <div class="row"><span>Datum:</span><span>${new Date(order.closed_at).toLocaleString('sl-SI')}</span></div>
+    <div class="row"><span>Plačilo:</span><span>${methodLabel}</span></div>
+    <div class="line"></div>
+    ${(lines||[]).map(l => `
+      <div class="row"><span>${l.name}</span><span>${Number(l.qty)}× €${Number(l.unit_price).toFixed(2)}</span></div>
+      <div class="row"><span></span><span>€${(Number(l.qty)*Number(l.unit_price)).toFixed(2)}</span></div>
+    `).join('')}
+    <div class="line"></div>
+    <div class="row bold"><span>SKUPAJ:</span><span>€${Number(order.total).toFixed(2)}</span></div>
+    ${payment?.furs_eor ? `<div class="line"></div>
+    <div style="font-size:10px">ZOI: ${payment.furs_zoi||'—'}</div>
+    <div style="font-size:10px">EOR: ${payment.furs_eor}</div>` : ''}
+    <div class="line"></div>
+    <div class="center">Hvala za obisk!</div>
+    <script>window.print();setTimeout(()=>window.close(),1000)</script>
+    </body></html>`)
+    w.document.close()
+  }
+
+  return (
+    <div style={{ display:'flex', height:'100%', gap:0 }}>
+      {/* Seznam */}
+      <div style={{ width: selectedOrder ? 400 : '100%', borderRight: selectedOrder ? '1px solid '+T.line : 'none', display:'flex', flexDirection:'column', minWidth:0 }}>
+        {/* Header */}
+        <div style={{ padding:'16px 20px', borderBottom:'1px solid '+T.line, display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
+          <div style={{ fontWeight:700, fontSize:16 }}>Računi</div>
+          <div style={{ display:'flex', gap:4, marginLeft:'auto' }}>
+            {[['today','Danes'],['week','Teden'],['month','Mesec'],['all','Vse']].map(([id,lbl])=>(
+              <button key={id} onClick={()=>setPeriod(id)} style={{ padding:'5px 12px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, background:period===id?T.accent:'transparent', color:period===id?'#fff':T.muted }}>
+                {lbl}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={{ padding:'10px 16px', borderBottom:'1px solid '+T.line, display:'flex', gap:10, alignItems:'center' }}>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Išči po številki ali EOR..." style={{ flex:1, padding:'7px 10px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:12, background:T.inputBg, outline:'none' }}/>
+          <div style={{ fontSize:12, color:T.muted, whiteSpace:'nowrap' }}>{filtered.length} računov · €{totalFiltered.toFixed(2)}</div>
+        </div>
+        <div style={{ flex:1, overflowY:'auto' }}>
+          {loading ? (
+            <div style={{ padding:40, textAlign:'center', color:T.muted }}>Nalagam...</div>
+          ) : filtered.length === 0 ? (
+            <div style={{ padding:40, textAlign:'center', color:T.muted }}>Ni računov za izbrano obdobje</div>
+          ) : filtered.map(o => {
+            const payment = o.payments?.[0]
+            const isSelected = selectedOrder?.id === o.id
+            return (
+              <div key={o.id} onClick={()=>loadOrderDetail(o)} style={{ padding:'12px 16px', borderBottom:'1px solid '+T.lineSoft, cursor:'pointer', background:isSelected?T.accentSoft:T.surface, display:'flex', gap:12, alignItems:'center' }}>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontWeight:700, fontSize:13, display:'flex', gap:8, alignItems:'center' }}>
+                    <span>#{o.number || o.id.slice(-6)}</span>
+                    <span style={{ fontSize:10, padding:'2px 6px', borderRadius:4, background:T.chipBg, color:T.muted, fontWeight:600 }}>
+                      {METHOD_LABELS[payment?.method] || '—'}
+                    </span>
+                    {o.spaces?.name && <span style={{ fontSize:10, color:T.muted }}>{o.spaces.name}</span>}
+                  </div>
+                  <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>
+                    {new Date(o.closed_at).toLocaleString('sl-SI')}
+                  </div>
+                </div>
+                <div style={{ fontWeight:800, fontSize:15, fontVariantNumeric:'tabular-nums' }}>€{Number(o.total).toFixed(2)}</div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Detail */}
+      {selectedOrder && (
+        <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
+          <div style={{ padding:'14px 20px', borderBottom:'1px solid '+T.line, display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ flex:1 }}>
+              <div style={{ fontWeight:700, fontSize:15 }}>Račun #{selectedOrder.number || selectedOrder.id.slice(-6)}</div>
+              <div style={{ fontSize:12, color:T.muted }}>{new Date(selectedOrder.closed_at).toLocaleString('sl-SI')}</div>
+            </div>
+            <button onClick={()=>printReceipt(selectedOrder, orderLines, orderPayment)}
+              style={{ padding:'7px 14px', borderRadius:8, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, display:'flex', alignItems:'center', gap:6 }}>
+              🖨️ Ponovni izpis
+            </button>
+            <button onClick={()=>setSelectedOrder(null)} style={{ width:30, height:30, borderRadius:8, border:'1px solid '+T.line, background:'transparent', cursor:'pointer', fontSize:16 }}>×</button>
+          </div>
+          <div style={{ flex:1, overflowY:'auto', padding:'16px 20px' }}>
+            {/* Plačilo info */}
+            <div style={{ background:T.surface2, borderRadius:10, padding:'12px 16px', marginBottom:16, display:'flex', gap:20 }}>
+              <div>
+                <div style={{ fontSize:10, color:T.muted, fontWeight:700, textTransform:'uppercase' }}>Plačilna metoda</div>
+                <div style={{ fontWeight:700, fontSize:14 }}>{METHOD_LABELS[orderPayment?.method] || '—'}</div>
+              </div>
+              <div>
+                <div style={{ fontSize:10, color:T.muted, fontWeight:700, textTransform:'uppercase' }}>Skupaj</div>
+                <div style={{ fontWeight:700, fontSize:14 }}>€{Number(selectedOrder.total).toFixed(2)}</div>
+              </div>
+              {orderPayment?.furs_eor && (
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:10, color:T.muted, fontWeight:700, textTransform:'uppercase' }}>EOR (FURS)</div>
+                  <div style={{ fontWeight:600, fontSize:11, fontFamily:'monospace', overflow:'hidden', textOverflow:'ellipsis' }}>{orderPayment.furs_eor}</div>
+                </div>
+              )}
+            </div>
+            {/* Artikli */}
+            <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', marginBottom:8 }}>ARTIKLI</div>
+            <table style={{ width:'100%', borderCollapse:'collapse' }}>
+              <thead>
+                <tr style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:'uppercase' }}>
+                  {['Artikel','Kol.','Cena','Skupaj'].map((h,i)=>(
+                    <th key={i} style={{ padding:'6px 8px', textAlign:i>0?'right':'left', borderBottom:'1px solid '+T.line }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {orderLines.map((l,i)=>(
+                  <tr key={l.id} style={{ background:i%2?T.surface2:T.surface, borderBottom:'1px solid '+T.lineSoft }}>
+                    <td style={{ padding:'8px', fontSize:13, fontWeight:600 }}>{l.name}</td>
+                    <td style={{ padding:'8px', textAlign:'right', fontSize:13 }}>{l.qty}</td>
+                    <td style={{ padding:'8px', textAlign:'right', fontSize:13 }}>€{Number(l.unit_price).toFixed(2)}</td>
+                    <td style={{ padding:'8px', textAlign:'right', fontWeight:700, fontSize:13 }}>€{(Number(l.qty)*Number(l.unit_price)).toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {selectedOrder.discount_pct > 0 && (
+              <div style={{ display:'flex', justifyContent:'space-between', padding:'8px', color:T.accent, fontSize:13 }}>
+                <span>Popust {selectedOrder.discount_pct}%</span>
+                <span>-€{Number(selectedOrder.discount_amount).toFixed(2)}</span>
+              </div>
+            )}
+            <div style={{ display:'flex', justifyContent:'space-between', padding:'10px 8px', fontWeight:800, fontSize:16, borderTop:'2px solid '+T.line, marginTop:8 }}>
+              <span>SKUPAJ</span>
+              <span>€{Number(selectedOrder.total).toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ================================================================
 // REPORTS SCREEN — real DB stats
 // ================================================================
@@ -6395,6 +6597,7 @@ function KlasikApp() {
           {screen==='customers' && <CustomersScreen posData={posData} setActiveCustomer={setActiveCustomer} setScreen={setScreen} setSellPackageModal={setSellPackageModal}/>}
           {screen==='packages'  && <PackagesScreen posData={posData} setSellPackageModal={setSellPackageModal}/>}
           {screen==='inventory' && <InventoryScreen posData={posData}/>}
+          {screen==='orders'    && <OrdersScreen posData={posData} auth={auth}/>}
           {screen==='reports'   && <ReportsScreen posData={posData}/>}
           {screen==='admin'     && <AdminScreen auth={auth} posData={posData}/>}
         </div>
