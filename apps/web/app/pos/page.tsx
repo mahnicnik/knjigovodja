@@ -430,7 +430,7 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
 
   useEffect(() => {
     if (!open) { setMethod('cash'); setTipPct(0); setGiven(''); setDiscount(0); setFurs(true); setError(null); setProcessing(false) }
-    if (open && typeof open === 'object' && open.discount) { setDiscount(open.discount) }
+    if (open && typeof open === 'object') { if(open.discount) setDiscount(open.discount) }
   }, [open])
 
   const finalTotal = (total - total * discount / 100) + total * tipPct / 100
@@ -1043,6 +1043,8 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
   const [discountInput, setDiscountInput] = useState('')
   const [splitOpen, setSplitOpen] = useState(false)
   const [splitParts, setSplitParts] = useState(2)
+  const [splitPaid, setSplitPaid] = useState([])
+  const [splitSelected, setSplitSelected] = useState({})
   const [pickCustomer, setPickCustomer] = useState(false)
   const [custSearch, setCustSearch] = useState('')
 
@@ -1159,23 +1161,68 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
         </Modal>
       )}
       {splitOpen && (
-        <Modal open onClose={()=>setSplitOpen(false)} width={360}>
+        <Modal open onClose={()=>setSplitOpen(false)} width={480}>
           <ModalHeader title="Razdeli račun" onClose={()=>setSplitOpen(false)}/>
-          <div style={{ padding:'20px 22px' }}>
-            <div style={{ fontSize:13, color:T.muted, marginBottom:16 }}>Razdeli skupni znesek med osebe</div>
-            <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20, justifyContent:'center' }}>
-              <button onClick={()=>setSplitParts(p=>Math.max(2,p-1))} style={{ width:36, height:36, borderRadius:8, border:'1px solid '+T.line, background:T.chipBg, cursor:'pointer', fontFamily:'inherit', fontSize:18, fontWeight:700 }}>−</button>
-              <div style={{ fontSize:32, fontWeight:800, minWidth:60, textAlign:'center' }}>{splitParts}</div>
-              <button onClick={()=>setSplitParts(p=>Math.min(20,p+1))} style={{ width:36, height:36, borderRadius:8, border:'1px solid '+T.line, background:T.chipBg, cursor:'pointer', fontFamily:'inherit', fontSize:18, fontWeight:700 }}>+</button>
+          <div style={{ padding:'16px 20px', maxHeight:'80vh', overflowY:'auto' }}>
+            <div style={{ fontSize:13, color:T.muted, marginBottom:14 }}>
+              Izberi artikle za to osebo, nato klikni Plačaj. Po plačilu se nadaljuje z ostalimi.
             </div>
-            <div style={{ background:T.accentSoft, borderRadius:10, padding:'14px 16px', textAlign:'center', marginBottom:16 }}>
-              <div style={{ fontSize:12, color:T.muted, marginBottom:4 }}>Vsaka oseba plača</div>
-              <div style={{ fontSize:28, fontWeight:800, color:T.accent, fontVariantNumeric:'tabular-nums' }}>{eur(totals.total*(1-cartDiscount/100)/splitParts)}</div>
+            <div style={{ marginBottom:12 }}>
+              {cart.map((line, idx) => {
+                const checked = !splitPaid.includes(line.lineId) && (splitSelected[line.lineId] !== false)
+                const alreadyPaid = splitPaid.includes(line.lineId)
+                return (
+                  <div key={line.lineId} onClick={()=>{if(alreadyPaid)return;setSplitSelected(p=>({...p,[line.lineId]:!checked}))}}
+                    style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', borderRadius:9, marginBottom:6, border:'1px solid '+T.line, background:alreadyPaid?T.surface2:checked?T.accentSoft:T.surface, opacity:alreadyPaid?0.4:1, cursor:alreadyPaid?'default':'pointer' }}>
+                    <input type="checkbox" checked={checked && !alreadyPaid} disabled={alreadyPaid} readOnly style={{ accentColor:T.accent, width:16, height:16 }}/>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontWeight:600, fontSize:13 }}>{line.name}</div>
+                      {line.qty > 1 && <div style={{ fontSize:11, color:T.muted }}>{line.qty}× {eur(line.unitPrice)}</div>}
+                    </div>
+                    <div style={{ fontWeight:700, fontSize:13 }}>{eur(line.unitPrice * line.qty)}</div>
+                    {alreadyPaid && <span style={{ fontSize:10, color:T.accent, fontWeight:700 }}>✓</span>}
+                  </div>
+                )
+              })}
             </div>
-            <div style={{ fontSize:12, color:T.muted, textAlign:'center', marginBottom:16 }}>
-              Skupaj: {eur(totals.total*(1-cartDiscount/100))} · {splitParts} osebe
-            </div>
-            <button onClick={()=>setSplitOpen(false)} style={{ width:'100%', padding:'11px', borderRadius:8, border:'none', background:T.accent, color:'#fff', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:14 }}>Zapri</button>
+            {(() => {
+              const selectedLines = cart.filter(l => !splitPaid.includes(l.lineId) && splitSelected[l.lineId] !== false)
+              const selectedTotal = selectedLines.reduce((s,l)=>s+l.unitPrice*l.qty,0)
+              const remaining = cart.filter(l => !splitPaid.includes(l.lineId) && splitSelected[l.lineId] === false)
+              return (
+                <div>
+                  <div style={{ display:'flex', justifyContent:'space-between', fontWeight:700, fontSize:15, marginBottom:12, padding:'10px 12px', background:T.accentSoft, borderRadius:9 }}>
+                    <span>Ta oseba plača:</span>
+                    <span style={{ color:T.accent }}>{eur(selectedTotal)}</span>
+                  </div>
+                  {remaining.length > 0 && (
+                    <div style={{ fontSize:12, color:T.muted, marginBottom:12, textAlign:'center' }}>
+                      Preostalo po plačilu: {eur(remaining.reduce((s,l)=>s+l.unitPrice*l.qty,0))}
+                    </div>
+                  )}
+                  <div style={{ display:'flex', gap:8 }}>
+                    <button onClick={()=>setSplitOpen(false)} style={{ flex:1, padding:'11px', borderRadius:8, border:'1px solid '+T.line, background:'transparent', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:13 }}>Prekliči</button>
+                    <button disabled={selectedLines.length===0} onClick={()=>{
+                      setSplitOpen(false)
+                      setPaymentOpen({ discount:cartDiscount, splitLines: selectedLines, onSplitPaid: (paidLineIds) => {
+                        setSplitPaid(p=>[...p,...paidLineIds])
+                        const remaining2 = cart.filter(l => ![...splitPaid,...paidLineIds].includes(l.lineId))
+                        if(remaining2.length === 0) {
+                          setCart([])
+                          setSplitPaid([])
+                          setSplitSelected({})
+                        } else {
+                          setSplitSelected({})
+                          setSplitOpen(true)
+                        }
+                      }})
+                    }} style={{ flex:2, padding:'11px', borderRadius:8, border:'none', background:selectedLines.length?T.accent:'#ccc', color:'#fff', cursor:selectedLines.length?'pointer':'not-allowed', fontFamily:'inherit', fontWeight:700, fontSize:14 }}>
+                      Plačaj {eur(selectedTotal)}
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         </Modal>
       )}
@@ -6331,13 +6378,18 @@ function KlasikApp() {
         </div>
       </div>
 
-      <PaymentModal open={paymentOpen} total={totals.total} cart={cart} activeTable={activeTable} activeCustomer={activeCustomer} auth={auth}
+      <PaymentModal open={paymentOpen} total={typeof paymentOpen==='object'&&paymentOpen.splitLines ? paymentOpen.splitLines.reduce((s,l)=>s+l.unitPrice*l.qty,0)*(1-(paymentOpen.discount||0)/100) : totals.total} cart={typeof paymentOpen==='object'&&paymentOpen.splitLines ? paymentOpen.splitLines : cart} activeTable={activeTable} activeCustomer={activeCustomer} auth={auth}
         onCancel={() => setPaymentOpen(false)}
         onComplete={(data) => {
+          const po = paymentOpen
           setPaymentOpen(false)
           setReceipt(data)
-          setCart([])
-          setActiveTable(null)
+          if(typeof po==='object' && po.splitLines && po.onSplitPaid) {
+            po.onSplitPaid(po.splitLines.map(l=>l.lineId))
+          } else {
+            setCart([])
+            setActiveTable(null)
+          }
           posData.refresh()
         }}/>
       <ReceiptToast data={receipt} onClose={() => setReceipt(null)}/>
