@@ -496,6 +496,15 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         fursZoi,
       })
 
+      // Odštej zalogo za simple artikle
+      try {
+        for (const line of cart) {
+          if (line.item_type !== 'recipe' && line.stock !== null) {
+            const newStock = Math.max(0, (line.stock || 0) - line.qty)
+            await createClient().from('items').update({ stock: newStock }).eq('id', line.id)
+          }
+        }
+      } catch(stockErr) { console.warn('Zaloga odštevanje ni uspelo:', stockErr) }
       // Odštej surovine za recipe artikle
       try {
         for (const line of cart) {
