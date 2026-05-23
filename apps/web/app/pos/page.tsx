@@ -3757,7 +3757,8 @@ function OrdersScreen({ posData, auth }) {
       q = q.gte('closed_at', fromDate.toISOString()).lte('closed_at', toDate.toISOString())
     }
 
-    const { data } = await q
+    const { data, error } = await q
+    console.log('ORDERS DEBUG:', { data, error, period, fromDate: fromDate?.toISOString(), toDate: toDate?.toISOString() })
     setOrders(data || [])
     setLoading(false)
   }
