@@ -3747,7 +3747,7 @@ function OrdersScreen({ posData, auth }) {
 
     let q = sb
       .from('orders')
-      .select('*, payments(method, amount, furs_zoi, furs_eor, paid_at), spaces(name)')
+      .select('*, payments(method, amount, furs_zoi, furs_eor, paid_at), tables(name, space_id)')
       .eq('business_id', BUSINESS_ID)
       .eq('status', 'paid')
       .order('closed_at', { ascending: false })
@@ -3855,7 +3855,7 @@ function OrdersScreen({ posData, auth }) {
                     <span style={{ fontSize:10, padding:'2px 6px', borderRadius:4, background:T.chipBg, color:T.muted, fontWeight:600 }}>
                       {METHOD_LABELS[payment?.method] || '—'}
                     </span>
-                    {o.spaces?.name && <span style={{ fontSize:10, color:T.muted }}>{o.spaces.name}</span>}
+                    {o.tables?.name && <span style={{ fontSize:10, color:T.muted }}>{o.spaces.name}</span>}
                   </div>
                   <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>
                     {new Date(o.closed_at).toLocaleString('sl-SI')}
