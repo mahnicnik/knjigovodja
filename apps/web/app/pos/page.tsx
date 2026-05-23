@@ -1177,9 +1177,9 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
                     <input type="checkbox" checked={checked && !alreadyPaid} disabled={alreadyPaid} readOnly style={{ accentColor:T.accent, width:16, height:16 }}/>
                     <div style={{ flex:1 }}>
                       <div style={{ fontWeight:600, fontSize:13 }}>{line.name}</div>
-                      {line.qty > 1 && <div style={{ fontSize:11, color:T.muted }}>{line.qty}× {eur(line.unitPrice)}</div>}
+                      {line.qty > 1 && <div style={{ fontSize:11, color:T.muted }}>{line.qty}× {eur(line.price)}</div>}
                     </div>
-                    <div style={{ fontWeight:700, fontSize:13 }}>{eur(line.unitPrice * line.qty)}</div>
+                    <div style={{ fontWeight:700, fontSize:13 }}>{eur(line.price * line.qty)}</div>
                     {alreadyPaid && <span style={{ fontSize:10, color:T.accent, fontWeight:700 }}>✓</span>}
                   </div>
                 )
@@ -1187,7 +1187,7 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
             </div>
             {(() => {
               const selectedLines = cart.filter(l => !splitPaid.includes(l.lineId) && splitSelected[l.lineId] !== false)
-              const selectedTotal = selectedLines.reduce((s,l)=>s+l.unitPrice*l.qty,0)
+              const selectedTotal = selectedLines.reduce((s,l)=>s+l.price*l.qty,0)
               const remaining = cart.filter(l => !splitPaid.includes(l.lineId) && splitSelected[l.lineId] === false)
               return (
                 <div>
@@ -1197,7 +1197,7 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
                   </div>
                   {remaining.length > 0 && (
                     <div style={{ fontSize:12, color:T.muted, marginBottom:12, textAlign:'center' }}>
-                      Preostalo po plačilu: {eur(remaining.reduce((s,l)=>s+l.unitPrice*l.qty,0))}
+                      Preostalo po plačilu: {eur(remaining.reduce((s,l)=>s+l.price*l.qty,0))}
                     </div>
                   )}
                   <div style={{ display:'flex', gap:8 }}>
@@ -6378,7 +6378,7 @@ function KlasikApp() {
         </div>
       </div>
 
-      <PaymentModal open={paymentOpen} total={typeof paymentOpen==='object'&&paymentOpen.splitLines ? paymentOpen.splitLines.reduce((s,l)=>s+l.unitPrice*l.qty,0)*(1-(paymentOpen.discount||0)/100) : totals.total} cart={typeof paymentOpen==='object'&&paymentOpen.splitLines ? paymentOpen.splitLines : cart} activeTable={activeTable} activeCustomer={activeCustomer} auth={auth}
+      <PaymentModal open={paymentOpen} total={typeof paymentOpen==='object'&&paymentOpen.splitLines ? paymentOpen.splitLines.reduce((s,l)=>s+l.price*l.qty,0)*(1-(paymentOpen.discount||0)/100) : totals.total} cart={typeof paymentOpen==='object'&&paymentOpen.splitLines ? paymentOpen.splitLines : cart} activeTable={activeTable} activeCustomer={activeCustomer} auth={auth}
         onCancel={() => setPaymentOpen(false)}
         onComplete={(data) => {
           const po = paymentOpen
