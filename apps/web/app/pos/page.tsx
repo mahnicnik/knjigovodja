@@ -2721,6 +2721,8 @@ function InventoryScreen({ posData }) {
   const [salesData, setSalesData] = useState({})
   const [priceHistory, setPriceHistory] = useState({})
   const [dobavnicaModal, setDobavnicaModal] = useState(false)
+  const [deliveries, setDeliveries] = useState([])
+  const [deliveriesLoaded, setDeliveriesLoaded] = useState(false)
   const [editModal, setEditModal] = useState(null)
   const [editSaving, setEditSaving] = useState(false)
   const [itemModal, setItemModal] = useState(null)
