@@ -5806,9 +5806,8 @@ const btnS = { background:'#fff', color:'#666', border:'0.5px solid rgba(0,0,0,0
 // ================================================================
 // BELL NOTIFICATIONS
 // ================================================================
-function BellNotifications({ notifications, notifOpen, setNotifOpen, posData }) {
+function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, orderListOpen, setOrderListOpen }) {
   const unread = notifications.filter(n => !n.read && !n.dismissed)
-  const [orderListOpen, setOrderListOpen] = useState(false)
   const lowItems = posData.items.filter(i => i.stock !== null && i.low_stock > 0 && i.stock <= i.low_stock)
   const lowIngr = posData.ingredients.filter(i => i.stock_qty !== null && i.stock_qty <= (i.min_stock||0) && i.min_stock > 0)
   const sevColor = { danger:T.danger, warning:T.warn, info:T.accent }
@@ -5874,7 +5873,6 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData }) 
           </div>
         </>
       )}
-      {orderListOpen && <OrderListModal posData={posData} onClose={()=>setOrderListOpen(false)}/>}
     </div>
   )
 }
@@ -6186,6 +6184,7 @@ function KlasikApp() {
   const [receipt, setReceipt] = useState(null)
   const [now, setNow] = useState(new Date())
   const [notifOpen, setNotifOpen] = useState(false)
+  const [orderListOpen, setOrderListOpen] = useState(false)
   const [sellPackageModal, setSellPackageModal] = useState(null)
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 30000); return () => clearInterval(t) }, [])
@@ -6239,7 +6238,8 @@ function KlasikApp() {
             </div>
           </div>
           {activePremise && <div style={{ fontSize:10, fontWeight:700, color:'#e9b949', background:'rgba(233,185,73,0.15)', padding:'4px 8px', borderRadius:6, letterSpacing:'0.04em' }}>📍 {activePremise.premise_id}</div>}
-          <BellNotifications notifications={posData.notifications} notifOpen={notifOpen} setNotifOpen={setNotifOpen} posData={posData} />
+          <BellNotifications notifications={posData.notifications} notifOpen={notifOpen} setNotifOpen={setNotifOpen} posData={posData} orderListOpen={orderListOpen} setOrderListOpen={setOrderListOpen}/>
+          {orderListOpen && <OrderListModal posData={posData} onClose={()=>setOrderListOpen(false)}/>}
           <UserAvatar user={auth.user} onLock={auth.lock}/>
         </div>
       </div>
