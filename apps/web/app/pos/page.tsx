@@ -3758,7 +3758,6 @@ function OrdersScreen({ posData, auth }) {
     }
 
     const { data, error } = await q
-    console.log('ORDERS DEBUG:', { data, error, period, fromDate: fromDate?.toISOString(), toDate: toDate?.toISOString() })
     setOrders(data || [])
     setLoading(false)
   }
