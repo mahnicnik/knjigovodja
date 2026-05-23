@@ -5897,7 +5897,7 @@ function OrderListModal({ posData, onClose }) {
               </tr></thead>
               <tbody>{low.map((it,i)=>(
                 <tr key={it.id} style={{ background:i%2?T.surface2:T.surface, borderBottom:'1px solid '+T.lineSoft }}>
-                  <td style={{ padding:'8px 10px', fontWeight:600, fontSize:13 }}>{it.name}</td>
+                  <td style={{ padding:'8px 10px', fontWeight:600, fontSize:13, color:T.ink }}>{it.name}</td>
                   <td style={{ padding:'8px 10px', textAlign:'right', color:it.stock===0?T.danger:T.warn, fontWeight:700 }}>{it.stock} {it.unit||'kos'}</td>
                   <td style={{ padding:'8px 10px', textAlign:'right', color:T.muted, fontSize:12 }}>{it.low_stock}</td>
                   <td style={{ padding:'8px 10px', textAlign:'right', fontWeight:700, color:T.danger }}>{it.low_stock - it.stock} {it.unit||'kos'}</td>
