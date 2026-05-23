@@ -2758,6 +2758,19 @@ function InventoryScreen({ posData }) {
         if (item) map[item.id] = (map[item.id]||0) + Number(l.qty||1)
       })
       setSalesData(map)
+        {!!itemModal && (
+          <Modal open onClose={()=>setItemModal(null)} width={520}>
+            <ModalHeader title={itemModal?.id?'Uredi artikel':'Nov artikel'} onClose={()=>setItemModal(null)}/>
+            <div style={{ padding:'20px 22px', display:'flex', flexDirection:'column', gap:12, maxHeight:'72vh', overflowY:'auto' }}>
+              <Field label="Tip artikla *">
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:6 }}>
+                  {[
+                    { id:'simple', label:'Enostaven', desc:'Pivo, vstopnina, kava', icon:'🛍️' },
+                    { id:'recipe', label:'Z normativom', desc:'Točeno vino, koktajl', icon:'🧪' },
+                    { id:'ingredient', label:'Surovina', desc:'Vino 1L, moka 1kg', icon:'📦' },
+                  ].map(t=>{
+                    const sel = (itemModal?.item_type||'simple') === t.id
+                    return (
         {!!editModal && (
           <Modal open onClose={()=>setEditModal(null)} width={440}>
             <ModalHeader title={'Uredi: '+editModal.name} onClose={()=>setEditModal(null)}/>
@@ -2793,19 +2806,6 @@ function InventoryScreen({ posData }) {
             {invToast.msg}
           </div>
         )}
-        {!!itemModal && (
-          <Modal open onClose={()=>setItemModal(null)} width={520}>
-            <ModalHeader title={itemModal?.id?'Uredi artikel':'Nov artikel'} onClose={()=>setItemModal(null)}/>
-            <div style={{ padding:'20px 22px', display:'flex', flexDirection:'column', gap:12, maxHeight:'72vh', overflowY:'auto' }}>
-              <Field label="Tip artikla *">
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:6 }}>
-                  {[
-                    { id:'simple', label:'Enostaven', desc:'Pivo, vstopnina, kava', icon:'🛍️' },
-                    { id:'recipe', label:'Z normativom', desc:'Točeno vino, koktajl', icon:'🧪' },
-                    { id:'ingredient', label:'Surovina', desc:'Vino 1L, moka 1kg', icon:'📦' },
-                  ].map(t=>{
-                    const sel = (itemModal?.item_type||'simple') === t.id
-                    return (
                       <div key={t.id} onClick={()=>setItemModal(p=>({...p,item_type:t.id}))} style={{ padding:'10px 8px', borderRadius:9, border:'2px solid '+(sel?T.accent:T.line), cursor:'pointer', textAlign:'center', background:sel?T.accentSoft:T.surface }}>
                         <div style={{ fontSize:20 }}>{t.icon}</div>
                         <div style={{ fontSize:12, fontWeight:700, color:sel?T.accent:T.ink, marginTop:4 }}>{t.label}</div>
