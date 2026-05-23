@@ -2712,6 +2712,8 @@ function InventoryScreen({ posData }) {
   const [salesData, setSalesData] = useState({})
   const [priceHistory, setPriceHistory] = useState({})
   const [dobavnicaModal, setDobavnicaModal] = useState(false)
+  const [editModal, setEditModal] = useState(null)
+  const [editSaving, setEditSaving] = useState(false)
   const [itemModal, setItemModal] = useState(null)
   const [saving, setSaving] = useState(false)
   const [invToast, setInvToast] = useState(null)
@@ -2925,6 +2927,24 @@ function InventoryScreen({ posData }) {
     await createClient().from('items').update({archived:true}).eq('id',id)
     posData.refresh(); showInvToast('Artikel izbrisan')
   }
+  async function saveEdit() {
+    if (!editModal) return
+    setEditSaving(true)
+    try {
+      await createClient().from('items').update({
+        name: editModal.name || undefined,
+        price: editModal.price !== '' ? Number(editModal.price) : undefined,
+        stock: editModal.stock !== '' ? Number(editModal.stock) : null,
+        low_stock: editModal.min_stock !== '' ? Number(editModal.min_stock) : null,
+        cost_price: editModal.cost_price !== '' ? Number(editModal.cost_price) : null,
+      }).eq('id', editModal.id)
+      posData.refresh(); setEditModal(null)
+      setInvToast({msg:'Artikel posodobljen',ok:true}); setTimeout(()=>setInvToast(null),3000)
+    } catch(e) {
+      setInvToast({msg:e.message,ok:false}); setTimeout(()=>setInvToast(null),3000)
+    }
+    setEditSaving(false)
+  }
   async function exportInventory(items, ingredients) {
     const XLSX = await import('xlsx')
     const date = new Date().toLocaleDateString('sl-SI').replace(/\./g,'-')
@@ -3044,8 +3064,8 @@ function InventoryScreen({ posData }) {
                     </td>
                     <td style={{ padding:'10px 12px', textAlign:'center' }}>
                       <div style={{ display:'flex', gap:4, justifyContent:'center' }}>
-                        <button onClick={async()=>{const q=prompt(`Nova zaloga za ${it.name}:`,it.stock);if(q!==null)await createClient().from('items').update({stock:Number(q)}).eq('id',it.id).then(()=>posData.refresh())}}
-                          style={{ width:28, height:28, borderRadius:7, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center' }}>+</button>
+                        <button onClick={()=>setEditModal({ id:it.id, name:it.name, price:it.price??'', stock:it.stock??'', min_stock:it.low_stock??'', cost_price:it.cost_price??'' })}
+                          style={{ width:28, height:28, borderRadius:7, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center' }}>✏️</button>
                         <button onClick={()=>setSelectedItem(selectedItem?.id===it.id?null:it)}
                           style={{ width:28, height:28, borderRadius:7, border:'1px solid '+(selectedItem?.id===it.id?T.accent:T.line), background:selectedItem?.id===it.id?T.accentSoft:T.surface, cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', justifyContent:'center' }}>📊</button>
                       </div>
@@ -3177,6 +3197,41 @@ function InventoryScreen({ posData }) {
           </div>
         </div>
       )}
+        {!!editModal && (
+          <Modal open onClose={()=>setEditModal(null)} width={440}>
+            <ModalHeader title={'Uredi: '+editModal.name} onClose={()=>setEditModal(null)}/>
+            <div style={{ padding:'20px 22px', display:'flex', flexDirection:'column', gap:12 }}>
+              <Field label="Naziv artikla">
+                <input value={editModal.name||''} onChange={e=>setEditModal(p=>({...p,name:e.target.value}))} style={{ width:'100%', padding:'8px 10px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13, background:T.inputBg, outline:'none', boxSizing:'border-box' }}/>
+              </Field>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                <Field label="Prodajna cena (EUR)">
+                  <input type="number" min="0" step="0.01" value={editModal.price??''} onChange={e=>setEditModal(p=>({...p,price:e.target.value}))} style={{ width:'100%', padding:'8px 10px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13, background:T.inputBg, outline:'none', boxSizing:'border-box' }}/>
+                </Field>
+                <Field label="Nabavna cena (EUR)">
+                  <input type="number" min="0" step="0.0001" value={editModal.cost_price??''} onChange={e=>setEditModal(p=>({...p,cost_price:e.target.value}))} style={{ width:'100%', padding:'8px 10px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13, background:T.inputBg, outline:'none', boxSizing:'border-box' }}/>
+                </Field>
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                <Field label="Zaloga">
+                  <input type="number" min="0" value={editModal.stock??''} onChange={e=>setEditModal(p=>({...p,stock:e.target.value}))} placeholder="prazno = neomejeno" style={{ width:'100%', padding:'8px 10px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13, background:T.inputBg, outline:'none', boxSizing:'border-box' }}/>
+                </Field>
+                <Field label="Min. zaloga">
+                  <input type="number" min="0" value={editModal.min_stock??''} onChange={e=>setEditModal(p=>({...p,min_stock:e.target.value}))} placeholder="npr. 20" style={{ width:'100%', padding:'8px 10px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13, background:T.inputBg, outline:'none', boxSizing:'border-box' }}/>
+                </Field>
+              </div>
+              <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:4 }}>
+                <button onClick={()=>setEditModal(null)} style={{ padding:'8px 16px', borderRadius:8, border:'1px solid '+T.line, background:'transparent', cursor:'pointer', fontFamily:'inherit', fontSize:13 }}>Prekliči</button>
+                <button onClick={saveEdit} disabled={editSaving} style={{ padding:'8px 18px', borderRadius:8, border:'none', background:T.accent, color:'#fff', cursor:'pointer', fontFamily:'inherit', fontSize:13, fontWeight:700, opacity:editSaving?0.7:1 }}>{editSaving?'Shranjujem...':'Shrani'}</button>
+              </div>
+            </div>
+          </Modal>
+        )}
+        {invToast && (
+          <div style={{ position:'fixed', bottom:24, left:'50%', transform:'translateX(-50%)', background:invToast.ok?T.accent:T.danger, color:'#fff', padding:'10px 22px', borderRadius:10, fontWeight:600, fontSize:14, zIndex:9999, boxShadow:'0 4px 20px rgba(0,0,0,0.18)' }}>
+            {invToast.msg}
+          </div>
+        )}
     </div>
   )
 }
