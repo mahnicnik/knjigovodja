@@ -3718,26 +3718,46 @@ function OrdersScreen({ posData, auth }) {
   const [orderPayment, setOrderPayment] = useState(null)
   const [period, setPeriod] = useState('today')
   const [search, setSearch] = useState('')
+  const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate()-30); return d.toISOString().slice(0,10) })
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0,10))
 
   const METHOD_LABELS = { cash:'Gotovina', card:'Kartica', bon:'Bon', prep:'Predplačilo', split:'Deljeno' }
 
   async function loadOrders() {
     setLoading(true)
     const sb = createClient()
-    let from = new Date()
-    if (period === 'today') { from.setHours(0,0,0,0); from = new Date(from.getTime() - 60*60*1000) }
-    else if (period === 'week') { from.setDate(from.getDate()-7) }
-    else if (period === 'month') { from.setDate(1); from.setHours(0,0,0,0) }
-    else { from = new Date('2020-01-01') }
+    let fromDate, toDate
+    const now = new Date()
+    if (period === 'today') {
+      fromDate = new Date(); fromDate.setHours(0,0,0,0)
+      toDate = new Date(); toDate.setHours(23,59,59,999)
+    } else if (period === 'week') {
+      fromDate = new Date(); fromDate.setDate(now.getDate()-7); fromDate.setHours(0,0,0,0)
+      toDate = new Date(); toDate.setHours(23,59,59,999)
+    } else if (period === 'month') {
+      fromDate = new Date(); fromDate.setDate(1); fromDate.setHours(0,0,0,0)
+      toDate = new Date(); toDate.setHours(23,59,59,999)
+    } else if (period === 'custom') {
+      fromDate = new Date(dateFrom + 'T00:00:00')
+      toDate = new Date(dateTo + 'T23:59:59')
+    } else {
+      fromDate = new Date('2020-01-01')
+      toDate = new Date()
+    }
 
-    const { data } = await sb
+    let q = sb
       .from('orders')
       .select('*, payments(method, amount, furs_zoi, furs_eor, paid_at), spaces(name)')
       .eq('business_id', BUSINESS_ID)
       .eq('status', 'paid')
-      .gte('closed_at', from.toISOString())
       .order('closed_at', { ascending: false })
-      .limit(200)
+      .limit(500)
+
+    if (period !== 'all') {
+      q = q.gte('closed_at', fromDate.toISOString()).lte('closed_at', toDate.toISOString())
+    }
+
+    const { data } = await q
     setOrders(data || [])
     setLoading(false)
   }
@@ -3750,7 +3770,7 @@ function OrdersScreen({ posData, auth }) {
     setOrderPayment(order.payments?.[0] || null)
   }
 
-  useEffect(() => { loadOrders() }, [period])
+  useEffect(() => { if(period !== 'custom') loadOrders() }, [period])
 
   const filtered = orders.filter(o =>
     !search || String(o.number).includes(search) ||
@@ -3796,12 +3816,22 @@ function OrdersScreen({ posData, auth }) {
         {/* Header */}
         <div style={{ padding:'16px 20px', borderBottom:'1px solid '+T.line, display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
           <div style={{ fontWeight:700, fontSize:16 }}>Računi</div>
-          <div style={{ display:'flex', gap:4, marginLeft:'auto' }}>
-            {[['today','Danes'],['week','Teden'],['month','Mesec'],['all','Vse']].map(([id,lbl])=>(
-              <button key={id} onClick={()=>setPeriod(id)} style={{ padding:'5px 12px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, background:period===id?T.accent:'transparent', color:period===id?'#fff':T.muted }}>
+          <div style={{ display:'flex', gap:4, alignItems:'center', flexWrap:'wrap' }}>
+            {[['today','Danes'],['week','Teden'],['month','Mesec'],['custom','Po meri'],['all','Vse']].map(([id,lbl])=>(
+              <button key={id} onClick={()=>{setPeriod(id)}} style={{ padding:'5px 10px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, background:period===id?T.accent:'transparent', color:period===id?'#fff':T.muted }}>
                 {lbl}
               </button>
             ))}
+            {period==='custom' && (
+              <div style={{ display:'flex', gap:6, alignItems:'center', marginLeft:4 }}>
+                <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
+                  style={{ padding:'4px 8px', borderRadius:7, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:12, background:T.inputBg, outline:'none' }}/>
+                <span style={{ color:T.muted, fontSize:12 }}>—</span>
+                <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
+                  style={{ padding:'4px 8px', borderRadius:7, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:12, background:T.inputBg, outline:'none' }}/>
+                <button onClick={loadOrders} style={{ padding:'4px 10px', borderRadius:7, border:'none', background:T.accent, color:'#fff', cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:700 }}>Išči</button>
+              </div>
+            )}
           </div>
         </div>
         <div style={{ padding:'10px 16px', borderBottom:'1px solid '+T.line, display:'flex', gap:10, alignItems:'center' }}>
