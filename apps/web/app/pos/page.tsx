@@ -3725,7 +3725,7 @@ function OrdersScreen({ posData, auth }) {
     setLoading(true)
     const sb = createClient()
     let from = new Date()
-    if (period === 'today') { from.setHours(0,0,0,0) }
+    if (period === 'today') { from.setHours(0,0,0,0); from = new Date(from.getTime() - 60*60*1000) }
     else if (period === 'week') { from.setDate(from.getDate()-7) }
     else if (period === 'month') { from.setDate(1); from.setHours(0,0,0,0) }
     else { from = new Date('2020-01-01') }
