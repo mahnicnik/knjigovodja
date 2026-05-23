@@ -430,6 +430,7 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
 
   useEffect(() => {
     if (!open) { setMethod('cash'); setTipPct(0); setGiven(''); setDiscount(0); setFurs(true); setError(null); setProcessing(false) }
+    if (open && typeof open === 'object' && open.discount) { setDiscount(open.discount) }
   }, [open])
 
   const finalTotal = (total - total * discount / 100) + total * tipPct / 100
@@ -936,6 +937,7 @@ function FloorScreen({ spaces, setActiveTable, setScreen }) {
 // SALE SCREEN — real DB kategorije + artikli
 // ================================================================
 function SaleScreen({ activeTable, activeCustomer, cart, setCart, addItem, adjustQty, setPaymentOpen, totals, setActiveCustomer, posData, happyHourActive, setHappyHourActive }) {
+  const [cartDiscount, setCartDiscount] = useState(0)
   const [selectedCat, setSelectedCat] = useState('cat-fav')
   const [search, setSearch] = useState('')
   const [scanModal, setScanModal] = useState(false)
@@ -1021,7 +1023,7 @@ function SaleScreen({ activeTable, activeCustomer, cart, setCart, addItem, adjus
       </div>
 
       {/* Košarica */}
-      <SaleCart cart={cart} setCart={setCart} adjustQty={adjustQty} activeTable={activeTable} activeCustomer={activeCustomer} setPaymentOpen={setPaymentOpen} totals={totals} setActiveCustomer={setActiveCustomer} customers={posData.customers}/>
+      <SaleCart cart={cart} setCart={setCart} adjustQty={adjustQty} activeTable={activeTable} activeCustomer={activeCustomer} setPaymentOpen={setPaymentOpen} totals={totals} setActiveCustomer={setActiveCustomer} customers={posData.customers} cartDiscount={cartDiscount} setCartDiscount={setCartDiscount}/>
 
       {/* Scan placeholder */}
       <Modal open={scanModal} onClose={() => setScanModal(false)} width={380}>
@@ -1036,7 +1038,11 @@ function SaleScreen({ activeTable, activeCustomer, cart, setCart, addItem, adjus
   )
 }
 
-function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPaymentOpen, totals, setActiveCustomer, customers }) {
+function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPaymentOpen, totals, setActiveCustomer, customers, cartDiscount, setCartDiscount }) {
+  const [discountOpen, setDiscountOpen] = useState(false)
+  const [discountInput, setDiscountInput] = useState('')
+  const [splitOpen, setSplitOpen] = useState(false)
+  const [splitParts, setSplitParts] = useState(2)
   const [pickCustomer, setPickCustomer] = useState(false)
   const [custSearch, setCustSearch] = useState('')
 
@@ -1095,10 +1101,10 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
           <button onClick={() => setPickCustomer(true)} style={{ flex:1, padding:'8px 4px', borderRadius:7, background:T.chipBg, border:'none', cursor:'pointer', color:T.ink, fontFamily:'inherit', display:'flex', flexDirection:'column', alignItems:'center', gap:3, fontSize:10, fontWeight:700 }}>
             <KI name="user" size={14}/>Stranka
           </button>
-          <button style={{ flex:1, padding:'8px 4px', borderRadius:7, background:T.chipBg, border:'none', cursor:'pointer', color:T.muted, fontFamily:'inherit', display:'flex', flexDirection:'column', alignItems:'center', gap:3, fontSize:10, fontWeight:700 }}>
-            <KI name="percent" size={14}/>Popust
+          <button onClick={()=>{setDiscountInput(cartDiscount>0?String(cartDiscount):'');setDiscountOpen(true)}} style={{ flex:1, padding:'8px 4px', borderRadius:7, background:cartDiscount>0?T.accentSoft:T.chipBg, border:'none', cursor:'pointer', color:cartDiscount>0?T.accent:T.muted, fontFamily:'inherit', display:'flex', flexDirection:'column', alignItems:'center', gap:3, fontSize:10, fontWeight:700 }}>
+            <KI name="percent" size={14}/>{cartDiscount>0?`-${cartDiscount}%`:'Popust'}
           </button>
-          <button style={{ flex:1, padding:'8px 4px', borderRadius:7, background:T.chipBg, border:'none', cursor:'pointer', color:T.muted, fontFamily:'inherit', display:'flex', flexDirection:'column', alignItems:'center', gap:3, fontSize:10, fontWeight:700 }}>
+          <button onClick={()=>setSplitOpen(true)} style={{ flex:1, padding:'8px 4px', borderRadius:7, background:T.chipBg, border:'none', cursor:'pointer', color:T.muted, fontFamily:'inherit', display:'flex', flexDirection:'column', alignItems:'center', gap:3, fontSize:10, fontWeight:700 }}>
             <KI name="split" size={14}/>Razdeli
           </button>
         </div>
@@ -1117,15 +1123,62 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
         <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:10, color:T.muted }}>
           <span>DDV 22%</span><span>{eur(totals.ddv)}</span>
         </div>
+        {cartDiscount>0 && (
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:4, color:T.accent }}>
+            <span>Popust {cartDiscount}%</span><span>-{eur(totals.total*cartDiscount/100)}</span>
+          </div>
+        )}
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline' }}>
           <div style={{ fontWeight:700, fontSize:14 }}>Skupaj</div>
           <div style={{ fontWeight:800, fontSize:26, fontVariantNumeric:'tabular-nums', letterSpacing:'-0.02em' }}>{eur(totals.total)}</div>
         </div>
-        <button disabled={cart.length===0} onClick={() => setPaymentOpen(true)} style={{ width:'100%', marginTop:12, padding:'13px', borderRadius:9, cursor: cart.length ? 'pointer' : 'not-allowed', fontFamily:'inherit', border:'none', background: cart.length ? T.accent : '#ccc', color:'#fff', fontWeight:800, fontSize:15, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-          <KI name="arrow" size={16} strokeWidth={2.2}/> Plačaj {cart.length > 0 ? eur(totals.total) : ''}
+        <button disabled={cart.length===0} onClick={() => setPaymentOpen({ discount: cartDiscount })} style={{ width:'100%', marginTop:12, padding:'13px', borderRadius:9, cursor: cart.length ? 'pointer' : 'not-allowed', fontFamily:'inherit', border:'none', background: cart.length ? T.accent : '#ccc', color:'#fff', fontWeight:800, fontSize:15, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+          <KI name="arrow" size={16} strokeWidth={2.2}/> Plačaj {cart.length > 0 ? eur(totals.total*(1-cartDiscount/100)) : ''}
         </button>
       </div>
 
+      {discountOpen && (
+        <Modal open onClose={()=>setDiscountOpen(false)} width={320}>
+          <ModalHeader title="Popust na račun" onClose={()=>setDiscountOpen(false)}/>
+          <div style={{ padding:'20px 22px' }}>
+            <div style={{ fontSize:13, color:T.muted, marginBottom:12 }}>Vnesi % popust na celoten račun</div>
+            <div style={{ display:'flex', gap:8, marginBottom:16 }}>
+              {[5,10,15,20,25].map(p=>(
+                <button key={p} onClick={()=>setDiscountInput(String(p))} style={{ flex:1, padding:'8px 4px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:13, background:discountInput===String(p)?T.accentSoft:T.chipBg, color:discountInput===String(p)?T.accent:T.ink }}>
+                  {p}%
+                </button>
+              ))}
+            </div>
+            <input type="number" min="0" max="100" value={discountInput} onChange={e=>setDiscountInput(e.target.value)}
+              placeholder="Ali vnesi ročno..." style={{ width:'100%', padding:'10px 12px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:14, background:T.inputBg, outline:'none', boxSizing:'border-box', marginBottom:12 }}/>
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={()=>{setCartDiscount(0);setDiscountOpen(false)}} style={{ flex:1, padding:'10px', borderRadius:8, border:'1px solid '+T.line, background:'transparent', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:13 }}>Odstrani</button>
+              <button onClick={()=>{setCartDiscount(Number(discountInput)||0);setDiscountOpen(false)}} style={{ flex:1, padding:'10px', borderRadius:8, border:'none', background:T.accent, color:'#fff', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:13 }}>Potrdi</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {splitOpen && (
+        <Modal open onClose={()=>setSplitOpen(false)} width={360}>
+          <ModalHeader title="Razdeli račun" onClose={()=>setSplitOpen(false)}/>
+          <div style={{ padding:'20px 22px' }}>
+            <div style={{ fontSize:13, color:T.muted, marginBottom:16 }}>Razdeli skupni znesek med osebe</div>
+            <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20, justifyContent:'center' }}>
+              <button onClick={()=>setSplitParts(p=>Math.max(2,p-1))} style={{ width:36, height:36, borderRadius:8, border:'1px solid '+T.line, background:T.chipBg, cursor:'pointer', fontFamily:'inherit', fontSize:18, fontWeight:700 }}>−</button>
+              <div style={{ fontSize:32, fontWeight:800, minWidth:60, textAlign:'center' }}>{splitParts}</div>
+              <button onClick={()=>setSplitParts(p=>Math.min(20,p+1))} style={{ width:36, height:36, borderRadius:8, border:'1px solid '+T.line, background:T.chipBg, cursor:'pointer', fontFamily:'inherit', fontSize:18, fontWeight:700 }}>+</button>
+            </div>
+            <div style={{ background:T.accentSoft, borderRadius:10, padding:'14px 16px', textAlign:'center', marginBottom:16 }}>
+              <div style={{ fontSize:12, color:T.muted, marginBottom:4 }}>Vsaka oseba plača</div>
+              <div style={{ fontSize:28, fontWeight:800, color:T.accent, fontVariantNumeric:'tabular-nums' }}>{eur(totals.total*(1-cartDiscount/100)/splitParts)}</div>
+            </div>
+            <div style={{ fontSize:12, color:T.muted, textAlign:'center', marginBottom:16 }}>
+              Skupaj: {eur(totals.total*(1-cartDiscount/100))} · {splitParts} osebe
+            </div>
+            <button onClick={()=>setSplitOpen(false)} style={{ width:'100%', padding:'11px', borderRadius:8, border:'none', background:T.accent, color:'#fff', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:14 }}>Zapri</button>
+          </div>
+        </Modal>
+      )}
       {pickCustomer && (
         <Modal open onClose={() => { setPickCustomer(false); setCustSearch('') }}>
           <ModalHeader title="Izberi stranko" onClose={() => { setPickCustomer(false); setCustSearch('') }}/>
