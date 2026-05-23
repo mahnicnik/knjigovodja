@@ -2723,6 +2723,8 @@ function InventoryScreen({ posData }) {
   const [dobavnicaModal, setDobavnicaModal] = useState(false)
   const [deliveries, setDeliveries] = useState([])
   const [deliveriesLoaded, setDeliveriesLoaded] = useState(false)
+  const [selectedDelivery, setSelectedDelivery] = useState(null)
+  const [deliveryLines, setDeliveryLines] = useState([])
   const [editModal, setEditModal] = useState(null)
   const [editSaving, setEditSaving] = useState(false)
   const [itemModal, setItemModal] = useState(null)
@@ -2769,42 +2771,6 @@ function InventoryScreen({ posData }) {
         if (item) map[item.id] = (map[item.id]||0) + Number(l.qty||1)
       })
       setSalesData(map)
-        {!!selectedDelivery && (
-          <Modal open onClose={()=>setSelectedDelivery(null)} width={700}>
-            <ModalHeader title={(selectedDelivery.supplier||'Dobavnica')+' — '+(selectedDelivery.document_number||'')} onClose={()=>setSelectedDelivery(null)}/>
-            <div style={{ padding:'16px 20px', maxHeight:'75vh', overflowY:'auto' }}>
-              <div style={{ display:'flex', gap:16, marginBottom:16, fontSize:13, color:T.muted }}>
-                <span>Datum: {selectedDelivery.document_date}</span>
-                <span>Skupaj: <b style={{ color:T.ink }}>€{Number(selectedDelivery.total_inc_vat||0).toFixed(2)}</b></span>
-              </div>
-              <table style={{ width:'100%', borderCollapse:'collapse' }}>
-                <thead>
-                  <tr style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:'uppercase' }}>
-                    {['Artikel','EAN','Kolicina','Cena brez DDV','Popust','Neto cena','DDV%','Vrednost'].map((h,i)=>(
-                      <th key={i} style={{ padding:'8px 10px', textAlign:i>=2?'right':'left', borderBottom:'1px solid '+T.line }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {deliveryLines.length===0 ? (
-                    <tr><td colSpan={8} style={{ padding:20, textAlign:'center', color:T.muted }}>Ni vrstic</td></tr>
-                  ) : deliveryLines.map((l,i)=>(
-                    <tr key={l.id} style={{ background:i%2?T.surface2:T.surface, borderBottom:'1px solid '+T.lineSoft }}>
-                      <td style={{ padding:'8px 10px', fontWeight:600, fontSize:13 }}>{l.item_name||'—'}</td>
-                      <td style={{ padding:'8px 10px', fontSize:11, color:T.muted, fontFamily:'monospace' }}>{l.ean||'—'}</td>
-                      <td style={{ padding:'8px 10px', textAlign:'right', fontWeight:700 }}>{l.quantity} {l.unit||'kos'}</td>
-                      <td style={{ padding:'8px 10px', textAlign:'right', fontSize:12 }}>{l.price_ex_vat?'€'+Number(l.price_ex_vat).toFixed(4):'—'}</td>
-                      <td style={{ padding:'8px 10px', textAlign:'right', fontSize:12, color:T.muted }}>{l.discount_pct?Number(l.discount_pct).toFixed(1)+'%':'—'}</td>
-                      <td style={{ padding:'8px 10px', textAlign:'right', fontWeight:600, fontSize:12 }}>{l.net_price_ex_vat?'€'+Number(l.net_price_ex_vat).toFixed(4):'—'}</td>
-                      <td style={{ padding:'8px 10px', textAlign:'right', fontSize:12, color:T.muted }}>{l.vat_rate}%</td>
-                      <td style={{ padding:'8px 10px', textAlign:'right', fontWeight:700, fontSize:13 }}>{l.total_inc_vat?'€'+Number(l.total_inc_vat).toFixed(2):'—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Modal>
-        )}
         {invToast && (
           <div style={{ position:'fixed', bottom:24, left:'50%', transform:'translateX(-50%)', background:invToast.ok?T.accent:T.danger, color:'#fff', padding:'10px 22px', borderRadius:10, fontWeight:600, fontSize:14, zIndex:9999, boxShadow:'0 4px 20px rgba(0,0,0,0.18)' }}>
             {invToast.msg}
@@ -6219,6 +6185,42 @@ export default function PosPage() {
   return (
     <div style={{ width:'100vw', height:'100vh', overflow:'hidden' }}>
       <KlasikApp/>
+        {!!selectedDelivery && (
+          <Modal open onClose={()=>setSelectedDelivery(null)} width={700}>
+            <ModalHeader title={(selectedDelivery.supplier||'Dobavnica')+' — '+(selectedDelivery.document_number||'')} onClose={()=>setSelectedDelivery(null)}/>
+            <div style={{ padding:'16px 20px', maxHeight:'75vh', overflowY:'auto' }}>
+              <div style={{ display:'flex', gap:16, marginBottom:16, fontSize:13, color:T.muted }}>
+                <span>Datum: {selectedDelivery.document_date}</span>
+                <span>Skupaj: <b style={{ color:T.ink }}>€{Number(selectedDelivery.total_inc_vat||0).toFixed(2)}</b></span>
+              </div>
+              <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                <thead>
+                  <tr style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:'uppercase' }}>
+                    {['Artikel','EAN','Kolicina','Cena brez DDV','Popust','Neto cena','DDV%','Vrednost'].map((h,i)=>(
+                      <th key={i} style={{ padding:'8px 10px', textAlign:i>=2?'right':'left', borderBottom:'1px solid '+T.line }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {deliveryLines.length===0 ? (
+                    <tr><td colSpan={8} style={{ padding:20, textAlign:'center', color:T.muted }}>Ni vrstic</td></tr>
+                  ) : deliveryLines.map((l,i)=>(
+                    <tr key={l.id} style={{ background:i%2?T.surface2:T.surface, borderBottom:'1px solid '+T.lineSoft }}>
+                      <td style={{ padding:'8px 10px', fontWeight:600, fontSize:13 }}>{l.item_name||'—'}</td>
+                      <td style={{ padding:'8px 10px', fontSize:11, color:T.muted, fontFamily:'monospace' }}>{l.ean||'—'}</td>
+                      <td style={{ padding:'8px 10px', textAlign:'right', fontWeight:700 }}>{l.quantity} {l.unit||'kos'}</td>
+                      <td style={{ padding:'8px 10px', textAlign:'right', fontSize:12 }}>{l.price_ex_vat?'€'+Number(l.price_ex_vat).toFixed(4):'—'}</td>
+                      <td style={{ padding:'8px 10px', textAlign:'right', fontSize:12, color:T.muted }}>{l.discount_pct?Number(l.discount_pct).toFixed(1)+'%':'—'}</td>
+                      <td style={{ padding:'8px 10px', textAlign:'right', fontWeight:600, fontSize:12 }}>{l.net_price_ex_vat?'€'+Number(l.net_price_ex_vat).toFixed(4):'—'}</td>
+                      <td style={{ padding:'8px 10px', textAlign:'right', fontSize:12, color:T.muted }}>{l.vat_rate}%</td>
+                      <td style={{ padding:'8px 10px', textAlign:'right', fontWeight:700, fontSize:13 }}>{l.total_inc_vat?'€'+Number(l.total_inc_vat).toFixed(2):'—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Modal>
+        )}
     </div>
   )
 }
