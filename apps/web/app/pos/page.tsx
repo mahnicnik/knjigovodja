@@ -3032,7 +3032,7 @@ function InventoryScreen({ posData }) {
             </thead>
             <tbody>
               {items.map((it,idx)=>{
-                const low = it.stock !== null && it.min_stock > 0 && it.stock <= it.min_stock
+                const low = it.stock !== null && it.low_stock > 0 && it.stock <= it.low_stock
                 const zero = it.stock === 0
                 const value = (it.cost_price||0) * (it.stock||0)
                 const m = margin(it)
@@ -3053,7 +3053,7 @@ function InventoryScreen({ posData }) {
                       {it.stock===null?<span style={{ color:T.muted }}>∞</span>:it.stock}
                       <span style={{ fontSize:10, color:T.muted, fontWeight:400, marginLeft:3 }}>{it.unit||'kos'}</span>
                     </td>
-                    <td style={{ padding:'10px 12px', textAlign:'right', color:T.muted, fontSize:12, fontVariantNumeric:'tabular-nums' }}>{it.min_stock||'—'}</td>
+                    <td style={{ padding:'10px 12px', textAlign:'right', color:T.muted, fontSize:12, fontVariantNumeric:'tabular-nums' }}>{it.low_stock||'—'}</td>
                     <td style={{ padding:'10px 12px', textAlign:'right', fontVariantNumeric:'tabular-nums', fontSize:12, color:value>0?T.ink:T.muted }}>{value>0?eur(value):'—'}</td>
                     <td style={{ padding:'10px 12px', textAlign:'right' }}>
                       <span style={{ fontSize:10, fontWeight:700, padding:'3px 8px', borderRadius:5, whiteSpace:'nowrap',
