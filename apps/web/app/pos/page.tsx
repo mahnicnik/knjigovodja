@@ -3044,8 +3044,8 @@ function InventoryScreen({ posData }) {
                     </td>
                     <td style={{ padding:'10px 12px', textAlign:'center' }}>
                       <div style={{ display:'flex', gap:4, justifyContent:'center' }}>
-                        <button onClick={()=>setEditModal({ id:it.id, name:it.name, price:it.price??'', stock:it.stock??'', min_stock:it.low_stock??'', cost_price:it.cost_price??'' })}
-                          style={{ width:28, height:28, borderRadius:7, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center' }}>✏️</button>
+                        <button onClick={async()=>{const q=prompt(`Nova zaloga za ${it.name}:`,it.stock);if(q!==null)await createClient().from('items').update({stock:Number(q)}).eq('id',it.id).then(()=>posData.refresh())}}
+                          style={{ width:28, height:28, borderRadius:7, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center' }}>+</button>
                         <button onClick={()=>setSelectedItem(selectedItem?.id===it.id?null:it)}
                           style={{ width:28, height:28, borderRadius:7, border:'1px solid '+(selectedItem?.id===it.id?T.accent:T.line), background:selectedItem?.id===it.id?T.accentSoft:T.surface, cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', justifyContent:'center' }}>📊</button>
                       </div>
