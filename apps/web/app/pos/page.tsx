@@ -5808,6 +5808,9 @@ const btnS = { background:'#fff', color:'#666', border:'0.5px solid rgba(0,0,0,0
 // ================================================================
 function BellNotifications({ notifications, notifOpen, setNotifOpen, posData }) {
   const unread = notifications.filter(n => !n.read && !n.dismissed)
+  const [orderListOpen, setOrderListOpen] = useState(false)
+  const lowItems = posData.items.filter(i => i.stock !== null && i.low_stock > 0 && i.stock <= i.low_stock)
+  const lowIngr = posData.ingredients.filter(i => i.stock_qty !== null && i.stock_qty <= (i.min_stock||0) && i.min_stock > 0)
   const sevColor = { danger:T.danger, warning:T.warn, info:T.accent }
 
   async function dismiss(id) {
@@ -5859,6 +5862,9 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData }) 
             </div>
             {notifications.length > 0 && (
               <div style={{ padding:'10px 16px', borderTop:'1px solid '+T.line }}>
+                {(lowItems.length + lowIngr.length) > 0 && (
+                  <button onClick={()=>{setOrderListOpen(true);setNotifOpen(false)}} style={{ width:'100%', padding:'8px', borderRadius:8, background:T.accent, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:12, color:'#fff', marginBottom:6 }}>Narocilnica ({lowItems.length + lowIngr.length})</button>
+                )}
                 <button onClick={async()=>{ await createClient().from('pos_notifications').update({dismissed:true}).eq('business_id',BUSINESS_ID); posData.refresh(); setNotifOpen(false) }}
                   style={{ width:'100%', padding:'8px', borderRadius:8, background:T.surface2, border:'1px solid '+T.line, cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:12, color:T.muted }}>
                   Počisti vse
@@ -5869,9 +5875,64 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData }) 
         </>
       )}
     </div>
+      {orderListOpen && <OrderListModal posData={posData} onClose={()=>setOrderListOpen(false)}/>}
   )
 }
 
+// ================================================================
+// ORDER LIST MODAL
+// ================================================================
+function OrderListModal({ posData, onClose }) {
+  const low = posData.items.filter(i => i.stock !== null && i.low_stock > 0 && i.stock <= i.low_stock)
+  const lowI = posData.ingredients.filter(i => i.stock_qty !== null && i.stock_qty <= (i.min_stock||0) && i.min_stock > 0)
+  return (
+    <Modal open onClose={onClose} width={600}>
+      <ModalHeader title="Narocilnica" onClose={onClose}/>
+      <div style={{ padding:'16px 20px', maxHeight:'75vh', overflowY:'auto' }}>
+        <div style={{ fontSize:13, color:T.muted, marginBottom:16 }}>Artikli in surovine pod minimalno zalogo</div>
+        {low.length > 0 && (
+          <div style={{ marginBottom:20 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', marginBottom:8 }}>ARTIKLI</div>
+            <table style={{ width:'100%', borderCollapse:'collapse' }}>
+              <thead><tr style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:'uppercase' }}>
+                {['Artikel','Trenutno','Min','Manjka'].map((h,i)=>(<th key={i} style={{ padding:'8px 10px', textAlign:i>0?'right':'left', borderBottom:'1px solid '+T.line }}>{h}</th>))}
+              </tr></thead>
+              <tbody>{low.map((it,i)=>(
+                <tr key={it.id} style={{ background:i%2?T.surface2:T.surface, borderBottom:'1px solid '+T.lineSoft }}>
+                  <td style={{ padding:'8px 10px', fontWeight:600, fontSize:13 }}>{it.name}</td>
+                  <td style={{ padding:'8px 10px', textAlign:'right', color:it.stock===0?T.danger:T.warn, fontWeight:700 }}>{it.stock} {it.unit||'kos'}</td>
+                  <td style={{ padding:'8px 10px', textAlign:'right', color:T.muted, fontSize:12 }}>{it.low_stock}</td>
+                  <td style={{ padding:'8px 10px', textAlign:'right', fontWeight:700, color:T.danger }}>{it.low_stock - it.stock} {it.unit||'kos'}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+        {lowI.length > 0 && (
+          <div>
+            <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', marginBottom:8 }}>SUROVINE</div>
+            <table style={{ width:'100%', borderCollapse:'collapse' }}>
+              <thead><tr style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:'uppercase' }}>
+                {['Surovina','Trenutno','Min','Manjka'].map((h,i)=>(<th key={i} style={{ padding:'8px 10px', textAlign:i>0?'right':'left', borderBottom:'1px solid '+T.line }}>{h}</th>))}
+              </tr></thead>
+              <tbody>{lowI.map((ig,i)=>(
+                <tr key={ig.id} style={{ background:i%2?T.surface2:T.surface, borderBottom:'1px solid '+T.lineSoft }}>
+                  <td style={{ padding:'8px 10px', fontWeight:600, fontSize:13 }}>{ig.name}</td>
+                  <td style={{ padding:'8px 10px', textAlign:'right', color:ig.stock_qty===0?T.danger:T.warn, fontWeight:700 }}>{ig.stock_qty} {ig.unit||'kos'}</td>
+                  <td style={{ padding:'8px 10px', textAlign:'right', color:T.muted, fontSize:12 }}>{ig.min_stock}</td>
+                  <td style={{ padding:'8px 10px', textAlign:'right', fontWeight:700, color:T.danger }}>{(ig.min_stock||0) - ig.stock_qty} {ig.unit||'kos'}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+        <div style={{ marginTop:16, display:'flex', justifyContent:'flex-end' }}>
+          <button onClick={()=>window.print()} style={{ padding:'8px 18px', borderRadius:8, background:T.accent, border:'none', color:'#fff', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:13 }}>Natisni</button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
 // ================================================================
 // CUSTOMER EDIT BUTTON + MODAL
 // ================================================================
