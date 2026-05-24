@@ -3779,9 +3779,45 @@ function OrdersScreen({ posData, auth }) {
 
   const totalFiltered = filtered.reduce((s,o) => s + Number(o.total||0), 0)
 
-  function printReceipt(order, lines, payment) {
-    const w = window.open('', '_blank', 'width=400,height=600')
+  async function printReceipt(order, lines, payment) {
     const methodLabel = METHOD_LABELS[payment?.method] || payment?.method || '—'
+    
+    // Poskusi lokalni print server
+    try {
+      const res = await fetch('http://localhost:6789/health', { signal: AbortSignal.timeout(1000) })
+      if (res.ok) {
+        // Print server je dostopen - pošlji nanj
+        const printData = {
+          business_name: 'ŠIRM fitness&bar',
+          business_address: 'Poljanska cesta 87, 4224 Gorenja vas',
+          receipt_number: order.number || order.id.slice(-6),
+          date: new Date(order.closed_at).toLocaleString('sl-SI'),
+          items: (lines||[]).map(l => ({ name: l.name, qty: Number(l.qty), unit_price: Number(l.unit_price) })),
+          subtotal: Number(order.subtotal),
+          discount_pct: Number(order.discount_pct||0),
+          discount_amount: Number(order.discount_amount||0),
+          tip: Number(order.tip_amount||0),
+          total: Number(order.total),
+          payment_method: payment?.method,
+          furs_zoi: payment?.furs_zoi,
+          furs_eor: payment?.furs_eor,
+        }
+        const printRes = await fetch('http://localhost:6789/print/receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(printData)
+        })
+        const result = await printRes.json()
+        if (result.ok) return
+        alert('Napaka tiskalnika: ' + result.error)
+        return
+      }
+    } catch (e) {
+      // Print server ni dostopen - fallback na browser print
+    }
+    
+    // Fallback: browser print dialog
+    const w = window.open('', '_blank', 'width=400,height=600')
     w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
     <style>body{font-family:monospace;font-size:12px;margin:20px;max-width:300px}
     .center{text-align:center}.bold{font-weight:bold}.line{border-top:1px dashed #000;margin:8px 0}
