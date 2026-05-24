@@ -635,7 +635,7 @@ function SRow({ label, v, muted }) {
   )
 }
 
-async async function autoPrint(data) {
+async function autoPrint(data) {
   // Poskusi lokalni print server (Star/Epson termalni)
   try {
     const res = await fetch('http://localhost:6789/health', { signal: AbortSignal.timeout(1000) })
