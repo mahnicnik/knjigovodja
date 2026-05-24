@@ -6,6 +6,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { pos, BUSINESS_ID } from '@/lib/pos-client'
+import { buildReceiptHTML } from '@/lib/receipt'
 
 // ================================================================
 // TEMA
@@ -634,19 +635,26 @@ function SRow({ label, v, muted }) {
   )
 }
 
-async function autoPrint(data) {
-  if (!data) return
-  // Poskusi lokalni print server
+async async function autoPrint(data) {
+  // Poskusi lokalni print server (Star/Epson termalni)
   try {
-    const health = await fetch('http://localhost:6789/health', { signal: AbortSignal.timeout(800) })
-    if (health.ok) {
+    const res = await fetch('http://localhost:6789/health', { signal: AbortSignal.timeout(1000) })
+    if (res.ok) {
       const printData = {
-        business_name: 'SIRM fitness&bar',
-        business_address: 'Poljanska cesta 87, 4224 Gorenja vas',
+        business_name: data.org?.name || 'ŠIRM fitness&bar',
+        business_address: [data.org?.address, [data.org?.post_code, data.org?.city].filter(Boolean).join(' ')].filter(Boolean).join(', '),
+        tax_number: data.org?.tax_number || '',
+        vat_id: data.org?.vat_registered ? `SI${data.org.tax_number}` : '',
         receipt_number: data.invoiceNumber || data.orderId?.slice(-6),
+        cashier: data.cashierName || '',
         date: new Date().toLocaleString('sl-SI'),
-        items: data.lines || [],
-        subtotal: data.subtotal || data.total,
+        items: (data.lines||[]).map(l => ({
+          name: l.name,
+          qty: Number(l.qty),
+          unit_price: Number(l.unitPrice||l.unit_price||0),
+          vat_rate: Number(l.vat_rate || 22),
+        })),
+        subtotal: Number(data.subtotal||data.total||0),
         discount_pct: data.discount_pct || 0,
         discount_amount: data.discount_amount || 0,
         tip: data.tip || 0,
@@ -655,38 +663,55 @@ async function autoPrint(data) {
         furs_zoi: data.zoi,
         furs_eor: data.eor,
       }
-      const res = await fetch('http://localhost:6789/print/receipt', {
+      const printRes = await fetch('http://localhost:6789/print/receipt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(printData)
       })
-      if ((await res.json()).ok) return
+      if ((await printRes.json()).ok) return
     }
   } catch(e) {}
-  // Fallback: browser print
-  const w = window.open('', '_blank', 'width=380,height=600')
-  if (!w) return
-  const methodLabels = { cash:'Gotovina', card:'Kartica', bon:'Bon', prep:'Predplacilo' }
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
-  <style>body{font-family:monospace;font-size:12px;margin:16px;max-width:300px}
-  .c{text-align:center}.b{font-weight:bold}.l{border-top:1px dashed #000;margin:6px 0}
-  .r{display:flex;justify-content:space-between}</style></head><body>
-  <div class="c b" style="font-size:15px">SIRM fitness&bar</div>
-  <div class="c">Poljanska cesta 87, 4224 Gorenja vas</div>
-  <div class="l"></div>
-  <div class="r"><span>Racun st.:</span><span>${data.invoiceNumber||'—'}</span></div>
-  <div class="r"><span>Datum:</span><span>${new Date().toLocaleString('sl-SI')}</span></div>
-  <div class="r"><span>Placilo:</span><span>${methodLabels[data.method]||data.method||'—'}</span></div>
-  <div class="l"></div>
-  ${(data.lines||[]).map(l=>`<div class="r"><span>${l.name}</span><span>${l.qty}x €${Number(l.unitPrice||l.unit_price||0).toFixed(2)}</span></div>`).join('')}
-  <div class="l"></div>
-  <div class="r b"><span>SKUPAJ:</span><span>€${Number(data.total).toFixed(2)}</span></div>
-  ${data.eor?`<div class="l"></div><div style="font-size:9px">EOR: ${data.eor}</div>`:''}
-  <div class="l"></div>
-  <div class="c">Hvala za obisk!</div>
-  <script>window.print();setTimeout(()=>window.close(),1500)</script>
-  </body></html>`)
-  w.document.close()
+
+  // Fallback: browser print z lib/receipt.ts helperjem
+  try {
+    const html = await buildReceiptHTML({
+      org: data.org || {
+        name: 'ŠIRM fitness&bar',
+        address: 'Poljanska cesta 87',
+        city: 'Gorenja vas',
+        post_code: '4224',
+        tax_number: '',
+        vat_registered: false,
+      },
+      premiseId: data.premiseId || 'SIRBFB01',
+      deviceId: data.deviceId || 'RACUNK001',
+      invoiceNumber: data.invoiceNumber || (data.orderId?.slice(-6)) || '—',
+      issueDate: new Date(),
+      cashierName: data.cashierName || '',
+      payment: {
+        method: data.method,
+        furs_zoi: data.zoi,
+        furs_eor: data.eor,
+      },
+      lines: (data.lines||[]).map(l => ({
+        name: l.name,
+        qty: Number(l.qty),
+        unit_price: Number(l.unitPrice||l.unit_price||0),
+        vat_rate: Number(l.vat_rate || 22),
+        total: Number(l.total || (l.qty * (l.unitPrice||l.unit_price||0))),
+      })),
+      subtotal: Number(data.subtotal||data.total||0),
+      discountAmount: Number(data.discount_amount||0),
+      tip: Number(data.tip||0),
+      total: Number(data.total||0),
+    })
+    const w = window.open('', '_blank', 'width=380,height=700')
+    if (!w) return
+    w.document.write(html)
+    w.document.close()
+  } catch (e) {
+    console.error('Receipt print error:', e)
+  }
 }
 
 function ReceiptToast({ data, onClose }) {
@@ -3855,19 +3880,67 @@ function OrdersScreen({ posData, auth }) {
   const totalFiltered = filtered.reduce((s,o) => s + Number(o.total||0), 0)
 
   async function printReceipt(order, lines, payment) {
-    const methodLabel = METHOD_LABELS[payment?.method] || payment?.method || '—'
-    
+    // Pridobi org + premise + cashier za glavo računa
+    let orgData = null
+    let premiseData = null
+    let deviceData = null
+    let cashierName = ''
+
+    try {
+      const { data: { user } } = await db.auth.getUser()
+      if (user) {
+        const { data: member } = await db.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+        if (member) {
+          const { data: org } = await db.from('organizations').select('*').eq('id', member.org_id).single()
+          orgData = org
+
+          const { data: premise } = await db.from('business_premises')
+            .select('*').eq('org_id', member.org_id).eq('is_active', true).limit(1).maybeSingle()
+          premiseData = premise
+
+          if (premise) {
+            const { data: device } = await db.from('electronic_devices')
+              .select('*').eq('premise_id', premise.id).eq('is_active', true).maybeSingle()
+            deviceData = device
+          }
+        }
+
+        // Cashier ime
+        if (payment?.cashier_id) {
+          const { data: cashUser } = await db.from('org_members')
+            .select('display_name, user_id')
+            .eq('user_id', payment.cashier_id)
+            .maybeSingle()
+          cashierName = cashUser?.display_name || ''
+        }
+        if (!cashierName) {
+          const { data: me } = await db.from('org_members')
+            .select('display_name')
+            .eq('user_id', user.id)
+            .maybeSingle()
+          cashierName = me?.display_name || user.email?.split('@')[0] || ''
+        }
+      }
+    } catch (e) {}
+
     // Poskusi lokalni print server
     try {
       const res = await fetch('http://localhost:6789/health', { signal: AbortSignal.timeout(1000) })
       if (res.ok) {
-        // Print server je dostopen - pošlji nanj
         const printData = {
-          business_name: 'ŠIRM fitness&bar',
-          business_address: 'Poljanska cesta 87, 4224 Gorenja vas',
-          receipt_number: order.number || order.id.slice(-6),
+          business_name: orgData?.name || 'ŠIRM fitness&bar',
+          business_address: [orgData?.address, [orgData?.post_code, orgData?.city].filter(Boolean).join(' ')].filter(Boolean).join(', '),
+          tax_number: orgData?.tax_number || '',
+          vat_id: orgData?.vat_registered ? `SI${orgData.tax_number}` : '',
+          receipt_number: order.invoice_number || order.number || order.id.slice(-6),
+          cashier: cashierName,
           date: new Date(order.closed_at).toLocaleString('sl-SI'),
-          items: (lines||[]).map(l => ({ name: l.name, qty: Number(l.qty), unit_price: Number(l.unit_price) })),
+          items: (lines||[]).map(l => ({
+            name: l.name,
+            qty: Number(l.qty),
+            unit_price: Number(l.unit_price),
+            vat_rate: Number(l.vat_rate || 22),
+          })),
           subtotal: Number(order.subtotal),
           discount_pct: Number(order.discount_pct||0),
           discount_amount: Number(order.discount_amount||0),
@@ -3887,37 +3960,47 @@ function OrdersScreen({ posData, auth }) {
         alert('Napaka tiskalnika: ' + result.error)
         return
       }
+    } catch (e) {}
+
+    // Fallback: browser print z lib/receipt.ts helperjem
+    try {
+      const html = await buildReceiptHTML({
+        org: orgData || {
+          name: 'ŠIRM fitness&bar',
+          tax_number: '',
+          vat_registered: false,
+        },
+        premiseId: premiseData?.premise_id || 'SIRBFB01',
+        deviceId: deviceData?.device_id || 'RACUNK001',
+        invoiceNumber: order.invoice_number || order.number || order.id.slice(-6),
+        issueDate: new Date(order.closed_at),
+        cashierName: cashierName,
+        payment: {
+          method: payment?.method || 'cash',
+          furs_zoi: payment?.furs_zoi,
+          furs_eor: payment?.furs_eor,
+        },
+        lines: (lines||[]).map(l => ({
+          name: l.name,
+          qty: Number(l.qty),
+          unit_price: Number(l.unit_price),
+          vat_rate: Number(l.vat_rate || 22),
+          total: Number(l.total || l.qty * l.unit_price),
+          voided: l.voided,
+        })),
+        subtotal: Number(order.subtotal||0),
+        discountAmount: Number(order.discount_amount||0),
+        tip: Number(order.tip_amount||0),
+        total: Number(order.total||0),
+      })
+      const w = window.open('', '_blank', 'width=400,height=700')
+      if (!w) return
+      w.document.write(html)
+      w.document.close()
     } catch (e) {
-      // Print server ni dostopen - fallback na browser print
+      console.error('Receipt print error:', e)
+      alert('Napaka pri izpisu računa: ' + e.message)
     }
-    
-    // Fallback: browser print dialog
-    const w = window.open('', '_blank', 'width=400,height=600')
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
-    <style>body{font-family:monospace;font-size:12px;margin:20px;max-width:300px}
-    .center{text-align:center}.bold{font-weight:bold}.line{border-top:1px dashed #000;margin:8px 0}
-    .row{display:flex;justify-content:space-between}</style></head><body>
-    <div class="center bold" style="font-size:16px">ŠIRM fitness&bar</div>
-    <div class="center">Poljanska cesta 87, 4224 Gorenja vas</div>
-    <div class="line"></div>
-    <div class="row"><span>Račun št.:</span><span>${order.number || order.id.slice(-6)}</span></div>
-    <div class="row"><span>Datum:</span><span>${new Date(order.closed_at).toLocaleString('sl-SI')}</span></div>
-    <div class="row"><span>Plačilo:</span><span>${methodLabel}</span></div>
-    <div class="line"></div>
-    ${(lines||[]).map(l => `
-      <div class="row"><span>${l.name}</span><span>${Number(l.qty)}× €${Number(l.unit_price).toFixed(2)}</span></div>
-      <div class="row"><span></span><span>€${(Number(l.qty)*Number(l.unit_price)).toFixed(2)}</span></div>
-    `).join('')}
-    <div class="line"></div>
-    <div class="row bold"><span>SKUPAJ:</span><span>€${Number(order.total).toFixed(2)}</span></div>
-    ${payment?.furs_eor ? `<div class="line"></div>
-    <div style="font-size:10px">ZOI: ${payment.furs_zoi||'—'}</div>
-    <div style="font-size:10px">EOR: ${payment.furs_eor}</div>` : ''}
-    <div class="line"></div>
-    <div class="center">Hvala za obisk!</div>
-    <script>window.print();setTimeout(()=>window.close(),1000)</script>
-    </body></html>`)
-    w.document.close()
   }
 
   return (

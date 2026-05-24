@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
         success: true,
         eor: invoice.eor,
         zoi: invoice.zoi,
+        invoiceNumber: invoice.invoice_number,
         alreadyConfirmed: true,
       })
     }
@@ -93,14 +94,23 @@ export async function POST(req: NextRequest) {
       .eq('is_active', true)
       .maybeSingle()
 
-    // Pridobi naslednjo zaporedno številko za to napravo
-    const { count: invoiceCount } = await supabase
-      .from('furs_log')
+    const deviceIdCode = device?.device_id ?? 'RACUNKO01'
+
+    // ──────────────────────────────────────────────────────────
+    // POPRAVEK: Sequence številka per-org (FURS confirmed računi).
+    // Ker ŠIRM ima eno napravo, to ustreza per-device štetju.
+    // Za multi-device v prihodnosti dodamo device_id na issued_invoices.
+    // ──────────────────────────────────────────────────────────
+    const { count: confirmedCount } = await supabase
+      .from('issued_invoices')
       .select('*', { count: 'exact', head: true })
       .eq('org_id', member.org_id)
-      .eq('status', 'success')
+      .not('eor', 'is', null)
 
-    const sequenceNumber = (invoiceCount ?? 0) + 1
+    const sequenceNumber = (confirmedCount ?? 0) + 1
+
+    // Tridelna FURS številka: SIRBFB01-RACUNK001-42
+    const invoiceNumberFull = `${premise.premise_id}-${deviceIdCode}-${sequenceNumber}`
 
     // Pripravi FURS podatke
     const fursData: FursInvoiceData = {
@@ -114,7 +124,7 @@ export async function POST(req: NextRequest) {
     const config: FursConfig = {
       taxNumber: org.tax_number,
       premiseId: premise.premise_id,
-      deviceId: device?.device_id ?? 'RACUNKO01',
+      deviceId: deviceIdCode,
       privateKeyPem: cert.certificate_data,
       certificatePem: cert.certificate_data,
       isTest: process.env.FURS_TEST_MODE === 'true',
@@ -127,7 +137,12 @@ export async function POST(req: NextRequest) {
         org_id: member.org_id,
         invoice_id: invoiceId,
         status: 'pending',
-        raw_request: { invoiceNumber: sequenceNumber, premiseId: premise.premise_id },
+        raw_request: {
+          invoiceNumber: sequenceNumber,
+          invoiceNumberFull,
+          premiseId: premise.premise_id,
+          deviceId: deviceIdCode,
+        },
       })
       .select('id')
       .single()
@@ -148,10 +163,11 @@ export async function POST(req: NextRequest) {
       .eq('id', logEntry?.id)
 
     if (result.success && result.zoi && result.eor) {
-      // Shrani ZOI + EOR na račun
+      // Shrani ZOI + EOR + tridelno številko na račun
       await supabase
         .from('issued_invoices')
         .update({
+          invoice_number: invoiceNumberFull,
           zoi: result.zoi,
           eor: result.eor,
           furs_confirmed_at: new Date().toISOString(),
@@ -162,6 +178,7 @@ export async function POST(req: NextRequest) {
         success: true,
         zoi: result.zoi,
         eor: result.eor,
+        invoiceNumber: invoiceNumberFull,
       })
     } else {
       // FURS napaka — po ZDavPR imate 2 uri offline
@@ -169,7 +186,8 @@ export async function POST(req: NextRequest) {
         success: false,
         error: result.errorMessage,
         offlineMode: result.errorMessage?.includes('Timeout') || result.errorMessage?.includes('offline'),
-        zoi: result.zoi, // ZOI imamo tudi brez EOR
+        zoi: result.zoi,
+        invoiceNumber: invoiceNumberFull,
       }, { status: 503 })
     }
 
