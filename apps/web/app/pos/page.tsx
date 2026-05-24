@@ -527,10 +527,13 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
       onComplete({
         method,
         total: finalTotal,
+        subtotal: total,
         furs,
         eor: fursEor,
+        zoi: fursZoi,
         orderId,
-        invoiceNumber: `RAČ-${Date.now().toString().slice(-5)}`,
+        invoiceNumber: `RAC-${orderId ? orderId.slice(-5).toUpperCase() : Date.now().toString().slice(-5)}`,
+        lines: cart.map(l => ({ name: l.name, qty: l.qty, unitPrice: l.happyHourApplied ? l.price * 0.8 : l.price })),
       })
     } catch (e) {
       setError(e.message || 'Napaka pri plačilu')
@@ -631,23 +634,95 @@ function SRow({ label, v, muted }) {
   )
 }
 
+async function autoPrint(data) {
+  if (!data) return
+  // Poskusi lokalni print server
+  try {
+    const health = await fetch('http://localhost:6789/health', { signal: AbortSignal.timeout(800) })
+    if (health.ok) {
+      const printData = {
+        business_name: 'SIRM fitness&bar',
+        business_address: 'Poljanska cesta 87, 4224 Gorenja vas',
+        receipt_number: data.invoiceNumber || data.orderId?.slice(-6),
+        date: new Date().toLocaleString('sl-SI'),
+        items: data.lines || [],
+        subtotal: data.subtotal || data.total,
+        discount_pct: data.discount_pct || 0,
+        discount_amount: data.discount_amount || 0,
+        tip: data.tip || 0,
+        total: data.total,
+        payment_method: data.method,
+        furs_zoi: data.zoi,
+        furs_eor: data.eor,
+      }
+      const res = await fetch('http://localhost:6789/print/receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(printData)
+      })
+      if ((await res.json()).ok) return
+    }
+  } catch(e) {}
+  // Fallback: browser print
+  const w = window.open('', '_blank', 'width=380,height=600')
+  if (!w) return
+  const methodLabels = { cash:'Gotovina', card:'Kartica', bon:'Bon', prep:'Predplacilo' }
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+  <style>body{font-family:monospace;font-size:12px;margin:16px;max-width:300px}
+  .c{text-align:center}.b{font-weight:bold}.l{border-top:1px dashed #000;margin:6px 0}
+  .r{display:flex;justify-content:space-between}</style></head><body>
+  <div class="c b" style="font-size:15px">SIRM fitness&bar</div>
+  <div class="c">Poljanska cesta 87, 4224 Gorenja vas</div>
+  <div class="l"></div>
+  <div class="r"><span>Racun st.:</span><span>${data.invoiceNumber||'—'}</span></div>
+  <div class="r"><span>Datum:</span><span>${new Date().toLocaleString('sl-SI')}</span></div>
+  <div class="r"><span>Placilo:</span><span>${methodLabels[data.method]||data.method||'—'}</span></div>
+  <div class="l"></div>
+  ${(data.lines||[]).map(l=>`<div class="r"><span>${l.name}</span><span>${l.qty}x €${Number(l.unitPrice||l.unit_price||0).toFixed(2)}</span></div>`).join('')}
+  <div class="l"></div>
+  <div class="r b"><span>SKUPAJ:</span><span>€${Number(data.total).toFixed(2)}</span></div>
+  ${data.eor?`<div class="l"></div><div style="font-size:9px">EOR: ${data.eor}</div>`:''}
+  <div class="l"></div>
+  <div class="c">Hvala za obisk!</div>
+  <script>window.print();setTimeout(()=>window.close(),1500)</script>
+  </body></html>`)
+  w.document.close()
+}
+
 function ReceiptToast({ data, onClose }) {
+  const fursOk = data?.eor
+  const fursFailed = data?.furs && !data?.eor
+
+  React.useEffect(() => {
+    if (data) {
+      // Avtomatski print
+      autoPrint(data)
+    }
+  }, [data])
+
   if (!data) return null
   return (
     <Modal open={!!data} onClose={onClose} width={340}>
       <div style={{ padding:'28px 22px', textAlign:'center' }}>
-        <div style={{ width:56, height:56, borderRadius:999, margin:'0 auto 14px', background:T.accentSoft, color:T.accent, display:'flex', alignItems:'center', justifyContent:'center' }}>
+        <div style={{ width:56, height:56, borderRadius:999, margin:'0 auto 14px', background:fursFailed?'rgba(168,50,50,0.1)':T.accentSoft, color:fursFailed?T.danger:T.accent, display:'flex', alignItems:'center', justifyContent:'center' }}>
           <KI name="check" size={28} strokeWidth={2.5}/>
         </div>
-        <div style={{ fontSize:20, fontWeight:700 }}>Račun zaključen</div>
+        <div style={{ fontSize:20, fontWeight:700 }}>Racun zakljucen</div>
         <div style={{ fontSize:22, fontWeight:700, marginTop:4, fontVariantNumeric:'tabular-nums' }}>{eur(data.total)}</div>
-        <div style={{ fontSize:13, color:T.muted, marginTop:8 }}>
-          {data.eor ? `FURS ✓  EOR: ${data.eor.substring(0, 10)}...` : data.furs ? 'FURS potrjen' : 'Brez FURS'}
-        </div>
+        {fursOk && (
+          <div style={{ fontSize:12, color:T.accent, marginTop:8, fontWeight:600 }}>
+            FURS potrjen
+          </div>
+        )}
+        {fursFailed && (
+          <div style={{ fontSize:12, color:T.danger, marginTop:8, background:'rgba(168,50,50,0.08)', padding:'8px 12px', borderRadius:8 }}>
+            ⚠️ FURS potrjevanje ni uspelo. Racun je shranjen, potrdi ga rocno v zavihku Racuni.
+          </div>
+        )}
         <div style={{ fontSize:13, fontWeight:600, color:T.muted, marginTop:4 }}>{data.invoiceNumber}</div>
         <div style={{ display:'flex', gap:8, marginTop:18 }}>
           <button onClick={onClose} style={{ flex:1, padding:'11px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'1px solid rgba(0,0,0,0.1)', background:'transparent', fontWeight:600, fontSize:13 }}>Zapri</button>
-          <button onClick={onClose} style={{ flex:1, padding:'11px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'none', background:T.accent, color:'#fff', fontWeight:700, fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+          <button onClick={()=>autoPrint(data)} style={{ flex:1, padding:'11px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'none', background:T.accent, color:'#fff', fontWeight:700, fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
             <KI name="print" size={14}/> Natisni
           </button>
         </div>
@@ -3915,6 +3990,17 @@ function OrdersScreen({ posData, auth }) {
               style={{ padding:'7px 14px', borderRadius:8, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, display:'flex', alignItems:'center', gap:6 }}>
               🖨️ Ponovni izpis
             </button>
+            {selectedOrder.furs_required && !orderPayment?.furs_eor && (
+              <button onClick={async()=>{
+                try {
+                  const res = await fetch('/api/furs/invoice', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ order_id: selectedOrder.id, total: selectedOrder.total }) })
+                  if (res.ok) { const d = await res.json(); alert('FURS potrjen! EOR: ' + d.eor); loadOrders() }
+                  else alert('FURS napaka: ' + (await res.text()))
+                } catch(e) { alert('FURS napaka: ' + e.message) }
+              }} style={{ padding:'7px 14px', borderRadius:8, border:'none', background:'rgba(168,50,50,0.1)', color:T.danger, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:700 }}>
+                ⚠️ Potrdi FURS
+              </button>
+            )}
             <button onClick={()=>setSelectedOrder(null)} style={{ width:30, height:30, borderRadius:8, border:'1px solid '+T.line, background:'transparent', cursor:'pointer', fontSize:16 }}>×</button>
           </div>
           <div style={{ flex:1, overflowY:'auto', padding:'16px 20px' }}>
