@@ -49,12 +49,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Org ni najdena' }, { status: 404 })
     }
 
-    // Order — uporablja business_id (legacy poimenovanje za org_id)
+    // Order — POS uporablja placeholder business_id (00000000-...-000001),
+    // ne pravega org_id. Iščemo samo po order_id, org se določi preko user-ja.
     const { data: order } = await supabase
       .from('orders')
       .select('*, payments(*)')
       .eq('id', order_id)
-      .eq('business_id', member.org_id)
       .single()
 
     if (!order) {
@@ -124,11 +124,11 @@ export async function POST(req: NextRequest) {
 
     const deviceIdCode = device?.device_id ?? 'RACUNKO01'
 
-    // Sequence per-org POS računi (kjer imamo FURS EOR)
+    // Sequence — štejemo vse POS račune s FURS EOR (placeholder business_id
+    // pomeni da imamo eno organizacijo na POS-u; ko bo multi-tenant, popravimo)
     const { count: confirmedCount } = await supabase
       .from('orders')
       .select('id, payments!inner(furs_eor)', { count: 'exact', head: true })
-      .eq('business_id', member.org_id)
       .not('payments.furs_eor', 'is', null)
 
     const sequenceNumber = (confirmedCount ?? 0) + 1
