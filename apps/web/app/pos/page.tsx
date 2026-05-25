@@ -3638,7 +3638,7 @@ function OpenCashModal({ posData, auth, onClose, onOpened }) {
     setError('')
     try {
       const db = createClient()
-      const { data: { user } } = await db.auth.getUser()
+      const { data: { user } } = await createClient().auth.getUser()
       if (!user) throw new Error('Niste prijavljeni')
 
       const { session, error: err } = await openSession({
@@ -3657,8 +3657,8 @@ function OpenCashModal({ posData, auth, onClose, onOpened }) {
       const sessionNumber = (allSessions || []).findIndex(s => s.id === session!.id) + 1
 
       // Org za izpis
-      const { data: member } = await db.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
-      const { data: org } = member ? await db.from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
+      const { data: member } = await createClient().from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+      const { data: org } = member ? await createClient().from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
       const cashierName = user.email?.split('@')[0] || ''
 
       // Natisni otvoritev
@@ -3742,10 +3742,10 @@ function XReportModal({ session, posData, auth, onClose }) {
     setPrinting(true)
     try {
       const db = createClient()
-      const { data: { user } } = await db.auth.getUser()
-      const { data: member } = user ? await db.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle() : { data: null }
-      const { data: org } = member ? await db.from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
-      const { data: allSessions } = await db.from('cash_sessions').select('id').eq('business_id', '00000000-0000-0000-0000-000000000001').order('created_at', { ascending: true })
+      const { data: { user } } = await createClient().auth.getUser()
+      const { data: member } = user ? await createClient().from('org_members').select('org_id').eq('user_id', user.id).maybeSingle() : { data: null }
+      const { data: org } = member ? await createClient().from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
+      const { data: allSessions } = await createClient().from('cash_sessions').select('id').eq('business_id', '00000000-0000-0000-0000-000000000001').order('created_at', { ascending: true })
       const sessionNumber = (allSessions || []).findIndex(s => s.id === session.id) + 1
       const cashierName = user?.email?.split('@')[0] || ''
 
@@ -3839,7 +3839,7 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
     setError('')
     try {
       const db = createClient()
-      const { data: { user } } = await db.auth.getUser()
+      const { data: { user } } = await createClient().auth.getUser()
       if (!user) throw new Error('Niste prijavljeni')
 
       const { zReportNumber, difference: diff, error: err } = await closeSession({
@@ -3851,9 +3851,9 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
       if (err) throw new Error(err)
 
       // Pridobi org za izpis
-      const { data: member } = await db.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
-      const { data: org } = member ? await db.from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
-      const { data: allSessions } = await db.from('cash_sessions').select('id').eq('business_id', '00000000-0000-0000-0000-000000000001').order('created_at', { ascending: true })
+      const { data: member } = await createClient().from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+      const { data: org } = member ? await createClient().from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
+      const { data: allSessions } = await createClient().from('cash_sessions').select('id').eq('business_id', '00000000-0000-0000-0000-000000000001').order('created_at', { ascending: true })
       const sessionNumber = (allSessions || []).findIndex(s => s.id === session.id) + 1
       const cashierName = user.email?.split('@')[0] || ''
 
@@ -4053,7 +4053,7 @@ function ZReportModal({ posData, onClose }) {
       const db = createClient()
 
       // Shrani Z-poročilo v DB
-      const { data: zReport, error } = await db.from('z_reports').insert({
+      const { data: zReport, error } = await createClient().from('z_reports').insert({
         business_id: BUSINESS_ID,
         report_number: reportNumber,
         opened_at: new Date(data.date.getFullYear(), data.date.getMonth(), data.date.getDate()).toISOString(),
@@ -4246,11 +4246,11 @@ function VoidModal({ order, lines, payment, posData, auth, onClose, onVoided }) 
     setError('')
     try {
       const db = createClient()
-      const { data: { user } } = await db.auth.getUser()
+      const { data: { user } } = await createClient().auth.getUser()
       if (!user) throw new Error('Niste prijavljeni')
 
       // 1. Pridobi org podatke za FURS klic
-      const { data: member } = await db.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+      const { data: member } = await createClient().from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
       if (!member) throw new Error('Org ni najdena')
 
       // 2. Kliči FURS kredit nota (storno)
@@ -4267,7 +4267,7 @@ function VoidModal({ order, lines, payment, posData, auth, onClose, onVoided }) 
       const fursData = await fursRes.json().catch(() => ({}))
 
       // 3. Označi order kot storniran
-      await db.from('orders').update({
+      await createClient().from('orders').update({
         voided_at: new Date().toISOString(),
         voided_by: user.id,
         void_reason: reason || 'Storno',
@@ -4277,7 +4277,7 @@ function VoidModal({ order, lines, payment, posData, auth, onClose, onVoided }) 
       }).eq('id', order.id)
 
       // 4. Natisni storno račun
-      const { data: org } = member ? await db.from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
+      const { data: org } = member ? await createClient().from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
       const cashierName = user.email?.split('@')[0] || ''
       const html = buildStornoReceiptHTML({
         order, lines, payment, org, cashierName,
@@ -4380,10 +4380,10 @@ function RefundModal({ order, lines, payment, auth, onClose, onRefunded }) {
     setError('')
     try {
       const db = createClient()
-      const { data: { user } } = await db.auth.getUser()
+      const { data: { user } } = await createClient().auth.getUser()
       if (!user) throw new Error('Niste prijavljeni')
 
-      await db.from('refunds').insert({
+      await createClient().from('refunds').insert({
         business_id: '00000000-0000-0000-0000-000000000001',
         original_order_id: order.id,
         amount: refundAmount,
@@ -4872,13 +4872,13 @@ function OrdersScreen({ posData, auth }) {
               style={{ padding:'7px 14px', borderRadius:8, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, display:'flex', alignItems:'center', gap:6 }}>
               🖨️ Ponovni izpis
             </button>
-            {isToday(selectedOrder.closed_at) && !selectedOrder.voided_at && auth.can('voidReceipt') && (
+            {isToday(selectedOrder.closed_at) && !selectedOrder.voided_at && auth.permissions?.voidReceipt && (
               <button onClick={()=>setShowVoid(true)}
                 style={{ padding:'7px 14px', borderRadius:8, border:'none', background:'rgba(168,50,50,0.1)', color:T.danger, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', gap:6 }}>
                 🗑️ Storno
               </button>
             )}
-            {isToday(selectedOrder.closed_at) && !selectedOrder.voided_at && auth.can('refund') && (
+            {isToday(selectedOrder.closed_at) && !selectedOrder.voided_at && auth.permissions?.refund && (
               <button onClick={()=>setShowRefund(true)}
                 style={{ padding:'7px 14px', borderRadius:8, border:'none', background:'rgba(37,99,235,0.1)', color:'#2563eb', cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', gap:6 }}>
                 ↩️ Vračilo
