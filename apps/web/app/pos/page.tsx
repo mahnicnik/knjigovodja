@@ -4961,30 +4961,12 @@ function OrdersScreen({ posData, auth }) {
 // ================================================================
 // REPORTS SCREEN — real DB stats
 // ================================================================
-function ReportsScreen({ posData }) {
+function ReportsScreen({ posData, auth }) {
   const [period, setPeriod] = useState('today')
   const [reportData, setReportData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showPeriodModal, setShowPeriodModal] = useState(false)
   const [showZReport, setShowZReport] = useState(false)
-  const [cashSession, setCashSession] = React.useState(null)
-  const [sessionLoaded, setSessionLoaded] = React.useState(false)
-  const [showOpenCash, setShowOpenCash] = React.useState(false)
-  const [showXReport, setShowXReport] = React.useState(false)
-  const [showCloseCash, setShowCloseCash] = React.useState(false)
-
-  // Naloži trenutno izmeno ob zagonu
-  React.useEffect(() => {
-    getCurrentSession().then(s => {
-      setCashSession(s)
-      setSessionLoaded(true)
-      if (!s) setShowOpenCash(true)
-    })
-  }, [])
-
-  function refreshSession() {
-    getCurrentSession().then(s => setCashSession(s))
-  }
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
 
@@ -7601,6 +7583,23 @@ function KlasikApp() {
   const [happyHourActive, setHappyHourActive] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [receipt, setReceipt] = useState(null)
+  const [cashSession, setCashSession] = React.useState(null)
+  const [sessionLoaded, setSessionLoaded] = React.useState(false)
+  const [showOpenCash, setShowOpenCash] = React.useState(false)
+  const [showXReport, setShowXReport] = React.useState(false)
+  const [showCloseCash, setShowCloseCash] = React.useState(false)
+
+  React.useEffect(() => {
+    getCurrentSession().then(s => {
+      setCashSession(s)
+      setSessionLoaded(true)
+      if (!s) setShowOpenCash(true)
+    })
+  }, [])
+
+  function refreshSession() {
+    getCurrentSession().then(s => setCashSession(s))
+  }
   const [now, setNow] = useState(new Date())
   const [notifOpen, setNotifOpen] = useState(false)
   const [orderListOpen, setOrderListOpen] = useState(false)
@@ -7693,7 +7692,7 @@ function KlasikApp() {
           {screen==='packages'  && <PackagesScreen posData={posData} setSellPackageModal={setSellPackageModal}/>}
           {screen==='inventory' && <InventoryScreen posData={posData}/>}
           {screen==='orders'    && <OrdersScreen posData={posData} auth={auth}/>}
-          {screen==='reports'   && <ReportsScreen posData={posData}/>}
+          {screen==='reports'   && <ReportsScreen posData={posData} auth={auth}/>}
           {screen==='admin'     && <AdminScreen auth={auth} posData={posData}/>}
         </div>
       </div>
