@@ -470,6 +470,7 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
       // 3. Plačaj + FURS
       let fursEor = null
       let fursZoi = null
+      let fursInvoiceNumber = null
       if (furs) {
         try {
           const fursRes = await fetch('/api/furs/invoice', {
@@ -477,10 +478,13 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ order_id: orderId, total: finalTotal }),
           })
-          if (fursRes.ok) {
-            const fursData = await fursRes.json()
-            fursEor = fursData.eor
-            fursZoi = fursData.zoi
+          // 200 = success, 503 = FURS napaka ampak še vedno imamo ZOI + tridelno
+          const fursData = await fursRes.json().catch(() => ({}))
+          if (fursData.eor) fursEor = fursData.eor
+          if (fursData.zoi) fursZoi = fursData.zoi
+          if (fursData.invoiceNumber) fursInvoiceNumber = fursData.invoiceNumber
+          if (!fursRes.ok && fursData.error) {
+            console.warn('FURS:', fursData.error)
           }
         } catch (e) {
           console.warn('FURS klic ni uspel, račun bo shranjen brez EOR:', e.message)
@@ -525,16 +529,60 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         }
       } catch(normErr) { console.warn('Normativ odštevanje ni uspelo:', normErr) }
 
+      // Pridobi org + premise + device + cashier za izpis računa
+      let orgInfo = null
+      let premiseInfo = null
+      let deviceInfo = null
+      let cashierDisplayName = ''
+      try {
+        const sb = createClient()
+        const { data: { user } } = await sb.auth.getUser()
+        if (user) {
+          const { data: mem } = await sb.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+          if (mem) {
+            const { data: o } = await sb.from('organizations').select('*').eq('id', mem.org_id).single()
+            orgInfo = o
+            const { data: p } = await sb.from('business_premises').select('*').eq('org_id', mem.org_id).eq('is_active', true).limit(1).maybeSingle()
+            premiseInfo = p
+            if (p) {
+              const { data: d } = await sb.from('electronic_devices').select('*').eq('premise_id', p.id).eq('is_active', true).maybeSingle()
+              deviceInfo = d
+            }
+          }
+          cashierDisplayName = user.email?.split('@')[0] || ''
+        }
+      } catch (e) { console.warn('Receipt meta load:', e) }
+
+      const fallbackNumber = `RAC-${orderId ? orderId.slice(-5).toUpperCase() : Date.now().toString().slice(-5)}`
       onComplete({
         method,
         total: finalTotal,
         subtotal: total,
+        discount_amount: total - finalTotal,
+        tip: 0,
         furs,
         eor: fursEor,
         zoi: fursZoi,
         orderId,
-        invoiceNumber: `RAC-${orderId ? orderId.slice(-5).toUpperCase() : Date.now().toString().slice(-5)}`,
-        lines: cart.map(l => ({ name: l.name, qty: l.qty, unitPrice: l.happyHourApplied ? l.price * 0.8 : l.price })),
+        invoiceNumber: fursInvoiceNumber || fallbackNumber,
+        org: orgInfo ? {
+          name: orgInfo.name,
+          address: orgInfo.address,
+          post_code: orgInfo.post_code,
+          city: orgInfo.city,
+          tax_number: orgInfo.tax_number,
+          vat_registered: orgInfo.vat_registered,
+        } : null,
+        premiseId: premiseInfo?.premise_id || 'SIRBFB01',
+        deviceId: deviceInfo?.device_id || 'RACUNKO01',
+        cashierName: cashierDisplayName,
+        lines: cart.map(l => ({
+          name: l.name,
+          qty: l.qty,
+          unitPrice: l.happyHourApplied ? l.price * 0.8 : l.price,
+          unit_price: l.happyHourApplied ? l.price * 0.8 : l.price,
+          vat_rate: l.vat_rate || 22,
+        })),
       })
     } catch (e) {
       setError(e.message || 'Napaka pri plačilu')
