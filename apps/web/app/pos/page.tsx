@@ -1174,7 +1174,7 @@ function SaleScreen({ activeTable, activeCustomer, cart, setCart, addItem, adjus
       </div>
 
       {/* Košarica */}
-      <SaleCart cart={cart} setCart={setCart} adjustQty={adjustQty} activeTable={activeTable} activeCustomer={activeCustomer} setPaymentOpen={setPaymentOpen} totals={totals} setActiveCustomer={setActiveCustomer} customers={posData.customers} cartDiscount={cartDiscount} setCartDiscount={setCartDiscount}/>
+      <SaleCart cart={cart} setCart={setCart} adjustQty={adjustQty} activeTable={activeTable} activeCustomer={activeCustomer} setPaymentOpen={setPaymentOpen} totals={totals} setActiveCustomer={setActiveCustomer} customers={posData.customers} cartDiscount={cartDiscount} setCartDiscount={setCartDiscount} cashSession={cashSession} onNeedOpenCash={onNeedOpenCash}/>
 
       {/* Scan placeholder */}
       <Modal open={scanModal} onClose={() => setScanModal(false)} width={380}>
@@ -1189,7 +1189,7 @@ function SaleScreen({ activeTable, activeCustomer, cart, setCart, addItem, adjus
   )
 }
 
-function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPaymentOpen, totals, setActiveCustomer, customers, cartDiscount, setCartDiscount }) {
+function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPaymentOpen, totals, setActiveCustomer, customers, cartDiscount, setCartDiscount, cashSession, onNeedOpenCash }) {
   const [discountOpen, setDiscountOpen] = useState(false)
   const [discountInput, setDiscountInput] = useState('')
   const [splitOpen, setSplitOpen] = useState(false)
@@ -1288,7 +1288,7 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
         <button disabled={cart.length===0} onClick={() => {
           if (!cashSession && onNeedOpenCash) { onNeedOpenCash(); return }
           setPaymentOpen({ discount: cartDiscount })
-        }} style={{ width:'100%', marginTop:12, padding:'13px', borderRadius:9, curso: cart.length ? 'pointer' : 'not-allowed', fontFamily:'inherit', border:'none', background: cart.length ? T.accent : '#ccc', color:'#fff', fontWeight:800, fontSize:15, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+        }} style={{ width:'100%', marginTop:12, padding:'13px', borderRadius:9, cursor: cart.length ? 'pointer' : 'not-allowed', fontFamily:'inherit', border:'none', background: cart.length ? T.accent : '#ccc', color:'#fff', fontWeight:800, fontSize:15, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
           <KI name="arrow" size={16} strokeWidth={2.2}/> {!cashSession ? '🔒 Odpri blagajno' : (cart.length > 0 ? `Plačaj ${eur(totals.total*(1-cartDiscount/100))}` : 'Plačaj')}
         </button>
       </div>
