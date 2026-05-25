@@ -5091,17 +5091,6 @@ function ReportsScreen({ posData, auth }) {
           <button onClick={()=>setShowPeriodModal(true)} style={{ ...btnS, display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
             <KI name="calendar" size={13}/> Spremeni obdobje
           </button>
-          {cashSession && <button onClick={()=>setShowXReport(true)} style={{ ...btnP, display:'flex', alignItems:'center', gap:6, fontSize:12, background:'#2563eb' }}>
-            <KI name="receipt" size={14}/> X-poročilo
-          </button>}
-          {cashSession
-            ? <button onClick={()=>setShowCloseCash(true)} style={{ ...btnP, display:'flex', alignItems:'center', gap:6, fontSize:12, background:T.danger }}>
-                <KI name="lock" size={14}/> Zaključi blagajno
-              </button>
-            : <button onClick={()=>setShowOpenCash(true)} style={{ ...btnP, display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
-                <KI name="unlock" size={14}/> Odpri blagajno
-              </button>
-          }
           <button onClick={()=>setShowZReport(true)} style={{ ...btnP, display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
             <KI name="print" size={13}/> Z-poročilo (zaključi izmeno)
           </button>
@@ -5228,21 +5217,7 @@ function ReportsScreen({ posData, auth }) {
       </div>
 
       {showZReport && <ZReportModal posData={posData} onClose={()=>setShowZReport(false)}/>}
-      {showOpenCash && <OpenCashModal posData={posData} auth={auth} onClose={()=>setShowOpenCash(false)} onOpened={(s)=>{ setCashSession(s); setShowOpenCash(false) }}/>}
-      {showXReport && cashSession && <XReportModal session={cashSession} posData={posData} auth={auth} onClose={()=>setShowXReport(false)}/>}
-      {showCloseCash && cashSession && <CloseCashModal session={cashSession} posData={posData} auth={auth} onClose={()=>setShowCloseCash(false)} onClosed={()=>{ setCashSession(null); refreshSession() }}/>}
-      {sessionLoaded && !cashSession && !showOpenCash && (
-        <Modal open width={340}>
-          <div style={{ padding:'32px 24px', textAlign:'center' }}>
-            <div style={{ fontSize:40, marginBottom:12 }}>🔒</div>
-            <div style={{ fontSize:18, fontWeight:700, marginBottom:8 }}>Blagajna je zaprta</div>
-            <div style={{ fontSize:13, color:T.muted, marginBottom:20 }}>Pred začetkom prodaje odprite blagajno in vnesite začetno gotovino.</div>
-            <button onClick={()=>setShowOpenCash(true)} style={{ width:'100%', padding:'13px', borderRadius:10, cursor:'pointer', fontFamily:'inherit', border:'none', background:T.accent, color:'#fff', fontWeight:700, fontSize:14 }}>
-              🔓 Odpri blagajno
-            </button>
-          </div>
-        </Modal>
-      )}
+
 
       {/* Period modal */}
       {showPeriodModal && (
