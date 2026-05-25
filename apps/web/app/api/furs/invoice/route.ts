@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { confirmWithFurs, type FursConfig, type FursInvoiceData } from '@/lib/furs'
+import { confirmWithFurs, extractFromP12, type FursConfig, type FursInvoiceData } from '@/lib/furs'
 
 async function getSupabase() {
   const cookieStore = await cookies()
@@ -143,13 +143,20 @@ export async function POST(req: NextRequest) {
       invoiceType: 'invoice',
     }
 
+    // Razpakiraj .p12 v PEM (privateKey + cert)
+    const p12Buffer = Buffer.from(cert.certificate_data, 'base64')
+    const { privateKeyPem, certificatePem } = extractFromP12(
+      p12Buffer,
+      cert.certificate_password ?? ''
+    )
+
     const config: FursConfig = {
       taxNumber: org.tax_number,
       premiseId: premise.premise_id,
       deviceId: deviceIdCode,
-      privateKeyPem: cert.certificate_data,
-      certificatePem: cert.certificate_data,
-      isTest: process.env.FURS_TEST_MODE === 'true',
+      privateKeyPem,
+      certificatePem,
+      isTest: process.env.FURS_TEST_MODE !== 'false',
     }
 
     const { data: logEntry } = await supabase
