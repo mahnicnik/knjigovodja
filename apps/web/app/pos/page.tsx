@@ -1087,7 +1087,7 @@ function FloorScreen({ spaces, setActiveTable, setScreen }) {
 // ================================================================
 // SALE SCREEN — real DB kategorije + artikli
 // ================================================================
-function SaleScreen({ activeTable, activeCustomer, cart, setCart, addItem, adjustQty, setPaymentOpen, totals, setActiveCustomer, posData, happyHourActive, setHappyHourActive }) {
+function SaleScreen({ activeTable, activeCustomer, cart, setCart, addItem, adjustQty, setPaymentOpen, totals, setActiveCustomer, posData, happyHourActive, setHappyHourActive, cashSession, onNeedOpenCash }) {
   const [cartDiscount, setCartDiscount] = useState(0)
   const [selectedCat, setSelectedCat] = useState('cat-fav')
   const [search, setSearch] = useState('')
@@ -1285,8 +1285,11 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
           <div style={{ fontWeight:700, fontSize:14 }}>Skupaj</div>
           <div style={{ fontWeight:800, fontSize:26, fontVariantNumeric:'tabular-nums', letterSpacing:'-0.02em' }}>{eur(totals.total)}</div>
         </div>
-        <button disabled={cart.length===0} onClick={() => setPaymentOpen({ discount: cartDiscount })} style={{ width:'100%', marginTop:12, padding:'13px', borderRadius:9, cursor: cart.length ? 'pointer' : 'not-allowed', fontFamily:'inherit', border:'none', background: cart.length ? T.accent : '#ccc', color:'#fff', fontWeight:800, fontSize:15, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-          <KI name="arrow" size={16} strokeWidth={2.2}/> Plačaj {cart.length > 0 ? eur(totals.total*(1-cartDiscount/100)) : ''}
+        <button disabled={cart.length===0} onClick={() => {
+          if (!cashSession && onNeedOpenCash) { onNeedOpenCash(); return }
+          setPaymentOpen({ discount: cartDiscount })
+        }} style={{ width:'100%', marginTop:12, padding:'13px', borderRadius:9, curso: cart.length ? 'pointer' : 'not-allowed', fontFamily:'inherit', border:'none', background: cart.length ? T.accent : '#ccc', color:'#fff', fontWeight:800, fontSize:15, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+          <KI name="arrow" size={16} strokeWidth={2.2}/> {!cashSession ? '🔒 Odpri blagajno' : (cart.length > 0 ? `Plačaj ${eur(totals.total*(1-cartDiscount/100))}` : 'Plačaj')}
         </button>
       </div>
 
@@ -7568,7 +7571,6 @@ function KlasikApp() {
     getCurrentSession().then(s => {
       setCashSession(s)
       setSessionLoaded(true)
-      if (!s) setShowOpenCash(true)
     })
   }, [])
 
@@ -7674,7 +7676,7 @@ function KlasikApp() {
         <SideNav screen={screen} setScreen={setScreen} nav={nav}/>
         <div style={{ flex:1, display:'flex', overflow:'hidden', minWidth:0 }}>
           {screen==='floor'     && <FloorScreen spaces={posData.spaces} setActiveTable={setActiveTable} setScreen={setScreen}/>}
-          {screen==='sale'      && <SaleScreen activeTable={activeTable} activeCustomer={activeCustomer} cart={cart} setCart={setCart} addItem={addItem} adjustQty={adjustQty} setPaymentOpen={setPaymentOpen} totals={totals} setActiveCustomer={setActiveCustomer} posData={posData} happyHourActive={happyHourActive} setHappyHourActive={setHappyHourActive}/>}
+          {screen==='sale'      && <SaleScreen activeTable={activeTable} activeCustomer={activeCustomer} cart={cart} setCart={setCart} addItem={addItem} adjustQty={adjustQty} setPaymentOpen={setPaymentOpen} totals={totals} setActiveCustomer={setActiveCustomer} posData={posData} happyHourActive={happyHourActive} setHappyHourActive={setHappyHourActive} cashSession={cashSession} onNeedOpenCash={()=enCash(true)}/>}
           {screen==='calendar'  && <CalendarScreen posData={posData}/>}
           {screen==='customers' && <CustomersScreen posData={posData} setActiveCustomer={setActiveCustomer} setScreen={setScreen} setSellPackageModal={setSellPackageModal}/>}
           {screen==='packages'  && <PackagesScreen posData={posData} setSellPackageModal={setSellPackageModal}/>}
@@ -7704,18 +7706,7 @@ function KlasikApp() {
       {showOpenCash && <OpenCashModal posData={posData} auth={auth} onClose={()=>setShowOpenCash(false)} onOpened={(s)=>{ setCashSession(s); setShowOpenCash(false) }}/>}
       {showXReport && cashSession && <XReportModal session={cashSession} posData={posData} auth={auth} onClose={()=>setShowXReport(false)}/>}
       {showCloseCash && cashSession && <CloseCashModal session={cashSession} posData={posData} auth={auth} onClose={()=>setShowCloseCash(false)} onClosed={()=>{ setCashSession(null); refreshSession() }}/>}
-      {sessionLoaded && !cashSession && !showOpenCash && (
-        <Modal open width={340}>
-          <div style={{ padding:'32px 24px', textAlign:'center' }}>
-            <div style={{ fontSize:40, marginBottom:12 }}>🔒</div>
-            <div style={{ fontSize:18, fontWeight:700, marginBottom:8 }}>Blagajna je zaprta</div>
-            <div style={{ fontSize:13, color:T.muted, marginBottom:20 }}>Pred začetkom prodaje odprite blagajno in vnesite začetno gotovino.</div>
-            <button onClick={()=>setShowOpenCash(true)} style={{ width:'100%', padding:'13px', borderRadius:10, cursor:'pointer', fontFamily:'inherit', border:'none', background:T.accent, color:'#fff', fontWeight:700, fontSize:14 }}>
-              🔓 Odpri blagajno
-            </button>
-          </div>
-        </Modal>
-      )}
+      
       {auth.locked && <LockScreen auth={auth}/>}
     </div>
   )
