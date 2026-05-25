@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { pos, BUSINESS_ID } from '@/lib/pos-client'
 import { buildReceiptHTML } from '@/lib/receipt'
+import { getCurrentSession, openSession, getSessionStats, closeSession, type CashSession, type SessionStats } from '@/lib/cash-session'
+import { buildOpeningReceipt, buildXReportReceipt, buildZReportReceipt } from '@/lib/cash-session-receipt'
 
 // ================================================================
 // TEMA
@@ -3596,6 +3598,376 @@ function InventoryScreen({ posData }) {
 // ================================================================
 // Z-REPORT MODAL — zaključek izmene
 // ================================================================
+
+// ─────────────────────────────────────────────────────────────────
+// CASH SESSION HELPERS
+// ─────────────────────────────────────────────────────────────────
+
+async function printCashReceipt(html: string) {
+  try {
+    const res = await fetch('http://localhost:6789/health', { signal: AbortSignal.timeout(1000) })
+    if (res.ok) {
+      const printRes = await fetch('http://localhost:6789/print/receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ html })
+      })
+      if ((await printRes.json()).ok) return
+    }
+  } catch {}
+  const w = window.open('', '_blank', 'width=380,height=700')
+  if (!w) return
+  w.document.write(html)
+  w.document.close()
+}
+
+// ─────────────────────────────────────────────────────────────────
+// OTVORITEV BLAGAJNE MODAL
+// ─────────────────────────────────────────────────────────────────
+
+function OpenCashModal({ posData, auth, onClose, onOpened }) {
+  const [cashAmount, setCashAmount] = React.useState('0.00')
+  const [note, setNote] = React.useState('')
+  const [saving, setSaving] = React.useState(false)
+  const [error, setError] = React.useState('')
+
+  async function handleOpen() {
+    const amount = parseFloat(cashAmount)
+    if (isNaN(amount) || amount < 0) { setError('Vnesi veljavni znesek'); return }
+    setSaving(true)
+    setError('')
+    try {
+      const db = createClient()
+      const { data: { user } } = await db.auth.getUser()
+      if (!user) throw new Error('Niste prijavljeni')
+
+      const { session, error: err } = await openSession({
+        cashOpening: amount,
+        openedBy: user.id,
+        note: note || undefined,
+      })
+      if (err) throw new Error(err)
+
+      // Pridobi session number
+      const { data: allSessions } = await db
+        .from('cash_sessions')
+        .select('id')
+        .eq('business_id', '00000000-0000-0000-0000-000000000001')
+        .order('created_at', { ascending: true })
+      const sessionNumber = (allSessions || []).findIndex(s => s.id === session!.id) + 1
+
+      // Org za izpis
+      const { data: member } = await db.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+      const { data: org } = member ? await db.from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
+      const cashierName = user.email?.split('@')[0] || ''
+
+      // Natisni otvoritev
+      const html = buildOpeningReceipt({
+        session: session!,
+        org: org || { name: 'ŠIRM fitness&bar', tax_number: '', vat_registered: false },
+        sessionNumber,
+        cashierName,
+      })
+      await printCashReceipt(html)
+
+      onOpened(session)
+      onClose()
+    } catch (e: any) {
+      setError(e.message)
+    }
+    setSaving(false)
+  }
+
+  return (
+    <Modal open onClose={saving ? undefined : onClose} width={360}>
+      <ModalHeader title="Otvoritev blagajne" onClose={onClose}/>
+      <div style={{ padding:'24px 20px', display:'flex', flexDirection:'column', gap:16 }}>
+        <div style={{ background:T.accentSoft, borderRadius:10, padding:'12px 14px' }}>
+          <div style={{ fontSize:12, color:T.accent, fontWeight:700, marginBottom:2 }}>💰 Začetna gotovina</div>
+          <div style={{ fontSize:11, color:T.muted }}>Preštej gotovino v blagajni in vnesi znesek</div>
+        </div>
+
+        <div>
+          <div style={{ fontSize:12, fontWeight:600, marginBottom:6 }}>Znesek v blagajni (€)</div>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={cashAmount}
+            onChange={e => setCashAmount(e.target.value)}
+            style={{ width:'100%', padding:'10px 12px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:14, fontWeight:700, background:T.inputBg, outline:'none' }}
+            autoFocus
+          />
+        </div>
+
+        <div>
+          <div style={{ fontSize:12, fontWeight:600, marginBottom:6 }}>Opomba (opcijsko)</div>
+          <input
+            type="text"
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            placeholder="npr. manjkal drobiž..."
+            style={{ width:'100%', padding:'9px 12px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:12, background:T.inputBg, outline:'none' }}
+          />
+        </div>
+
+        {error && <div style={{ color:T.danger, fontSize:12, background:'rgba(168,50,50,0.08)', padding:'8px 12px', borderRadius:8 }}>⚠️ {error}</div>}
+
+        <div style={{ display:'flex', gap:8, marginTop:4 }}>
+          <button onClick={onClose} disabled={saving} style={{ flex:1, padding:'11px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'1px solid '+T.line, background:'transparent', fontWeight:600, fontSize:13 }}>Prekliči</button>
+          <button onClick={handleOpen} disabled={saving} style={{ flex:2, padding:'11px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'none', background:T.accent, color:'#fff', fontWeight:700, fontSize:13 }}>
+            {saving ? 'Odpiranje...' : '🔓 Odpri blagajno'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// X-POROČILO MODAL (vmesno stanje)
+// ─────────────────────────────────────────────────────────────────
+
+function XReportModal({ session, posData, auth, onClose }) {
+  const [stats, setStats] = React.useState<SessionStats | null>(null)
+  const [loading, setLoading] = React.useState(true)
+  const [printing, setPrinting] = React.useState(false)
+
+  React.useEffect(() => {
+    getSessionStats(session).then(s => { setStats(s); setLoading(false) })
+  }, [])
+
+  async function handlePrint() {
+    if (!stats) return
+    setPrinting(true)
+    try {
+      const db = createClient()
+      const { data: { user } } = await db.auth.getUser()
+      const { data: member } = user ? await db.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle() : { data: null }
+      const { data: org } = member ? await db.from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
+      const { data: allSessions } = await db.from('cash_sessions').select('id').eq('business_id', '00000000-0000-0000-0000-000000000001').order('created_at', { ascending: true })
+      const sessionNumber = (allSessions || []).findIndex(s => s.id === session.id) + 1
+      const cashierName = user?.email?.split('@')[0] || ''
+
+      const html = buildXReportReceipt({
+        session,
+        stats,
+        org: org || { name: 'ŠIRM fitness&bar', tax_number: '', vat_registered: false },
+        sessionNumber,
+        cashierName,
+      })
+      await printCashReceipt(html)
+    } catch (e: any) { alert(e.message) }
+    setPrinting(false)
+  }
+
+  const eur = (n: number) => '€' + n.toFixed(2).replace('.', ',')
+
+  return (
+    <Modal open onClose={onClose} width={400}>
+      <ModalHeader title="X-poročilo (vmesno stanje)" onClose={onClose}/>
+      <div style={{ padding:'20px', display:'flex', flexDirection:'column', gap:12 }}>
+        {loading ? (
+          <div style={{ textAlign:'center', padding:20, color:T.muted }}>Nalagam...</div>
+        ) : stats ? (<>
+          <div style={{ background:T.surface, borderRadius:10, padding:'12px 14px' }}>
+            <div style={{ fontSize:11, color:T.muted }}>Izmena odprta</div>
+            <div style={{ fontSize:13, fontWeight:700 }}>{new Date(session.opened_at).toLocaleString('sl-SI')}</div>
+          </div>
+
+          <div style={{ fontSize:12, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:1 }}>Promet po plačilu</div>
+          {[['Gotovina', stats.cash, stats.cashCount], ['Kartica', stats.card, stats.cardCount], ['Bon', stats.bon, stats.bonCount]].map(([label, amt, cnt]) => (
+            <div key={label as string} style={{ display:'flex', justifyContent:'space-between', fontSize:13 }}>
+              <span>{label as string}</span>
+              <span style={{ fontWeight:600 }}>{eur(amt as number)} <span style={{ color:T.muted, fontSize:11 }}>({cnt as number})</span></span>
+            </div>
+          ))}
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, fontWeight:700, borderTop:'2px solid '+T.line, paddingTop:8 }}>
+            <span>SKUPAJ</span>
+            <span>{eur(stats.totalRevenue)}</span>
+          </div>
+
+          <div style={{ fontSize:12, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:1, marginTop:4 }}>Pričakovana gotovina</div>
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, fontWeight:700, background:T.accentSoft, padding:'10px 12px', borderRadius:8 }}>
+            <span>V blagajni naj bo:</span>
+            <span style={{ color:T.accent }}>{eur(stats.cashExpected)}</span>
+          </div>
+        </>) : <div style={{ color:T.danger }}>Napaka pri nalaganju</div>}
+
+        <div style={{ display:'flex', gap:8, marginTop:4 }}>
+          <button onClick={onClose} style={{ flex:1, padding:'11px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'1px solid '+T.line, background:'transparent', fontWeight:600, fontSize:13 }}>Zapri</button>
+          <button onClick={handlePrint} disabled={printing || loading} style={{ flex:1, padding:'11px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'none', background:T.accent, color:'#fff', fontWeight:700, fontSize:13 }}>
+            {printing ? 'Tiskam...' : '🖨️ Natisni'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// ZAKLJUČEK BLAGAJNE MODAL
+// ─────────────────────────────────────────────────────────────────
+
+function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
+  const [stats, setStats] = React.useState<SessionStats | null>(null)
+  const [loading, setLoading] = React.useState(true)
+  const [cashDeclared, setCashDeclared] = React.useState('0.00')
+  const [note, setNote] = React.useState('')
+  const [saving, setSaving] = React.useState(false)
+  const [saved, setSaved] = React.useState(false)
+  const [error, setError] = React.useState('')
+
+  React.useEffect(() => {
+    getSessionStats(session).then(s => {
+      setStats(s)
+      setCashDeclared(s.cashExpected.toFixed(2))
+      setLoading(false)
+    })
+  }, [])
+
+  const eur = (n: number) => '€' + n.toFixed(2).replace('.', ',')
+  const declared = parseFloat(cashDeclared) || 0
+  const expected = stats?.cashExpected || 0
+  const difference = declared - expected
+  const diffLabel = Math.abs(difference) < 0.01 ? 'Ujema se ✓' : difference > 0 ? `+${eur(difference)} (višek)` : `−${eur(Math.abs(difference))} (manjko)`
+  const diffColor = Math.abs(difference) < 0.01 ? T.accent : difference > 0 ? '#2563eb' : T.danger
+
+  async function handleClose() {
+    if (!stats) return
+    setSaving(true)
+    setError('')
+    try {
+      const db = createClient()
+      const { data: { user } } = await db.auth.getUser()
+      if (!user) throw new Error('Niste prijavljeni')
+
+      const { zReportNumber, difference: diff, error: err } = await closeSession({
+        session,
+        cashClosingDeclared: declared,
+        closedBy: user.id,
+        note: note || undefined,
+      })
+      if (err) throw new Error(err)
+
+      // Pridobi org za izpis
+      const { data: member } = await db.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+      const { data: org } = member ? await db.from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
+      const { data: allSessions } = await db.from('cash_sessions').select('id').eq('business_id', '00000000-0000-0000-0000-000000000001').order('created_at', { ascending: true })
+      const sessionNumber = (allSessions || []).findIndex(s => s.id === session.id) + 1
+      const cashierName = user.email?.split('@')[0] || ''
+
+      // Natisni Z-poročilo
+      const updatedSession = { ...session, closed_at: new Date().toISOString(), closing_note: note }
+      const html = buildZReportReceipt({
+        session: updatedSession as any,
+        stats,
+        org: org || { name: 'ŠIRM fitness&bar', tax_number: '', vat_registered: false },
+        zReportNumber: zReportNumber!,
+        cashierName,
+        cashClosingDeclared: declared,
+      })
+      await printCashReceipt(html)
+
+      // Pošlji email
+      const ownerEmail = posData.staffList?.find(s => s.role === 'Lastnik')?.email
+      if (ownerEmail || org?.email) {
+        fetch('/api/email/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: ownerEmail || org?.email,
+            subject: `Z-poročilo #${zReportNumber} — ${new Date().toLocaleDateString('sl-SI')}`,
+            html,
+          })
+        }).catch(() => {})
+      }
+
+      setSaved(true)
+      setTimeout(() => { onClosed(); onClose() }, 1500)
+    } catch (e: any) {
+      setError(e.message)
+    }
+    setSaving(false)
+  }
+
+  return (
+    <Modal open onClose={saving ? undefined : onClose} width={420}>
+      <ModalHeader title="Zaključek blagajne" onClose={onClose}/>
+      <div style={{ padding:'20px', display:'flex', flexDirection:'column', gap:14 }}>
+        {loading ? (
+          <div style={{ textAlign:'center', padding:20, color:T.muted }}>Nalagam...</div>
+        ) : saved ? (
+          <div style={{ textAlign:'center', padding:24 }}>
+            <div style={{ fontSize:40, marginBottom:8 }}>✅</div>
+            <div style={{ fontSize:16, fontWeight:700 }}>Blagajna zaključena</div>
+            <div style={{ fontSize:12, color:T.muted, marginTop:4 }}>Z-poročilo natisnjeno</div>
+          </div>
+        ) : stats ? (<>
+          <div style={{ background:T.surface, borderRadius:10, padding:'10px 14px', fontSize:12, color:T.muted }}>
+            Izmena: {new Date(session.opened_at).toLocaleString('sl-SI')} – zdaj
+          </div>
+
+          <div style={{ fontSize:12, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:1 }}>Promet dneva</div>
+          {[['Gotovina', stats.cash, stats.cashCount], ['Kartica', stats.card, stats.cardCount], ['Bon', stats.bon, stats.bonCount]].map(([label, amt, cnt]) => (
+            <div key={label as string} style={{ display:'flex', justifyContent:'space-between', fontSize:13 }}>
+              <span>{label as string}</span>
+              <span style={{ fontWeight:600 }}>{eur(amt as number)} <span style={{ color:T.muted, fontSize:11 }}>({cnt as number})</span></span>
+            </div>
+          ))}
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, fontWeight:700, borderTop:'2px solid '+T.line, paddingTop:8 }}>
+            <span>SKUPAJ</span><span>{eur(stats.totalRevenue)}</span>
+          </div>
+
+          <div style={{ fontSize:12, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:1, marginTop:4 }}>Izračun gotovine</div>
+          <div style={{ background:T.surface, borderRadius:8, padding:'10px 12px', fontSize:12 }}>
+            <div style={{ display:'flex', justifyContent:'space-between' }}><span>Začetna:</span><span>{eur(Number(session.cash_opening))}</span></div>
+            <div style={{ display:'flex', justifyContent:'space-between' }}><span>+ Gotovinski računi:</span><span>{eur(stats.cash)}</span></div>
+            {stats.refundTotal > 0 && <div style={{ display:'flex', justifyContent:'space-between' }}><span>− Vračila:</span><span>{eur(stats.refundTotal)}</span></div>}
+            <div style={{ display:'flex', justifyContent:'space-between', fontWeight:700, borderTop:'1px solid '+T.line, marginTop:6, paddingTop:6 }}>
+              <span>Pričakovano v blagajni:</span><span>{eur(expected)}</span>
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize:12, fontWeight:600, marginBottom:6 }}>Prešteto v blagajni (€)</div>
+            <input
+              type="number" min="0" step="0.01"
+              value={cashDeclared}
+              onChange={e => setCashDeclared(e.target.value)}
+              style={{ width:'100%', padding:'10px 12px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:14, fontWeight:700, background:T.inputBg, outline:'none' }}
+            />
+          </div>
+
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:14, fontWeight:700, padding:'10px 12px', background:'rgba(0,0,0,0.04)', borderRadius:8 }}>
+            <span>Razlika:</span>
+            <span style={{ color:diffColor }}>{diffLabel}</span>
+          </div>
+
+          <div>
+            <div style={{ fontSize:12, fontWeight:600, marginBottom:6 }}>Opomba (opcijsko)</div>
+            <input
+              type="text" value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder="npr. manjkalo 5€, oddano v sef..."
+              style={{ width:'100%', padding:'9px 12px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:12, background:T.inputBg, outline:'none' }}
+            />
+          </div>
+
+          {error && <div style={{ color:T.danger, fontSize:12, background:'rgba(168,50,50,0.08)', padding:'8px 12px', borderRadius:8 }}>⚠️ {error}</div>}
+
+          <div style={{ display:'flex', gap:8, marginTop:4 }}>
+            <button onClick={onClose} disabled={saving} style={{ flex:1, padding:'11px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'1px solid '+T.line, background:'transparent', fontWeight:600, fontSize:13 }}>Prekliči</button>
+            <button onClick={handleClose} disabled={saving} style={{ flex:2, padding:'11px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'none', background:T.danger, color:'#fff', fontWeight:700, fontSize:13 }}>
+              {saving ? 'Zaključujem...' : '🔒 Zaključi blagajno'}
+            </button>
+          </div>
+        </>) : <div style={{ color:T.danger }}>Napaka pri nalaganju</div>}
+      </div>
+    </Modal>
+  )
+}
+
 function ZReportModal({ posData, onClose }) {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState(null)
@@ -4199,6 +4571,24 @@ function ReportsScreen({ posData }) {
   const [loading, setLoading] = useState(true)
   const [showPeriodModal, setShowPeriodModal] = useState(false)
   const [showZReport, setShowZReport] = useState(false)
+  const [cashSession, setCashSession] = React.useState(null)
+  const [sessionLoaded, setSessionLoaded] = React.useState(false)
+  const [showOpenCash, setShowOpenCash] = React.useState(false)
+  const [showXReport, setShowXReport] = React.useState(false)
+  const [showCloseCash, setShowCloseCash] = React.useState(false)
+
+  // Naloži trenutno izmeno ob zagonu
+  React.useEffect(() => {
+    getCurrentSession().then(s => {
+      setCashSession(s)
+      setSessionLoaded(true)
+      if (!s) setShowOpenCash(true)
+    })
+  }, [])
+
+  function refreshSession() {
+    getCurrentSession().then(s => setCashSession(s))
+  }
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
 
@@ -4323,6 +4713,17 @@ function ReportsScreen({ posData }) {
           <button onClick={()=>setShowPeriodModal(true)} style={{ ...btnS, display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
             <KI name="calendar" size={13}/> Spremeni obdobje
           </button>
+          {cashSession && <button onClick={()=>setShowXReport(true)} style={{ ...btnP, display:'flex', alignItems:'center', gap:6, fontSize:12, background:'#2563eb' }}>
+            <KI name="receipt" size={14}/> X-poročilo
+          </button>}
+          {cashSession
+            ? <button onClick={()=>setShowCloseCash(true)} style={{ ...btnP, display:'flex', alignItems:'center', gap:6, fontSize:12, background:T.danger }}>
+                <KI name="lock" size={14}/> Zaključi blagajno
+              </button>
+            : <button onClick={()=>setShowOpenCash(true)} style={{ ...btnP, display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
+                <KI name="unlock" size={14}/> Odpri blagajno
+              </button>
+          }
           <button onClick={()=>setShowZReport(true)} style={{ ...btnP, display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
             <KI name="print" size={13}/> Z-poročilo (zaključi izmeno)
           </button>
@@ -4449,6 +4850,21 @@ function ReportsScreen({ posData }) {
       </div>
 
       {showZReport && <ZReportModal posData={posData} onClose={()=>setShowZReport(false)}/>}
+      {showOpenCash && <OpenCashModal posData={posData} auth={auth} onClose={()=>setShowOpenCash(false)} onOpened={(s)=>{ setCashSession(s); setShowOpenCash(false) }}/>}
+      {showXReport && cashSession && <XReportModal session={cashSession} posData={posData} auth={auth} onClose={()=>setShowXReport(false)}/>}
+      {showCloseCash && cashSession && <CloseCashModal session={cashSession} posData={posData} auth={auth} onClose={()=>setShowCloseCash(false)} onClosed={()=>{ setCashSession(null); refreshSession() }}/>}
+      {sessionLoaded && !cashSession && !showOpenCash && (
+        <Modal open width={340}>
+          <div style={{ padding:'32px 24px', textAlign:'center' }}>
+            <div style={{ fontSize:40, marginBottom:12 }}>🔒</div>
+            <div style={{ fontSize:18, fontWeight:700, marginBottom:8 }}>Blagajna je zaprta</div>
+            <div style={{ fontSize:13, color:T.muted, marginBottom:20 }}>Pred začetkom prodaje odprite blagajno in vnesite začetno gotovino.</div>
+            <button onClick={()=>setShowOpenCash(true)} style={{ width:'100%', padding:'13px', borderRadius:10, cursor:'pointer', fontFamily:'inherit', border:'none', background:T.accent, color:'#fff', fontWeight:700, fontSize:14 }}>
+              🔓 Odpri blagajno
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {/* Period modal */}
       {showPeriodModal && (
