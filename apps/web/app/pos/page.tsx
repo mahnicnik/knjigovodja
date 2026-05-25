@@ -7710,7 +7710,7 @@ function KlasikApp() {
             <div style={{ fontSize:40, marginBottom:12 }}>🔒</div>
             <div style={{ fontSize:18, fontWeight:700, marginBottom:8 }}>Blagajna je zaprta</div>
             <div style={{ fontSize:13, color:T.muted, marginBottom:20 }}>Pred začetkom prodaje odprite blagajno in vnesite začetno gotovino.</div>
-            <button onClick={()=>setShowOpenCash(true)} style={{ width:%', padding:'13px', borderRadius:10, cursor:'pointer', fontFamily:'inherit', border:'none', background:T.accent, color:'#fff', fontWeight:700, fontSize:14 }}>
+            <button onClick={()=>setShowOpenCash(true)} style={{ width:'100%', padding:'13px', borderRadius:10, cursor:'pointer', fontFamily:'inherit', border:'none', background:T.accent, color:'#fff', fontWeight:700, fontSize:14 }}>
               🔓 Odpri blagajno
             </button>
           </div>
