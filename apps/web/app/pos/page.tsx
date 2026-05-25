@@ -7641,7 +7641,7 @@ function KlasikApp() {
             </button>
           )}
           {cashSession
-            ? <button onClick={CloseCash(true)} style={{ padding:'5px 10px', borderRadius:7, border:'none', background:'rgba(168,50,50,0.15)', color:T.danger, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700 }}>
+            ? <button onClick={()=>setShowCloseCash(true)} style={{ padding:'5px 10px', borderRadius:7, border:'none', background:'rgba(168,50,50,0.15)', color:T.danger, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700 }}>
                 🔒 Zaključi
               </button>
             : <button onClick={()=>setShowOpenCash(true)} style={{ padding:'5px 10px', borderRadius:7, border:'none', background:T.accentSoft, color:T.accent, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700 }}>
