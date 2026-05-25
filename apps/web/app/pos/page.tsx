@@ -7633,6 +7633,19 @@ function KlasikApp() {
           {activePremise && <div style={{ fontSize:10, fontWeight:700, color:'#e9b949', background:'rgba(233,185,73,0.15)', padding:'4px 8px', borderRadius:6, letterSpacing:'0.04em' }}>📍 {activePremise.premise_id}</div>}
           <BellNotifications notifications={posData.notifications} notifOpen={notifOpen} setNotifOpen={setNotifOpen} posData={posData} orderListOpen={orderListOpen} setOrderListOpen={setOrderListOpen}/>
           {orderListOpen && <OrderListModal posData={posData} onClose={()=>setOrderListOpen(false)}/>}
+          {cashSession && (
+            <button onClick={()=>setShowXReport(true)} style={{ padding:'5px 10px', borderRadius:7, border:'none', background:'rgba(37,99,235,0.15)', color:'#2563eb', cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700 }}>
+              X-poročilo
+            </button>
+          )}
+          {cashSession
+            ? <button onClick={CloseCash(true)} style={{ padding:'5px 10px', borderRadius:7, border:'none', background:'rgba(168,50,50,0.15)', color:T.danger, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700 }}>
+                🔒 Zaključi
+              </button>
+            : <button onClick={()=>setShowOpenCash(true)} style={{ padding:'5px 10px', borderRadius:7, border:'none', background:T.accentSoft, color:T.accent, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700 }}>
+                🔓 Odpri
+              </button>
+          }
           <UserAvatar user={auth.user} onLock={auth.lock}/>
         </div>
       </div>
@@ -7688,6 +7701,21 @@ function KlasikApp() {
         }}/>
       <ReceiptToast data={receipt} onClose={() => setReceipt(null)}/>
       {sellPackageModal && <SellPackageModal template={sellPackageModal} posData={posData} onClose={()=>setSellPackageModal(null)} auth={auth}/>}
+      {showOpenCash && <OpenCashModal posData={posData} auth={auth} onClose={()=>setShowOpenCash(false)} onOpened={(s)=>{ setCashSession(s); setShowOpenCash(false) }}/>}
+      {showXReport && cashSession && <XReportModal session={cashSession} posData={posData} auth={auth} onClose={()=>setShowXReport(false)}/>}
+      {showCloseCash && cashSession && <CloseCashModal session={cashSession} posData={posData} auth={auth} onClose={()=>setShowCloseCash(false)} onClosed={()=>{ setCashSession(null); refreshSession() }}/>}
+      {sessionLoaded && !cashSession && !showOpenCash && (
+        <Modal open width={340}>
+          <div style={{ padding:'32px 24px', textAlign:'center' }}>
+            <div style={{ fontSize:40, marginBottom:12 }}>🔒</div>
+            <div style={{ fontSize:18, fontWeight:700, marginBottom:8 }}>Blagajna je zaprta</div>
+            <div style={{ fontSize:13, color:T.muted, marginBottom:20 }}>Pred začetkom prodaje odprite blagajno in vnesite začetno gotovino.</div>
+            <button onClick={()=>setShowOpenCash(true)} style={{ width:%', padding:'13px', borderRadius:10, cursor:'pointer', fontFamily:'inherit', border:'none', background:T.accent, color:'#fff', fontWeight:700, fontSize:14 }}>
+              🔓 Odpri blagajno
+            </button>
+          </div>
+        </Modal>
+      )}
       {auth.locked && <LockScreen auth={auth}/>}
     </div>
   )
