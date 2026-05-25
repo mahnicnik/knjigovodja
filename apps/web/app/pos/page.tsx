@@ -4230,6 +4230,352 @@ function ZReportModal({ posData, onClose }) {
 // ================================================================
 // ORDERS SCREEN — pregled računov
 // ================================================================
+
+// ─────────────────────────────────────────────────────────────────
+// STORNO MODAL
+// ─────────────────────────────────────────────────────────────────
+
+function VoidModal({ order, lines, payment, posData, auth, onClose, onVoided }) {
+  const [reason, setReason] = React.useState('')
+  const [saving, setSaving] = React.useState(false)
+  const [done, setDone] = React.useState(false)
+  const [error, setError] = React.useState('')
+
+  async function handleVoid() {
+    setSaving(true)
+    setError('')
+    try {
+      const db = createClient()
+      const { data: { user } } = await db.auth.getUser()
+      if (!user) throw new Error('Niste prijavljeni')
+
+      // 1. Pridobi org podatke za FURS klic
+      const { data: member } = await db.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+      if (!member) throw new Error('Org ni najdena')
+
+      // 2. Kliči FURS kredit nota (storno)
+      const fursRes = await fetch('/api/furs/void', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          order_id: order.id,
+          total: order.total,
+          original_eor: payment?.furs_eor,
+          reason,
+        })
+      })
+      const fursData = await fursRes.json().catch(() => ({}))
+
+      // 3. Označi order kot storniran
+      await db.from('orders').update({
+        voided_at: new Date().toISOString(),
+        voided_by: user.id,
+        void_reason: reason || 'Storno',
+        void_furs_eor: fursData.eor || null,
+        void_furs_zoi: fursData.zoi || null,
+        status: 'voided',
+      }).eq('id', order.id)
+
+      // 4. Natisni storno račun
+      const { data: org } = member ? await db.from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
+      const cashierName = user.email?.split('@')[0] || ''
+      const html = buildStornoReceiptHTML({
+        order, lines, payment, org, cashierName,
+        voidEor: fursData.eor,
+        voidZoi: fursData.zoi,
+        reason: reason || 'Storno',
+      })
+      const w = window.open('', '_blank', 'width=380,height=700')
+      if (w) { w.document.write(html); w.document.close() }
+
+      setDone(true)
+      setTimeout(() => { onVoided(); onClose() }, 1500)
+    } catch (e: any) {
+      setError(e.message)
+    }
+    setSaving(false)
+  }
+
+  return (
+    <Modal open onClose={saving ? undefined : onClose} width={400}>
+      <ModalHeader title="Storno računa" onClose={onClose}/>
+      <div style={{ padding:'20px', display:'flex', flexDirection:'column', gap:14 }}>
+        {done ? (
+          <div style={{ textAlign:'center', padding:24 }}>
+            <div style={{ fontSize:40, marginBottom:8 }}>✅</div>
+            <div style={{ fontSize:16, fontWeight:700 }}>Račun storniran</div>
+          </div>
+        ) : (<>
+          <div style={{ background:'rgba(168,50,50,0.08)', border:'1px solid rgba(168,50,50,0.2)', borderRadius:10, padding:'12px 14px' }}>
+            <div style={{ fontSize:13, fontWeight:700, color:T.danger, marginBottom:4 }}>⚠️ Pozor — storno je nepovraten</div>
+            <div style={{ fontSize:12, color:T.muted }}>Stornira se celoten račun #{order.number || order.id.slice(-6)} za €{Number(order.total).toFixed(2)}. Stranki se vrne celoten znesek.</div>
+          </div>
+
+          <div style={{ background:T.surface, borderRadius:10, padding:'10px 14px' }}>
+            <div style={{ fontSize:12, fontWeight:700, marginBottom:6 }}>Artikli na računu:</div>
+            {lines.map(l => (
+              <div key={l.id} style={{ display:'flex', justifyContent:'space-between', fontSize:12, padding:'2px 0', color:T.muted }}>
+                <span>{l.name} × {l.qty}</span>
+                <span>€{(Number(l.qty)*Number(l.unit_price)).toFixed(2)}</span>
+              </div>
+            ))}
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, fontWeight:700, borderTop:'1px solid '+T.line, marginTop:6, paddingTop:6 }}>
+              <span>Skupaj:</span><span>€{Number(order.total).toFixed(2)}</span>
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize:12, fontWeight:600, marginBottom:6 }}>Razlog storna</div>
+            <input
+              type="text" value={reason}
+              onChange={e => setReason(e.target.value)}
+              placeholder="npr. napačna naročba, zahteva stranke..."
+              style={{ width:'100%', padding:'9px 12px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:12, background:T.inputBg, outline:'none' }}
+            />
+          </div>
+
+          {error && <div style={{ color:T.danger, fontSize:12, background:'rgba(168,50,50,0.08)', padding:'8px 12px', borderRadius:8 }}>⚠️ {error}</div>}
+
+          <div style={{ display:'flex', gap:8, marginTop:4 }}>
+            <button onClick={onClose} disabled={saving} style={{ flex:1, padding:'11px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'1px solid '+T.line, background:'transparent', fontWeight:600, fontSize:13 }}>Prekliči</button>
+            <button onClick={handleVoid} disabled={saving} style={{ flex:2, padding:'11px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'none', background:T.danger, color:'#fff', fontWeight:700, fontSize:13 }}>
+              {saving ? 'Storniram...' : '🗑️ Potrdi storno'}
+            </button>
+          </div>
+        </>)}
+      </div>
+    </Modal>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// VRAČILO MODAL (delno)
+// ─────────────────────────────────────────────────────────────────
+
+function RefundModal({ order, lines, payment, auth, onClose, onRefunded }) {
+  const [selectedLines, setSelectedLines] = React.useState<string[]>([])
+  const [customAmount, setCustomAmount] = React.useState('')
+  const [mode, setMode] = React.useState<'lines'|'custom'>('lines')
+  const [reason, setReason] = React.useState('')
+  const [saving, setSaving] = React.useState(false)
+  const [done, setDone] = React.useState(false)
+  const [error, setError] = React.useState('')
+
+  const selectedTotal = lines
+    .filter(l => selectedLines.includes(l.id))
+    .reduce((s, l) => s + Number(l.qty) * Number(l.unit_price), 0)
+
+  const refundAmount = mode === 'lines'
+    ? selectedTotal
+    : parseFloat(customAmount) || 0
+
+  function toggleLine(id: string) {
+    setSelectedLines(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  async function handleRefund() {
+    if (refundAmount <= 0) { setError('Znesek vračila mora biti večji od 0'); return }
+    if (refundAmount > Number(order.total)) { setError('Znesek ne sme presegati skupaj računa'); return }
+    setSaving(true)
+    setError('')
+    try {
+      const db = createClient()
+      const { data: { user } } = await db.auth.getUser()
+      if (!user) throw new Error('Niste prijavljeni')
+
+      await db.from('refunds').insert({
+        business_id: '00000000-0000-0000-0000-000000000001',
+        original_order_id: order.id,
+        amount: refundAmount,
+        reason: reason || 'Delno vračilo',
+        cashier_id: user.id,
+        refunded_at: new Date().toISOString(),
+      })
+
+      // Natisni vračilo
+      const html = buildRefundReceiptHTML({
+        order, refundAmount,
+        reason: reason || 'Delno vračilo',
+        cashierName: user.email?.split('@')[0] || '',
+      })
+      const w = window.open('', '_blank', 'width=380,height=600')
+      if (w) { w.document.write(html); w.document.close() }
+
+      setDone(true)
+      setTimeout(() => { onRefunded(); onClose() }, 1500)
+    } catch (e: any) {
+      setError(e.message)
+    }
+    setSaving(false)
+  }
+
+  return (
+    <Modal open onClose={saving ? undefined : onClose} width={420}>
+      <ModalHeader title="Delno vračilo" onClose={onClose}/>
+      <div style={{ padding:'20px', display:'flex', flexDirection:'column', gap:14 }}>
+        {done ? (
+          <div style={{ textAlign:'center', padding:24 }}>
+            <div style={{ fontSize:40, marginBottom:8 }}>✅</div>
+            <div style={{ fontSize:16, fontWeight:700 }}>Vračilo zabeleženo</div>
+            <div style={{ fontSize:13, color:T.muted, marginTop:4 }}>€{refundAmount.toFixed(2)}</div>
+          </div>
+        ) : (<>
+          {/* Način */}
+          <div style={{ display:'flex', gap:8 }}>
+            {(['lines', 'custom'] as const).map(m => (
+              <button key={m} onClick={() => setMode(m)} style={{ flex:1, padding:'8px', borderRadius:8, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:700, border:'1px solid '+T.line, background: mode===m ? T.accent : 'transparent', color: mode===m ? '#fff' : T.text }}>
+                {m === 'lines' ? '📋 Po artiklih' : '✏️ Ročni znesek'}
+              </button>
+            ))}
+          </div>
+
+          {mode === 'lines' ? (
+            <div style={{ background:T.surface, borderRadius:10, padding:'10px 14px' }}>
+              <div style={{ fontSize:12, fontWeight:700, marginBottom:8 }}>Izberi artikle za vračilo:</div>
+              {lines.map(l => {
+                const lineTotal = Number(l.qty) * Number(l.unit_price)
+                const selected = selectedLines.includes(l.id)
+                return (
+                  <div key={l.id} onClick={() => toggleLine(l.id)} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'7px 0', borderBottom:'1px solid '+T.lineSoft, cursor:'pointer' }}>
+                    <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                      <div style={{ width:18, height:18, borderRadius:4, border:'1.5px solid '+(selected?T.accent:T.line), background:selected?T.accent:'transparent', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:12 }}>
+                        {selected ? '✓' : ''}
+                      </div>
+                      <span style={{ fontSize:13 }}>{l.name} × {l.qty}</span>
+                    </div>
+                    <span style={{ fontSize:13, fontWeight:600 }}>€{lineTotal.toFixed(2)}</span>
+                  </div>
+                )
+              })}
+              <div style={{ display:'flex', justifyContent:'space-between', fontSize:14, fontWeight:700, marginTop:8, paddingTop:8, borderTop:'1px solid '+T.line }}>
+                <span>Vračilo:</span><span style={{ color:T.accent }}>€{selectedTotal.toFixed(2)}</span>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div style={{ fontSize:12, fontWeight:600, marginBottom:6 }}>Znesek vračila (€)</div>
+              <input
+                type="number" min="0.01" step="0.01" max={order.total}
+                value={customAmount}
+                onChange={e => setCustomAmount(e.target.value)}
+                placeholder={`Max: €${Number(order.total).toFixed(2)}`}
+                style={{ width:'100%', padding:'10px 12px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:14, fontWeight:700, background:T.inputBg, outline:'none' }}
+                autoFocus
+              />
+            </div>
+          )}
+
+          <div>
+            <div style={{ fontSize:12, fontWeight:600, marginBottom:6 }}>Razlog vračila</div>
+            <input
+              type="text" value={reason}
+              onChange={e => setReason(e.target.value)}
+              placeholder="npr. napaka pri naročilu, nezadovoljstvo..."
+              style={{ width:'100%', padding:'9px 12px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:12, background:T.inputBg, outline:'none' }}
+            />
+          </div>
+
+          {refundAmount > 0 && (
+            <div style={{ background:T.accentSoft, borderRadius:8, padding:'10px 14px', display:'flex', justifyContent:'space-between', fontSize:14, fontWeight:700 }}>
+              <span>Vračilo stranki:</span>
+              <span style={{ color:T.accent }}>€{refundAmount.toFixed(2)}</span>
+            </div>
+          )}
+
+          {error && <div style={{ color:T.danger, fontSize:12, background:'rgba(168,50,50,0.08)', padding:'8px 12px', borderRadius:8 }}>⚠️ {error}</div>}
+
+          <div style={{ display:'flex', gap:8, marginTop:4 }}>
+            <button onClick={onClose} disabled={saving} style={{ flex:1, padding:'11px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'1px solid '+T.line, background:'transparent', fontWeight:600, fontSize:13 }}>Prekliči</button>
+            <button onClick={handleRefund} disabled={saving || refundAmount <= 0} style={{ flex:2, padding:'11px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'none', background: refundAmount > 0 ? T.accent : T.line, color:'#fff', fontWeight:700, fontSize:13 }}>
+              {saving ? 'Shranjujem...' : `↩️ Vrni €${refundAmount.toFixed(2)}`}
+            </button>
+          </div>
+        </>)}
+      </div>
+    </Modal>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// STORNO RAČUN HTML (termalni format)
+// ─────────────────────────────────────────────────────────────────
+
+function buildStornoReceiptHTML({ order, lines, payment, org, cashierName, voidEor, voidZoi, reason }) {
+  const eur = n => '€' + Number(n).toFixed(2).replace('.', ',')
+  const addr = [org?.address, [org?.post_code, org?.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>STORNO #${order.number}</title>
+<style>@page{size:80mm auto;margin:0}body{font-family:monospace;font-size:11px;line-height:1.4;color:#000;background:#fff;margin:0;padding:8mm 4mm;max-width:80mm}.c{text-align:center}.b{font-weight:700}.l{border-top:1px dashed #000;margin:6px 0}.dl{border-top:2px solid #000;margin:6px 0}.r{display:flex;justify-content:space-between}.s{font-size:10px;color:#444}.footer{text-align:center;font-size:10px;margin-top:8px}.brand{font-weight:700;letter-spacing:4px;font-size:11px}</style>
+</head><body>
+<div class="c">
+  <div class="b" style="font-size:14px">${org?.name || 'ŠIRM fitness&bar'}</div>
+  ${addr ? `<div class="s">${addr}</div>` : ''}
+  ${org?.tax_number ? `<div class="s">Davčna št.: ${org.tax_number}</div>` : ''}
+  ${org?.vat_registered ? `<div class="s">ID za DDV: SI${org.tax_number}</div>` : ''}
+</div>
+<div class="l"></div>
+<div class="c b" style="font-size:13px;color:#a83232">⚠️ STORNO RAČUN</div>
+<div class="c s" style="color:#a83232">Originalni račun je razveljavljen</div>
+<div class="l"></div>
+<div class="r"><span>Storno računa:</span><span class="b">#${order.number || order.id.slice(-6)}</span></div>
+<div class="r"><span>Datum:</span><span>${new Date().toLocaleString('sl-SI')}</span></div>
+<div class="r"><span>Blagajnik:</span><span>${cashierName}</span></div>
+<div class="r"><span>Razlog:</span><span>${reason}</span></div>
+<div class="l"></div>
+${lines.map(l => `
+<div class="r"><span>${l.name}</span><span>-${eur(Number(l.qty)*Number(l.unit_price))}</span></div>
+<div class="r s"><span>  ${l.qty} × ${eur(l.unit_price)}</span><span></span></div>
+`).join('')}
+<div class="dl"></div>
+<div class="r b" style="font-size:13px"><span>VRAČILO:</span><span style="color:#a83232">-${eur(order.total)}</span></div>
+<div class="dl"></div>
+${voidEor ? `
+<div class="l"></div>
+<div class="s">ZOI: ${voidZoi || '—'}</div>
+<div class="s">EOR: ${voidEor}</div>
+<div class="c b s" style="margin-top:4px">✓ Davčno potrjeno</div>
+` : `<div class="c s" style="color:#a83232">FURS potrjevanje ni uspelo</div>`}
+<div class="l"></div>
+<div class="c">Hvala za razumevanje!</div>
+<div class="l"></div>
+<div class="footer">
+  <div>⚡ Izdano s sistemom</div>
+  <div class="brand">RAČUNKO</div>
+  <div>AI knjigovodstvo za s.p.</div>
+  <div style="font-weight:700">www.računko.si</div>
+</div>
+<script>window.addEventListener('load',function(){setTimeout(function(){window.print();setTimeout(function(){window.close()},1500)},100)})</script>
+</body></html>`
+}
+
+// ─────────────────────────────────────────────────────────────────
+// VRAČILO POTRDILO HTML
+// ─────────────────────────────────────────────────────────────────
+
+function buildRefundReceiptHTML({ order, refundAmount, reason, cashierName }) {
+  const eur = n => '€' + Number(n).toFixed(2).replace('.', ',')
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Vračilo #${order.number}</title>
+<style>@page{size:80mm auto;margin:0}body{font-family:monospace;font-size:11px;line-height:1.4;color:#000;background:#fff;margin:0;padding:8mm 4mm;max-width:80mm}.c{text-align:center}.b{font-weight:700}.l{border-top:1px dashed #000;margin:6px 0}.dl{border-top:2px solid #000;margin:6px 0}.r{display:flex;justify-content:space-between}.s{font-size:10px;color:#444}.footer{text-align:center;font-size:10px;margin-top:8px}.brand{font-weight:700;letter-spacing:4px;font-size:11px}</style>
+</head><body>
+<div class="c b" style="font-size:14px">POTRDILO O VRAČILU</div>
+<div class="l"></div>
+<div class="r"><span>Orig. račun:</span><span class="b">#${order.number || order.id.slice(-6)}</span></div>
+<div class="r"><span>Datum:</span><span>${new Date().toLocaleString('sl-SI')}</span></div>
+<div class="r"><span>Blagajnik:</span><span>${cashierName}</span></div>
+<div class="r"><span>Razlog:</span><span>${reason}</span></div>
+<div class="dl"></div>
+<div class="r b" style="font-size:14px"><span>VRAČILO:</span><span style="color:#2563eb">${eur(refundAmount)}</span></div>
+<div class="dl"></div>
+<div class="c" style="margin-top:8px">Hvala za razumevanje!</div>
+<div class="l"></div>
+<div class="footer">
+  <div>⚡ Izdano s sistemom</div>
+  <div class="brand">RAČUNKO</div>
+  <div style="font-weight:700">www.računko.si</div>
+</div>
+<script>window.addEventListener('load',function(){setTimeout(function(){window.print();setTimeout(function(){window.close()},1500)},100)})</script>
+</body></html>`
+}
+
 function OrdersScreen({ posData, auth }) {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
@@ -4240,6 +4586,18 @@ function OrdersScreen({ posData, auth }) {
   const [search, setSearch] = useState('')
   const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate()-30); return d.toISOString().slice(0,10) })
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0,10))
+  const [showVoid, setShowVoid] = React.useState(false)
+  const [showRefund, setShowRefund] = React.useState(false)
+
+  // Preveri ali je račun od danes
+  function isToday(dateStr) {
+    if (!dateStr) return false
+    const d = new Date(dateStr)
+    const now = new Date()
+    return d.getFullYear() === now.getFullYear() &&
+      d.getMonth() === now.getMonth() &&
+      d.getDate() === now.getDate()
+  }
 
   const METHOD_LABELS = { cash:'Gotovina', card:'Kartica', bon:'Bon', prep:'Predplačilo', split:'Deljeno' }
 
@@ -4481,6 +4839,27 @@ function OrdersScreen({ posData, auth }) {
         </div>
       </div>
 
+      {showVoid && selectedOrder && (
+        <VoidModal
+          order={selectedOrder}
+          lines={orderLines}
+          payment={orderPayment}
+          posData={posData}
+          auth={auth}
+          onClose={()=>setShowVoid(false)}
+          onVoided={()=>{ setSelectedOrder(null); loadOrders() }}
+        />
+      )}
+      {showRefund && selectedOrder && (
+        <RefundModal
+          order={selectedOrder}
+          lines={orderLines}
+          payment={orderPayment}
+          auth={auth}
+          onClose={()=>setShowRefund(false)}
+          onRefunded={()=>{ setSelectedOrder(null); loadOrders() }}
+        />
+      )}
       {/* Detail */}
       {selectedOrder && (
         <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
@@ -4493,6 +4872,23 @@ function OrdersScreen({ posData, auth }) {
               style={{ padding:'7px 14px', borderRadius:8, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, display:'flex', alignItems:'center', gap:6 }}>
               🖨️ Ponovni izpis
             </button>
+            {isToday(selectedOrder.closed_at) && !selectedOrder.voided_at && auth.can('voidReceipt') && (
+              <button onClick={()=>setShowVoid(true)}
+                style={{ padding:'7px 14px', borderRadius:8, border:'none', background:'rgba(168,50,50,0.1)', color:T.danger, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', gap:6 }}>
+                🗑️ Storno
+              </button>
+            )}
+            {isToday(selectedOrder.closed_at) && !selectedOrder.voided_at && auth.can('refund') && (
+              <button onClick={()=>setShowRefund(true)}
+                style={{ padding:'7px 14px', borderRadius:8, border:'none', background:'rgba(37,99,235,0.1)', color:'#2563eb', cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', gap:6 }}>
+                ↩️ Vračilo
+              </button>
+            )}
+            {selectedOrder.voided_at && (
+              <div style={{ padding:'6px 12px', borderRadius:8, background:'rgba(168,50,50,0.08)', color:T.danger, fontSize:12, fontWeight:700 }}>
+                ⛔ Storniran
+              </div>
+            )}
             {selectedOrder.furs_required && !orderPayment?.furs_eor && (
               <button onClick={async()=>{
                 try {
