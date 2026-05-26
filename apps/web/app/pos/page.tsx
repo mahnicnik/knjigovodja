@@ -4982,12 +4982,12 @@ function ReportsScreen({ posData, auth }) {
     const now = new Date()
     let from, to
     if (p === 'today') {
-      from = now.toISOString().slice(0,10) + 'T00:00:00.000Z'
-      to = now.toISOString().slice(0,10) + 'T23:59:59.999Z'
+      from = new Date(now.toISOString().slice(0,10) + 'T00:00:00.000Z')
+      to = new Date(now.toISOString().slice(0,10) + 'T23:59:59.999Z')
     } else if (p === 'yesterday') {
       const y = new Date(now); y.setUTCDate(y.getUTCDate()-1)
-      from = y.toISOString().slice(0,10) + 'T00:00:00.000Z'
-      to = y.toISOString().slice(0,10) + 'T23:59:59.999Z'
+      from = new Date(y.toISOString().slice(0,10) + 'T00:00:00.000Z')
+      to = new Date(y.toISOString().slice(0,10) + 'T23:59:59.999Z')
     } else if (p === 'week') {
       from = new Date(now); from.setDate(now.getDate()-7); from.setHours(0,0,0,0)
       to = now
@@ -5008,13 +5008,13 @@ function ReportsScreen({ posData, auth }) {
         .select('id, closed_at, payments(amount, method, tip)')
         .eq('business_id', BUSINESS_ID)
         .eq('status', 'paid')
-        .gte('closed_at', typeof from === 'string' ? from : from.toISOString())
-        .lte('closed_at', typeof to === 'string' ? to : to.toISOString()),
+        .gte('closed_at', from.toISOString())
+        .lte('closed_at', to.toISOString()),
       db.from('refunds')
         .select('amount, reason, created_at, orders(id)')
         .eq('business_id', BUSINESS_ID)
-        .gte('created_at', typeof from === 'string' ? from : from.toISOString())
-        .lte('created_at', typeof to === 'string' ? to : to.toISOString()),
+        .gte('created_at', from.toISOString())
+        .lte('created_at', to.toISOString()),
     ])
 
     const orders = ordersRes.data || []
