@@ -4982,12 +4982,12 @@ function ReportsScreen({ posData, auth }) {
     const now = new Date()
     let from, to
     if (p === 'today') {
-      from = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)
-      to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
+      from = new Date(now.toISOString().slice(0,10) + 'T00:00:00.000Z')
+      to = new Date(now.toISOString().slice(0,10) + 'T23:59:59.999Z')
     } else if (p === 'yesterday') {
-      const y = new Date(now); y.setDate(y.getDate()-1)
-      from = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 0, 0, 0)
-      to = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59, 999)
+      const y = new Date(now); y.setUTCDate(y.getUTCDate()-1)
+      from = new Date(y.toISOString().slice(0,10) + 'T00:00:00.000Z')
+      to = new Date(y.toISOString().slice(0,10) + 'T23:59:59.999Z')
     } else if (p === 'week') {
       from = new Date(now); from.setDate(now.getDate()-7); from.setHours(0,0,0,0)
       to = now
