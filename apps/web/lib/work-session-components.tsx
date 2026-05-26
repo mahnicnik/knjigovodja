@@ -82,13 +82,26 @@ export function WorkStatusBar({ posData, onRequestClockIn }: {
 
   async function loadSessions() {
     const db = createClient()
-    const { data } = await db
+    // Najprej work_sessions
+    const { data: ws } = await db
       .from('work_sessions')
-      .select('*, staff(name, color, role)')
+      .select('*')
       .eq('business_id', BUSINESS_ID)
       .in('status', ['active', 'on_break'])
       .order('clock_in', { ascending: true })
-    setSessions(data || [])
+
+    if (!ws || ws.length === 0) { setSessions([]); return }
+
+    // Potem staff podatki
+    const staffIds = [...new Set(ws.map((s: any) => s.staff_id))]
+    const { data: staffData } = await db
+      .from('staff')
+      .select('id, name, color, role')
+      .in('id', staffIds)
+
+    const staffMap = Object.fromEntries((staffData || []).map((s: any) => [s.id, s]))
+
+    setSessions(ws.map((s: any) => ({ ...s, staff: staffMap[s.staff_id] || null })))
   }
 
   async function toggleBreak(session: WorkSession) {
