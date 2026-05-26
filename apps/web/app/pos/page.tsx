@@ -5006,7 +5006,7 @@ function ReportsScreen({ posData, auth }) {
     const db = createClient()
     const [ordersRes, refundsRes] = await Promise.all([
       db.from('orders')
-        .select('id, closed_at, payments(amount, method, tip)')
+        .select('id, closed_at, total, tip_amount, payments(amount, method, tip)')
         .eq('business_id', BUSINESS_ID)
         .eq('status', 'paid')
         .gte('closed_at', from.toISOString())
@@ -5028,20 +5028,29 @@ function ReportsScreen({ posData, auth }) {
 
     orders.forEach(o => {
       const payments = o.payments || []
-      payments.forEach(p => {
-        const amt = Number(p.amount || 0)
-        const tip = Number(p.tip || 0)
+      // Fallback na o.total če payments je prazen
+      if (payments.length === 0 && o.total) {
+        const amt = Number(o.total)
         promet += amt
-        napitnine += tip
-        const h = new Date(o.created_at).getHours()
+       const h = new Date(o.closed_at).getHours()
         byHour[h] = (byHour[h] || 0) + amt
-        const m = p.method || 'other'
-        if (m === 'cash') byMethod.cash += amt
-        else if (m === 'card') byMethod.card += amt
-        else if (m === 'bon') byMethod.bon += amt
-        else if (m === 'prep') byMethod.prep += amt
-        else byMethod.other += amt
-      })
+        byMethod.cash += amt  // predpostavimo gotovina kot fallback
+      } else {
+        payments.forEach(p => {
+          const amt = Number(p.amount || 0)
+          const tip = Number(p.tip || 0)
+          promet += amt
+          napitnine += tip
+          const h = new Date(o.closed_at).getHours()
+          byHour[h] = (byHour[h] || 0) + amt
+          const m = p.method || 'other'
+          if (m === 'cash') byMethod.cash += amt
+          else if (m === 'card') byMethod.card += amt
+          else if (m === 'bon') byMethod.bon += amt
+          else if (m === 'prep') byMethod.prep += amt
+          else byMethod.other += amt
+        })
+      }
     })
 
     refunds.forEach(r => { vracila += Number(r.amount || 0) })
