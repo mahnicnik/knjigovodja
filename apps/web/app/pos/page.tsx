@@ -5067,7 +5067,7 @@ function ReportsScreen({ posData, auth }) {
       .select('name, qty, unit_price, orders!inner(closed_at, status, business_id)')
       .eq('orders.business_id', BUSINESS_ID)
       .eq('orders.status', 'paid')
-      .gte('orders._at', fromStr)
+      .gte('orders.closed_at', fromStr)
       .lte('orders.closed_at', toStr)
 
     const itemMap = {}
