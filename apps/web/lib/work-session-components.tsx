@@ -413,7 +413,7 @@ export function ClockOutModal({ session, staffMember, onClose, onClockedOut }: {
             <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Opomba (opcijsko)</div>
             <input type="text" value={note} onChange={e => setNote(e.target.value)}
               placeholder="npr. zaključil zgodaj, bolniška..."
-              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #e5e7eb', fontFamily: 'inherit', fontSize: 12, outline: 'none' }} />
+              style={{ width: '100%', padding: '9px 12pborderRadius: 8, border: '1px solid #e5e7eb', fontFamily: 'inherit', fontSize: 12, outline: 'none', color: '#111', background: '#fff' }} />
           </div>
 
           {error && <div style={{ color: '#dc2626', fontSize: 12 }}>⚠️ {error}</div>}
