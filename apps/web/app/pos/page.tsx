@@ -7583,6 +7583,7 @@ function KlasikApp() {
   const [notifOpen, setNotifOpen] = useState(false)
   const [orderListOpen, setOrderListOpen] = useState(false)
   const [showClockIn, setShowClockIn] = useState(false)
+  const [wsRefreshKey, setWsRefreshKey] = useState(0)
   const [sellPackageModal, setSellPackageModal] = useState(null)
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 30000); return () => clearInterval(t) }, [])
@@ -7636,7 +7637,7 @@ function KlasikApp() {
             </div>
           </div>
           {activePremise && <div style={{ fontSize:10, fontWeight:700, color:'#e9b949', background:'rgba(233,185,73,0.15)', padding:'4px 8px', borderRadius:6, letterSpacing:'0.04em' }}>📍 {activePremise.premise_id}</div>}
-          <WorkStatusBar posData={posData} onRequestClockIn={()=>setShowClockIn(true)}/>
+          <WorkStatusBar key={wsRefreshKey} posData={posData} onRequestClockIn={()=>setShowClockIn(true)}/>
           <BellNotifications notifications={posData.notifications} notifOpen={notifOpen} setNotifOpen={setNotifOpen} posData={posData} orderListOpen={orderListOpen} setOrderListOpen={setOrderListOpen}/>
           {orderListOpen && <OrderListModal posData={posData} onClose={()=>setOrderListOpen(false)}/>}
           {cashSession && (
@@ -7707,7 +7708,7 @@ function KlasikApp() {
         }}/>
       <ReceiptToast data={receipt} onClose={() => setReceipt(null)}/>
       {sellPackageModal && <SellPackageModal template={sellPackageModal} posData={posData} onClose={()=>setSellPackageModal(null)} auth={auth}/>}
-      {showClockIn && <ClockInModal posData={posData} onClose={()=>setShowClockIn(false)} onClockedIn={()=>setShowClockIn(false)}/>}
+      {showClockIn && <ClockInModal posData={posData} onClose={()=>setShowClockIn(false)} onClockedIn={()=>{ setShowClockIn(false); setWsRefreshKey(k=>k+1) }}/>}
       {showOpenCash && <OpenCashModal posData={posData} auth={auth} onClose={()=>setShowOpenCash(false)} onOpened={(s)=>{ setCashSession(s); setShowOpenCash(false) }}/>}
       {showXReport && cashSession && <XReportModal session={cashSession} posData={posData} auth={auth} onClose={()=>setShowXReport(false)}/>}
       {showCloseCash && cashSession && <CloseCashModal session={cashSession} posData={posData} auth={auth} onClose={()=>setShowCloseCash(false)} onClosed={()=>{ setCashSession(null); refreshSession() }}/>}
