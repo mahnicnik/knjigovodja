@@ -398,7 +398,7 @@ export function ClockOutModal({ session, staffMember, onClose, onClockedOut }: {
               ].map(([label, val]) => (
                 <div key={label} style={cell}>
                   <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase' }}>{label}</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, marginTop: 2 }}>{val}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, marginTop: 2, color: '#111' }}>{val}</div>
                 </div>
               ))}
             </div>
