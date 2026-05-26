@@ -694,8 +694,9 @@ async function autoPrint(data) {
       const printData = {
         business_name: data.org?.name || 'ŠIRM fitness&bar',
         business_address: [data.org?.address, [data.org?.post_code, data.org?.city].filter(Boolean).join(' ')].filter(Boolean).join(', '),
-        tax_number: data.org?.tax_number || '',
-        vat_id: data.org?.vat_registered ? `SI${data.org.tax_number}` : '',
+        business_tax: data.org?.vat_registered
+          ? `Davčna: ${data.org?.tax_number || ''} | ID za DDV: SI${data.org?.tax_number || ''}`
+          : `Davčna: ${data.org?.tax_number || ''}`,
         receipt_number: data.invoiceNumber || data.orderId?.slice(-6),
         cashier: data.cashierName || '',
         date: new Date().toLocaleString('sl-SI'),
