@@ -5004,18 +5004,20 @@ function ReportsScreen({ posData, auth }) {
     }
 
     const db = createClient()
+    const fromStr = from instanceof Date ? from.toISOString().replace('.000Z','Z').replace('.999Z','Z') : String(from)
+    const toStr = to instanceof Date ? to.toISOString().replace('.000Z','Z').replace('.999Z','Z') : String(to)
     const [ordersRes, refundsRes] = await Promise.all([
       db.from('orders')
-        .select('id, closed_at, total, tip_amount, payments(amount, method, tip)')
+        .select('id, closed_at, total, tip_amount, discount_amount')
         .eq('business_id', BUSINESS_ID)
         .eq('status', 'paid')
-        .gte('closed_at', from.toISOString())
-        .lte('closed_at', to.toISOString()),
+        .gte('closed_at', fromStr)
+        .lte('closed_at', toStr),
       db.from('refunds')
-        .select('amount, reason, created_at, orders(id)')
+        .select('amount, reason, created_at')
         .eq('business_id', BUSINESS_ID)
-        .gte('created_at', from.toISOString())
-        .lte('created_at', to.toISOString()),
+        .gte('created_at', fromStr)
+        .lte('created_at', toStr),
     ])
 
     const orders = ordersRes.data || []
@@ -5026,31 +5028,36 @@ function ReportsScreen({ posData, auth }) {
     const byHour = {}
     const byMethod = { cash:0, card:0, bon:0, prep:0, other:0 }
 
+    or    // Posebej pridobi payments za teorderje
+    const orderIds = orders.map(o => o.id)
+    let paymentsData = []
+    if (orderIds.length > 0) {
+      const { data: pd } = await db.from('payments')
+        .select('order_id, amount, method, tip')
+        .in('order_id', orderIds)
+      paymentsData = pd || []
+    }
+    const paymentsByOrder = {}
+    paymentsData.forEach(p => {
+      if (!paymentsByOrder[p.order_id]) paymentsByOrder[p.order_id] = []
+      paymentsByOrder[p.order_id].push(p)
+    })
     orders.forEach(o => {
-      const payments = o.payments || []
-      // Fallback na o.total če payments je prazen
-      if (payments.length === 0 && o.total) {
-        const amt = Number(o.total)
-        promet += amt
-       const h = new Date(o.closed_at).getHours()
-        byHour[h] = (byHour[h] || 0) + amt
-        byMethod.cash += amt  // predpostavimo gotovina kot fallback
-      } else {
-        payments.forEach(p => {
-          const amt = Number(p.amount || 0)
-          const tip = Number(p.tip || 0)
-          promet += amt
-          napitnine += tip
-          const h = new Date(o.closed_at).getHours()
-          byHour[h] = (byHour[h] || 0) + amt
-          const m = p.method || 'other'
-          if (m === 'cash') byMethod.cash += amt
-          else if (m === 'card') byMethod.card += amt
-          else if (m === 'bon') byMethod.bon += amt
-          else if (m === 'prep') byMethod.prep += amt
-          else byMethod.other += amt
-        })
-      }
+      const payments = paymentsByOrder[o.id] || []
+      const amt = payments.length > 0
+        ? payments.reduce((s, p) => s + Number(p.amount || 0), 0)
+        : Number(o.total || 0)
+      const tip = payments.reduce((s, p) => s + Number(p.tip || 0), 0)
+      promet += amt
+      napitnine += tip
+      const h = new Date(o.closed_at).getHours()
+      byHour[h] = (byHour[h] || 0) + amt
+      const method = payments[0]?.method || 'cash'
+      if (method === 'cash') byMethod.cash += amt
+      else if (method === 'card') byMethod.card += amt
+      else if (method === 'bon') byMethod.bon += amt
+      else if (method === 'prep') byMethod.prep += amt
+      else byMethod.other += amt
     })
 
     refunds.forEach(r => { vracila += Number(r.amount || 0) })
@@ -5060,8 +5067,8 @@ function ReportsScreen({ posData, auth }) {
       .select('name, qty, unit_price, orders!inner(closed_at, status, business_id)')
       .eq('orders.business_id', BUSINESS_ID)
       .eq('orders.status', 'paid')
-      .gte('orders.closed_at', from.toISOString())
-      .lte('orders.closed_at', to.toISOString())
+      .gte('orders._at', fromStr)
+      .lte('orders.closed_at', toStr)
 
     const itemMap = {}
     ;(linesRes.data || []).forEach(l => {
