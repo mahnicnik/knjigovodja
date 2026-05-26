@@ -5008,13 +5008,13 @@ function ReportsScreen({ posData, auth }) {
         .select('id, closed_at, payments(amount, method, tip)')
         .eq('business_id', BUSINESS_ID)
         .eq('status', 'paid')
-        .gte('closed_at', from.toISOString())
-        .lte('closed_at', to.toISOString()),
+        .gte('closed_at', typeof from === 'string' ? from : from.toISOString())
+        .lte('closed_at', typeof to === 'string' ? to : to.toISOString()),
       db.from('refunds')
         .select('amount, reason, created_at, orders(id)')
         .eq('business_id', BUSINESS_ID)
-        .gte('created_at', from.toISOString())
-        .lte('created_at', to.toISOString()),
+        .gte('created_at', typeof from === 'string' ? from : from.toISOString())
+        .lte('created_at', typeof to === 'string' ? to : to.toISOString()),
     ])
 
     const orders = ordersRes.data || []
