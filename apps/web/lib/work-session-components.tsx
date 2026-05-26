@@ -383,12 +383,12 @@ export function ClockOutModal({ session, staffMember, onClose, onClockedOut }: {
     <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ background: '#fff', borderRadius: 14, width: 400, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontWeight: 700, fontSize: 16 }}>Odjava z dela</div>
+          <div style={{ fontWeight: 700, fontSize: 16, color: '#111' }}>Odjava z dela</div>
           <button onClick={onClose} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 18, color: '#9ca3af' }}>×</button>
         </div>
         <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ background: '#f9fafb', borderRadius: 10, padding: 14 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>{staffMember?.name}</div>
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10, color: '#111' }}>{staffMember?.name}</div>
             <div style={grid}>
               {[
                 ['Prihod', fmtTime(clockIn)],
@@ -397,7 +397,7 @@ export function ClockOutModal({ session, staffMember, onClose, onClockedOut }: {
                 ['Skupaj', fmtMin(workMin)],
               ].map(([label, val]) => (
                 <div key={label} style={cell}>
-                  <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase' }}>{label}</div>
+                  <div style={{ fontSize: 10, color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>{label}</div>
                   <div style={{ fontSize: 14, fontWeight: 700, marginTop: 2, color: '#111' }}>{val}</div>
                 </div>
               ))}
@@ -419,7 +419,7 @@ export function ClockOutModal({ session, staffMember, onClose, onClockedOut }: {
           {error && <div style={{ color: '#dc2626', fontSize: 12 }}>⚠️ {error}</div>}
 
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={onClose} style={{ flex: 1, padding: '11px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', border: '1px solid #e5e7eb', background: 'transparent', fontWeight: 600 }}>Prekliči</button>
+            <button onClick={onClose} style={{ flex: 1, padding: '11px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', border: '1px solid #e5e7eb', background: 'transparent', fontWeight: 600, color: '#111' }}>Prekliči</button>
             <button onClick={handleClockOut} disabled={saving} style={{ flex: 2, padding: '11px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', border: 'none', background: '#dc2626', color: '#fff', fontWeight: 700 }}>
               {saving ? 'Odjavljam...' : '🔴 Potrdi odjavo'}
             </button>
