@@ -4983,11 +4983,11 @@ function ReportsScreen({ posData, auth }) {
     let from, to
     if (p === 'today') {
       from = new Date(now.toISOString().slice(0,10) + 'T00:00:00.000Z')
-      to = new Date(now.toISOString().slice(0,10) + 'T23:59:59.999Z')
+      to = new Date(now.toISOString().slice(0,10) + 'T23:59:59Z')
     } else if (p === 'yesterday') {
       const y = new Date(now); y.setUTCDate(y.getUTCDate()-1)
       from = new Date(y.toISOString().slice(0,10) + 'T00:00:00.000Z')
-      to = new Date(y.toISOString().slice(0,10) + 'T23:59:59.999Z')
+      to = new Date(y.toISOString().slice(0,10) + 'T23:59:59Z')
     } else if (p === 'week') {
       const w = new Date(now); w.setUTCDate(w.getUTCDate()-7)
       from = new Date(w.toISOString().slice(0,10) + 'T00:00:00.000Z')
