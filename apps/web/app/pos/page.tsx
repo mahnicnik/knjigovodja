@@ -5028,7 +5028,7 @@ function ReportsScreen({ posData, auth }) {
     const byHour = {}
     const byMethod = { cash:0, card:0, bon:0, prep:0, other:0 }
 
-    or    // Posebej pridobi payments za teorderje
+    // Posebej pridobi payments za te orderje
     const orderIds = orders.map(o => o.id)
     let paymentsData = []
     if (orderIds.length > 0) {
