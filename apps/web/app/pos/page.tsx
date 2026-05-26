@@ -5047,11 +5047,11 @@ function ReportsScreen({ posData, auth }) {
 
     // Top artikli iz order_lines
     const linesRes = await db.from('order_lines')
-      .select('name, qty, unit_price, orders!inner(created_at, status, business_id)')
+      .select('name, qty, unit_price, orders!inner(closed_at, status, business_id)')
       .eq('orders.business_id', BUSINESS_ID)
       .eq('orders.status', 'paid')
-      .gte('orders.created_at', from.toISOString())
-      .lte('orders.created_at', to.toISOString())
+      .gte('orders.closed_at', from.toISOString())
+      .lte('orders.closed_at', to.toISOString())
 
     const itemMap = {}
     ;(linesRes.data || []).forEach(l => {
