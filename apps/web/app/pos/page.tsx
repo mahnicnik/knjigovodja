@@ -5005,11 +5005,11 @@ function ReportsScreen({ posData, auth }) {
     const db = createClient()
     const [ordersRes, refundsRes] = await Promise.all([
       db.from('orders')
-        .select('id, created_at, payments(amount, method, tip)')
+        .select('id, closed_at, payments(amount, method, tip)')
         .eq('business_id', BUSINESS_ID)
         .eq('status', 'paid')
-        .gte('created_at', from.toISOString())
-        .lte('created_at', to.toISOString()),
+        .gte('closed_at', from.toISOString())
+        .lte('closed_at', to.toISOString()),
       db.from('refunds')
         .select('amount, reason, created_at, orders(id)')
         .eq('business_id', BUSINESS_ID)

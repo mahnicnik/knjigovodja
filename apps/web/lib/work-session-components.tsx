@@ -331,7 +331,8 @@ export function ClockOutModal({ session, staffMember, onClose, onClockedOut }: {
   const [error, setError] = React.useState('')
 
   const now = new Date()
-  const clockIn = new Date(session.clock_in)
+  const clockInRaw = session?.clock_in || session?.created_at || new Date().toISOString()
+  const clockIn = new Date(clockInRaw)
   const totalMs = now.getTime() - clockIn.getTime()
   const breakMs = (session.break_minutes || 0) * 60000
   const workMin = Math.floor((totalMs - breakMs) / 60000)
