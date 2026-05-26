@@ -4989,10 +4989,11 @@ function ReportsScreen({ posData, auth }) {
       from = new Date(y.toISOString().slice(0,10) + 'T00:00:00.000Z')
       to = new Date(y.toISOString().slice(0,10) + 'T23:59:59.999Z')
     } else if (p === 'week') {
-      from = new Date(now); from.setDate(now.getDate()-7); from.setHours(0,0,0,0)
+      const w = new Date(now); w.setUTCDate(w.getUTCDate()-7)
+      from = new Date(w.toISOString().slice(0,10) + 'T00:00:00.000Z')
       to = now
     } else if (p === 'month') {
-      from = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0)
+      from = new Date(now.getUTCFullYear() + '-' + String(now.getUTCMonth()+1).padStart(2,'0') + '-01T00:00:00.000Z')
       to = now
     } else if (p === 'custom' && customFrom && customTo) {
       from = new Date(customFrom)
