@@ -19,11 +19,11 @@ jobs:
 
       - name: Install dependencies
         working-directory: apps/desktop
-        run: npm install --legacy-peer-deps
+        run: npm install --legacy-peer-deps --no-workspaces
 
       - name: Build Windows
         working-directory: apps/desktop
-        run: npm run build:win
+        run: npx electron-builder --win
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -43,11 +43,11 @@ jobs:
 
       - name: Install dependencies
         working-directory: apps/desktop
-        run: npm install --legacy-peer-deps
+        run: npm install --legacy-peer-deps --no-workspaces
 
       - name: Build Mac
         working-directory: apps/desktop
-        run: npm run build:mac
+        run: npx electron-builder --mac
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
