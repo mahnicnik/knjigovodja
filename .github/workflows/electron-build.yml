@@ -25,7 +25,7 @@ jobs:
         working-directory: apps/desktop
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --win --publish always
+        run: npx electron-builder --win --publish never
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -51,7 +51,7 @@ jobs:
         working-directory: apps/desktop
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --mac --publish always
+        run: npx electron-builder --mac --publish never
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
