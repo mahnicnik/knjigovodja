@@ -1,24 +1,24 @@
 const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron')
 const path = require('path')
+const fs = require('fs')
+const os = require('os')
 const express = require('express')
 const cors = require('cors')
 const http = require('http')
 
-// ── Nastavitve ────────────────────────────────────────────────────
 const POS_URL = 'https://računko.si/pos'
 const PRINT_PORT = 6789
 
 let mainWindow = null
 let printServer = null
 
-// ── Print server (vgrajen v Electron) ────────────────────────────
 function startPrintServer() {
   const expressApp = express()
   expressApp.use(cors({ origin: '*' }))
   expressApp.use(express.json({ limit: '10mb' }))
 
   expressApp.get('/health', (req, res) => {
-    res.json({ ok: true, version: '2.0', source: 'electron', printer_type: 'html' })
+    res.json({ ok: true, version: '2.0', source: 'electron', printer_type: 'usb' })
   })
 
   expressApp.post('/print/receipt', async (req, res) => {
@@ -26,19 +26,24 @@ function startPrintServer() {
       const { html } = req.body
       if (!html) return res.json({ ok: false, error: 'Manjka html' })
 
-      // Ustvari nevidno okno za print
+      // Shrani HTML v temp file
+      const tmpFile = path.join(os.tmpdir(), `racunko-receipt-${Date.now()}.html`)
+      fs.writeFileSync(tmpFile, html, 'utf8')
+
       const printWin = new BrowserWindow({
         show: false,
         webPreferences: { nodeIntegration: false, contextIsolation: true }
       })
 
-      printWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
+      printWin.loadFile(tmpFile)
 
       printWin.webContents.on('did-finish-load', () => {
         printWin.webContents.print(
           { silent: true, printBackground: true, deviceName: '' },
           (success, errorType) => {
             printWin.close()
+            // Pocisti temp file
+            try { fs.unlinkSync(tmpFile) } catch {}
             if (success) {
               res.json({ ok: true })
             } else {
@@ -47,27 +52,39 @@ function startPrintServer() {
           }
         )
       })
+
+      printWin.webContents.on('did-fail-load', (event, code, desc) => {
+        printWin.close()
+        try { fs.unlinkSync(tmpFile) } catch {}
+        res.json({ ok: false, error: desc })
+      })
+
     } catch (e) {
       res.json({ ok: false, error: e.message })
     }
   })
 
   expressApp.post('/print/test', (req, res) => {
-    const testHtml = `
-      <html><body style="font-family:monospace;font-size:12px;max-width:80mm;margin:0;padding:8mm 4mm">
-        <div style="text-align:center;font-weight:700;font-size:14px">RAČUNKO POS</div>
-        <div style="text-align:center">Test tiskanja</div>
-        <hr/>
-        <div>Datum: ${new Date().toLocaleString('sl-SI')}</div>
-        <div>Tiskalnik: OK</div>
-        <hr/>
-        <div style="text-align:center">✓ Tiskalnik deluje</div>
-      </body></html>
-    `
+    const testHtml = `<!DOCTYPE html><html><body style="font-family:monospace;font-size:12px;max-width:80mm;margin:0;padding:8mm 4mm">
+      <div style="text-align:center;font-weight:700;font-size:14px">RAČUNKO POS</div>
+      <div style="text-align:center">Test tiskanja</div>
+      <hr/>
+      <div>Datum: ${new Date().toLocaleString('sl-SI')}</div>
+      <div>Tiskalnik: OK</div>
+      <hr/>
+      <div style="text-align:center">Tiskalnik deluje!</div>
+    </body></html>`
+
+    const tmpFile = path.join(os.tmpdir(), `racunko-test-${Date.now()}.html`)
+    fs.writeFileSync(tmpFile, testHtml, 'utf8')
+
     const printWin = new BrowserWindow({ show: false, webPreferences: { nodeIntegration: false } })
-    printWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(testHtml))
+    printWin.loadFile(tmpFile)
     printWin.webContents.on('did-finish-load', () => {
-      printWin.webContents.print({ silent: true, printBackground: true }, () => printWin.close())
+      printWin.webContents.print({ silent: true, printBackground: true }, () => {
+        printWin.close()
+        try { fs.unlinkSync(tmpFile) } catch {}
+      })
       res.json({ ok: true })
     })
   })
@@ -81,7 +98,6 @@ function startPrintServer() {
   })
 }
 
-// ── Glavno okno ───────────────────────────────────────────────────
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -99,19 +115,16 @@ function createWindow() {
     backgroundColor: '#0d2818',
   })
 
-  // Naloži POS
   mainWindow.loadURL(POS_URL)
 
-  // Odpri zunanje linke v browserju
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (!url.startsWith('https://racunko.si')) {
+    if (!url.startsWith('https://računko.si')) {
       shell.openExternal(url)
       return { action: 'deny' }
     }
     return { action: 'allow' }
   })
 
-  // DevTools samo v development
   if (process.env.NODE_ENV === 'development') {
     mainWindow.webContents.openDevTools()
   }
@@ -119,7 +132,6 @@ function createWindow() {
   mainWindow.on('closed', () => { mainWindow = null })
 }
 
-// ── Meni ──────────────────────────────────────────────────────────
 function createMenu() {
   const template = [
     ...(process.platform === 'darwin' ? [{
@@ -162,7 +174,7 @@ function createMenu() {
         },
         {
           label: 'Odpri Računko.si',
-          click: () => shell.openExternal('https://racunko.si')
+          click: () => shell.openExternal('https://računko.si')
         },
       ]
     }
@@ -171,7 +183,6 @@ function createMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
-// ── App lifecycle ─────────────────────────────────────────────────
 app.whenReady().then(() => {
   startPrintServer()
   createMenu()
