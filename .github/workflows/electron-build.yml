@@ -1,0 +1,56 @@
+name: Electron Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: apps/desktop
+        run: npm install --legacy-peer-deps
+
+      - name: Build Windows
+        working-directory: apps/desktop
+        run: npm run build:win
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Racunko-POS-Windows
+          path: apps/desktop/dist/*.exe
+
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: apps/desktop
+        run: npm install --legacy-peer-deps
+
+      - name: Build Mac
+        working-directory: apps/desktop
+        run: npm run build:mac
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Racunko-POS-Mac
+          path: apps/desktop/dist/*.dmg
