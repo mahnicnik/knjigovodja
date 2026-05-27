@@ -29,7 +29,7 @@
       "icon": "assets/icon.icns",
       "target": [
         {
-          "target": "dmg",
+          "target": "zip",
           "arch": [
             "x64",
             "arm64"
