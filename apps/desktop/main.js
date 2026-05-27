@@ -1,4 +1,5 @@
-const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron')
+const { app, BrowserWindow, Menu, shell, dialog } = require('electron')
+const { autoUpdater } = require('electron-updater')
 const path = require('path')
 const fs = require('fs')
 const os = require('os')
@@ -12,13 +13,48 @@ const PRINT_PORT = 6789
 let mainWindow = null
 let printServer = null
 
+// ── Auto-updater ──────────────────────────────────────────────────
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+
+  autoUpdater.on('update-available', (info) => {
+    console.log('Nova verzija na voljo:', info.version)
+  })
+
+  autoUpdater.on('update-downloaded', (info) => {
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Posodobitev pripravljena',
+      message: `Nova verzija ${info.version} je bila prenesena. Aplikacija se bo posodobila ob naslednjem zagonu.`,
+      buttons: ['Posodobi zdaj', 'Kasneje']
+    }).then((result) => {
+      if (result.response === 0) {
+        autoUpdater.quitAndInstall()
+      }
+    })
+  })
+
+  autoUpdater.on('error', (err) => {
+    console.log('Auto-updater napaka:', err.message)
+  })
+
+  // Preveri za posodobitve ob zagonu (po 3 sekundah)
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch(err => {
+      console.log('Preverjanje posodobitev napaka:', err.message)
+    })
+  }, 3000)
+}
+
+// ── Print server ──────────────────────────────────────────────────
 function startPrintServer() {
   const expressApp = express()
   expressApp.use(cors({ origin: '*' }))
   expressApp.use(express.json({ limit: '10mb' }))
 
   expressApp.get('/health', (req, res) => {
-    res.json({ ok: true, version: '2.0', source: 'electron', printer_type: 'usb' })
+    res.json({ ok: true, version: app.getVersion(), source: 'electron' })
   })
 
   expressApp.post('/print/receipt', async (req, res) => {
@@ -26,7 +62,6 @@ function startPrintServer() {
       const { html } = req.body
       if (!html) return res.json({ ok: false, error: 'Manjka html' })
 
-      // Shrani HTML v temp file
       const tmpFile = path.join(os.tmpdir(), `racunko-receipt-${Date.now()}.html`)
       fs.writeFileSync(tmpFile, html, 'utf8')
 
@@ -42,13 +77,8 @@ function startPrintServer() {
           { silent: true, printBackground: true, deviceName: '' },
           (success, errorType) => {
             printWin.close()
-            // Pocisti temp file
             try { fs.unlinkSync(tmpFile) } catch {}
-            if (success) {
-              res.json({ ok: true })
-            } else {
-              res.json({ ok: false, error: errorType })
-            }
+            res.json({ ok: success, error: success ? null : errorType })
           }
         )
       })
@@ -69,8 +99,8 @@ function startPrintServer() {
       <div style="text-align:center;font-weight:700;font-size:14px">RAČUNKO POS</div>
       <div style="text-align:center">Test tiskanja</div>
       <hr/>
+      <div>Verzija: ${app.getVersion()}</div>
       <div>Datum: ${new Date().toLocaleString('sl-SI')}</div>
-      <div>Tiskalnik: OK</div>
       <hr/>
       <div style="text-align:center">Tiskalnik deluje!</div>
     </body></html>`
@@ -98,6 +128,7 @@ function startPrintServer() {
   })
 }
 
+// ── Glavno okno ───────────────────────────────────────────────────
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -125,10 +156,6 @@ function createWindow() {
     return { action: 'allow' }
   })
 
-  if (process.env.NODE_ENV === 'development') {
-    mainWindow.webContents.openDevTools()
-  }
-
   mainWindow.on('closed', () => { mainWindow = null })
 }
 
@@ -139,16 +166,13 @@ function createMenu() {
       submenu: [
         { role: 'about', label: 'O aplikaciji' },
         { type: 'separator' },
-        { role: 'hide', label: 'Skrij' },
         { role: 'quit', label: 'Zapri' },
       ]
     }] : []),
     {
       label: 'Urejanje',
       submenu: [
-        { role: 'cut', label: 'Izreži' },
-        { role: 'copy', label: 'Kopiraj' },
-        { role: 'paste', label: 'Prilepi' },
+        { role: 'cut' }, { role: 'copy' }, { role: 'paste' }
       ]
     },
     {
@@ -167,26 +191,25 @@ function createMenu() {
           click: async () => {
             try {
               await fetch(`http://localhost:${PRINT_PORT}/print/test`, { method: 'POST' })
-            } catch (e) {
-              console.error('Test print napaka:', e)
-            }
+            } catch (e) { console.error(e) }
           }
         },
         {
-          label: 'Odpri Računko.si',
-          click: () => shell.openExternal('https://računko.si')
+          label: 'Preveri posodobitve',
+          click: () => autoUpdater.checkForUpdates().catch(console.error)
         },
       ]
     }
   ]
-
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
+// ── App lifecycle ─────────────────────────────────────────────────
 app.whenReady().then(() => {
   startPrintServer()
   createMenu()
   createWindow()
+  setupAutoUpdater()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

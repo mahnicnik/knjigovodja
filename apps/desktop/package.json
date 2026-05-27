@@ -1,9 +1,9 @@
 {
   "name": "racunko-pos",
-  "version": "1.0.0",
-  "description": "Računko POS — blagajniški terminal",
+  "version": "1.0.1",
+  "description": "Računko POS - blagajniški terminal",
   "main": "main.js",
-  "author": "Nik Mahnič <mahnic.nik@gmail.com>",
+  "author": "Nik Mahnic <mahnic.nik@gmail.com>",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
@@ -15,7 +15,12 @@
   "build": {
     "appId": "si.racunko.pos",
     "productName": "Računko POS",
-    "copyright": "Copyright © 2026 Nik Mahnič s.p.",
+    "copyright": "Copyright 2026 Nik Mahnic s.p.",
+    "publish": {
+      "provider": "github",
+      "owner": "mahnicnik",
+      "repo": "knjigovodja"
+    },
     "directories": {
       "output": "dist"
     },
@@ -28,49 +33,23 @@
       "category": "public.app-category.finance",
       "icon": "assets/icon.icns",
       "target": [
-        {
-          "target": "zip",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
-      ],
-      "darkModeSupport": true
+        { "target": "zip", "arch": ["x64", "arm64"] }
+      ]
     },
     "win": {
-      "icon": "assets/icon.ico",
+      "icon": "assets/icon.png",
       "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
+        { "target": "nsis", "arch": ["x64"] }
       ]
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
-    },
-    "dmg": {
-      "title": "Računko POS ${version}",
-      "contents": [
-        {
-          "x": 130,
-          "y": 220
-        },
-        {
-          "x": 410,
-          "y": 220,
-          "type": "link",
-          "path": "/Applications"
-        }
-      ]
     }
   },
   "dependencies": {
     "cors": "^2.8.5",
+    "electron-updater": "^6.1.7",
     "express": "^4.18.2"
   },
   "devDependencies": {
