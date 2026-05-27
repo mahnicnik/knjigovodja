@@ -51,12 +51,7 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "installerLanguages": [
-        "sl-SI",
-        "en-US"
-      ],
-      "language": "1060"
+      "allowToChangeInstallationDirectory": true
     },
     "dmg": {
       "title": "Računko POS ${version}",
