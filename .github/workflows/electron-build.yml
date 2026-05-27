@@ -53,4 +53,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Racunko-POS-Mac
-          path: apps/desktop/dist/*.dmg
+          path: apps/desktop/dist/*.zip
