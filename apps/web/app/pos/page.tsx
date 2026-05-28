@@ -431,10 +431,12 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
   const [furs, setFurs] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState(null)
+  const [cardConfirmed, setCardConfirmed] = useState(false)
 
   useEffect(() => {
     if (!open) { setMethod('cash'); setTipPct(0); setGiven(''); setDiscount(0); setFurs(true); setError(null); setProcessing(false) }
     if (open && typeof open === 'object') { if(open.discount) setDiscount(open.discount) }
+    if (!open) setCardConfirmed(false)
   }, [open])
 
   const finalTotal = (total - total * discount / 100) + total * tipPct / 100
@@ -603,7 +605,7 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
             <div style={{ fontWeight:600, fontSize:12, color:T.muted, marginBottom:8, textTransform:'uppercase', letterSpacing:'0.06em' }}>Način plačila</div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:6 }}>
               {CFG.paymentMethods.map(pm => (
-                <button key={pm.id} onClick={() => setMethod(pm.id)} style={{ padding:'12px 8px', borderRadius:10, cursor:'pointer', background: method===pm.id ? T.accent : T.chipBg, color: method===pm.id ? '#fff' : 'inherit', border:'none', display:'flex', alignItems:'center', gap:8, fontWeight:600, fontSize:13, fontFamily:'inherit' }}>
+                <button key={pm.id} onClick={() => { setMethod(pm.id); setCardConfirmed(false) }} style={{ padding:'12px 8px', borderRadius:10, cursor:'pointer', background: method===pm.id ? T.accent : T.chipBg, color: method===pm.id ? '#fff' : 'inherit', border:'none', display:'flex', alignItems:'center', gap:8, fontWeight:600, fontSize:13, fontFamily:'inherit' }}>
                   <span style={{ fontSize:20 }}>{pm.icon}</span>{pm.name}
                 </button>
               ))}
@@ -621,6 +623,26 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
               {change > 0 && (
                 <div style={{ marginTop:8, padding:'9px 12px', borderRadius:8, background:T.accentSoft, color:T.accent, fontWeight:600, fontSize:14, display:'flex', justifyContent:'space-between' }}>
                   <span>Za vrniti</span><span>{eur(change)}</span>
+                </div>
+              )}
+            </div>
+          )}
+          {method === 'card' && (
+            <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+              {/* Velik znesek za vnos na terminal */}
+              <div style={{ background:T.accentSoft, borderRadius:14, padding:'20px 16px', textAlign:'center' }}>
+                <div style={{ fontSize:12, fontWeight:600, color:T.muted, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.08em' }}>Vnesi na terminal</div>
+                <div style={{ fontSize:48, fontWeight:800, color:T.accent, letterSpacing:'-0.02em', fontVariantNumeric:'tabular-nums' }}>{eur(finalTotal)}</div>
+              </div>
+              {!cardConfirmed ? (
+                <button
+                  onClick={() => setCardConfirmed(true)}
+                  style={{ width:'100%', padding:'14px', borderRadius:10, border:'none', background:T.accent, color:'#fff', fontWeight:700, fontSize:15, fontFamily:'inherit', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                  ✅ Kartica potrjena na terminalu
+                </button>
+              ) : (
+                <div style={{ padding:'12px 16px', borderRadius:10, background:'rgba(31,107,58,0.12)', color:T.accent, fontWeight:700, fontSize:14, textAlign:'center', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                  ✅ Plačilo potrjeno — klikni Zaključi
                 </div>
               )}
             </div>
