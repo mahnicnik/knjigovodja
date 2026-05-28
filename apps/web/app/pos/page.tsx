@@ -687,6 +687,35 @@ function SRow({ label, v, muted }) {
 }
 
 async function autoPrint(data) {
+  // Electron IPC (desktop app) — direktno, brez HTTP
+  if (typeof window !== 'undefined' && (window as any).electronAPI?.printReceipt) {
+    try {
+      const html = await buildReceiptHTML({
+        org: data.org || { name: 'ŠIRM fitness&bar', address: 'Poljanska cesta 87', city: 'Gorenja vas', post_code: '4224', tax_number: '', vat_registered: false },
+        premiseId: data.premiseId || 'SIRBFB01',
+        premiseAddress: data.premiseAddress || 'Poljanska cesta 87, 4224 Gorenja vas',
+        deviceId: data.deviceId || 'RACUNK001',
+        invoiceNumber: data.invoiceNumber || (data.orderId?.slice(-6)) || '—',
+        issueDate: new Date(),
+        cashierName: data.cashierName || '',
+        payment: { method: data.method, furs_zoi: data.zoi, furs_eor: data.eor },
+        lines: (data.lines||[]).map(l => ({
+          name: l.name, qty: Number(l.qty),
+          unit_price: Number(l.unitPrice||l.unit_price||0),
+          vat_rate: Number(l.vat_rate || 22),
+          total: Number(l.total || (l.qty * (l.unitPrice||l.unit_price||0))),
+        })),
+        subtotal: Number(data.subtotal||data.total||0),
+        discountAmount: Number(data.discount_amount||0),
+        tip: Number(data.tip||0),
+        total: Number(data.total||0),
+      })
+      const result = await (window as any).electronAPI.printReceipt(html)
+      if (result?.ok) return
+      if (result?.error) console.error('IPC print error:', result.error)
+    } catch (e) { console.error('IPC print napaka:', e) }
+    return
+  }
   // Poskusi lokalni print server (Star/Epson termalni)
   try {
     const res = await fetch('http://localhost:6789/health', { signal: AbortSignal.timeout(1000) })

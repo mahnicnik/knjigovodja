@@ -61,14 +61,29 @@ function setupIpcHandlers() {
         })
         printWin.loadFile(tmpFile)
         printWin.webContents.on('did-finish-load', () => {
-          printWin.webContents.print(
-            { silent: true, printBackground: true },
-            (success, errorType) => {
+          // Delay 400ms da se stran popolnoma naloži pred tiskanjem
+          setTimeout(async () => {
+            try {
+              // Poisci termalni tiskalnik (RONGTA, Epson, Star, Bixolon)
+              const printers = await printWin.webContents.getPrintersAsync()
+              const thermalNames = ['rongta', 'epson', 'star', 'bixolon', 'xprinter', 'rp80', 'tm-t', 'tsp']
+              const thermal = printers.find(p =>
+                thermalNames.some(n => p.name.toLowerCase().includes(n))
+              )
+              const deviceName = thermal ? thermal.name : (printers[0]?.name || '')
+              printWin.webContents.print(
+                { silent: true, printBackground: true, deviceName },
+                (success, errorType) => {
+                  printWin.close()
+                  try { require('fs').unlinkSync(tmpFile) } catch {}
+                  resolve({ ok: success, error: success ? null : errorType })
+                }
+              )
+            } catch (e) {
               printWin.close()
-              try { require('fs').unlinkSync(tmpFile) } catch {}
-              resolve({ ok: success, error: success ? null : errorType })
+              resolve({ ok: false, error: e.message })
             }
-          )
+          }, 400)
         })
         printWin.webContents.on('did-fail-load', (event, code, desc) => {
           printWin.close()
