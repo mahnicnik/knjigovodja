@@ -75,6 +75,13 @@ function buildEscPos(data) {
   if (data.business_address) { txt(data.business_address); lf() }
   if (data.tax_number) { txt('Davcna: ' + data.tax_number); lf() }
   if (data.vat_id) { txt('ID DDV: ' + data.vat_id); lf() }
+  // PE - poslovna enota
+  if (data.premise_id || data.premise_address) {
+    lf()
+    txt('PE: ' + (data.premise_id||'') + (data.premise_address ? ', ' + data.premise_address : '')); lf()
+  }
+  // Kopija
+  if (data.is_copy) { txt('*** KOPIJA ***'); lf() }
   lf()
   // Left align
   b(ESC,0x61,0x00)
@@ -91,7 +98,6 @@ function buildEscPos(data) {
     const qty = Number(item.qty||1)
     const up  = Number(item.unit_price||0)
     const tot = qty * up
-    txt(name.slice(0,42)); lf()
     txtRaw('  ' + qty + ' x ' + eur(up) + '   ' + eur(tot)); lf()
   }
   sep()
@@ -122,6 +128,19 @@ function buildEscPos(data) {
   // FURS
   if (data.furs_zoi) { txt('ZOI: ' + data.furs_zoi); lf() }
   if (data.furs_eor) { txt('EOR: ' + data.furs_eor); lf() }
+  if (data.furs_eor) {
+    // QR koda — EOR kot QR code (GS ( k)
+    const qrData = Buffer.from(data.furs_eor, 'utf8')
+    const qrLen = qrData.length + 3
+    // Model 2, size 4, error correction L
+    b(GS,0x28,0x6B, 4,0, 0x31,0x41,0x32,0x00)            // model
+    b(GS,0x28,0x6B, 3,0, 0x31,0x43,0x04)                  // size
+    b(GS,0x28,0x6B, 3,0, 0x31,0x45,0x30)                  // error L
+    b(GS,0x28,0x6B, qrLen&0xFF,(qrLen>>8)&0xFF, 0x31,0x50,0x30)
+    for (let i = 0; i < qrData.length; i++) b(qrData[i])
+    b(GS,0x28,0x6B, 3,0, 0x31,0x51,0x30)                  // print
+    lf()
+  }
   if (data.furs_zoi || data.furs_eor) sep()
   // Footer
   b(ESC,0x61,0x01)

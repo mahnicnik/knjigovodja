@@ -712,6 +712,9 @@ async function autoPrint(data) {
         payment_method: data.method,
         furs_zoi: data.zoi,
         furs_eor: data.eor,
+        premise_id: data.premiseId || 'SIRBFB01',
+        premise_address: data.premiseAddress || 'Poljanska cesta 87, 4224 Gorenja vas',
+        is_copy: false,
       }
       const result = await (window as any).electronAPI.printRaw(printData)
       if (result?.ok) return
@@ -4977,6 +4980,9 @@ function OrdersScreen({ posData, auth }) {
                     payment_method: orderPayment?.method,
                     furs_zoi: orderPayment?.furs_zoi,
                     furs_eor: orderPayment?.furs_eor,
+                    premise_id: premiseData?.premise_id || 'SIRBFB01',
+                    premise_address: premiseData ? [premiseData.address, [premiseData.post_code, premiseData.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') : 'Poljanska cesta 87, 4224 Gorenja vas',
+                    is_copy: true,
                   }
                   const r = await (window as any).electronAPI.printRaw(pd)
                   if (!r?.ok) alert('Napaka: ' + r?.error)
