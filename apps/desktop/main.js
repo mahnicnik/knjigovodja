@@ -74,7 +74,7 @@ function startPrintServer() {
 
       printWin.webContents.on('did-finish-load', () => {
         printWin.webContents.print(
-          { silent: true, printBackground: true, deviceName: '' },
+          { silent: true, printBackground: true },
           (success, errorType) => {
             printWin.close()
             try { fs.unlinkSync(tmpFile) } catch {}
@@ -149,6 +149,9 @@ function createWindow() {
   mainWindow.loadURL(POS_URL)
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('about:') || url.startsWith('data:')) {
+      return { action: 'deny' }
+    }
     if (!url.startsWith('https://računko.si')) {
       shell.openExternal(url)
       return { action: 'deny' }
