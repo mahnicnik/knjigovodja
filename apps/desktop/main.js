@@ -119,49 +119,77 @@ function buildEscPos(data) {
 async function rawPrintWindows(printerName, buffer) {
   return new Promise((resolve) => {
     const { exec } = require('child_process')
-    const tmpBin = require('path').join(require('os').tmpdir(), `racunko-raw-${Date.now()}.bin`)
+    const stamp  = Date.now()
+    const tmpDir = require('os').tmpdir()
+    const tmpBin = require('path').join(tmpDir, `racunko-raw-${stamp}.bin`)
+    const tmpPs  = require('path').join(tmpDir, `racunko-raw-${stamp}.ps1`)
+
     require('fs').writeFileSync(tmpBin, buffer)
 
-    // PowerShell: Windows Spooler API raw print
-    const ps = `
-$bytes = [System.IO.File]::ReadAllBytes('${tmpBin.replace(/\\/g, '\\\\')}')
-$sig = @'
-using System; using System.Runtime.InteropServices;
+    // Zapisi .ps1 skript v temp fajl (izognemo se heredoc problemu v exec)
+    const escapedBin = tmpBin.replace(/\\/g, '\\\\')
+    const escapedPrinter = printerName.replace(/"/g, '`"')
+    const psScript = `
+$ErrorActionPreference = 'Stop'
+$bytes = [System.IO.File]::ReadAllBytes("${escapedBin}")
+$code = @"
+using System;
+using System.Runtime.InteropServices;
 public class RawPrint {
-  [DllImport("winspool.drv",EntryPoint="OpenPrinterA")] public static extern bool OpenPrinter(string n,out IntPtr h,IntPtr d);
-  [DllImport("winspool.drv")] public static extern bool StartDocPrinter(IntPtr h,int l,ref DOC_INFO_1 di);
-  [DllImport("winspool.drv")] public static extern bool StartPagePrinter(IntPtr h);
-  [DllImport("winspool.drv")] public static extern bool WritePrinter(IntPtr h,byte[] b,int cb,out int w);
-  [DllImport("winspool.drv")] public static extern bool EndPagePrinter(IntPtr h);
-  [DllImport("winspool.drv")] public static extern bool EndDocPrinter(IntPtr h);
-  [DllImport("winspool.drv")] public static extern bool ClosePrinter(IntPtr h);
-  [StructLayout(LayoutKind.Sequential)] public struct DOC_INFO_1 {
-    [MarshalAs(UnmanagedType.LPStr)] public string pDocName;
-    [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile;
-    [MarshalAs(UnmanagedType.LPStr)] public string pDatatype;
+  [DllImport("winspool.drv", EntryPoint="OpenPrinterA")]
+  public static extern bool OpenPrinter(string n, out IntPtr h, IntPtr d);
+  [DllImport("winspool.drv")]
+  public static extern bool StartDocPrinter(IntPtr h, int l, ref DOC_INFO_1 di);
+  [DllImport("winspool.drv")]
+  public static extern bool StartPagePrinter(IntPtr h);
+  [DllImport("winspool.drv")]
+  public static extern bool WritePrinter(IntPtr h, byte[] b, int cb, out int w);
+  [DllImport("winspool.drv")]
+  public static extern bool EndPagePrinter(IntPtr h);
+  [DllImport("winspool.drv")]
+  public static extern bool EndDocPrinter(IntPtr h);
+  [DllImport("winspool.drv")]
+  public static extern bool ClosePrinter(IntPtr h);
+  [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+  public struct DOC_INFO_1 {
+    [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPStr)]
+    public string pDocName;
+    [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPStr)]
+    public string pOutputFile;
+    [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPStr)]
+    public string pDatatype;
   }
 }
-'@
-Add-Type -TypeDefinition $sig -Language CSharp
+"@
+Add-Type -TypeDefinition $code -Language CSharp
 $h = [IntPtr]::Zero
-[RawPrint]::OpenPrinter("${printerName.replace(/"/g, '\\"')}", [ref]$h, [IntPtr]::Zero) | Out-Null
+[RawPrint]::OpenPrinter("${escapedPrinter}", [ref]$h, [IntPtr]::Zero) | Out-Null
 $di = New-Object RawPrint+DOC_INFO_1
-$di.pDocName = "Racun"; $di.pDatatype = "RAW"
-[RawPrint]::StartDocPrinter($h,1,[ref]$di) | Out-Null
+$di.pDocName = "Racun"
+$di.pDatatype = "RAW"
+[RawPrint]::StartDocPrinter($h, 1, [ref]$di) | Out-Null
 [RawPrint]::StartPagePrinter($h) | Out-Null
 $w = 0
-[RawPrint]::WritePrinter($h,$bytes,$bytes.Length,[ref]$w) | Out-Null
+[RawPrint]::WritePrinter($h, $bytes, $bytes.Length, [ref]$w) | Out-Null
 [RawPrint]::EndPagePrinter($h) | Out-Null
 [RawPrint]::EndDocPrinter($h) | Out-Null
 [RawPrint]::ClosePrinter($h) | Out-Null
 Write-Output "OK:$w"
 `
-    exec(`powershell -NoProfile -NonInteractive -Command "${ps.replace(/\n/g,' ').replace(/"/g,'\\"')}"`,
-      { timeout: 10000 },
+    require('fs').writeFileSync(tmpPs, psScript, 'utf8')
+
+    exec(`powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${tmpPs}"`,
+      { timeout: 15000 },
       (err, stdout, stderr) => {
         try { require('fs').unlinkSync(tmpBin) } catch {}
-        if (err) { resolve({ ok: false, error: err.message }) }
-        else { resolve({ ok: true }) }
+        try { require('fs').unlinkSync(tmpPs)  } catch {}
+        if (err) {
+          console.error('PS raw print error:', stderr || err.message)
+          resolve({ ok: false, error: stderr || err.message })
+        } else {
+          console.log('PS raw print OK:', stdout.trim())
+          resolve({ ok: true })
+        }
       }
     )
   })
