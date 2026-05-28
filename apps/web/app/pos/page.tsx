@@ -4943,7 +4943,47 @@ function OrdersScreen({ posData, auth }) {
               <div style={{ fontWeight:700, fontSize:15 }}>Račun #{selectedOrder.number || selectedOrder.id.slice(-6)}</div>
               <div style={{ fontSize:12, color:T.muted }}>{new Date(selectedOrder.closed_at).toLocaleString('sl-SI')}</div>
             </div>
-            <button onClick={()=>printReceipt(selectedOrder, orderLines, orderPayment)}
+            <button onClick={async ()=>{
+                if (typeof window !== 'undefined' && (window as any).electronAPI?.printRaw) {
+                  // ESC/POS direktni print
+                  let orgData = null, premiseData = null, cashierName = ''
+                  try {
+                    const { data: { user } } = await db.auth.getUser()
+                    if (user) {
+                      const { data: member } = await db.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+                      if (member) {
+                        const { data: org } = await db.from('organizations').select('*').eq('id', member.org_id).single()
+                        orgData = org
+                        const { data: premise } = await db.from('business_premises').select('*').eq('org_id', member.org_id).eq('is_active', true).limit(1).maybeSingle()
+                        premiseData = premise
+                      }
+                      const { data: me } = await db.from('org_members').select('display_name').eq('user_id', user.id).maybeSingle()
+                      cashierName = me?.display_name || user.email?.split('@')[0] || ''
+                    }
+                  } catch {}
+                  const pd = {
+                    business_name: orgData?.name || 'SIRM fitness&bar',
+                    business_address: [orgData?.address, [orgData?.post_code, orgData?.city].filter(Boolean).join(' ')].filter(Boolean).join(', '),
+                    tax_number: orgData?.tax_number || '',
+                    vat_id: orgData?.vat_registered ? 'SI'+(orgData?.tax_number||'') : '',
+                    receipt_number: selectedOrder.invoice_number || selectedOrder.number || selectedOrder.id.slice(-6),
+                    cashier: cashierName,
+                    date: new Date(selectedOrder.closed_at).toLocaleString('sl-SI'),
+                    items: (orderLines||[]).map((l:any) => ({ name: l.name, qty: Number(l.qty), unit_price: Number(l.unit_price), vat_rate: Number(l.vat_rate||22) })),
+                    subtotal: Number(selectedOrder.subtotal||0),
+                    discount_amount: Number(selectedOrder.discount_amount||0),
+                    tip: Number(selectedOrder.tip_amount||0),
+                    total: Number(selectedOrder.total||0),
+                    payment_method: orderPayment?.method,
+                    furs_zoi: orderPayment?.furs_zoi,
+                    furs_eor: orderPayment?.furs_eor,
+                  }
+                  const r = await (window as any).electronAPI.printRaw(pd)
+                  if (!r?.ok) alert('Napaka: ' + r?.error)
+                } else {
+                  printReceipt(selectedOrder, orderLines, orderPayment)
+                }
+              }}
               style={{ padding:'7px 14px', borderRadius:8, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, display:'flex', alignItems:'center', gap:6 }}>
               🖨️ Ponovni izpis
             </button>

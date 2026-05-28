@@ -34,7 +34,20 @@ function buildEscPos(data) {
     .replace(/\u00e9/g,'e').replace(/\u00e8/g,'e')
     .replace(/[^\x20-\x7E]/g,'?')
 
-  const txt = (s) => { for (const c of sl(s)) b(c.charCodeAt(0)) }
+  const txt = (s) => {
+    for (const c of sl(s)) {
+      const code = c.charCodeAt(0)
+      b(code > 0xFF ? 0x3F : code)  // >255 -> '?'
+    }
+  }
+  // Posebej za euro byte ki pride iz eur()
+  const txtRaw = (s) => {
+    for (let i = 0; i < s.length; i++) {
+      const code = s.charCodeAt(i)
+      if (code === 0x80) { b(0x80) }  // euro direktno
+      else b(code > 0xFF ? 0x3F : code)
+    }
+  }
   const pad = (s, n, right) => {
     const t = sl(s).slice(0, n)
     const p = ' '.repeat(Math.max(0, n - t.length))
@@ -42,13 +55,17 @@ function buildEscPos(data) {
   }
   const line = (l, r, width=42) => {
     const lp = sl(l).slice(0, width - sl(r).length - 1)
-    txt(lp + ' '.repeat(width - lp.length - sl(r).length) + sl(r)); lf()
+    txtRaw(lp + ' '.repeat(width - lp.length - sl(r).length) + sl(r)); lf()
   }
   const sep = (ch='-', w=42) => { txt(ch.repeat(w)); lf() }
-  const eur = (n) => '€' + Number(n||0).toFixed(2).replace('.', ',')
+  const eur = (n) => {
+    // V CP1252 je euro znak byte 0x80 — dodamo ga direktno v buffer
+    const s = Number(n||0).toFixed(2).replace('.', ',')
+    return '\x80' + s  // 0x80 = € v Windows-1252
+  }
 
-  // Init + code page 2 (PC850)
-  b(ESC,0x40, ESC,0x74,0x02)
+  // Init + code page 16 (Windows-1252) — podpira euro znak 0x80
+  b(ESC,0x40, ESC,0x74,0x10)
   // Center
   b(ESC,0x61,0x01)
   // Header bold
@@ -74,7 +91,8 @@ function buildEscPos(data) {
     const qty = Number(item.qty||1)
     const up  = Number(item.unit_price||0)
     const tot = qty * up
-    txt('  ' + qty + ' x ' + eur(up)); txt('   '); txt(eur(tot)); lf()
+    txt(name.slice(0,42)); lf()
+    txtRaw('  ' + qty + ' x ' + eur(up) + '   ' + eur(tot)); lf()
   }
   sep()
   // Popust
@@ -88,7 +106,7 @@ function buildEscPos(data) {
   // Skupaj — vecja pisava
   sep('=')
   b(ESC,0x61,0x01, GS,0x21,0x11) // center + 2x
-  txt('SKUPAJ  ' + eur(data.total)); lf()
+  txtRaw('SKUPAJ  ' + eur(data.total)); lf()
   b(GS,0x21,0x00, ESC,0x61,0x00) // reset
   sep('=')
   // DDV tabela
