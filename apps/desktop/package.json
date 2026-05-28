@@ -1,6 +1,6 @@
 {
   "name": "racunko-pos",
-  "version": "1.0.20",
+  "version": "1.0.21",
   "description": "Računko POS - blagajniški terminal",
   "main": "main.js",
   "author": "Nik Mahnic <mahnic.nik@gmail.com>",
@@ -55,7 +55,13 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Računko POS",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "include": "assets/installer.nsh"
     },
     "linux": {
       "icon": "assets/icon.png"
