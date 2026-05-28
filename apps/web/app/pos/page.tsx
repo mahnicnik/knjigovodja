@@ -153,6 +153,19 @@ function usePosData() {
         setServices(svcs)
         setTodayStats(stats)
         setIngredients((await createClient().from('ingredients').select('*, item_ingredients(qty_used, item_id)').eq('business_id', BUSINESS_ID).order('name')).data || [])
+        // Naloži modifier grupe
+        const { data: mgData } = await createClient().from('item_modifier_groups').select('*, item_modifiers(*)').eq('business_id', BUSINESS_ID).order('sort_order')
+        setModifierGroups(mgData || [])
+        // Naloži artikel-modifier povezave
+        const { data: linkData } = await createClient().from('item_modifier_group_links').select('item_id, group_id')
+        if (linkData) {
+          const links: Record<string,string[]> = {}
+          for (const l of linkData) {
+            if (!links[l.item_id]) links[l.item_id] = []
+            links[l.item_id].push(l.group_id)
+          }
+          setItemModifierLinks(links)
+        }
         // Generiraj in fetch notifikacije
         await createClient().rpc('generate_pos_notifications', { p_business_id: BUSINESS_ID })
         const notifRes = await createClient().from('pos_notifications').select('*, customers(name, email)').eq('business_id', BUSINESS_ID).eq('dismissed', false).order('created_at', { ascending: false })
@@ -428,18 +441,20 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
   const [tipPct, setTipPct] = useState(0)
   const [given, setGiven] = useState('')
   const [discount, setDiscount] = useState(0)
+  const [discountEur, setDiscountEur] = useState('')
   const [furs, setFurs] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState(null)
   const [cardConfirmed, setCardConfirmed] = useState(false)
 
   useEffect(() => {
-    if (!open) { setMethod('cash'); setTipPct(0); setGiven(''); setDiscount(0); setFurs(true); setError(null); setProcessing(false) }
+    if (!open) { setMethod('cash'); setTipPct(0); setGiven(''); setDiscount(0); setDiscountEur(''); setFurs(true); setError(null); setProcessing(false) }
     if (open && typeof open === 'object') { if(open.discount) setDiscount(open.discount) }
     if (!open) setCardConfirmed(false)
   }, [open])
 
-  const finalTotal = (total - total * discount / 100) + total * tipPct / 100
+  const discountEurVal = parseFloat(discountEur) || 0
+  const finalTotal = Math.max(0, (total - total * discount / 100 - discountEurVal)) + total * tipPct / 100
   const change = method === 'cash' && given ? Math.max(0, parseFloat(given) - finalTotal) : 0
 
   async function submitPayment() {
@@ -3064,6 +3079,9 @@ function InventoryScreen({ posData }) {
   const [editModal, setEditModal] = useState(null)
   const [editSaving, setEditSaving] = useState(false)
   const [itemModal, setItemModal] = useState(null)
+  const [modifierGroups, setModifierGroups] = useState<any[]>([])
+  const [itemModifierLinks, setItemModifierLinks] = useState<Record<string,string[]>>({})
+  const [modGroupModal, setModGroupModal] = useState<any>(null) // {name, required, multi_select}
   const [saving, setSaving] = useState(false)
   const [invToast, setInvToast] = useState(null)
 
@@ -3645,10 +3663,91 @@ function InventoryScreen({ posData }) {
               <Field label={(itemModal?.item_type||'simple')==='ingredient'?'Zaloga v skladišču':'Zaloga (pusti prazno za neomejeno)'}>
                 <input type="number" min="0" value={itemModal?.stock??''} onChange={e=>setItemModal(p=>({...p,stock:e.target.value}))} placeholder="∞" style={inp}/>
               </Field>
+              {/* Modifier grupe */}
+              {(itemModal?.item_type||'simple') !== 'ingredient' && (
+                <Field label="Modifier grupe (variante, dodatki)">
+                  <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                    {modifierGroups.map(mg => {
+                      const linked = itemModal?.id ? (itemModifierLinks[itemModal.id]||[]).includes(mg.id) : (itemModal?._modLinks||[]).includes(mg.id)
+                      return (
+                        <div key={mg.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 10px', borderRadius:8, border:'1px solid '+T.line, background:linked?T.accentSoft:T.surface }}>
+                          <input type="checkbox" checked={linked} onChange={async e => {
+                            if (itemModal?.id) {
+                              if (e.target.checked) {
+                                await createClient().from('item_modifier_group_links').insert({ item_id: itemModal.id, group_id: mg.id })
+                              } else {
+                                await createClient().from('item_modifier_group_links').delete().eq('item_id', itemModal.id).eq('group_id', mg.id)
+                              }
+                              const { data: linkData } = await createClient().from('item_modifier_group_links').select('item_id, group_id')
+                              if (linkData) {
+                                const links: Record<string,string[]> = {}
+                                for (const l of linkData) { if (!links[l.item_id]) links[l.item_id] = []; links[l.item_id].push(l.group_id) }
+                                setItemModifierLinks(links)
+                              }
+                            } else {
+                              const cur = itemModal?._modLinks || []
+                              setItemModal((p:any) => ({...p, _modLinks: e.target.checked ? [...cur, mg.id] : cur.filter((id:string) => id !== mg.id)}))
+                            }
+                          }}/>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontWeight:600, fontSize:12 }}>{mg.name} {mg.required?'(obvezno)':''} {mg.multi_select?'(več izbir)':''}</div>
+                            <div style={{ fontSize:11, color:T.muted }}>{(mg.item_modifiers||[]).map((m:any) => m.name + (m.price_delta ? (m.price_delta>0?'+':'')+m.price_delta+'€' : '')).join(' · ')}</div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    <button onClick={() => setModGroupModal({ name:'', required:false, multi_select:false, modifiers:[{name:'',price_delta:0}] })} style={{ ...btnS, fontSize:11, alignSelf:'flex-start' }}>+ Nova modifier grupa</button>
+                  </div>
+                </Field>
+              )}
               <div style={{ display:'flex', gap:10, justifyContent:'flex-end', marginTop:4 }}>
                 {itemModal?.id && <button onClick={()=>deleteItem(itemModal.id,itemModal.name)} style={{ ...btnS, color:T.danger }}>Izbriši</button>}
                 <button onClick={()=>setItemModal(null)} style={btnS}>Prekliči</button>
                 <button onClick={saveItem} disabled={saving} style={{ ...btnP, opacity:saving?0.7:1 }}>{saving?'Shranjujem...':'Shrani'}</button>
+              </div>
+            </div>
+          </Modal>
+        )}
+        {/* Modifier Group Modal */}
+        {!!modGroupModal && (
+          <Modal open onClose={()=>setModGroupModal(null)} width={480}>
+            <ModalHeader title="Nova modifier grupa" onClose={()=>setModGroupModal(null)}/>
+            <div style={{ padding:'20px 22px', display:'flex', flexDirection:'column', gap:12 }}>
+              <Field label="Ime grupe (npr. Mleko, Velikost, Dodatki)">
+                <input value={modGroupModal.name} onChange={e=>setModGroupModal((p:any)=>({...p,name:e.target.value}))} placeholder="Mleko" style={inp} autoFocus/>
+              </Field>
+              <div style={{ display:'flex', gap:16 }}>
+                <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, cursor:'pointer' }}>
+                  <input type="checkbox" checked={modGroupModal.required} onChange={e=>setModGroupModal((p:any)=>({...p,required:e.target.checked}))}/> Obvezna izbira
+                </label>
+                <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, cursor:'pointer' }}>
+                  <input type="checkbox" checked={modGroupModal.multi_select} onChange={e=>setModGroupModal((p:any)=>({...p,multi_select:e.target.checked}))}/> Več izbir
+                </label>
+              </div>
+              <Field label="Možnosti">
+                <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                  {modGroupModal.modifiers.map((m:any, i:number) => (
+                    <div key={i} style={{ display:'flex', gap:6, alignItems:'center' }}>
+                      <input value={m.name} onChange={e=>{const ms=[...modGroupModal.modifiers];ms[i]={...ms[i],name:e.target.value};setModGroupModal((p:any)=>({...p,modifiers:ms}))}} placeholder="npr. Ovseno" style={{...inp,flex:2}}/>
+                      <input type="number" step="0.1" value={m.price_delta||''} onChange={e=>{const ms=[...modGroupModal.modifiers];ms[i]={...ms[i],price_delta:parseFloat(e.target.value)||0};setModGroupModal((p:any)=>({...p,modifiers:ms}))}} placeholder="+0.50" style={{...inp,flex:1,width:80}}/>
+                      <button onClick={()=>{const ms=modGroupModal.modifiers.filter((_:any,j:number)=>j!==i);setModGroupModal((p:any)=>({...p,modifiers:ms}))}} style={{ color:T.danger, background:'none', border:'none', cursor:'pointer', fontSize:16 }}>×</button>
+                    </div>
+                  ))}
+                  <button onClick={()=>setModGroupModal((p:any)=>({...p,modifiers:[...p.modifiers,{name:'',price_delta:0}]}))} style={{ ...btnS, fontSize:11, alignSelf:'flex-start' }}>+ Dodaj možnost</button>
+                </div>
+              </Field>
+              <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+                <button onClick={()=>setModGroupModal(null)} style={btnS}>Prekliči</button>
+                <button onClick={async()=>{
+                  if (!modGroupModal.name.trim()) return
+                  const { data: mg } = await createClient().from('item_modifier_groups').insert({ business_id:BUSINESS_ID, name:modGroupModal.name, required:modGroupModal.required, multi_select:modGroupModal.multi_select }).select().single()
+                  if (mg && modGroupModal.modifiers.filter((m:any)=>m.name).length > 0) {
+                    await createClient().from('item_modifiers').insert(modGroupModal.modifiers.filter((m:any)=>m.name).map((m:any,i:number)=>({ group_id:mg.id, name:m.name, price_delta:m.price_delta||0, sort_order:i })))
+                  }
+                  const { data: mgData } = await createClient().from('item_modifier_groups').select('*, item_modifiers(*)').eq('business_id', BUSINESS_ID).order('sort_order')
+                  setModifierGroups(mgData || [])
+                  setModGroupModal(null)
+                }} style={btnP}>Shrani grupo</button>
               </div>
             </div>
           </Modal>
@@ -7748,8 +7847,20 @@ function KlasikApp() {
 
   function addItem(item, happyOn = false) {
     const eligible = happyOn && H.isHappyHourEligible(item.name)
+    // Preveri ali ima artikel modifier grupe
+    const itemGroups = (posData?.items || []).length > 0 ? [] : []
+    // Pridobi modifier grupe za ta artikel iz Supabase
+    const { data: linkRows } = await createClient().from('item_modifier_group_links').select('group_id').eq('item_id', item.id)
+    if (linkRows && linkRows.length > 0) {
+      const groupIds = linkRows.map((l:any) => l.group_id)
+      const { data: groups } = await createClient().from('item_modifier_groups').select('*, item_modifiers(*)').in('id', groupIds).order('sort_order')
+      if (groups && groups.length > 0) {
+        setModifierPickModal({ item, eligible, groups, selected: {}, note: '', qty: 1 })
+        return
+      }
+    }
     setCart(c => {
-      const idx = c.findIndex(l => l.id === item.id && l.happyHourApplied === eligible)
+      const idx = c.findIndex(l => l.id === item.id && l.happyHourApplied === eligible && l.mods.length === 0)
       if (idx >= 0) { const cp = [...c]; cp[idx] = {...cp[idx], qty: cp[idx].qty + 1}; return cp }
       return [...c, { lineId: Math.random().toString(36).slice(2), id: item.id, name: item.name, price: Number(item.price), qty: 1, vat_rate: Number(item.vat_rate || 22), unit: item.unit || 'kos', mods: [], note: '', happyHourApplied: eligible }]
     })
@@ -7847,6 +7958,96 @@ function KlasikApp() {
         </div>
       </div>
 
+      {/* Modifier izbira modal */}
+      {!!modifierPickModal && (
+        <Modal open onClose={()=>setModifierPickModal(null)} width={480}>
+          <div style={{ padding:'20px 22px' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:16 }}>
+              <div>
+                <div style={{ fontSize:11, color:T.muted, textTransform:'uppercase', letterSpacing:'0.06em' }}>Dodaj v naročilo</div>
+                <div style={{ fontSize:22, fontWeight:800 }}>{modifierPickModal.item.name}</div>
+              </div>
+              <div style={{ fontSize:22, fontWeight:800 }}>
+                {(() => {
+                  const base = Number(modifierPickModal.item.price)
+                  const delta = Object.values(modifierPickModal.selected as Record<string,any>).flat().reduce((s:number,m:any)=>s+(m.price_delta||0),0)
+                  return '€' + ((base + delta) * modifierPickModal.qty).toFixed(2).replace('.',',')
+                })()}
+              </div>
+            </div>
+            {modifierPickModal.groups.map((g:any) => (
+              <div key={g.id} style={{ marginBottom:16 }}>
+                <div style={{ fontWeight:700, fontSize:13, marginBottom:6 }}>
+                  {g.name} {g.required && <span style={{ fontSize:10, background:T.accent, color:'#fff', borderRadius:4, padding:'1px 6px', marginLeft:4 }}>OBVEZNO</span>}
+                  {g.multi_select && <span style={{ fontSize:11, color:T.muted, marginLeft:4 }}>več izbir</span>}
+                </div>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                  {(g.item_modifiers||[]).sort((a:any,b:any)=>a.sort_order-b.sort_order).map((m:any) => {
+                    const sel = g.multi_select
+                      ? ((modifierPickModal.selected[g.id]||[]) as any[]).some((s:any)=>s.id===m.id)
+                      : modifierPickModal.selected[g.id]?.id === m.id
+                    return (
+                      <button key={m.id} onClick={()=>{
+                        setModifierPickModal((p:any) => {
+                          const cur = {...p.selected}
+                          if (g.multi_select) {
+                            const arr = [...(cur[g.id]||[])]
+                            const idx = arr.findIndex((s:any)=>s.id===m.id)
+                            if (idx>=0) arr.splice(idx,1); else arr.push(m)
+                            cur[g.id] = arr
+                          } else {
+                            cur[g.id] = cur[g.id]?.id === m.id ? null : m
+                          }
+                          return {...p, selected: cur}
+                        })
+                      }} style={{ padding:'9px 14px', borderRadius:9, border:'2px solid '+(sel?T.accent:T.line), background:sel?T.accentSoft:T.surface, cursor:'pointer', fontFamily:'inherit', fontSize:13, fontWeight:sel?700:500 }}>
+                        {m.name}{m.price_delta ? <span style={{ color:T.muted, fontSize:11 }}> {m.price_delta>0?'+':''}{m.price_delta}€</span> : ''}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+            <div style={{ borderTop:'1px solid '+T.line, paddingTop:12, marginTop:4 }}>
+              <div style={{ fontSize:12, color:T.muted, marginBottom:4 }}>Opomba kuhinji</div>
+              <input value={modifierPickModal.note} onChange={e=>setModifierPickModal((p:any)=>({...p,note:e.target.value}))} placeholder="npr. brez čebule, na pol pečeno..." style={{...inp,width:'100%',boxSizing:'border-box'}}/>
+            </div>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:12 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <span style={{ fontSize:13 }}>Količina</span>
+                <button onClick={()=>setModifierPickModal((p:any)=>({...p,qty:Math.max(1,p.qty-1)}))} style={{ width:32,height:32,borderRadius:8,border:'1px solid '+T.line,background:T.surface,cursor:'pointer',fontSize:18,fontFamily:'inherit' }}>−</button>
+                <span style={{ fontWeight:700, fontSize:16, minWidth:24, textAlign:'center' }}>{modifierPickModal.qty}</span>
+                <button onClick={()=>setModifierPickModal((p:any)=>({...p,qty:p.qty+1}))} style={{ width:32,height:32,borderRadius:8,border:'1px solid '+T.line,background:T.surface,cursor:'pointer',fontSize:18,fontFamily:'inherit' }}>+</button>
+              </div>
+              <div style={{ fontSize:20, fontWeight:800 }}>
+                {(() => {
+                  const base = Number(modifierPickModal.item.price)
+                  const delta = Object.values(modifierPickModal.selected as Record<string,any>).flat().filter(Boolean).reduce((s:number,m:any)=>s+(m?.price_delta||0),0)
+                  return '€' + ((base + delta) * modifierPickModal.qty).toFixed(2).replace('.',',')
+                })()}
+              </div>
+            </div>
+            <div style={{ display:'flex', gap:8, marginTop:16 }}>
+              <button onClick={()=>setModifierPickModal(null)} style={{ flex:1,padding:'12px',borderRadius:9,border:'1px solid '+T.line,background:'transparent',cursor:'pointer',fontFamily:'inherit',fontWeight:600,fontSize:13 }}>Prekliči</button>
+              <button onClick={()=>{
+                const { item, eligible, selected, note, qty } = modifierPickModal
+                // Preveri obvezne grupe
+                const missing = modifierPickModal.groups.filter((g:any) => g.required && !selected[g.id])
+                if (missing.length > 0) { alert('Izberi: ' + missing.map((g:any)=>g.name).join(', ')); return }
+                // Zberi vse izbrane modifierje
+                const mods = Object.values(selected as Record<string,any>).flat().filter(Boolean).map((m:any)=>({ id:m.id, name:m.name, delta:m.price_delta||0 }))
+                const modDelta = mods.reduce((s:number,m:any)=>s+m.delta,0)
+                for (let i=0; i<qty; i++) {
+                  setCart((c:any[]) => [...c, { lineId: Math.random().toString(36).slice(2), id: item.id, name: item.name, price: Number(item.price) + modDelta, qty: 1, vat_rate: Number(item.vat_rate||22), unit: item.unit||'kos', mods, note: note||'', happyHourApplied: eligible }])
+                }
+                setModifierPickModal(null)
+              }} style={{ flex:2,padding:'12px',borderRadius:9,border:'none',background:T.accent,color:'#fff',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:14 }}>
+                Dodaj v naročilo
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
       <PaymentModal open={paymentOpen} total={typeof paymentOpen==='object'&&paymentOpen.splitLines ? paymentOpen.splitLines.reduce((s,l)=>s+l.price*l.qty,0)*(1-(paymentOpen.discount||0)/100) : totals.total} cart={typeof paymentOpen==='object'&&paymentOpen.splitLines ? paymentOpen.splitLines : cart} activeTable={activeTable} activeCustomer={activeCustomer} auth={auth}
         onCancel={() => setPaymentOpen(false)}
         onComplete={(data) => {
