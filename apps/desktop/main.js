@@ -19,6 +19,154 @@ function loadPrinterConfig() {
 function savePrinterConfig(config) {
   try { fs.writeFileSync(getPrinterConfigPath(), JSON.stringify(config, null, 2), 'utf8'); return true } catch { return false }
 }
+// ── ESC/POS generator ────────────────────────────────────────────
+function buildEscPos(data) {
+  const ESC = 0x1B, GS = 0x1D, LF = 0x0A
+  const buf = []
+  const b = (...v) => buf.push(...v)
+  const lf = () => b(LF)
+
+  // Pretvori slovenscino v ASCII (code page 850)
+  const sl = (s) => (s||'')
+    .replace(/\u0161/g,'s').replace(/\u0160/g,'S')
+    .replace(/\u010d/g,'c').replace(/\u010c/g,'C')
+    .replace(/\u017e/g,'z').replace(/\u017d/g,'Z')
+    .replace(/\u00e9/g,'e').replace(/\u00e8/g,'e')
+    .replace(/[^\x20-\x7E]/g,'?')
+
+  const txt = (s) => { for (const c of sl(s)) b(c.charCodeAt(0)) }
+  const pad = (s, n, right) => {
+    const t = sl(s).slice(0, n)
+    const p = ' '.repeat(Math.max(0, n - t.length))
+    return right ? p + t : t + p
+  }
+  const line = (l, r, width=42) => {
+    const lp = sl(l).slice(0, width - sl(r).length - 1)
+    txt(lp + ' '.repeat(width - lp.length - sl(r).length) + sl(r)); lf()
+  }
+  const sep = (ch='-', w=42) => { txt(ch.repeat(w)); lf() }
+  const eur = (n) => '€' + Number(n||0).toFixed(2).replace('.', ',')
+
+  // Init + code page 2 (PC850)
+  b(ESC,0x40, ESC,0x74,0x02)
+  // Center
+  b(ESC,0x61,0x01)
+  // Header bold
+  b(ESC,0x45,0x01)
+  txt(data.business_name || 'SIRM fitness&bar'); lf()
+  b(ESC,0x45,0x00)
+  if (data.business_address) { txt(data.business_address); lf() }
+  if (data.tax_number) { txt('Davcna: ' + data.tax_number); lf() }
+  if (data.vat_id) { txt('ID DDV: ' + data.vat_id); lf() }
+  lf()
+  // Left align
+  b(ESC,0x61,0x00)
+  sep()
+  line('Racun st.:', data.receipt_number || '')
+  line('Datum:', data.date || '')
+  line('Blagajnik:', data.cashier || '')
+  line('Placilo:', data.payment_method === 'card' ? 'Kartica' : data.payment_method === 'bon' ? 'Bon' : 'Gotovina')
+  sep()
+  // Artikli
+  for (const item of (data.items||[])) {
+    const name = sl(item.name||'').slice(0,42)
+    txt(name); lf()
+    const qty = Number(item.qty||1)
+    const up  = Number(item.unit_price||0)
+    const tot = qty * up
+    txt('  ' + qty + ' x ' + eur(up)); txt('   '); txt(eur(tot)); lf()
+  }
+  sep()
+  // Popust
+  if (Number(data.discount_amount||0) > 0) {
+    line('Popust:', '-' + eur(data.discount_amount))
+  }
+  // Napitnina
+  if (Number(data.tip||0) > 0) {
+    line('Napitnina:', '+' + eur(data.tip))
+  }
+  // Skupaj — vecja pisava
+  sep('=')
+  b(ESC,0x61,0x01, GS,0x21,0x11) // center + 2x
+  txt('SKUPAJ  ' + eur(data.total)); lf()
+  b(GS,0x21,0x00, ESC,0x61,0x00) // reset
+  sep('=')
+  // DDV tabela
+  txt('OBRACUN DDV'); lf()
+  txt(pad('##',3) + pad('DDV%',7) + pad('NETO',8,true) + pad('DDV',8,true) + pad('BRUTO',8,true)); lf()
+  const total = Number(data.total||0)
+  const vatR  = 22
+  const neto  = total / (1 + vatR/100)
+  const ddv   = total - neto
+  txt(pad('C',3) + pad(vatR+'%',7) + pad(neto.toFixed(2),8,true) + pad(ddv.toFixed(2),8,true) + pad(total.toFixed(2),8,true)); lf()
+  txt('C: DDV ' + vatR + '% stopnja'); lf()
+  sep()
+  // FURS
+  if (data.furs_zoi) { txt('ZOI: ' + data.furs_zoi); lf() }
+  if (data.furs_eor) { txt('EOR: ' + data.furs_eor); lf() }
+  if (data.furs_zoi || data.furs_eor) sep()
+  // Footer
+  b(ESC,0x61,0x01)
+  txt('Hvala za obisk!'); lf()
+  txt('Izdano s sistemom RACUNKO'); lf()
+  txt('www.racunko.si'); lf()
+  lf(); lf(); lf()
+  // Cut
+  b(GS,0x56,0x42,0x00)
+  return Buffer.from(buf)
+}
+
+async function rawPrintWindows(printerName, buffer) {
+  return new Promise((resolve) => {
+    const { exec } = require('child_process')
+    const tmpBin = require('path').join(require('os').tmpdir(), `racunko-raw-${Date.now()}.bin`)
+    require('fs').writeFileSync(tmpBin, buffer)
+
+    // PowerShell: Windows Spooler API raw print
+    const ps = `
+$bytes = [System.IO.File]::ReadAllBytes('${tmpBin.replace(/\\/g, '\\\\')}')
+$sig = @'
+using System; using System.Runtime.InteropServices;
+public class RawPrint {
+  [DllImport("winspool.drv",EntryPoint="OpenPrinterA")] public static extern bool OpenPrinter(string n,out IntPtr h,IntPtr d);
+  [DllImport("winspool.drv")] public static extern bool StartDocPrinter(IntPtr h,int l,ref DOC_INFO_1 di);
+  [DllImport("winspool.drv")] public static extern bool StartPagePrinter(IntPtr h);
+  [DllImport("winspool.drv")] public static extern bool WritePrinter(IntPtr h,byte[] b,int cb,out int w);
+  [DllImport("winspool.drv")] public static extern bool EndPagePrinter(IntPtr h);
+  [DllImport("winspool.drv")] public static extern bool EndDocPrinter(IntPtr h);
+  [DllImport("winspool.drv")] public static extern bool ClosePrinter(IntPtr h);
+  [StructLayout(LayoutKind.Sequential)] public struct DOC_INFO_1 {
+    [MarshalAs(UnmanagedType.LPStr)] public string pDocName;
+    [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile;
+    [MarshalAs(UnmanagedType.LPStr)] public string pDatatype;
+  }
+}
+'@
+Add-Type -TypeDefinition $sig -Language CSharp
+$h = [IntPtr]::Zero
+[RawPrint]::OpenPrinter("${printerName.replace(/"/g, '\\"')}", [ref]$h, [IntPtr]::Zero) | Out-Null
+$di = New-Object RawPrint+DOC_INFO_1
+$di.pDocName = "Racun"; $di.pDatatype = "RAW"
+[RawPrint]::StartDocPrinter($h,1,[ref]$di) | Out-Null
+[RawPrint]::StartPagePrinter($h) | Out-Null
+$w = 0
+[RawPrint]::WritePrinter($h,$bytes,$bytes.Length,[ref]$w) | Out-Null
+[RawPrint]::EndPagePrinter($h) | Out-Null
+[RawPrint]::EndDocPrinter($h) | Out-Null
+[RawPrint]::ClosePrinter($h) | Out-Null
+Write-Output "OK:$w"
+`
+    exec(`powershell -NoProfile -NonInteractive -Command "${ps.replace(/\n/g,' ').replace(/"/g,'\\"')}"`,
+      { timeout: 10000 },
+      (err, stdout, stderr) => {
+        try { require('fs').unlinkSync(tmpBin) } catch {}
+        if (err) { resolve({ ok: false, error: err.message }) }
+        else { resolve({ ok: true }) }
+      }
+    )
+  })
+}
+
 async function getSelectedPrinterName(webContents) {
   const config = loadPrinterConfig()
   if (config.printerName) return config.printerName
@@ -125,6 +273,29 @@ function setupIpcHandlers() {
       <div style="text-align:center">Tiskalnik deluje!</div>
     </body></html>`
     return ipcMain.emit('print-receipt', null, testHtml)
+  })
+
+  ipcMain.handle('print-raw', async (event, data) => {
+    try {
+      const config = loadPrinterConfig()
+      const printerName = config.printerName || ''
+      if (!printerName) return { ok: false, error: 'Tiskalnik ni nastavljen. Pojdi na Orodja > Nastavitve tiskalnika.' }
+      const buf = buildEscPos(data)
+      if (process.platform === 'win32') {
+        return await rawPrintWindows(printerName, buf)
+      } else {
+        // macOS/Linux: lp
+        const { exec } = require('child_process')
+        const tmpBin = require('path').join(require('os').tmpdir(), `racunko-raw-${Date.now()}.bin`)
+        require('fs').writeFileSync(tmpBin, buf)
+        return new Promise((resolve) => {
+          exec(`lp -d "${printerName}" -o raw "${tmpBin}"`, (err) => {
+            try { require('fs').unlinkSync(tmpBin) } catch {}
+            resolve(err ? { ok: false, error: err.message } : { ok: true })
+          })
+        })
+      }
+    } catch (e) { return { ok: false, error: e.message } }
   })
 
   ipcMain.handle('get-printers', async () => {

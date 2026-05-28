@@ -1,6 +1,6 @@
 {
   "name": "racunko-pos",
-  "version": "1.0.11",
+  "version": "1.0.13",
   "description": "Računko POS - blagajniški terminal",
   "main": "main.js",
   "author": "Nik Mahnic <mahnic.nik@gmail.com>",

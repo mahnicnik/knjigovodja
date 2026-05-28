@@ -687,33 +687,36 @@ function SRow({ label, v, muted }) {
 }
 
 async function autoPrint(data) {
-  // Electron IPC (desktop app) — direktno, brez HTTP
-  if (typeof window !== 'undefined' && (window as any).electronAPI?.printReceipt) {
+  // Electron IPC — raw ESC/POS (brez dialoga)
+  if (typeof window !== 'undefined' && (window as any).electronAPI?.printRaw) {
     try {
-      const html = await buildReceiptHTML({
-        org: data.org || { name: 'ŠIRM fitness&bar', address: 'Poljanska cesta 87', city: 'Gorenja vas', post_code: '4224', tax_number: '', vat_registered: false },
-        premiseId: data.premiseId || 'SIRBFB01',
-        premiseAddress: data.premiseAddress || 'Poljanska cesta 87, 4224 Gorenja vas',
-        deviceId: data.deviceId || 'RACUNK001',
-        invoiceNumber: data.invoiceNumber || (data.orderId?.slice(-6)) || '—',
-        issueDate: new Date(),
-        cashierName: data.cashierName || '',
-        payment: { method: data.method, furs_zoi: data.zoi, furs_eor: data.eor },
-        lines: (data.lines||[]).map(l => ({
-          name: l.name, qty: Number(l.qty),
+      const printData = {
+        business_name: data.org?.name || 'ŠIRM fitness&bar',
+        business_address: [data.org?.address, [data.org?.post_code, data.org?.city].filter(Boolean).join(' ')].filter(Boolean).join(', '),
+        tax_number: data.org?.tax_number || '',
+        vat_id: data.org?.vat_registered ? 'SI' + (data.org?.tax_number||'') : '',
+        receipt_number: data.invoiceNumber || (data.orderId?.slice(-6)) || '—',
+        cashier: data.cashierName || '',
+        date: new Date().toLocaleString('sl-SI'),
+        items: (data.lines||[]).map(l => ({
+          name: l.name,
+          qty: Number(l.qty),
           unit_price: Number(l.unitPrice||l.unit_price||0),
           vat_rate: Number(l.vat_rate || 22),
-          total: Number(l.total || (l.qty * (l.unitPrice||l.unit_price||0))),
         })),
         subtotal: Number(data.subtotal||data.total||0),
-        discountAmount: Number(data.discount_amount||0),
+        discount_pct: data.discount_pct || 0,
+        discount_amount: Number(data.discount_amount||0),
         tip: Number(data.tip||0),
         total: Number(data.total||0),
-      })
-      const result = await (window as any).electronAPI.printReceipt(html)
+        payment_method: data.method,
+        furs_zoi: data.zoi,
+        furs_eor: data.eor,
+      }
+      const result = await (window as any).electronAPI.printRaw(printData)
       if (result?.ok) return
-      if (result?.error) console.error('IPC print error:', result.error)
-    } catch (e) { console.error('IPC print napaka:', e) }
+      if (result?.error) alert('Napaka tiskalnika: ' + result.error)
+    } catch (e: any) { alert('Napaka ESC/POS: ' + e.message) }
     return
   }
   // Poskusi lokalni print server (Star/Epson termalni)
