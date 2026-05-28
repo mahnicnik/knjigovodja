@@ -4716,6 +4716,33 @@ function OrdersScreen({ posData, auth }) {
       }
     } catch (e) {}
 
+    // Electron IPC (desktop app) — direktno, brez HTTP
+    if (typeof window !== 'undefined' && (window as any).electronAPI?.printReceipt) {
+      try {
+        const html = await buildReceiptHTML({
+          org: orgData || { name: 'ŠIRM fitness&bar', tax_number: '', vat_registered: false },
+          premiseId: premiseData?.premise_id || 'SIRBFB01',
+          premiseAddress: premiseData ? [premiseData.address, [premiseData.post_code, premiseData.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') : 'Poljanska cesta 87, 4224 Gorenja vas',
+          deviceId: deviceData?.device_id || 'RACUNK001',
+          invoiceNumber: order.invoice_number || order.number || order.id.slice(-6),
+          issueDate: new Date(order.closed_at),
+          cashierName: cashierName,
+          payment: { method: payment?.method || 'cash', furs_zoi: payment?.furs_zoi, furs_eor: payment?.furs_eor },
+          lines: (lines||[]).map(l => ({
+            name: l.name, qty: Number(l.qty), unit_price: Number(l.unit_price),
+            vat_rate: Number(l.vat_rate || 22), total: Number(l.total || l.qty * l.unit_price), voided: l.voided,
+          })),
+          subtotal: Number(order.subtotal||0),
+          discountAmount: Number(order.discount_amount||0),
+          tip: Number(order.tip_amount||0),
+          total: Number(order.total||0),
+        })
+        const result = await (window as any).electronAPI.printReceipt(html)
+        if (result?.ok) return
+        if (result?.error) alert('Napaka tiskalnika: ' + result.error)
+        return
+      } catch (e: any) { alert('Napaka IPC print: ' + e.message); return }
+    }
     // Poskusi lokalni print server
     try {
       const res = await fetch('http://localhost:6789/health', { signal: AbortSignal.timeout(1000) })
