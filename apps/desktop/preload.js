@@ -4,4 +4,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   version: process.versions.electron,
   printReceipt: (html) => ipcRenderer.invoke('print-receipt', html),
   printTest: () => ipcRenderer.invoke('print-test'),
+  getPrinters: () => ipcRenderer.invoke('get-printers'),
+  getSelectedPrinter: () => ipcRenderer.invoke('get-selected-printer'),
+  selectPrinter: () => ipcRenderer.invoke('select-printer'),
 })

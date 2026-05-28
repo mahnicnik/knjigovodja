@@ -8,6 +8,28 @@ const cors = require('cors')
 const http = require('http')
 
 const POS_URL = 'https://računko.si/pos'
+
+// ── Printer config ────────────────────────────────────────────────
+function getPrinterConfigPath() {
+  return path.join(app.getPath('userData'), 'printer-config.json')
+}
+function loadPrinterConfig() {
+  try { return JSON.parse(fs.readFileSync(getPrinterConfigPath(), 'utf8')) } catch { return {} }
+}
+function savePrinterConfig(config) {
+  try { fs.writeFileSync(getPrinterConfigPath(), JSON.stringify(config, null, 2), 'utf8'); return true } catch { return false }
+}
+async function getSelectedPrinterName(webContents) {
+  const config = loadPrinterConfig()
+  if (config.printerName) return config.printerName
+  try {
+    const printers = await webContents.getPrintersAsync()
+    const thermalNames = ['rongta', 'epson', 'star', 'bixolon', 'xprinter', 'rp80', 'tm-t', 'tsp']
+    const thermal = printers.find(p => thermalNames.some(n => p.name.toLowerCase().includes(n)))
+    const defaultP = printers.find(p => p.isDefault)
+    return (thermal || defaultP || printers[0])?.name || ''
+  } catch { return '' }
+}
 const PRINT_PORT = 6789
 
 let mainWindow = null
@@ -64,13 +86,8 @@ function setupIpcHandlers() {
           // Delay 400ms da se stran popolnoma naloži pred tiskanjem
           setTimeout(async () => {
             try {
-              // Poisci termalni tiskalnik (RONGTA, Epson, Star, Bixolon)
-              const printers = await printWin.webContents.getPrintersAsync()
-              const thermalNames = ['rongta', 'epson', 'star', 'bixolon', 'xprinter', 'rp80', 'tm-t', 'tsp']
-              const thermal = printers.find(p =>
-                thermalNames.some(n => p.name.toLowerCase().includes(n))
-              )
-              const deviceName = thermal ? thermal.name : (printers[0]?.name || '')
+              const deviceName = await getSelectedPrinterName(printWin.webContents)
+              console.log('Tiskam na:', deviceName || '(default)')
               printWin.webContents.print(
                 { silent: true, printBackground: true, deviceName },
                 (success, errorType) => {
@@ -108,6 +125,48 @@ function setupIpcHandlers() {
       <div style="text-align:center">Tiskalnik deluje!</div>
     </body></html>`
     return ipcMain.emit('print-receipt', null, testHtml)
+  })
+
+  ipcMain.handle('get-printers', async () => {
+    try {
+      const win = BrowserWindow.getAllWindows()[0]
+      if (!win) return []
+      return (await win.webContents.getPrintersAsync()).map(p => ({ name: p.name, isDefault: p.isDefault }))
+    } catch { return [] }
+  })
+
+  ipcMain.handle('get-selected-printer', async () => {
+    return loadPrinterConfig().printerName || null
+  })
+
+  ipcMain.handle('select-printer', async () => {
+    try {
+      const win = BrowserWindow.getAllWindows()[0]
+      if (!win) return { ok: false }
+      const printers = await win.webContents.getPrintersAsync()
+      if (!printers.length) {
+        await dialog.showMessageBox(win, { type: 'warning', title: 'Ni tiskalnikov', message: 'Na tem računalniku ni nameščenih tiskalnikov.', buttons: ['OK'] })
+        return { ok: false }
+      }
+      const config = loadPrinterConfig()
+      const currentIdx = printers.findIndex(p => p.name === config.printerName)
+      const result = await dialog.showMessageBox(win, {
+        type: 'question',
+        title: 'Izberi tiskalnik za račune',
+        message: 'Kateri tiskalnik naj Računko uporablja za tiskanje računov?',
+        detail: 'Trenutno: ' + (config.printerName || 'ni nastavljeno'),
+        buttons: [...printers.map(p => p.name + (p.isDefault ? ' (privzeti)' : '')), 'Prekliči'],
+        defaultId: currentIdx >= 0 ? currentIdx : 0,
+        cancelId: printers.length,
+      })
+      if (result.response < printers.length) {
+        const selected = printers[result.response]
+        savePrinterConfig({ printerName: selected.name })
+        await dialog.showMessageBox(win, { type: 'info', title: 'Shranjeno', message: `Tiskalnik "${selected.name}" je nastavljen.`, buttons: ['OK'] })
+        return { ok: true, name: selected.name }
+      }
+      return { ok: false }
+    } catch (e) { return { ok: false, error: e.message } }
   })
 }
 
@@ -254,6 +313,13 @@ function createMenu() {
     {
       label: 'Orodja',
       submenu: [
+        {
+          label: 'Nastavitve tiskalnika...',
+          click: async () => {
+            const win = BrowserWindow.getAllWindows()[0]
+            if (win) win.webContents.executeJavaScript('window.electronAPI?.selectPrinter?.()')
+          }
+        },
         {
           label: 'Test tiskanja',
           click: async () => {
