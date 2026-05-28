@@ -75,13 +75,21 @@ function buildEscPos(data) {
   if (data.business_address) { txt(data.business_address); lf() }
   if (data.tax_number) { txt('Davcna: ' + data.tax_number); lf() }
   if (data.vat_id) { txt('ID DDV: ' + data.vat_id); lf() }
-  // PE - poslovna enota
+  // PE - poslovna enota (center)
   if (data.premise_id || data.premise_address) {
     lf()
+    b(ESC,0x61,0x01) // center
     txt('PE: ' + (data.premise_id||'') + (data.premise_address ? ', ' + data.premise_address : '')); lf()
+    b(ESC,0x61,0x00) // left
   }
   // Kopija
-  if (data.is_copy) { txt('*** KOPIJA ***'); lf() }
+  if (data.is_copy) {
+    b(ESC,0x61,0x01)
+    b(ESC,0x45,0x01)
+    txt('*** KOPIJA ***'); lf()
+    b(ESC,0x45,0x00)
+    b(ESC,0x61,0x00)
+  }
   lf()
   // Left align
   b(ESC,0x61,0x00)
@@ -129,17 +137,18 @@ function buildEscPos(data) {
   if (data.furs_zoi) { txt('ZOI: ' + data.furs_zoi); lf() }
   if (data.furs_eor) { txt('EOR: ' + data.furs_eor); lf() }
   if (data.furs_eor) {
-    // QR koda — EOR kot QR code (GS ( k)
+    // QR koda — center + EOR kot QR code (GS ( k)
+    b(ESC,0x61,0x01) // center
     const qrData = Buffer.from(data.furs_eor, 'utf8')
     const qrLen = qrData.length + 3
-    // Model 2, size 4, error correction L
-    b(GS,0x28,0x6B, 4,0, 0x31,0x41,0x32,0x00)            // model
-    b(GS,0x28,0x6B, 3,0, 0x31,0x43,0x04)                  // size
+    b(GS,0x28,0x6B, 4,0, 0x31,0x41,0x32,0x00)            // model 2
+    b(GS,0x28,0x6B, 3,0, 0x31,0x43,0x06)                  // size 6 (vecja)
     b(GS,0x28,0x6B, 3,0, 0x31,0x45,0x30)                  // error L
     b(GS,0x28,0x6B, qrLen&0xFF,(qrLen>>8)&0xFF, 0x31,0x50,0x30)
     for (let i = 0; i < qrData.length; i++) b(qrData[i])
     b(GS,0x28,0x6B, 3,0, 0x31,0x51,0x30)                  // print
     lf()
+    b(ESC,0x61,0x00) // left
   }
   if (data.furs_zoi || data.furs_eor) sep()
   // Footer
