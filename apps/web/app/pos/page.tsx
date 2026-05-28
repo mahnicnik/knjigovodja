@@ -689,7 +689,7 @@ function SRow({ label, v, muted }) {
 async function autoPrint(data) {
   // Poskusi lokalni print server (Star/Epson termalni)
   try {
-    const res = await fetch('https://localhost:6790/health', { signal: AbortSignal.timeout(1000) })
+    const res = await fetch('http://localhost:6789/health', { signal: AbortSignal.timeout(1000) })
     if (res.ok) {
       const printData = {
         business_name: data.org?.name || 'ŠIRM fitness&bar',
@@ -715,7 +715,7 @@ async function autoPrint(data) {
         furs_zoi: data.zoi,
         furs_eor: data.eor,
       }
-      const printRes = await fetch('https://localhost:6790/print/receipt', {
+      const printRes = await fetch('http://localhost:6789/print/receipt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(printData)
@@ -3610,10 +3610,18 @@ function InventoryScreen({ posData }) {
 // ─────────────────────────────────────────────────────────────────
 
 async function printCashReceipt(html: string) {
+  // Electron IPC (desktop app) — direktno, brez HTTP
+  if (typeof window !== 'undefined' && (window as any).electronAPI?.printReceipt) {
+    const result = await (window as any).electronAPI.printReceipt(html)
+    if (result?.ok) return
+    if (result?.error) alert('Napaka tiskalnika: ' + result.error)
+    return
+  }
+  // Fallback: localhost print server
   try {
-    const res = await fetch('https://localhost:6790/health', { signal: AbortSignal.timeout(1000) })
+    const res = await fetch('http://localhost:6789/health', { signal: AbortSignal.timeout(1000) })
     if (res.ok) {
-      const printRes = await fetch('https://localhost:6790/print/receipt', {
+      const printRes = await fetch('http://localhost:6789/print/receipt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ html })
@@ -3621,8 +3629,9 @@ async function printCashReceipt(html: string) {
       if ((await printRes.json()).ok) return
     }
   } catch {}
-  const w = window.open('', '_blank', 'width=380,height=700')
-  if (!w) return
+  // Zadnji fallback: browser popup
+  const w = window.open('about:blank', '_blank', 'width=380,height=700')
+  if (!w) { alert('Tiskalnik ni dosegljiv. Preverite ali je Racunko POS app odprta.'); return }
   w.document.write(html)
   w.document.close()
 }
@@ -4709,7 +4718,7 @@ function OrdersScreen({ posData, auth }) {
 
     // Poskusi lokalni print server
     try {
-      const res = await fetch('https://localhost:6790/health', { signal: AbortSignal.timeout(1000) })
+      const res = await fetch('http://localhost:6789/health', { signal: AbortSignal.timeout(1000) })
       if (res.ok) {
         const printData = {
           business_name: orgData?.name || 'ŠIRM fitness&bar',
@@ -4734,7 +4743,7 @@ function OrdersScreen({ posData, auth }) {
           furs_zoi: payment?.furs_zoi,
           furs_eor: payment?.furs_eor,
         }
-        const printRes = await fetch('https://localhost:6790/print/receipt', {
+        const printRes = await fetch('http://localhost:6789/print/receipt', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(printData)

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell, dialog } = require('electron')
+const { app, BrowserWindow, Menu, shell, dialog, ipcMain } = require('electron')
 const { autoUpdater } = require('electron-updater')
 const path = require('path')
 const fs = require('fs')
@@ -45,6 +45,55 @@ function setupAutoUpdater() {
       console.log('Preverjanje posodobitev napaka:', err.message)
     })
   }, 3000)
+}
+
+
+// ── IPC print handlers ────────────────────────────────────────────
+function setupIpcHandlers() {
+  ipcMain.handle('print-receipt', async (event, html) => {
+    return new Promise((resolve) => {
+      try {
+        const tmpFile = require('path').join(require('os').tmpdir(), `racunko-receipt-${Date.now()}.html`)
+        require('fs').writeFileSync(tmpFile, html, 'utf8')
+        const printWin = new BrowserWindow({
+          show: false,
+          webPreferences: { nodeIntegration: false, contextIsolation: true }
+        })
+        printWin.loadFile(tmpFile)
+        printWin.webContents.on('did-finish-load', () => {
+          printWin.webContents.print(
+            { silent: true, printBackground: true },
+            (success, errorType) => {
+              printWin.close()
+              try { require('fs').unlinkSync(tmpFile) } catch {}
+              resolve({ ok: success, error: success ? null : errorType })
+            }
+          )
+        })
+        printWin.webContents.on('did-fail-load', (event, code, desc) => {
+          printWin.close()
+          try { require('fs').unlinkSync(tmpFile) } catch {}
+          resolve({ ok: false, error: desc })
+        })
+      } catch (e) {
+        resolve({ ok: false, error: e.message })
+      }
+    })
+  })
+
+  ipcMain.handle('print-test', async () => {
+    const { app } = require('electron')
+    const testHtml = `<!DOCTYPE html><html><body style="font-family:monospace;font-size:12px;max-width:80mm;margin:0;padding:8mm 4mm">
+      <div style="text-align:center;font-weight:700;font-size:14px">RACUNKO POS</div>
+      <div style="text-align:center">Test tiskanja</div>
+      <hr/>
+      <div>Verzija: ${app.getVersion()}</div>
+      <div>Datum: ${new Date().toLocaleString('sl-SI')}</div>
+      <hr/>
+      <div style="text-align:center">Tiskalnik deluje!</div>
+    </body></html>`
+    return ipcMain.emit('print-receipt', null, testHtml)
+  })
 }
 
 // ── Print server ──────────────────────────────────────────────────
@@ -210,6 +259,7 @@ function createMenu() {
 
 // ── App lifecycle ─────────────────────────────────────────────────
 app.whenReady().then(() => {
+  setupIpcHandlers()
   startPrintServer()
   createMenu()
   createWindow()
