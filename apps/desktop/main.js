@@ -27,7 +27,7 @@ function buildEscPos(data) {
   const lf = () => b(LF)
 
   // Pretvori slovenscino v ASCII (code page 850)
-  const sl = (s) => (s||'')
+  const sl = (s) => (String(s||''))
     .replace(/\u0161/g,'s').replace(/\u0160/g,'S')
     .replace(/\u010d/g,'c').replace(/\u010c/g,'C')
     .replace(/\u017e/g,'z').replace(/\u017d/g,'Z')
