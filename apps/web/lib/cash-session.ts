@@ -316,3 +316,19 @@ export function formatDifference(diff: number): string {
   const word = diff > 0 ? '(višek)' : '(manjko)'
   return `${sign}${diff.toFixed(2).replace('.', ',')} € ${word}`
 }
+
+/**
+ * Vrne priporočeno začetno gotovino za novo izmeno
+ * (= pričakovana gotovina zadnje zaprte izmene).
+ */
+export async function getLastCarryOver(): Promise<number | null> {
+  const db = createClient()
+  const { data } = await db
+    .from('z_reports')
+    .select('cash_carry_over')
+    .eq('business_id', BUSINESS_ID)
+    .order('report_number', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return data?.cash_carry_over ?? null
+}
