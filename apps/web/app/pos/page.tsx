@@ -154,8 +154,8 @@ function usePosData() {
         setTodayStats(stats)
         setIngredients((await createClient().from('ingredients').select('*, item_ingredients(qty_used, item_id)').eq('business_id', BUSINESS_ID).order('name')).data || [])
         // Naloži modifier grupe
-        const { data: mgData } = await createClient().from('item_modifier_groups').select('*, item_modifiers(*)').eq('business_id', BUSINESS_ID).order('sort_order')
-        setModifierGroups(mgData || [])
+        const { data: mgData2 } = await createClient().from('item_modifier_groups').select('*, item_modifiers(*)').eq('business_id', BUSINESS_ID).order('sort_order')
+        setModifierGroups(mgData2 || [])
         // Naloži artikel-modifier povezave
         const { data: linkData } = await createClient().from('item_modifier_group_links').select('item_id, group_id')
         if (linkData) {
