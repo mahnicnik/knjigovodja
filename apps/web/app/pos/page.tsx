@@ -9,7 +9,7 @@ import { pos, BUSINESS_ID } from '@/lib/pos-client'
 import { buildReceiptHTML } from '@/lib/receipt'
 import { WorkStatusBar, ClockInModal } from '@/lib/work-session-components'
 import { getCurrentSession, openSession, getSessionStats, closeSession, getLastCarryOver, type CashSession, type SessionStats } from '@/lib/cash-session'
-import { buildOpeningReceipt, buildXReportReceipt, buildZReportReceipt } from '@/lib/cash-session-receipt'
+import { buildOpeningReceipt, buildVmesnoStanjeReceipt, buildZReportReceipt } from '@/lib/cash-session-receipt'
 
 // ================================================================
 // TEMA
@@ -3703,43 +3703,7 @@ function InventoryScreen({ posData }) {
                   </div>
                 </Field>
               )}
-              {/* Modifier grupe */}
-              {(itemModal?.item_type||'simple') !== 'ingredient' && (
-                <Field label="Modifier grupe (variante, dodatki)">
-                  <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-                    {modifierGroups.map(mg => {
-                      const linked = itemModal?.id ? (itemModifierLinks[itemModal.id]||[]).includes(mg.id) : (itemModal?._modLinks||[]).includes(mg.id)
-                      return (
-                        <div key={mg.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 10px', borderRadius:8, border:'1px solid '+T.line, background:linked?T.accentSoft:T.surface }}>
-                          <input type="checkbox" checked={linked} onChange={async e => {
-                            if (itemModal?.id) {
-                              if (e.target.checked) {
-                                await createClient().from('item_modifier_group_links').insert({ item_id: itemModal.id, group_id: mg.id })
-                              } else {
-                                await createClient().from('item_modifier_group_links').delete().eq('item_id', itemModal.id).eq('group_id', mg.id)
-                              }
-                              const { data: linkData } = await createClient().from('item_modifier_group_links').select('item_id, group_id')
-                              if (linkData) {
-                                const links: Record<string,string[]> = {}
-                                for (const l of linkData) { if (!links[l.item_id]) links[l.item_id] = []; links[l.item_id].push(l.group_id) }
-                                setItemModifierLinks(links)
-                              }
-                            } else {
-                              const cur = itemModal?._modLinks || []
-                              setItemModal((p:any) => ({...p, _modLinks: e.target.checked ? [...cur, mg.id] : cur.filter((id:string) => id !== mg.id)}))
-                            }
-                          }}/>
-                          <div style={{ flex:1 }}>
-                            <div style={{ fontWeight:600, fontSize:12 }}>{mg.name} {mg.required?'(obvezno)':''} {mg.multi_select?'(več izbir)':''}</div>
-                            <div style={{ fontSize:11, color:T.muted }}>{(mg.item_modifiers||[]).map((m:any) => m.name + (m.price_delta ? (m.price_delta>0?'+':'')+m.price_delta+'€' : '')).join(' · ')}</div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                    <button onClick={() => setModGroupModal({ name:'', required:false, multi_select:false, modifiers:[{name:'',price_delta:0}] })} style={{ ...btnS, fontSize:11, alignSelf:'flex-start' }}>+ Nova modifier grupa</button>
-                  </div>
-                </Field>
-              )}
+
               <div style={{ display:'flex', gap:10, justifyContent:'flex-end', marginTop:4 }}>
                 {itemModal?.id && <button onClick={()=>deleteItem(itemModal.id,itemModal.name)} style={{ ...btnS, color:T.danger }}>Izbriši</button>}
                 <button onClick={()=>setItemModal(null)} style={btnS}>Prekliči</button>
@@ -3983,7 +3947,7 @@ function OpenCashModal({ posData, auth, onClose, onOpened }) {
 // X-POROČILO MODAL (vmesno stanje)
 // ─────────────────────────────────────────────────────────────────
 
-function XReportModal({ session, posData, auth, onClose }) {
+function VmesnoStanjeModal({ session, posData, auth, onClose }) {
   const [stats, setStats] = React.useState<SessionStats | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [printing, setPrinting] = React.useState(false)
@@ -4004,7 +3968,7 @@ function XReportModal({ session, posData, auth, onClose }) {
       const sessionNumber = (allSessions || []).findIndex(s => s.id === session.id) + 1
       const cashierName = user?.email?.split('@')[0] || ''
 
-      const html = buildXReportReceipt({
+      const html = buildVmesnoStanjeReceipt({
         session,
         stats,
         org: org || { name: 'ŠIRM fitness&bar', tax_number: '', vat_registered: false },
@@ -4020,7 +3984,7 @@ function XReportModal({ session, posData, auth, onClose }) {
 
   return (
     <Modal open onClose={onClose} width={400}>
-      <ModalHeader title="X-poročilo (vmesno stanje)" onClose={onClose}/>
+      <ModalHeader title="Vmesno stanje (vmesno stanje)" onClose={onClose}/>
       <div style={{ padding:'20px', display:'flex', flexDirection:'column', gap:12 }}>
         {loading ? (
           <div style={{ textAlign:'center', padding:20, color:T.muted }}>Nalagam...</div>
@@ -7927,7 +7891,7 @@ function KlasikApp() {
   const [cashSession, setCashSession] = React.useState(null)
   const [sessionLoaded, setSessionLoaded] = React.useState(false)
   const [showOpenCash, setShowOpenCash] = React.useState(false)
-  const [showXReport, setShowXReport] = React.useState(false)
+  const [showVmesnoStanje, setShowVmesnoStanje] = React.useState(false)
   const [showCloseCash, setShowCloseCash] = React.useState(false)
 
   React.useEffect(() => {
@@ -8014,8 +7978,8 @@ function KlasikApp() {
           <BellNotifications notifications={posData.notifications} notifOpen={notifOpen} setNotifOpen={setNotifOpen} posData={posData} orderListOpen={orderListOpen} setOrderListOpen={setOrderListOpen}/>
           {orderListOpen && <OrderListModal posData={posData} onClose={()=>setOrderListOpen(false)}/>}
           {cashSession && (
-            <button onClick={()=>setShowXReport(true)} style={{ padding:'5px 10px', borderRadius:7, border:'none', background:'rgba(37,99,235,0.15)', color:'#2563eb', cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700 }}>
-              X-poročilo
+            <button onClick={()=>setShowVmesnoStanje(true)} style={{ padding:'5px 10px', borderRadius:7, border:'none', background:'rgba(37,99,235,0.15)', color:'#2563eb', cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700 }}>
+              Vmesno stanje
             </button>
           )}
           {cashSession
@@ -8263,7 +8227,7 @@ function KlasikApp() {
       {sellPackageModal && <SellPackageModal template={sellPackageModal} posData={posData} onClose={()=>setSellPackageModal(null)} auth={auth}/>}
       {showClockIn && <ClockInModal posData={posData} onClose={()=>setShowClockIn(false)} onClockedIn={()=>{ setShowClockIn(false); setWsRefreshKey(k=>k+1) }}/>}
       {showOpenCash && <OpenCashModal posData={posData} auth={auth} onClose={()=>setShowOpenCash(false)} onOpened={(s)=>{ setCashSession(s); setShowOpenCash(false) }}/>}
-      {showXReport && cashSession && <XReportModal session={cashSession} posData={posData} auth={auth} onClose={()=>setShowXReport(false)}/>}
+      {showVmesnoStanje && cashSession && <VmesnoStanjeModal session={cashSession} posData={posData} auth={auth} onClose={()=>setShowVmesnoStanje(false)}/>}
       {showCloseCash && cashSession && <CloseCashModal session={cashSession} posData={posData} auth={auth} onClose={()=>setShowCloseCash(false)} onClosed={()=>{ setCashSession(null); refreshSession() }}/>}
       
       {auth.locked && <LockScreen auth={auth}/>}
