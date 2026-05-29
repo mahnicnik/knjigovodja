@@ -13,13 +13,15 @@ const SP_CONTRIBUTIONS: Record<number, number> = {
 }
 
 const SECTIONS = [
-  { id: 'profil',    icon: '🏢', label: 'Profil podjetja',   desc: 'Ime, naslov, davčna' },
-  { id: 'ddv',       icon: '📊', label: 'DDV & prispevki',   desc: 'DDV status, razred' },
-  { id: 'banka',     icon: '🏦', label: 'Bančni podatki',    desc: 'IBAN, BIC/SWIFT' },
-  { id: 'blagajna',  icon: '🧾', label: 'Davčna blagajna',   desc: 'FURS, certifikat' },
-  { id: 'ekipa',     icon: '👥', label: 'Ekipa',             desc: 'Uporabniki, dostop' },
-  { id: 'geslo',     icon: '🔐', label: 'Geslo',             desc: 'Sprememba gesla' },
-  { id: 'plan',      icon: '⭐', label: 'Naročnina',         desc: 'Plan, nadgradnja' },
+  { id: 'profil',       icon: '🏢', label: 'Profil podjetja',    desc: 'Ime, naslov, davčna' },
+  { id: 'ddv',          icon: '📊', label: 'DDV & prispevki',    desc: 'DDV status, razred' },
+  { id: 'banka',        icon: '🏦', label: 'Bančni podatki',     desc: 'IBAN, BIC/SWIFT' },
+  { id: 'blagajna',     icon: '🧾', label: 'Davčna blagajna',    desc: 'FURS, certifikat' },
+  { id: 'ekipa',        icon: '👥', label: 'Ekipa',              desc: 'Uporabniki, dostop' },
+  { id: 'geslo',        icon: '🔐', label: 'Geslo',              desc: 'Sprememba gesla' },
+  { id: 'plan',         icon: '⭐', label: 'Naročnina',          desc: 'Plan, nadgradnja' },
+  { id: 'racunovodja',  icon: '📒', label: 'Računovodja portal', desc: 'Dostop računovodje' },
+  { id: 'api',          icon: '🔑', label: 'API ključi',         desc: 'Integracije, dostop' },
 ]
 
 export default function NastavitevPage() {
@@ -308,6 +310,28 @@ export default function NastavitevPage() {
                 {pwSaving ? 'Shranjujem...' : 'Spremeni geslo'}
               </button>
             </div>
+          </div>
+        )}
+
+        {/* RAČUNOVODJA */}
+        {activeSection === 'racunovodja' && (
+          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>📒 Računovodja portal</div>
+            <div style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>Vaš računovodja dobi vpogled v vaše poslovanje brez XLSX emailov</div>
+            <a href="/racunovodja" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#0D1F12', color: '#fff', padding: '11px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
+              📒 Odpri računovodja portal →
+            </a>
+          </div>
+        )}
+
+        {/* API KLJUČI */}
+        {activeSection === 'api' && (
+          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>🔑 API ključi</div>
+            <div style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>API dostop za integracije z zunanjimi sistemi</div>
+            <a href="/api-kljuci" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#0D1F12', color: '#fff', padding: '11px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
+              🔑 Upravljaj API ključe →
+            </a>
           </div>
         )}
 

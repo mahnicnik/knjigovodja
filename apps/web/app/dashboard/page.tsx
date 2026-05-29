@@ -81,16 +81,7 @@ const RAIL_GROUPS = [
     ],
   },
   { id: 'ai', icon: 'ai', label: 'AI računovodja', href: '/ai', single: true },
-  {
-    id: 'nastavitve', icon: 'settings', label: 'Nastavitve',
-    items: [
-      { href: '/nastavitve',          icon: 'settings', label: 'Profil podjetja' },
-      { href: '/nastavitve/ekipa',    icon: 'users',    label: 'Ekipa' },
-      { href: '/nastavitve/blagajna', icon: 'pos',      label: 'Davčna blagajna' },
-      { href: '/racunovodja',         icon: 'chart',    label: 'Računovodja portal' },
-      { href: '/api-kljuci',          icon: 'key',      label: 'API ključi' },
-    ],
-  },
+  { id: 'nastavitve', icon: 'settings', label: 'Nastavitve', href: '/nastavitve', single: true },
 ]
 
 
