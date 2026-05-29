@@ -5672,9 +5672,20 @@ function InventuraScreen({ posData, auth }) {
                         {s.closed_at && <span>Zaključeno: {new Date(s.closed_at).toLocaleDateString('sl-SI')}</span>}
                       </div>
                     </div>
-                    <button onClick={() => openSession(s)} style={{ ...btnP, padding:'8px 16px', fontSize:12 }}>
-                      {isOpen ? '▶ Nadaljuj' : '🔍 Poglej'}
-                    </button>
+                    <div style={{ display:'flex', gap:6 }}>
+                      <button onClick={() => openSession(s)} style={{ ...btnP, padding:'8px 16px', fontSize:12 }}>
+                        {isOpen ? '▶ Nadaljuj' : '🔍 Poglej'}
+                      </button>
+                      <button onClick={async()=>{
+                        if (!confirm('Izbrišem inventuro?')) return
+                        await createClient().from('inventory_lines').delete().eq('session_id', s.id)
+                        await createClient().from('inventory_sessions').delete().eq('id', s.id)
+                        await loadSessions()
+                        showToast('Inventura izbrisana')
+                      }} style={{ ...btnS, padding:'8px 10px', fontSize:12, color:T.danger }}>
+                        <KI name="trash" size={14}/>
+                      </button>
+                    </div>
                   </div>
                 )
               })}
