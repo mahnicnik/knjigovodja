@@ -8689,7 +8689,6 @@ function KlasikApp() {
           {screen==='packages'  && <PackagesScreen posData={posData} setSellPackageModal={setSellPackageModal}/>}
           {screen==='inventory' && <InventoryScreen posData={posData}/>}
           {screen==='inventura' && <InventuraScreen posData={posData} auth={auth}/>}
-          {screen==='inventura' && <InventuraScreen posData={posData} auth={auth}/>}
           {screen==='orders'    && <OrdersScreen posData={posData} auth={auth}/>}
           {screen==='reports'   && <ReportsScreen posData={posData} auth={auth}/>}
           {screen==='admin'     && <AdminScreen auth={auth} posData={posData}/>}
