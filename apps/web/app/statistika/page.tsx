@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import AppLayout from '@/components/AppLayout'
+
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, Legend
@@ -144,15 +144,15 @@ export default function StatistikaPage() {
   }
 
   if (loading) return (
-    <AppLayout>
+    <div style={{minHeight:"100vh",background:"#f9fafb"}}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh' }}>
         <div style={{ fontSize:'14px', color:'#888' }}>Nalagam...</div>
       </div>
-    </AppLayout>
+    </div>
   )
 
   return (
-    <AppLayout org={org}>
+    <div style={{minHeight:"100vh",background:"#f9fafb"}}>
       {/* Topbar */}
       <div style={{ background:'#fff', borderBottom:'0.5px solid rgba(0,0,0,0.08)', padding:'16px 28px', display:'flex', alignItems:'center', justifyContent:'space-between', position:'sticky', top:0, zIndex:10 }}>
         <div>
@@ -267,6 +267,6 @@ export default function StatistikaPage() {
           </div>
         </div>
       </div>
-    </AppLayout>
+    </div>
   )
 }
