@@ -3084,9 +3084,7 @@ function InventoryScreen({ posData }) {
   const [modifierGroups, setModifierGroups] = useState<any[]>([])
   const [itemModifierLinks, setItemModifierLinks] = useState<Record<string,string[]>>({})
   const [modGroupModal, setModGroupModal] = useState<any>(null) // {name, required, multi_select}
-  const [modifierGroups, setModifierGroups] = useState<any[]>([])
-  const [itemModifierLinks, setItemModifierLinks] = useState<Record<string,string[]>>({})
-  const [modGroupModal, setModGroupModal] = useState<any>(null) // {name, required, multi_select}
+
   const [saving, setSaving] = useState(false)
   const [invToast, setInvToast] = useState(null)
 
