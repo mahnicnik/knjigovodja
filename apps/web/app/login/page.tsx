@@ -93,12 +93,19 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="text-center text-sm text-gray-500 mt-6">
-          Nimate računa?{' '}
-          <a href="/register" className="text-gray-900 font-medium hover:underline">
-            Registracija
-          </a>
-        </p>
+        <div className="mt-6 space-y-3 text-center text-sm text-gray-500">
+          <p>
+            <a href="/forgot-password" className="text-gray-900 font-medium hover:underline">
+              Pozabljeno geslo?
+            </a>
+          </p>
+          <p>
+            Nimate računa?{' '}
+            <a href="/register" className="text-gray-900 font-medium hover:underline">
+              Registracija
+            </a>
+          </p>
+        </div>
       </div>
     </div>
   )
