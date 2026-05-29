@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
-import AppLayout from '@/components/AppLayout'
+
 
 interface Message {
   role: 'user' | 'assistant'
@@ -147,7 +147,7 @@ export default function AIPage() {
   const ddvMonths = [4,7,10,1]
 
   return (
-    <AppLayout org={org}>
+    <div style={{minHeight:"100vh",background:"#f9fafb"}}>
       <div style={{ display:'flex', flexDirection:'column', height:'100vh', maxHeight:'100vh' }}>
 
         {/* Header */}
@@ -274,6 +274,6 @@ export default function AIPage() {
       </div>
 
       <style>{`@keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }`}</style>
-    </AppLayout>
+    </div>
   )
 }
