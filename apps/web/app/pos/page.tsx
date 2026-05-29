@@ -1240,6 +1240,7 @@ function SaleScreen({ activeTable, activeCustomer, cart, setCart, addItem, adjus
 
       {/* Košarica */}
       <SaleCart cart={cart} setCart={setCart} adjustQty={adjustQty} activeTable={activeTable} activeCustomer={activeCustomer} setPaymentOpen={setPaymentOpen} totals={totals} setActiveCustomer={setActiveCustomer} customers={posData.customers} cartDiscount={cartDiscount} setCartDiscount={setCartDiscount} cashSession={cashSession} onNeedOpenCash={onNeedOpenCash}
+        auth={auth}
         onHoldOrder={async () => {
           if (cart.length === 0) return
           try {
@@ -1259,26 +1260,54 @@ function SaleScreen({ activeTable, activeCustomer, cart, setCart, addItem, adjus
           if (cart.length === 0) return
           const label = activeTable ? activeTable.name : 'Predracun'
           const total = totals.total * (1 - (cartDiscount||0)/100)
-          // ESC/POS predracun
+          const num = 'PRE-' + Date.now().toString().slice(-6)
+          const eur2 = (n:number) => n.toFixed(2).replace('.',',') + ' €'
+          // ESC/POS (Electron)
           if (typeof window !== 'undefined' && (window as any).electronAPI?.printRaw) {
             const printData = {
               business_name: 'SIRM fitness&bar',
-              receipt_number: 'PRE-' + Date.now().toString().slice(-6),
+              business_address: 'Poljanska cesta 87, 4224 Gorenja vas',
+              receipt_number: num,
               cashier: auth?.user?.name || '',
               date: new Date().toLocaleString('sl-SI'),
-              items: cart.map(l => ({ name: l.name, qty: l.qty, unit_price: l.price, vat_rate: l.vat_rate || 22 })),
+              items: cart.map((l:any) => ({ name: l.name, qty: Number(l.qty), unit_price: Number(l.price), vat_rate: Number(l.vat_rate||22) })),
               subtotal: totals.sub,
               discount_amount: totals.total - total,
-              tip: 0,
-              total,
+              tip: 0, total,
               payment_method: 'predracun',
-              is_proforma: true,
             }
             const r = await (window as any).electronAPI.printRaw(printData)
             if (!r?.ok) alert('Napaka tiskalnika: ' + r?.error)
-          } else {
-            alert('Predracun: ' + label + ' - Skupaj: ' + total.toFixed(2) + ' EUR')
+            return
           }
+          // Browser — odpri HTML v novem oknu
+          const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Predracun ${num}</title>
+<style>@page{size:A4;margin:20mm}body{font-family:Arial,sans-serif;font-size:13px;color:#000;max-width:700px;margin:0 auto}
+.header{text-align:center;margin-bottom:24px}.title{font-size:22px;font-weight:bold;margin:8px 0}
+table{width:100%;border-collapse:collapse;margin:16px 0}th,td{padding:8px 12px;border-bottom:1px solid #ddd;text-align:left}
+th{background:#f5f5f5;font-weight:bold}.right{text-align:right}.total-row{font-size:16px;font-weight:bold}
+.footer{margin-top:32px;font-size:11px;color:#666;text-align:center;border-top:1px solid #ddd;padding-top:12px}
+.stamp{border:2px dashed #999;padding:20px;text-align:center;margin:24px 0;color:#999;font-size:14px}
+</style></head><body>
+<div class="header">
+  <div style="font-size:18px;font-weight:bold">SIRM fitness&bar</div>
+  <div>Poljanska cesta 87, 4224 Gorenja vas</div>
+</div>
+<div style="display:flex;justify-content:space-between;margin-bottom:16px">
+  <div><div class="title">PREDRACUN</div><div>St. ${num}</div></div>
+  <div style="text-align:right"><div>Datum: ${new Date().toLocaleDateString('sl-SI')}</div>${label !== 'Predracun' ? '<div>Miza: '+label+'</div>' : ''}</div>
+</div>
+<table><thead><tr><th>Artikel</th><th class="right">Kol.</th><th class="right">Cena</th><th class="right">Skupaj</th></tr></thead>
+<tbody>${cart.map((l:any) => `<tr><td>${l.name}</td><td class="right">${l.qty}</td><td class="right">${eur2(Number(l.price))}</td><td class="right">${eur2(Number(l.price)*Number(l.qty))}</td></tr>`).join('')}
+</tbody></table>
+${cartDiscount > 0 ? `<div style="text-align:right;color:#666">Popust ${cartDiscount}%: -${eur2(totals.total-total)}</div>` : ''}
+<div class="total-row" style="text-align:right;font-size:18px;margin:12px 0">SKUPAJ: ${eur2(total)}</div>
+<div class="stamp">Predracun ni davčno potrjen. Velja do: ${new Date(Date.now()+7*86400000).toLocaleDateString('sl-SI')}</div>
+<div class="footer">SIRM fitness&bar · www.racunko.si<br>Predracun izdan s sistemom RACUNKO</div>
+<script>window.addEventListener('load',function(){setTimeout(function(){window.print()},300)})</script>
+</body></html>`
+          const w = window.open('','_blank','width=800,height=900')
+          if (w) { w.document.write(html); w.document.close() }
         }}
       />
 
@@ -1295,7 +1324,7 @@ function SaleScreen({ activeTable, activeCustomer, cart, setCart, addItem, adjus
   )
 }
 
-function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPaymentOpen, totals, setActiveCustomer, customers, cartDiscount, setCartDiscount, cashSession, onNeedOpenCash, onHoldOrder, onProforma }) {
+function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPaymentOpen, totals, setActiveCustomer, customers, cartDiscount, setCartDiscount, cashSession, onNeedOpenCash, onHoldOrder, onProforma, auth }) {
   const [discountOpen, setDiscountOpen] = useState(false)
   const [discountInput, setDiscountInput] = useState('')
   const [splitOpen, setSplitOpen] = useState(false)
