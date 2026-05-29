@@ -17,7 +17,7 @@ function sb() { return createClient() }
 // ─── Tipi ────────────────────────────────────────────────────────────
 export type StaffRole = 'Lastnik' | 'Vodja' | 'Blagajnik' | 'Trener' | 'Terapevt'
 export type TableStatus = 'free' | 'occupied' | 'reserved' | 'needs_attention'
-export type OrderStatus = 'open' | 'paid' | 'cancelled'
+export type OrderStatus = 'open' | 'paid' | 'cancelled' | 'on_hold'
 export type PaymentMethod = 'cash' | 'card' | 'bon' | 'tk' | 'tr' | 'prep'
 
 export interface StaffMember {
@@ -323,6 +323,30 @@ export const pos = {
       return data as { payment_id: string; order_id: string }
     },
 
+    async holdOrder(orderId: string, label?: string) {
+      const { error } = await sb()
+        .from('orders')
+        .update({ status: 'on_hold', hold_label: label || null })
+        .eq('id', orderId)
+      if (error) throw error
+    },
+    async getHeldOrders(): Promise<any[]> {
+      const { data, error } = await sb()
+        .from('orders')
+        .select('*, order_lines(*), tables(name)')
+        .eq('business_id', BUSINESS_ID)
+        .eq('status', 'on_hold')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return data || []
+    },
+    async resumeOrder(orderId: string) {
+      const { error } = await sb()
+        .from('orders')
+        .update({ status: 'open' })
+        .eq('id', orderId)
+      if (error) throw error
+    },
     async getOpenOnTable(tableId: string): Promise<PosOrder | null> {
       const { data, error } = await sb()
         .from('orders')

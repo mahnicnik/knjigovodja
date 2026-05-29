@@ -1239,7 +1239,48 @@ function SaleScreen({ activeTable, activeCustomer, cart, setCart, addItem, adjus
       </div>
 
       {/* Košarica */}
-      <SaleCart cart={cart} setCart={setCart} adjustQty={adjustQty} activeTable={activeTable} activeCustomer={activeCustomer} setPaymentOpen={setPaymentOpen} totals={totals} setActiveCustomer={setActiveCustomer} customers={posData.customers} cartDiscount={cartDiscount} setCartDiscount={setCartDiscount} cashSession={cashSession} onNeedOpenCash={onNeedOpenCash}/>
+      <SaleCart cart={cart} setCart={setCart} adjustQty={adjustQty} activeTable={activeTable} activeCustomer={activeCustomer} setPaymentOpen={setPaymentOpen} totals={totals} setActiveCustomer={setActiveCustomer} customers={posData.customers} cartDiscount={cartDiscount} setCartDiscount={setCartDiscount} cashSession={cashSession} onNeedOpenCash={onNeedOpenCash}
+        onHoldOrder={async () => {
+          if (cart.length === 0) return
+          try {
+            const label = activeTable ? activeTable.name : new Date().toLocaleTimeString('sl-SI', {hour:'2-digit',minute:'2-digit'})
+            const cashierId = auth?.user?.id || null
+            const orderId = await pos.orders.openOrder({ tableId: activeTable?.id, customerId: activeCustomer?.id, cashierId })
+            for (const line of cart) {
+              await pos.orders.addLine(orderId, { itemId: line.id, name: line.name, qty: line.qty, unitPrice: line.price, vatRate: line.vat_rate || 22, mods: line.mods || [], note: line.note || null })
+            }
+            await pos.orders.holdOrder(orderId, label)
+            setCart([])
+            setActiveTable(null)
+            alert('Racun shranjen: ' + label)
+          } catch(e: any) { alert('Napaka: ' + e.message) }
+        }}
+        onProforma={async () => {
+          if (cart.length === 0) return
+          const label = activeTable ? activeTable.name : 'Predracun'
+          const total = totals.total * (1 - (cartDiscount||0)/100)
+          // ESC/POS predracun
+          if (typeof window !== 'undefined' && (window as any).electronAPI?.printRaw) {
+            const printData = {
+              business_name: 'SIRM fitness&bar',
+              receipt_number: 'PRE-' + Date.now().toString().slice(-6),
+              cashier: auth?.user?.name || '',
+              date: new Date().toLocaleString('sl-SI'),
+              items: cart.map(l => ({ name: l.name, qty: l.qty, unit_price: l.price, vat_rate: l.vat_rate || 22 })),
+              subtotal: totals.sub,
+              discount_amount: totals.total - total,
+              tip: 0,
+              total,
+              payment_method: 'predracun',
+              is_proforma: true,
+            }
+            const r = await (window as any).electronAPI.printRaw(printData)
+            if (!r?.ok) alert('Napaka tiskalnika: ' + r?.error)
+          } else {
+            alert('Predracun: ' + label + ' - Skupaj: ' + total.toFixed(2) + ' EUR')
+          }
+        }}
+      />
 
       {/* Scan placeholder */}
       <Modal open={scanModal} onClose={() => setScanModal(false)} width={380}>
@@ -1254,7 +1295,7 @@ function SaleScreen({ activeTable, activeCustomer, cart, setCart, addItem, adjus
   )
 }
 
-function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPaymentOpen, totals, setActiveCustomer, customers, cartDiscount, setCartDiscount, cashSession, onNeedOpenCash }) {
+function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPaymentOpen, totals, setActiveCustomer, customers, cartDiscount, setCartDiscount, cashSession, onNeedOpenCash, onHoldOrder, onProforma }) {
   const [discountOpen, setDiscountOpen] = useState(false)
   const [discountInput, setDiscountInput] = useState('')
   const [splitOpen, setSplitOpen] = useState(false)
@@ -1350,10 +1391,20 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
           <div style={{ fontWeight:700, fontSize:14 }}>Skupaj</div>
           <div style={{ fontWeight:800, fontSize:26, fontVariantNumeric:'tabular-nums', letterSpacing:'-0.02em' }}>{eur(totals.total)}</div>
         </div>
+        {cart.length > 0 && (
+          <div style={{ display:'flex', gap:6, marginTop:8 }}>
+            <button onClick={onHoldOrder} style={{ flex:1, padding:'9px 4px', borderRadius:8, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700, color:T.ink, display:'flex', alignItems:'center', justifyContent:'center', gap:4 }}>
+              💾 Shrani
+            </button>
+            <button onClick={onProforma} style={{ flex:1, padding:'9px 4px', borderRadius:8, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700, color:T.ink, display:'flex', alignItems:'center', justifyContent:'center', gap:4 }}>
+              🧾 Predračun
+            </button>
+          </div>
+        )}
         <button disabled={cart.length===0} onClick={() => {
           if (!cashSession && onNeedOpenCash) { onNeedOpenCash(); return }
           setPaymentOpen({ discount: cartDiscount })
-        }} style={{ width:'100%', marginTop:12, padding:'13px', borderRadius:9, cursor: cart.length ? 'pointer' : 'not-allowed', fontFamily:'inherit', border:'none', background: cart.length ? T.accent : '#ccc', color:'#fff', fontWeight:800, fontSize:15, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+        }} style={{ width:'100%', marginTop:8, padding:'13px', borderRadius:9, cursor: cart.length ? 'pointer' : 'not-allowed', fontFamily:'inherit', border:'none', background: cart.length ? T.accent : '#ccc', color:'#fff', fontWeight:800, fontSize:15, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
           <KI name="arrow" size={16} strokeWidth={2.2}/> {!cashSession ? '🔒 Odpri blagajno' : (cart.length > 0 ? `Plačaj ${eur(totals.total*(1-cartDiscount/100))}` : 'Plačaj')}
         </button>
       </div>
@@ -8002,6 +8053,8 @@ function KlasikApp() {
   const [showClockIn, setShowClockIn] = useState(false)
   const [wsRefreshKey, setWsRefreshKey] = useState(0)
   const [sellPackageModal, setSellPackageModal] = useState(null)
+  const [heldOrdersOpen, setHeldOrdersOpen] = useState(false)
+  const [heldOrders, setHeldOrders] = useState<any[]>([])
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 30000); return () => clearInterval(t) }, [])
   useEffect(() => { if (!nav.includes(screen)) setScreen(nav[0] || 'sale') }, [profileId])
@@ -8069,6 +8122,13 @@ function KlasikApp() {
           <WorkStatusBar key={wsRefreshKey} posData={posData} onRequestClockIn={()=>setShowClockIn(true)}/>
           <BellNotifications notifications={posData.notifications} notifOpen={notifOpen} setNotifOpen={setNotifOpen} posData={posData} orderListOpen={orderListOpen} setOrderListOpen={setOrderListOpen}/>
           {orderListOpen && <OrderListModal posData={posData} onClose={()=>setOrderListOpen(false)}/>}
+          <button onClick={async()=>{
+            const orders = await pos.orders.getHeldOrders()
+            setHeldOrders(orders)
+            setHeldOrdersOpen(true)
+          }} style={{ padding:'5px 10px', borderRadius:7, border:'none', background:'rgba(233,185,73,0.15)', color:T.brand, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700 }}>
+            💾 {heldOrders.length > 0 ? heldOrders.length + ' shranjenih' : 'Shranjeni'}
+          </button>
           {cashSession && (
             <button onClick={()=>setShowVmesnoStanje(true)} style={{ padding:'5px 10px', borderRadius:7, border:'none', background:'rgba(37,99,235,0.15)', color:'#2563eb', cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700 }}>
               Vmesno stanje
@@ -8208,6 +8268,71 @@ function KlasikApp() {
                 Dodaj v naročilo
               </button>
             </div>
+          </div>
+        </Modal>
+      )}
+      {/* Shranjeni racuni modal */}
+      {heldOrdersOpen && (
+        <Modal open onClose={()=>setHeldOrdersOpen(false)} width={520}>
+          <ModalHeader title="Shranjeni racuni" onClose={()=>setHeldOrdersOpen(false)}/>
+          <div style={{ padding:'16px 20px', maxHeight:'70vh', overflowY:'auto' }}>
+            {heldOrders.length === 0 ? (
+              <div style={{ padding:32, textAlign:'center', color:T.muted }}>
+                <div style={{ fontSize:32, marginBottom:8 }}>💾</div>
+                Ni shranjenih racunov
+              </div>
+            ) : heldOrders.map((o:any) => {
+              const lines = o.order_lines || []
+              const total = lines.reduce((s:number,l:any) => s + Number(l.qty||1)*Number(l.unit_price||0), 0)
+              const label = o.hold_label || o.tables?.name || o.id.slice(-6)
+              return (
+                <div key={o.id} style={{ padding:'14px 16px', borderRadius:12, marginBottom:10, background:T.surface, border:'1px solid '+T.line }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontWeight:700, fontSize:15 }}>{label}</div>
+                      <div style={{ fontSize:12, color:T.muted }}>{new Date(o.created_at).toLocaleString('sl-SI')} · {lines.length} artiklov</div>
+                    </div>
+                    <div style={{ fontWeight:800, fontSize:18 }}>€{total.toFixed(2).replace('.',',')}</div>
+                  </div>
+                  <div style={{ fontSize:12, color:T.muted, marginBottom:10 }}>
+                    {lines.slice(0,3).map((l:any) => `${l.name} ×${l.qty}`).join(', ')}{lines.length>3?'...':''}
+                  </div>
+                  <div style={{ display:'flex', gap:8 }}>
+                    <button onClick={async()=>{
+                      // Naloži nazaj v kosarico
+                      const newCart = lines.map((l:any) => ({
+                        lineId: Math.random().toString(36).slice(2),
+                        id: l.item_id || l.id,
+                        name: l.name,
+                        price: Number(l.unit_price||0),
+                        qty: Number(l.qty||1),
+                        vat_rate: Number(l.vat_rate||22),
+                        unit: 'kos',
+                        mods: l.mods||[],
+                        note: l.note||'',
+                        happyHourApplied: false,
+                      }))
+                      setCart(newCart)
+                      await pos.orders.resumeOrder(o.id)
+                      const updated = await pos.orders.getHeldOrders()
+                      setHeldOrders(updated)
+                      setHeldOrdersOpen(false)
+                      setScreen('sale')
+                    }} style={{ flex:2, padding:'9px', borderRadius:8, border:'none', background:T.accent, color:'#fff', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:13 }}>
+                      ▶ Nadaljuj
+                    </button>
+                    <button onClick={async()=>{
+                      if (!confirm('Izbrisem ta shranjeni racun?')) return
+                      await createClient().from('orders').update({ status:'cancelled' }).eq('id', o.id)
+                      const updated = await pos.orders.getHeldOrders()
+                      setHeldOrders(updated)
+                    }} style={{ padding:'9px 14px', borderRadius:8, border:'1px solid '+T.line, background:'transparent', cursor:'pointer', fontFamily:'inherit', fontSize:12, color:T.danger }}>
+                      Izbriši
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </Modal>
       )}
