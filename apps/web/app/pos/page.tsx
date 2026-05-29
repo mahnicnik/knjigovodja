@@ -1154,6 +1154,8 @@ function FloorScreen({ spaces, setActiveTable, setScreen }) {
 // ================================================================
 function SaleScreen({ activeTable, activeCustomer, cart, setCart, addItem, adjustQty, setPaymentOpen, totals, setActiveCustomer, posData, happyHourActive, setHappyHourActive, cashSession, onNeedOpenCash, auth }) {
   const [cartDiscount, setCartDiscount] = useState(0)
+  const [proformaModal, setProformaModal] = useState(false)
+  const [proformaRecipient, setProformaRecipient] = useState({ name:'', address:'', tax_number:'', vat_id:'' })
   const [selectedCat, setSelectedCat] = useState('cat-fav')
   const [search, setSearch] = useState('')
   const [scanModal, setScanModal] = useState(false)
@@ -1256,7 +1258,8 @@ function SaleScreen({ activeTable, activeCustomer, cart, setCart, addItem, adjus
             alert('Racun shranjen: ' + label)
           } catch(e: any) { alert('Napaka: ' + e.message) }
         }}
-        onProforma={async () => {
+        onProforma={() => { if (cart.length > 0) setProformaModal(true) }}
+        onProformaOld={async () => {
           if (cart.length === 0) return
           const label = activeTable ? activeTable.name : 'Predracun'
           const total = totals.total * (1 - (cartDiscount||0)/100)
@@ -1311,6 +1314,89 @@ ${cartDiscount > 0 ? `<div style="text-align:right;color:#666">Popust ${cartDisc
         }}
       />
 
+      {/* Proforma modal — podatki prejemnika */}
+      {proformaModal && (
+        <Modal open onClose={()=>setProformaModal(false)} width={480}>
+          <ModalHeader title="Predračun za podjetje" onClose={()=>setProformaModal(false)}/>
+          <div style={{ padding:'20px 22px', display:'flex', flexDirection:'column', gap:12 }}>
+            <div style={{ padding:'10px 14px', background:T.surface2, borderRadius:9, fontSize:12, color:T.muted }}>
+              Pusti prazno za predračun brez podatkov prejemnika
+            </div>
+            <Field label="Ime podjetja / stranke">
+              <input value={proformaRecipient.name} onChange={e=>setProformaRecipient(p=>({...p,name:e.target.value}))} placeholder="d.o.o., s.p., ime stranke..." style={inp} autoFocus/>
+            </Field>
+            <Field label="Naslov">
+              <input value={proformaRecipient.address} onChange={e=>setProformaRecipient(p=>({...p,address:e.target.value}))} placeholder="Ulica 1, 1000 Ljubljana" style={inp}/>
+            </Field>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+              <Field label="Davčna številka">
+                <input value={proformaRecipient.tax_number} onChange={e=>setProformaRecipient(p=>({...p,tax_number:e.target.value}))} placeholder="12345678" style={inp}/>
+              </Field>
+              <Field label="ID za DDV (če je zavezanec)">
+                <input value={proformaRecipient.vat_id} onChange={e=>setProformaRecipient(p=>({...p,vat_id:e.target.value}))} placeholder="SI12345678" style={inp}/>
+              </Field>
+            </div>
+            <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:4 }}>
+              <button onClick={()=>setProformaModal(false)} style={btnS}>Prekliči</button>
+              <button onClick={async()=>{
+                setProformaModal(false)
+                const label = activeTable ? activeTable.name : 'Predracun'
+                const total = totals.total * (1 - (cartDiscount||0)/100)
+                const num = 'PRE-' + Date.now().toString().slice(-6)
+                const eur2 = (n:number) => n.toFixed(2).replace('.',',') + ' €'
+                const r = proformaRecipient
+                const recipientHtml = r.name ? `
+                  <div style="border:1px solid #ddd;padding:14px;border-radius:6px;margin-bottom:16px">
+                    <div style="font-size:11px;color:#999;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.06em">PREJEMNIK</div>
+                    <div style="font-weight:bold;font-size:14px">${r.name}</div>
+                    ${r.address ? `<div>${r.address}</div>` : ''}
+                    ${r.tax_number ? `<div>Davčna: ${r.tax_number}</div>` : ''}
+                    ${r.vat_id ? `<div>ID DDV: ${r.vat_id}</div>` : ''}
+                  </div>` : ''
+                const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Predračun ${num}</title>
+<style>@page{size:A4;margin:20mm}body{font-family:Arial,sans-serif;font-size:13px;color:#000;max-width:700px;margin:0 auto}
+table{width:100%;border-collapse:collapse;margin:16px 0}th,td{padding:8px 12px;border-bottom:1px solid #ddd;text-align:left}
+th{background:#f5f5f5;font-weight:bold}.right{text-align:right}
+.footer{margin-top:32px;font-size:11px;color:#666;text-align:center;border-top:1px solid #ddd;padding-top:12px}
+.stamp{border:2px dashed #999;padding:16px;text-align:center;margin:20px 0;color:#999;font-size:13px}
+</style></head><body>
+<div style="display:flex;justify-content:space-between;margin-bottom:24px;border-bottom:2px solid #000;padding-bottom:16px">
+  <div>
+    <div style="font-size:20px;font-weight:bold">ŠIRM fitness&bar</div>
+    <div style="color:#666">Poljanska cesta 87, 4224 Gorenja vas</div>
+    <div style="color:#666">www.racunko.si</div>
+  </div>
+  <div style="text-align:right">
+    <div style="font-size:22px;font-weight:bold">PREDRAČUN</div>
+    <div>Št. ${num}</div>
+    <div>Datum: ${new Date().toLocaleDateString('sl-SI')}</div>
+    <div>Velja do: ${new Date(Date.now()+7*86400000).toLocaleDateString('sl-SI')}</div>
+    ${label !== 'Predracun' ? '<div>Ref: '+label+'</div>' : ''}
+  </div>
+</div>
+${recipientHtml}
+<table><thead><tr><th>Artikel</th><th class="right">Kol.</th><th class="right">Cena/kos</th><th class="right">DDV%</th><th class="right">Skupaj</th></tr></thead>
+<tbody>${cart.map((l:any) => `<tr><td>${l.name}</td><td class="right">${l.qty}</td><td class="right">${eur2(Number(l.price))}</td><td class="right">${l.vat_rate||22}%</td><td class="right">${eur2(Number(l.price)*Number(l.qty))}</td></tr>`).join('')}
+</tbody></table>
+<div style="display:flex;justify-content:flex-end">
+  <div style="min-width:280px">
+    ${cartDiscount > 0 ? `<div style="display:flex;justify-content:space-between;color:#666;padding:4px 0"><span>Popust ${cartDiscount}%:</span><span>-${eur2(totals.total-total)}</span></div>` : ''}
+    <div style="display:flex;justify-content:space-between;color:#666;padding:4px 0;border-top:1px solid #ddd;margin-top:4px"><span>Osnova (brez DDV):</span><span>${eur2(total/1.22)}</span></div>
+    <div style="display:flex;justify-content:space-between;color:#666;padding:4px 0"><span>DDV 22%:</span><span>${eur2(total-total/1.22)}</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:18px;font-weight:bold;border-top:2px solid #000;padding-top:8px;margin-top:4px"><span>SKUPAJ:</span><span>${eur2(total)}</span></div>
+  </div>
+</div>
+<div class="stamp">Ta predračun ni davčno potrjen račun.<br>Po plačilu izstavimo uradni davčni račun.</div>
+<div class="footer">ŠIRM fitness&bar · Nik Mahniš s.p. · Davčna: 91390419<br>Izdano s sistemom RAČUNKO · www.racunko.si</div>
+<script>window.addEventListener('load',function(){setTimeout(function(){window.print()},300)})</script>
+</body></html>`
+                const w = window.open('','_blank','width=820,height=960')
+                if (w) { w.document.write(html); w.document.close() }
+              }} style={btnP}>🖨️ Natisni predračun</button>
+            </div>
+          </div>
+        </Modal>
+      )}
       {/* Scan placeholder */}
       <Modal open={scanModal} onClose={() => setScanModal(false)} width={380}>
         <div style={{ padding:'28px 22px', textAlign:'center' }}>
