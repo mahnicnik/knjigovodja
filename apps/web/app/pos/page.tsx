@@ -6044,6 +6044,48 @@ function CatalogSection({ posData }) {
             </div>
           )}
 
+          {/* Modifier grupe */}
+          {(itemModal?.item_type||'simple') !== 'ingredient' && (
+            <Field label="Modifier grupe (variante, dodatki)">
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                {modifierGroups.length === 0 && (
+                  <div style={{ fontSize:12, color:T.muted, padding:'6px 0' }}>Ni modifier grup — klikni spodaj da ustvariš prvo</div>
+                )}
+                {modifierGroups.map((mg:any) => {
+                  const linked = itemModal?.id
+                    ? (itemModifierLinks[itemModal.id]||[]).includes(mg.id)
+                    : (itemModal?._modLinks||[]).includes(mg.id)
+                  return (
+                    <div key={mg.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 10px', borderRadius:8, border:'1px solid '+T.line, background:linked?T.accentSoft:T.surface }}>
+                      <input type="checkbox" checked={linked} onChange={async (e:any) => {
+                        if (itemModal?.id) {
+                          if (e.target.checked) {
+                            await createClient().from('item_modifier_group_links').insert({ item_id: itemModal.id, group_id: mg.id })
+                          } else {
+                            await createClient().from('item_modifier_group_links').delete().eq('item_id', itemModal.id).eq('group_id', mg.id)
+                          }
+                          const { data: lnks } = await createClient().from('item_modifier_group_links').select('item_id, group_id')
+                          if (lnks) {
+                            const map: Record<string,string[]> = {}
+                            for (const l of lnks) { if (!map[l.item_id]) map[l.item_id] = []; map[l.item_id].push(l.group_id) }
+                            setItemModifierLinks(map)
+                          }
+                        } else {
+                          const cur = itemModal?._modLinks || []
+                          setItemModal((p:any) => ({...p, _modLinks: e.target.checked ? [...cur, mg.id] : cur.filter((id:string) => id !== mg.id)}))
+                        }
+                      }}/>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontWeight:600, fontSize:12 }}>{mg.name}{mg.required?' (obvezno)':''}{mg.multi_select?' (vec izbir)':''}</div>
+                        <div style={{ fontSize:11, color:T.muted }}>{(mg.item_modifiers||[]).map((m:any) => m.name + (m.price_delta?(m.price_delta>0?'+':'')+m.price_delta+'€':'')).join(' · ')}</div>
+                      </div>
+                    </div>
+                  )
+                })}
+                <button onClick={() => setModGroupModal({ name:'', required:false, multi_select:false, modifiers:[{name:'',price_delta:0}] })} style={{ ...btnS, fontSize:11, alignSelf:'flex-start' }}>+ Nova modifier grupa</button>
+              </div>
+            </Field>
+          )}
           <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:4 }}>
             <button onClick={()=>setItemModal(null)} style={btnS}>Prekliči</button>
             <button onClick={saveItem} disabled={saving} style={{...btnP,opacity:saving?0.6:1}}>{saving?'Shranjujem...':'Shrani'}</button>
@@ -6051,6 +6093,50 @@ function CatalogSection({ posData }) {
         </div>
       </Modal>
 
+      {/* Modifier Group Modal - CatalogSection */}
+      {!!modGroupModal && (
+        <Modal open onClose={()=>setModGroupModal(null)} width={480}>
+          <ModalHeader title="Nova modifier grupa" onClose={()=>setModGroupModal(null)}/>
+          <div style={{ padding:'20px 22px', display:'flex', flexDirection:'column', gap:12 }}>
+            <Field label="Ime grupe *">
+              <input value={modGroupModal.name} onChange={(e:any)=>setModGroupModal((p:any)=>({...p,name:e.target.value}))} placeholder="Mleko, Velikost, Dodatki..." style={inp} autoFocus/>
+            </Field>
+            <div style={{ display:'flex', gap:16 }}>
+              <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, cursor:'pointer' }}>
+                <input type="checkbox" checked={modGroupModal.required} onChange={(e:any)=>setModGroupModal((p:any)=>({...p,required:e.target.checked}))}/> Obvezna
+              </label>
+              <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, cursor:'pointer' }}>
+                <input type="checkbox" checked={modGroupModal.multi_select} onChange={(e:any)=>setModGroupModal((p:any)=>({...p,multi_select:e.target.checked}))}/> Vec izbir
+              </label>
+            </div>
+            <Field label="Moznosti">
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                {modGroupModal.modifiers.map((m:any, i:number) => (
+                  <div key={i} style={{ display:'flex', gap:6, alignItems:'center' }}>
+                    <input value={m.name} onChange={(e:any)=>{const ms=[...modGroupModal.modifiers];ms[i]={...ms[i],name:e.target.value};setModGroupModal((p:any)=>({...p,modifiers:ms}))}} placeholder="npr. Ovseno" style={{...inp,flex:2}}/>
+                    <input type="number" step="0.1" value={m.price_delta||''} onChange={(e:any)=>{const ms=[...modGroupModal.modifiers];ms[i]={...ms[i],price_delta:parseFloat(e.target.value)||0};setModGroupModal((p:any)=>({...p,modifiers:ms}))}} placeholder="+0.50" style={{...inp,flex:1,width:80}}/>
+                    <button onClick={()=>{const ms=modGroupModal.modifiers.filter((_:any,j:number)=>j!==i);setModGroupModal((p:any)=>({...p,modifiers:ms}))}} style={{ color:T.danger, background:'none', border:'none', cursor:'pointer', fontSize:16 }}>x</button>
+                  </div>
+                ))}
+                <button onClick={()=>setModGroupModal((p:any)=>({...p,modifiers:[...p.modifiers,{name:'',price_delta:0}]}))} style={{ ...btnS, fontSize:11, alignSelf:'flex-start' }}>+ Dodaj moznost</button>
+              </div>
+            </Field>
+            <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+              <button onClick={()=>setModGroupModal(null)} style={btnS}>Preklic</button>
+              <button onClick={async()=>{
+                if (!modGroupModal.name.trim()) return
+                const { data: mg } = await createClient().from('item_modifier_groups').insert({ business_id:BUSINESS_ID, name:modGroupModal.name, required:modGroupModal.required, multi_select:modGroupModal.multi_select }).select().single()
+                if (mg && modGroupModal.modifiers.filter((m:any)=>m.name).length > 0) {
+                  await createClient().from('item_modifiers').insert(modGroupModal.modifiers.filter((m:any)=>m.name).map((m:any,idx:number)=>({ group_id:mg.id, name:m.name, price_delta:m.price_delta||0, sort_order:idx })))
+                }
+                const { data: mgData } = await createClient().from('item_modifier_groups').select('*, item_modifiers(*)').eq('business_id', BUSINESS_ID).order('sort_order')
+                setModifierGroups(mgData || [])
+                setModGroupModal(null)
+              }} style={btnP}>Shrani grupo</button>
+            </div>
+          </div>
+        </Modal>
+      )}
       {toast && <Toast msg={toast.msg} ok={toast.ok}/>}
     </div>
   )
