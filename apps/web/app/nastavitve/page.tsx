@@ -17,6 +17,11 @@ export default function NastavitevPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [pwCurrent, setPwCurrent] = useState('')
+  const [pwNew, setPwNew] = useState('')
+  const [pwConfirm, setPwConfirm] = useState('')
+  const [pwSaving, setPwSaving] = useState(false)
+  const [pwMsg, setPwMsg] = useState<{text:string, ok:boolean} | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const [showCancelled, setShowCancelled] = useState(false)
   const [form, setForm] = useState({
@@ -111,6 +116,23 @@ export default function NastavitevPage() {
       setTimeout(() => setSaved(false), 3000)
     }
     setSaving(false)
+  }
+
+  async function handlePasswordChange() {
+    if (!pwNew || !pwConfirm) { setPwMsg({text:'Vnesi novo geslo', ok:false}); return }
+    if (pwNew !== pwConfirm) { setPwMsg({text:'Gesli se ne ujemata', ok:false}); return }
+    if (pwNew.length < 8) { setPwMsg({text:'Geslo mora imeti vsaj 8 znakov', ok:false}); return }
+    setPwSaving(true)
+    setPwMsg(null)
+    const { error } = await supabase.auth.updateUser({ password: pwNew })
+    if (error) {
+      setPwMsg({text: error.message, ok: false})
+    } else {
+      setPwMsg({text: '✓ Geslo uspešno spremenjeno', ok: true})
+      setPwCurrent(''); setPwNew(''); setPwConfirm('')
+      setTimeout(() => setPwMsg(null), 4000)
+    }
+    setPwSaving(false)
   }
 
   if (loading) return (
@@ -337,6 +359,45 @@ export default function NastavitevPage() {
           <div style={{ fontSize: 13, fontWeight: 600, color: "#0D1F12", marginBottom: 4 }}>Davčna blagajna (FURS)</div>
           <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>Nastavitve za FURS potrjevanje gotovinskih računov po ZDavPR</div>
           <a href="/nastavitve/blagajna" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#0D1F12", color: "#fff", padding: "10px 18px", borderRadius: 8, fontSize: 13, fontWeight: 500, textDecoration: "none" }}>⚙️ Odpri nastavitve blagajne →</a>
+        </div>
+        {/* Sprememba gesla */}
+        <div style={{ marginTop: 24, borderTop: "0.5px solid rgba(0,0,0,0.08)", paddingTop: 24 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#0D1F12", marginBottom: 4 }}>Sprememba gesla</div>
+          <div style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>Nastavite novo geslo za vaš račun</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 400 }}>
+            <div>
+              <label style={{ fontSize: 12, color: "#666", display: "block", marginBottom: 4 }}>Novo geslo</label>
+              <input
+                type="password"
+                value={pwNew}
+                onChange={e => setPwNew(e.target.value)}
+                placeholder="Vsaj 8 znakov"
+                style={{ width: "100%", border: "1px solid #e5e7eb", borderRadius: 10, padding: "10px 14px", fontSize: 13, outline: "none", boxSizing: "border-box" as any }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: "#666", display: "block", marginBottom: 4 }}>Potrdi novo geslo</label>
+              <input
+                type="password"
+                value={pwConfirm}
+                onChange={e => setPwConfirm(e.target.value)}
+                placeholder="Ponovi geslo"
+                style={{ width: "100%", border: "1px solid #e5e7eb", borderRadius: 10, padding: "10px 14px", fontSize: 13, outline: "none", boxSizing: "border-box" as any }}
+              />
+            </div>
+            {pwMsg && (
+              <div style={{ padding: "9px 12px", borderRadius: 8, background: pwMsg.ok ? "rgba(31,107,58,0.08)" : "rgba(168,50,50,0.08)", color: pwMsg.ok ? "#1f6b3a" : "#a83232", fontSize: 12, fontWeight: 600 }}>
+                {pwMsg.text}
+              </div>
+            )}
+            <button
+              onClick={handlePasswordChange}
+              disabled={pwSaving || !pwNew || !pwConfirm}
+              style={{ padding: "10px 20px", borderRadius: 10, background: "#0D1F12", color: "#fff", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500, opacity: (pwSaving || !pwNew || !pwConfirm) ? 0.5 : 1 }}
+            >
+              {pwSaving ? "Shranjujem..." : "Spremeni geslo"}
+            </button>
+          </div>
         </div>
         <button onClick={handleSave} disabled={saving}
           className="w-full bg-gray-900 text-white rounded-xl py-3 text-sm font-medium disabled:opacity-40">
