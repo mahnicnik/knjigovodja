@@ -5876,7 +5876,10 @@ function ReportsScreen({ posData, auth }) {
     const db = createClient()
     const fromStr = from instanceof Date ? from.toISOString().replace('.000Z','Z').replace('.999Z','Z') : String(from)
     const toStr = to instanceof Date ? to.toISOString().replace('.000Z','Z').replace('.999Z','Z') : String(to)
-    const [ordersRes, refundsRes] = await Promise.all([
+    // Staff filter — za trenerje/terapevte
+    const staffFilter = selectedStaffId !== 'all' ? selectedStaffId : null
+
+    const [ordersRes, refundsRes, bookingsRes] = await Promise.all([
       db.from('orders')
         .select('id, closed_at, total, tip_amount, discount_amount')
         .eq('business_id', BUSINESS_ID)
@@ -5888,7 +5891,15 @@ function ReportsScreen({ posData, auth }) {
         .eq('business_id', BUSINESS_ID)
         .gte('created_at', fromStr)
         .lte('created_at', toStr),
+      staffFilter ? db.from('bookings')
+        .select('id, start_at, duration_min, status, services(name, price)')
+        .eq('business_id', BUSINESS_ID)
+        .eq('staff_id', staffFilter)
+        .gte('start_at', fromStr)
+        .lte('start_at', toStr)
+        .in('status', ['confirmed', 'arrived']) : Promise.resolve({ data: [] }),
     ])
+    const staffBookings = (staffFilter ? bookingsRes.data : []) || []
 
     const orders = ordersRes.data || []
     const refunds = refundsRes.data || []
@@ -5949,10 +5960,15 @@ function ReportsScreen({ posData, auth }) {
     })
     const topItems = Object.values(itemMap).sort((a:any,b:any) => b.total - a.total).slice(0,5)
 
+    const staffTotalMin = staffBookings.reduce((s:any, b:any) => s + (b.duration_min||60), 0)
+    const staffTotalRevenue = staffBookings.reduce((s:any, b:any) => s + (b.services?.price||0), 0)
+
     setReportData({
       promet, napitnine, vracila,
       racuni: orders.length,
-      byHour, byMethod, topItems, refunds, from, to
+      byHour, byMethod, topItems, refunds, from, to,
+      staffBookings, staffTotalMin, staffTotalRevenue,
+      isStaffFiltered: !!staffFilter,
     })
     setLoading(false)
   }
@@ -5979,7 +5995,17 @@ function ReportsScreen({ posData, auth }) {
             {period==='today' ? new Date().toLocaleDateString('sl-SI', { weekday:'long', day:'numeric', month:'long', year:'numeric' }) : periodLabel[period]}
           </div>
         </div>
-        <div style={{ marginLeft:'auto', display:'flex', gap:8 }}>
+        <div style={{ marginLeft:'auto', display:'flex', gap:8, alignItems:'center' }}>
+          {/* Filter po trenerju */}
+          {posData.staffList.filter((s:any) => s.role === 'Trener' || s.role === 'Terapevt').length > 0 && (
+            <select value={selectedStaffId} onChange={e => setSelectedStaffId(e.target.value)}
+              style={{ padding:'7px 10px', borderRadius:8, border:'1px solid '+T.line, fontSize:12, fontFamily:'inherit', background:T.surface, cursor:'pointer' }}>
+              <option value="all">Vsi zaposleni</option>
+              {posData.staffList.filter((s:any) => s.role === 'Trener' || s.role === 'Terapevt' || s.role === 'Fizioterapevt').map((s:any) => (
+                <option key={s.id} value={s.id}>{s.name} ({s.role})</option>
+              ))}
+            </select>
+          )}
           <button onClick={()=>setShowPeriodModal(true)} style={{ ...btnS, display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
             <KI name="calendar" size={13}/> Spremeni obdobje
           </button>
@@ -6108,6 +6134,59 @@ function ReportsScreen({ posData, auth }) {
         </div>
       </div>
 
+      {/* Porocilo trenerja */}
+      {reportData?.isStaffFiltered && (
+        <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:20, marginBottom:12 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:16 }}>
+            TERMINI TRENERJA/TERAPEVTA
+          </div>
+          {reportData.staffBookings.length === 0 ? (
+            <div style={{ fontSize:13, color:T.muted }}>Ni terminov v tem obdobju</div>
+          ) : (
+            <>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:16 }}>
+                {[
+                  ['TERMINI', reportData.staffBookings.length, 'opravljenih'],
+                  ['URE', (reportData.staffTotalMin/60).toFixed(1), 'skupaj ur'],
+                  ['PRIHODEK', eur(reportData.staffTotalRevenue), 'od storitev'],
+                ].map(([l,v,s]) => (
+                  <div key={String(l)} style={{ padding:'12px 14px', background:T.surface2, borderRadius:10, border:'1px solid '+T.line }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:'uppercase' }}>{l}</div>
+                    <div style={{ fontSize:24, fontWeight:800, marginTop:4 }}>{v}</div>
+                    <div style={{ fontSize:11, color:T.muted }}>{s}</div>
+                  </div>
+                ))}
+              </div>
+              <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                <thead>
+                  <tr style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:'uppercase' }}>
+                    {['Datum', 'Storitev', 'Trajanje', 'Status', 'Cena'].map((h,i) => (
+                      <th key={i} style={{ padding:'8px 10px', textAlign:i>=2?'right':'left', borderBottom:'1px solid '+T.line }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {reportData.staffBookings.map((b:any, i:number) => (
+                    <tr key={b.id} style={{ background:i%2?T.surface2:T.surface, borderBottom:'1px solid '+T.lineSoft }}>
+                      <td style={{ padding:'8px 10px', fontSize:12 }}>{new Date(b.start_at).toLocaleDateString('sl-SI')}</td>
+                      <td style={{ padding:'8px 10px', fontWeight:600, fontSize:13 }}>{b.services?.name || '—'}</td>
+                      <td style={{ padding:'8px 10px', textAlign:'right', fontSize:12 }}>{b.duration_min || 60} min</td>
+                      <td style={{ padding:'8px 10px', textAlign:'right' }}>
+                        <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:4,
+                          background: b.status==='arrived'?T.accentSoft:'rgba(184,140,40,0.1)',
+                          color: b.status==='arrived'?T.accent:T.warn }}>
+                          {b.status==='arrived'?'Prišel':'Potrjeno'}
+                        </span>
+                      </td>
+                      <td style={{ padding:'8px 10px', textAlign:'right', fontWeight:700 }}>{eur(b.services?.price||0)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+        </div>
+      )}
       {showZReport && <ZReportModal posData={posData} onClose={()=>setShowZReport(false)}/>}
 
 
