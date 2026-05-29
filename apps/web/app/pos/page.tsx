@@ -166,19 +166,7 @@ function usePosData() {
           }
           setItemModifierLinks(links2)
         }
-        // Naloži modifier grupe
-        const { data: mgData2 } = await createClient().from('item_modifier_groups').select('*, item_modifiers(*)').eq('business_id', BUSINESS_ID).order('sort_order')
-        setModifierGroups(mgData2 || [])
-        // Naloži artikel-modifier povezave
-        const { data: linkData2 } = await createClient().from('item_modifier_group_links').select('item_id, group_id')
-        if (linkData2) {
-          const links2: Record<string,string[]> = {}
-          for (const l of linkData2) {
-            if (!links2[l.item_id]) links2[l.item_id] = []
-            links2[l.item_id].push(l.group_id)
-          }
-          setItemModifierLinks(links2)
-        }
+
         // Generiraj in fetch notifikacije
         await createClient().rpc('generate_pos_notifications', { p_business_id: BUSINESS_ID })
         const notifRes = await createClient().from('pos_notifications').select('*, customers(name, email)').eq('business_id', BUSINESS_ID).eq('dismissed', false).order('created_at', { ascending: false })
