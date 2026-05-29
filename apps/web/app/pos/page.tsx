@@ -58,7 +58,7 @@ const CFG = {
     { id: 'never', label: 'Nikoli',    ms: 0      },
   ],
   profiles: [
-    { id: 'all',      name: 'Vse v enem',       icon: '🌐', nav: ['floor','sale','calendar','customers','packages','inventory','inventura','orders','reports','admin'] },
+    { id: 'all',      name: 'Vse v enem',       icon: '🌐', nav: ['floor','sale','calendar','customers','packages','inventory','orders','reports','admin'] },
     { id: 'rest',     name: 'Restavracija',      icon: '🍽', nav: ['floor','sale','calendar','customers','inventory','orders','reports','admin'] },
     { id: 'bar',      name: 'Bar / Kavarna',     icon: '🍺', nav: ['floor','sale','customers','inventory','orders','reports','admin'] },
     { id: 'storitve', name: 'Storitve',           icon: '💆', nav: ['calendar','customers','packages','sale','reports','admin'] },
@@ -6144,6 +6144,7 @@ function AdminScreen({ auth, posData }) {
     { id:'kuhinja',    label:'Kuhinja & display',     icon:'receipt'  },
     { id:'autolock',   label:'Avt. zaklepanje',       icon:'pin'      },
     { id:'furs',       label:'FURS & DDV',            icon:'receipt'  },
+    { id:'inventura',  label:'Inventura',             icon:'scale'    },
   ]
 
   return (
@@ -6167,6 +6168,7 @@ function AdminScreen({ auth, posData }) {
         {section==='autolock'   && <AutolockSection auth={auth}/>}
         {section==='furs'       && <FursSection/>}
         {section==='profile'    && <ProfileSection posData={posData}/>}
+        {section==='inventura'  && <InventuraScreen posData={posData} auth={auth}/>}
       </div>
     </div>
   )
