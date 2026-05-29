@@ -12,49 +12,45 @@ const SP_CONTRIBUTIONS: Record<number, number> = {
   11: 6877.80, 12: 7304.64, 13: 7731.48, 14: 8585.16, 15: 9438.84,
 }
 
+const SECTIONS = [
+  { id: 'profil',    icon: '🏢', label: 'Profil podjetja',   desc: 'Ime, naslov, davčna' },
+  { id: 'ddv',       icon: '📊', label: 'DDV & prispevki',   desc: 'DDV status, razred' },
+  { id: 'banka',     icon: '🏦', label: 'Bančni podatki',    desc: 'IBAN, BIC/SWIFT' },
+  { id: 'blagajna',  icon: '🧾', label: 'Davčna blagajna',   desc: 'FURS, certifikat' },
+  { id: 'ekipa',     icon: '👥', label: 'Ekipa',             desc: 'Uporabniki, dostop' },
+  { id: 'geslo',     icon: '🔐', label: 'Geslo',             desc: 'Sprememba gesla' },
+  { id: 'plan',      icon: '⭐', label: 'Naročnina',         desc: 'Plan, nadgradnja' },
+]
+
 export default function NastavitevPage() {
   const [org, setOrg] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [pwCurrent, setPwCurrent] = useState('')
+  const [activeSection, setActiveSection] = useState('profil')
   const [pwNew, setPwNew] = useState('')
   const [pwConfirm, setPwConfirm] = useState('')
   const [pwSaving, setPwSaving] = useState(false)
   const [pwMsg, setPwMsg] = useState<{text:string, ok:boolean} | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
-  const [showCancelled, setShowCancelled] = useState(false)
   const [form, setForm] = useState({
-    name: '',
-    tax_number: '',
-    vat_number: '',
-    vat_registered: false,
-    iban: '',
-    bic: '',
-    address: '',
-    post_code: '',
-    city: '',
-    phone: '',
-    email: '',
-    contribution_class: 8,
+    name: '', tax_number: '', vat_number: '', vat_registered: false,
+    iban: '', bic: '', address: '', post_code: '', city: '',
+    phone: '', email: '', contribution_class: 8,
   })
   const supabase = createClient()
 
-  useEffect(() => { 
+  useEffect(() => {
     load()
-    // Check for success/cancel from Stripe redirect
     const params = new URLSearchParams(window.location.search)
     if (params.get('success') === 'true') {
       setShowSuccess(true)
       posthog.capture('subscription_upgrade_success')
       window.history.replaceState({}, '', '/nastavitve')
-      // Reload org after delay to catch webhook update
       setTimeout(() => load(), 2500)
-    } else if (params.get('cancelled') === 'true') {
-      setShowCancelled(true)
-      posthog.capture('subscription_upgrade_cancelled')
-      window.history.replaceState({}, '', '/nastavitve')
     }
+    const sec = params.get('tab')
+    if (sec) setActiveSection(sec)
   }, [])
 
   async function load() {
@@ -67,17 +63,11 @@ export default function NastavitevPage() {
       const o = (member as any).organizations
       setOrg(o)
       setForm({
-        name: o.name || '',
-        tax_number: o.tax_number || '',
-        vat_number: o.vat_number || '',
-        vat_registered: o.vat_registered || false,
-        iban: o.iban || '',
-        bic: o.bic || '',
-        address: o.address || '',
-        post_code: o.post_code || '',
-        city: o.city || '',
-        phone: o.phone || '',
-        email: o.email || '',
+        name: o.name || '', tax_number: o.tax_number || '',
+        vat_number: o.vat_number || '', vat_registered: o.vat_registered || false,
+        iban: o.iban || '', bic: o.bic || '', address: o.address || '',
+        post_code: o.post_code || '', city: o.city || '',
+        phone: o.phone || '', email: o.email || '',
         contribution_class: o.contribution_class || 8,
       })
     }
@@ -87,34 +77,13 @@ export default function NastavitevPage() {
   async function handleSave() {
     if (!org) return
     setSaving(true)
-    const { error } = await supabase
-      .from('organizations')
-      .update({
-        name: form.name,
-        tax_number: form.tax_number,
-        vat_number: form.vat_number,
-        vat_registered: form.vat_registered,
-        iban: form.iban,
-        bic: form.bic,
-        address: form.address,
-        post_code: form.post_code,
-        city: form.city,
-        phone: form.phone,
-        email: form.email,
-        contribution_class: form.contribution_class,
-      })
-      .eq('id', org.id)
-    if (error) {
-      alert('Napaka: ' + error.message)
-    } else {
-      posthog.capture('organization_settings_saved', {
-        vat_registered: form.vat_registered,
-        contribution_class: form.contribution_class,
-        has_iban: !!form.iban,
-      })
-      setSaved(true)
-      setTimeout(() => setSaved(false), 3000)
-    }
+    const { error } = await supabase.from('organizations').update({
+      name: form.name, tax_number: form.tax_number, vat_number: form.vat_number,
+      vat_registered: form.vat_registered, iban: form.iban, bic: form.bic,
+      address: form.address, post_code: form.post_code, city: form.city,
+      phone: form.phone, email: form.email, contribution_class: form.contribution_class,
+    }).eq('id', org.id)
+    if (!error) { setSaved(true); setTimeout(() => setSaved(false), 3000) }
     setSaving(false)
   }
 
@@ -122,14 +91,12 @@ export default function NastavitevPage() {
     if (!pwNew || !pwConfirm) { setPwMsg({text:'Vnesi novo geslo', ok:false}); return }
     if (pwNew !== pwConfirm) { setPwMsg({text:'Gesli se ne ujemata', ok:false}); return }
     if (pwNew.length < 8) { setPwMsg({text:'Geslo mora imeti vsaj 8 znakov', ok:false}); return }
-    setPwSaving(true)
-    setPwMsg(null)
+    setPwSaving(true); setPwMsg(null)
     const { error } = await supabase.auth.updateUser({ password: pwNew })
-    if (error) {
-      setPwMsg({text: error.message, ok: false})
-    } else {
+    if (error) { setPwMsg({text: error.message, ok: false}) }
+    else {
       setPwMsg({text: '✓ Geslo uspešno spremenjeno', ok: true})
-      setPwCurrent(''); setPwNew(''); setPwConfirm('')
+      setPwNew(''); setPwConfirm('')
       setTimeout(() => setPwMsg(null), 4000)
     }
     setPwSaving(false)
@@ -142,267 +109,236 @@ export default function NastavitevPage() {
   )
 
   const isPro = org?.subscription_status === 'pro'
+  const inp = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
+    <div style={{ minHeight: '100vh', background: '#f9fafb' }}>
+      {/* Header */}
+      <div style={{ background: '#fff', borderBottom: '1px solid #f0f0f0', padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900">← Domov</Link>
-          <h1 className="font-semibold text-gray-900 mt-0.5">Nastavitve s.p.</h1>
+          <Link href="/dashboard" style={{ fontSize: 12, color: '#888', textDecoration: 'none' }}>← Domov</Link>
+          <div style={{ fontSize: 18, fontWeight: 700, color: '#0D1F12', marginTop: 2 }}>Nastavitve</div>
         </div>
-        <button onClick={handleSave} disabled={saving}
-          className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-40">
-          {saved ? '✓ Shranjeno!' : saving ? 'Shranjujem...' : 'Shrani spremembe'}
-        </button>
+        {['profil','ddv','banka'].includes(activeSection) && (
+          <button onClick={handleSave} disabled={saving}
+            style={{ background: '#0D1F12', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+            {saved ? '✓ Shranjeno!' : saving ? 'Shranjujem...' : 'Shrani'}
+          </button>
+        )}
       </div>
 
-      <div style={{ background: "#fff", borderBottom: "0.5px solid rgba(0,0,0,0.08)", padding: "0 24px", display: "flex", gap: 0 }}>
-        <a href="/nastavitve" style={{ background: "none", border: 0, borderBottom: "2px solid #0D1F12", padding: "12px 20px", fontSize: 13, fontWeight: 600, color: "#0D1F12", cursor: "pointer", textDecoration: "none" }}>⚙️ Profil</a>
-        <a href="/nastavitve/ekipa" style={{ background: "none", border: 0, borderBottom: "2px solid transparent", padding: "12px 20px", fontSize: 13, fontWeight: 400, color: "#888", cursor: "pointer", textDecoration: "none" }}>👥 Ekipa</a>
-        <a href="/nastavitve/blagajna" style={{ background: "none", border: 0, borderBottom: "2px solid transparent", padding: "12px 20px", fontSize: 13, fontWeight: 400, color: "#888", cursor: "pointer", textDecoration: "none" }}>🧾 Davčna blagajna</a>
-      </div>
-      <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
+      <div style={{ maxWidth: 860, margin: '0 auto', padding: '24px 20px' }}>
 
         {showSuccess && (
-          <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex items-start justify-between gap-4">
+          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '12px 16px', marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <p className="text-sm font-medium text-green-900">🎉 Dobrodošli v Pro planu!</p>
-              <p className="text-xs text-green-700 mt-1">Vaš plan je aktiven. Hvala za zaupanje!</p>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#166534' }}>🎉 Dobrodošli v Pro planu!</div>
+              <div style={{ fontSize: 12, color: '#15803d', marginTop: 2 }}>Vaš plan je aktiven. Hvala za zaupanje!</div>
             </div>
-            <button onClick={() => setShowSuccess(false)} className="text-green-700 hover:text-green-900 text-lg leading-none">✕</button>
+            <button onClick={() => setShowSuccess(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#166534', fontSize: 18 }}>✕</button>
           </div>
         )}
 
-        {showCancelled && (
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium text-amber-900">Plačilo preklicano</p>
-              <p className="text-xs text-amber-700 mt-1">Niste izvršili nadgradnje. Plačilo lahko izvršite kadarkoli.</p>
+        {/* Hub kartic */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: 10, marginBottom: 28 }}>
+          {SECTIONS.map(s => (
+            <button key={s.id} onClick={() => setActiveSection(s.id)}
+              style={{
+                background: activeSection === s.id ? '#0D1F12' : '#fff',
+                color: activeSection === s.id ? '#fff' : '#333',
+                border: `1.5px solid ${activeSection === s.id ? '#0D1F12' : '#e5e7eb'}`,
+                borderRadius: 14, padding: '14px 10px', cursor: 'pointer',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                transition: 'all 0.15s', fontFamily: 'inherit',
+              }}>
+              <span style={{ fontSize: 24 }}>{s.icon}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, textAlign: 'center', lineHeight: 1.3 }}>{s.label}</span>
+              <span style={{ fontSize: 10, opacity: 0.6, textAlign: 'center', lineHeight: 1.3 }}>{s.desc}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* PROFIL */}
+        {activeSection === 'profil' && (
+          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 20 }}>🏢 Profil podjetja</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Ime s.p. *</label>
+                <input value={form.name} onChange={e => setForm({...form, name: e.target.value})} className={inp}/>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Davčna številka *</label>
+                  <input value={form.tax_number} onChange={e => setForm({...form, tax_number: e.target.value})} className={inp}/>
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Email</label>
+                  <input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className={inp}/>
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Telefon</label>
+                <input value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} placeholder="041 123 456" className={inp}/>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Ulica in hišna številka</label>
+                <input value={form.address} onChange={e => setForm({...form, address: e.target.value})} placeholder="Dunajska cesta 5" className={inp}/>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Poštna številka</label>
+                  <input value={form.post_code} onChange={e => setForm({...form, post_code: e.target.value})} placeholder="1000" className={inp}/>
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Kraj</label>
+                  <input value={form.city} onChange={e => setForm({...form, city: e.target.value})} placeholder="Ljubljana" className={inp}/>
+                </div>
+              </div>
             </div>
-            <button onClick={() => setShowCancelled(false)} className="text-amber-700 hover:text-amber-900 text-lg leading-none">✕</button>
           </div>
         )}
 
-        <div className="bg-white rounded-2xl border border-gray-100 p-6">
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h3 className="font-medium text-gray-900">Vaš plan</h3>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {isPro ? 'Pro plan z neomejenim dostopom' : 'Trenutno uporabljate Starter plan'}
-              </p>
+        {/* DDV */}
+        {activeSection === 'ddv' && (
+          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 20 }}>📊 DDV & prispevki</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>DDV status</div>
+                <div onClick={() => setForm({...form, vat_registered: !form.vat_registered})}
+                  style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', border: '1px solid #e5e7eb', borderRadius: 12, cursor: 'pointer' }}>
+                  <div style={{ width: 20, height: 20, borderRadius: 5, border: `2px solid ${form.vat_registered ? '#0D1F12' : '#d1d5db'}`, background: form.vat_registered ? '#0D1F12' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {form.vat_registered && <span style={{ color: '#fff', fontSize: 12 }}>✓</span>}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>DDV zavezanec</div>
+                    <div style={{ fontSize: 11, color: '#888' }}>Imam ID za DDV (SI...)</div>
+                  </div>
+                </div>
+                {form.vat_registered && (
+                  <div style={{ marginTop: 10 }}>
+                    <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>ID za DDV</label>
+                    <input value={form.vat_number} onChange={e => setForm({...form, vat_number: e.target.value})} placeholder="SI12345678" className={inp}/>
+                  </div>
+                )}
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Prispevni razred</div>
+                <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 12, color: '#1e40af', lineHeight: 1.5 }}>
+                  <strong>Kako vem kateri razred je moj?</strong><br/>
+                  Preverite vašo <strong>FURS odločbo</strong> ali UPN nalog za prispevke.
+                </div>
+                <select value={form.contribution_class}
+                  onChange={e => setForm({...form, contribution_class: parseInt(e.target.value)})}
+                  className={inp}>
+                  {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15].map(c => (
+                    <option key={c} value={c}>Razred {c} — €{(SP_CONTRIBUTIONS[c]/12).toFixed(2)}/mes</option>
+                  ))}
+                </select>
+                <div style={{ fontSize: 12, color: '#888', marginTop: 8 }}>
+                  Mesečni prispevki: <strong>€{(SP_CONTRIBUTIONS[form.contribution_class]/12).toFixed(2)}</strong>
+                  &nbsp;·&nbsp; Letno: <strong>€{SP_CONTRIBUTIONS[form.contribution_class].toFixed(2)}</strong>
+                </div>
+              </div>
             </div>
-            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-              isPro ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700'
-            }`}>
-              {isPro ? 'PRO' : 'STARTER'}
-            </span>
           </div>
+        )}
 
-          {isPro ? (
-            <div className="space-y-2 text-sm text-gray-600">
-              {org.plan_expires_at && (
-                <p>Naslednje plačilo: <strong className="text-gray-900">{new Date(org.plan_expires_at).toLocaleDateString('sl-SI', { day: 'numeric', month: 'long', year: 'numeric' })}</strong></p>
+        {/* BANKA */}
+        {activeSection === 'banka' && (
+          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 20 }}>🏦 Bančni podatki</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>IBAN (TRR)</label>
+                <input value={form.iban} onChange={e => setForm({...form, iban: e.target.value})} placeholder="SI56 6100 0001 2345 678" className={inp} style={{ fontFamily: 'monospace' }}/>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>BIC / SWIFT</label>
+                <input value={form.bic} onChange={e => setForm({...form, bic: e.target.value})} placeholder="HDELSI22" className={inp} style={{ fontFamily: 'monospace' }}/>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* BLAGAJNA */}
+        {activeSection === 'blagajna' && (
+          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>🧾 Davčna blagajna (FURS)</div>
+            <div style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>Nastavitve za FURS potrjevanje gotovinskih računov po ZDavPR</div>
+            <a href="/nastavitve/blagajna" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#0D1F12', color: '#fff', padding: '11px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
+              ⚙️ Odpri nastavitve blagajne →
+            </a>
+          </div>
+        )}
+
+        {/* EKIPA */}
+        {activeSection === 'ekipa' && (
+          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>👥 Ekipa</div>
+            <div style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>Upravljanje članov ekipe in dostopov</div>
+            <a href="/nastavitve/ekipa" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#0D1F12', color: '#fff', padding: '11px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
+              👥 Upravljaj ekipo →
+            </a>
+          </div>
+        )}
+
+        {/* GESLO */}
+        {activeSection === 'geslo' && (
+          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>🔐 Sprememba gesla</div>
+            <div style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>Nastavite novo geslo za vaš račun</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 400 }}>
+              <div>
+                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Novo geslo</label>
+                <input type="password" value={pwNew} onChange={e => setPwNew(e.target.value)} placeholder="Vsaj 8 znakov" className={inp}/>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Potrdi novo geslo</label>
+                <input type="password" value={pwConfirm} onChange={e => setPwConfirm(e.target.value)} placeholder="Ponovi geslo" className={inp}/>
+              </div>
+              {pwMsg && (
+                <div style={{ padding: '9px 12px', borderRadius: 8, background: pwMsg.ok ? 'rgba(31,107,58,0.08)' : 'rgba(168,50,50,0.08)', color: pwMsg.ok ? '#1f6b3a' : '#a83232', fontSize: 12, fontWeight: 600 }}>
+                  {pwMsg.text}
+                </div>
               )}
-              <p className="text-xs text-gray-500 pt-2">Za upravljanje naročnine ali preklic kontaktirajte podporo.</p>
+              <button onClick={handlePasswordChange} disabled={pwSaving || !pwNew || !pwConfirm}
+                style={{ padding: '11px 20px', borderRadius: 10, background: '#0D1F12', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, opacity: (pwSaving || !pwNew || !pwConfirm) ? 0.5 : 1 }}>
+                {pwSaving ? 'Shranjujem...' : 'Spremeni geslo'}
+              </button>
             </div>
-          ) : (
-            <div>
-              <ul className="space-y-2 mb-5 text-sm text-gray-600">
-                <li className="flex items-center gap-2"><span className="text-green-600">✓</span>Neomejeno število računov</li>
-                <li className="flex items-center gap-2"><span className="text-green-600">✓</span>Letno poročilo in DDV obračun</li>
-                <li className="flex items-center gap-2"><span className="text-green-600">✓</span>Stripe integracija za samodejni uvoz plačil</li>
-                <li className="flex items-center gap-2"><span className="text-green-600">✓</span>AI pomočnik za knjiženje</li>
-                <li className="flex items-center gap-2"><span className="text-green-600">✓</span>Prioritetna podpora</li>
-              </ul>
-              <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} />
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        <div className="bg-white rounded-2xl border border-gray-100 p-6">
-          <h3 className="font-medium text-gray-900 mb-4">Osnovni podatki</h3>
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Ime s.p. *</label>
-              <input value={form.name} onChange={e => setForm({...form, name: e.target.value})}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+        {/* PLAN */}
+        {activeSection === 'plan' && (
+          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>⭐ Naročnina</div>
+              <span style={{ padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: isPro ? '#0D1F12' : '#f3f4f6', color: isPro ? '#fff' : '#6b7280' }}>
+                {isPro ? 'PRO' : 'STARTER'}
+              </span>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Davčna številka *</label>
-                <input value={form.tax_number} onChange={e => setForm({...form, tax_number: e.target.value})}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+            {isPro ? (
+              <div style={{ fontSize: 13, color: '#555' }}>
+                {org.plan_expires_at && <p>Naslednje plačilo: <strong>{new Date(org.plan_expires_at).toLocaleDateString('sl-SI', { day: 'numeric', month: 'long', year: 'numeric' })}</strong></p>}
+                <p style={{ fontSize: 12, color: '#888', marginTop: 8 }}>Za upravljanje naročnine kontaktirajte podporo.</p>
               </div>
+            ) : (
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Email</label>
-                <input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Telefon</label>
-              <input value={form.phone} onChange={e => setForm({...form, phone: e.target.value})}
-                placeholder="041 123 456"
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 p-6">
-          <h3 className="font-medium text-gray-900 mb-4">DDV status</h3>
-          <div className="flex items-center gap-3 p-3 border border-gray-200 rounded-xl cursor-pointer mb-3"
-            onClick={() => setForm({...form, vat_registered: !form.vat_registered})}>
-            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${form.vat_registered ? 'bg-gray-900 border-gray-900' : 'border-gray-300'}`}>
-              {form.vat_registered && <span className="text-white text-xs">✓</span>}
-            </div>
-            <div>
-              <div className="text-sm font-medium">DDV zavezanec</div>
-              <div className="text-xs text-gray-500">Imam ID za DDV (SI...)</div>
-            </div>
-          </div>
-          {form.vat_registered && (
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">ID za DDV</label>
-              <input value={form.vat_number} onChange={e => setForm({...form, vat_number: e.target.value})}
-                placeholder="SI12345678"
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 p-6">
-          <h3 className="font-medium text-gray-900 mb-4">Naslov</h3>
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Ulica in hišna številka</label>
-              <input value={form.address} onChange={e => setForm({...form, address: e.target.value})}
-                placeholder="Dunajska cesta 5"
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Poštna številka</label>
-                <input value={form.post_code} onChange={e => setForm({...form, post_code: e.target.value})}
-                  placeholder="1000"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Kraj</label>
-                <input value={form.city} onChange={e => setForm({...form, city: e.target.value})}
-                  placeholder="Ljubljana"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 p-6">
-          <h3 className="font-medium text-gray-900 mb-4">Bančni podatki</h3>
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">IBAN (TRR)</label>
-              <input value={form.iban} onChange={e => setForm({...form, iban: e.target.value})}
-                placeholder="SI56 6100 0001 2345 678"
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-900" />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">BIC / SWIFT</label>
-              <input value={form.bic} onChange={e => setForm({...form, bic: e.target.value})}
-                placeholder="HDELSI22"
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-900" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 p-6">
-          <h3 className="font-medium text-gray-900 mb-4">Prispevki s.p.</h3>
-          <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-4 text-xs text-blue-800 leading-relaxed">
-            <strong>Kako vem kateri razred je moj?</strong><br/>
-            Preverite vašo <strong>FURS odločbo</strong> ali poglejte na <strong>UPN nalogu za prispevke</strong> — tam piše točen mesečni znesek.
-          </div>
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">Prispevni razred</label>
-            <select value={form.contribution_class}
-              onChange={e => setForm({...form, contribution_class: parseInt(e.target.value)})}
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none">
-              {[
-                { c: 1,  desc: 'Začetnik / normiranec (prve 3 leta)' },
-                { c: 2,  desc: 'Nizki prihodki — pod €10.000/leto' },
-                { c: 3,  desc: 'Prihodki ~€15.000/leto' },
-                { c: 4,  desc: 'Prihodki ~€20.000/leto' },
-                { c: 5,  desc: 'Prihodki ~€25.000/leto' },
-                { c: 6,  desc: 'Prihodki ~€30.000/leto' },
-                { c: 7,  desc: 'Prihodki ~€35.000/leto' },
-                { c: 8,  desc: 'Najpogostejši — prihodki ~€40.000/leto' },
-                { c: 9,  desc: 'Prihodki ~€45.000/leto' },
-                { c: 10, desc: 'Prihodki ~€50.000/leto' },
-                { c: 11, desc: 'Prihodki ~€55.000/leto' },
-                { c: 12, desc: 'Prihodki ~€60.000/leto' },
-                { c: 13, desc: 'Prihodki ~€65.000/leto' },
-                { c: 14, desc: 'Prihodki ~€75.000/leto' },
-                { c: 15, desc: 'Najvišji — prihodki nad €80.000/leto' },
-              ].map(({ c, desc }) => (
-                <option key={c} value={c}>
-                  Razred {c} — €{(SP_CONTRIBUTIONS[c]/12).toFixed(2)}/mes — {desc}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-gray-400 mt-2">
-              Mesečni prispevki: <strong>€{(SP_CONTRIBUTIONS[form.contribution_class]/12).toFixed(2)}</strong>
-              &nbsp;·&nbsp; Letno: <strong>€{SP_CONTRIBUTIONS[form.contribution_class].toFixed(2)}</strong>
-            </p>
-          </div>
-        </div>
-
-        {/* Davčna blagajna */}
-        <div style={{ marginTop: 24, borderTop: "0.5px solid rgba(0,0,0,0.08)", paddingTop: 24 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#0D1F12", marginBottom: 4 }}>Davčna blagajna (FURS)</div>
-          <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>Nastavitve za FURS potrjevanje gotovinskih računov po ZDavPR</div>
-          <a href="/nastavitve/blagajna" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#0D1F12", color: "#fff", padding: "10px 18px", borderRadius: 8, fontSize: 13, fontWeight: 500, textDecoration: "none" }}>⚙️ Odpri nastavitve blagajne →</a>
-        </div>
-        {/* Sprememba gesla */}
-        <div style={{ marginTop: 24, borderTop: "0.5px solid rgba(0,0,0,0.08)", paddingTop: 24 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#0D1F12", marginBottom: 4 }}>Sprememba gesla</div>
-          <div style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>Nastavite novo geslo za vaš račun</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 400 }}>
-            <div>
-              <label style={{ fontSize: 12, color: "#666", display: "block", marginBottom: 4 }}>Novo geslo</label>
-              <input
-                type="password"
-                value={pwNew}
-                onChange={e => setPwNew(e.target.value)}
-                placeholder="Vsaj 8 znakov"
-                style={{ width: "100%", border: "1px solid #e5e7eb", borderRadius: 10, padding: "10px 14px", fontSize: 13, outline: "none", boxSizing: "border-box" as any }}
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: 12, color: "#666", display: "block", marginBottom: 4 }}>Potrdi novo geslo</label>
-              <input
-                type="password"
-                value={pwConfirm}
-                onChange={e => setPwConfirm(e.target.value)}
-                placeholder="Ponovi geslo"
-                style={{ width: "100%", border: "1px solid #e5e7eb", borderRadius: 10, padding: "10px 14px", fontSize: 13, outline: "none", boxSizing: "border-box" as any }}
-              />
-            </div>
-            {pwMsg && (
-              <div style={{ padding: "9px 12px", borderRadius: 8, background: pwMsg.ok ? "rgba(31,107,58,0.08)" : "rgba(168,50,50,0.08)", color: pwMsg.ok ? "#1f6b3a" : "#a83232", fontSize: 12, fontWeight: 600 }}>
-                {pwMsg.text}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+                  {['Neomejeno število računov','Letno poročilo in DDV obračun','Stripe integracija','AI pomočnik za knjiženje','Prioritetna podpora'].map(f => (
+                    <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#444' }}>
+                      <span style={{ color: '#16a34a', fontWeight: 700 }}>✓</span> {f}
+                    </div>
+                  ))}
+                </div>
+                <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} />
               </div>
             )}
-            <button
-              onClick={handlePasswordChange}
-              disabled={pwSaving || !pwNew || !pwConfirm}
-              style={{ padding: "10px 20px", borderRadius: 10, background: "#0D1F12", color: "#fff", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500, opacity: (pwSaving || !pwNew || !pwConfirm) ? 0.5 : 1 }}
-            >
-              {pwSaving ? "Shranjujem..." : "Spremeni geslo"}
-            </button>
           </div>
-        </div>
-        <button onClick={handleSave} disabled={saving}
-          className="w-full bg-gray-900 text-white rounded-xl py-3 text-sm font-medium disabled:opacity-40">
-          {saved ? '✓ Shranjeno!' : saving ? 'Shranjujem...' : 'Shrani vse spremembe'}
-        </button>
+        )}
 
       </div>
     </div>
