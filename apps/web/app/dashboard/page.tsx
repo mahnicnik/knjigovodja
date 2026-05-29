@@ -81,7 +81,6 @@ const RAIL_GROUPS = [
     ],
   },
   { id: 'ai', icon: 'ai', label: 'AI računovodja', href: '/ai', single: true },
-  { id: 'nastavitve', icon: 'settings', label: 'Nastavitve', href: '/nastavitve', single: true },
 ]
 
 
