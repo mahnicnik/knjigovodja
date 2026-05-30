@@ -523,7 +523,7 @@ export default function DashboardPage() {
   }, [data.yearRevenue, data.taxSystem, month])
 
   /* ============ COMPUTED: ONBOARDING CHECKLIST ============ */
-  const [dismissedSteps, setDismissedSteps] = React.useState<number[]>(() => {
+  const [dismissedSteps, setDismissedSteps] = useState<number[]>(() => {
     try { return JSON.parse(localStorage.getItem('rk_dismissed_steps') || '[]') } catch { return [] }
   })
   function dismissStep(id: number) {
