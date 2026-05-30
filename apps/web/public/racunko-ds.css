@@ -1,0 +1,426 @@
+/* ============================================================
+   RAČUNKO — DESIGN SYSTEM
+   Enoten vizualni jezik za vse strani aplikacije.
+   Uvozi z: <link rel="stylesheet" href="racunko-ds.css">
+   Vse barve/razmiki so spremenljivke (tokens) — glej :root.
+   Sloga sklic: dashboard (warm cream + forest green + gold).
+   POMEMBNO: pisave naloži v <head> strani z <link> (glej spodaj),
+   NE z @import tukaj — sicer se nekateri pregledovalniki ne izrišejo.
+   <link rel="preconnect" href="https://fonts.googleapis.com">
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800;900&family=Newsreader:ital,opsz,wght@1,6..72,400;1,6..72,500&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+   ============================================================ */
+
+/* ----------------------------------------------------------
+   1. TOKENS
+   ---------------------------------------------------------- */
+:root {
+  /* — Surfaces / paper — */
+  --rk-paper:      #ECE8DD;   /* glavno ozadje (warm cream) */
+  --rk-paper-2:    #F5F2E9;   /* rahlo dvignjena ploskev   */
+  --rk-card:       #FFFFFF;   /* kartice                    */
+  --rk-card-2:     #FBFAF6;   /* znotraj kartic (zebra)     */
+
+  /* — Ink / besedilo — */
+  --rk-ink:        #18271B;   /* primarno besedilo          */
+  --rk-ink-2:      #56604F;   /* sekundarno                 */
+  --rk-ink-3:      #8A9088;   /* mute / oznake (labels)     */
+
+  /* — Linije / robovi — */
+  --rk-line:       #E4DFCF;   /* robovi na paper            */
+  --rk-line-2:     #ECEAE1;   /* robovi na belem            */
+
+  /* — Brand: forest green — */
+  --rk-forest:     #15251A;   /* najtemnejša (hero/temni pas)*/
+  --rk-forest-2:   #1B3122;   /* temno-zelena 2             */
+  --rk-green:      #1E4D34;   /* PRIMARNI gumb / akcija     */
+  --rk-green-mid:  #2A7049;   /* ikonske ploščice / poudarek*/
+  --rk-green-soft: #DBE7DD;   /* svetli zeleni chip         */
+  --rk-green-050:  #EBF1EA;   /* zelo svetlo zeleno ozadje  */
+  --rk-green-text: #1F8A4C;   /* uspeh / pozitivni znesek   */
+
+  /* — Akcent: gold — */
+  --rk-gold:       #BE9743;   /* poudarek, grafi, wordmark  */
+  --rk-gold-2:     #A9832F;   /* gold za besedilo na svetlem*/
+  --rk-gold-soft:  #F0E6C6;   /* svetlo zlato ozadje        */
+
+  /* — Stanja — */
+  --rk-danger:     #BB4A29;   /* neplačano / opozorilo      */
+  --rk-danger-soft:#F7E7DE;
+  --rk-warn:       #8A6212;   /* "Poslano" besedilo         */
+  --rk-warn-soft:  #FBEAC6;   /* "Poslano" ozadje           */
+  --rk-info-soft:  #E3F0E6;   /* info banner ozadje         */
+  --rk-info-text:  #1E5236;
+
+  /* — Tipografija — */
+  --rk-font-sans:  'Schibsted Grotesk', system-ui, -apple-system, sans-serif;
+  --rk-font-mono:  'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+  --rk-font-serif: 'Newsreader', Georgia, serif;     /* italic poudarki */
+
+  /* — Razmiki (4pt scale) — */
+  --rk-1: 4px;  --rk-2: 8px;  --rk-3: 12px; --rk-4: 16px;
+  --rk-5: 20px; --rk-6: 24px; --rk-8: 32px; --rk-10: 40px;
+  --rk-12: 48px; --rk-16: 64px;
+
+  /* — Radiji — */
+  --rk-r-xs: 8px; --rk-r-sm: 12px; --rk-r-md: 16px;
+  --rk-r-lg: 20px; --rk-r-xl: 28px; --rk-r-pill: 999px;
+
+  /* — Sence — */
+  --rk-shadow-sm: 0 1px 2px rgba(20,30,20,.05);
+  --rk-shadow-md: 0 2px 10px rgba(20,30,20,.06);
+  --rk-shadow-lg: 0 16px 40px rgba(20,30,20,.10);
+
+  /* — Ostalo — */
+  --rk-page-max: 1160px;       /* maks. širina vsebine strani */
+  --rk-ease: cubic-bezier(.2,.7,.3,1);
+}
+
+/* — Temni način (dashboard ima preklopnik) — */
+[data-theme="dark"] {
+  --rk-paper:   #0F1710;
+  --rk-paper-2: #15201600;
+  --rk-card:    #18241A;
+  --rk-card-2:  #1E2C20;
+  --rk-ink:     #ECEFE8;
+  --rk-ink-2:   #A7AFA3;
+  --rk-ink-3:   #79817A;
+  --rk-line:    #26332700;
+  --rk-line:    #273328;
+  --rk-line-2:  #273328;
+  --rk-green-soft: #20382600;
+  --rk-green-soft: #1E3527;
+  --rk-green-050:  #16241A;
+}
+
+/* ----------------------------------------------------------
+   2. BASE
+   ---------------------------------------------------------- */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--rk-paper);
+  color: var(--rk-ink);
+  font-family: var(--rk-font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+a { color: inherit; }
+::selection { background: var(--rk-gold-soft); }
+
+/* Stran: omejena širina + dosleden padding */
+.rk-page {
+  max-width: var(--rk-page-max);
+  margin: 0 auto;
+  padding: var(--rk-8) var(--rk-6) var(--rk-16);
+}
+@media (max-width: 720px){ .rk-page { padding: var(--rk-5) var(--rk-4) var(--rk-12); } }
+
+/* ----------------------------------------------------------
+   3. TIPOGRAFIJA
+   ---------------------------------------------------------- */
+.rk-eyebrow {                 /* mono oznaka nad naslovom */
+  font-family: var(--rk-font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--rk-ink-3);
+  margin: 0 0 var(--rk-2);
+}
+.rk-eyebrow--gold { color: var(--rk-gold-2); }
+.rk-h1 { font-size: clamp(28px, 4vw, 40px); font-weight: 800; letter-spacing: -.02em; line-height: 1.05; margin: 0; }
+.rk-h2 { font-size: 22px; font-weight: 700; letter-spacing: -.01em; margin: 0; }
+.rk-h3 { font-size: 17px; font-weight: 700; margin: 0; }
+.rk-num { font-variant-numeric: tabular-nums; font-weight: 800; letter-spacing: -.02em; }
+.rk-num--xl { font-size: clamp(40px, 7vw, 72px); line-height: .95; }
+.rk-num--lg { font-size: 30px; }
+.rk-serif { font-family: var(--rk-font-serif); font-style: italic; color: var(--rk-ink-2); }
+.rk-muted { color: var(--rk-ink-2); }
+.rk-mute3 { color: var(--rk-ink-3); }
+
+/* ----------------------------------------------------------
+   4. NAZAJ (back link) — EN dosleden vzorec povsod
+   ---------------------------------------------------------- */
+.rk-back {
+  display: inline-flex; align-items: center; gap: var(--rk-2);
+  font-family: var(--rk-font-mono);
+  font-size: 13px; font-weight: 600; letter-spacing: .02em;
+  color: var(--rk-ink-2);
+  text-decoration: none;
+  padding: 8px 14px 8px 10px;
+  border-radius: var(--rk-r-pill);
+  border: 1px solid var(--rk-line);
+  background: transparent;
+  cursor: pointer;
+  transition: background .18s var(--rk-ease), color .18s, border-color .18s, transform .18s;
+}
+.rk-back:hover { background: var(--rk-card); color: var(--rk-ink); transform: translateX(-2px); box-shadow: var(--rk-shadow-sm); }
+.rk-back .rk-back__arrow { font-size: 15px; line-height: 1; transition: transform .18s var(--rk-ease); }
+.rk-back:hover .rk-back__arrow { transform: translateX(-2px); }
+/* na temnem pasu */
+.rk-on-dark .rk-back { color: rgba(255,255,255,.78); border-color: rgba(255,255,255,.16); }
+.rk-on-dark .rk-back:hover { background: rgba(255,255,255,.08); color: #fff; box-shadow: none; }
+
+/* ----------------------------------------------------------
+   5. GUMBI
+   ---------------------------------------------------------- */
+.rk-btn {
+  --_bg: var(--rk-green); --_fg: #fff; --_bd: transparent;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--rk-2);
+  font-family: var(--rk-font-sans);
+  font-size: 15px; font-weight: 600; line-height: 1;
+  padding: 12px 18px;
+  min-height: 44px;                 /* dostopen hit target */
+  border-radius: var(--rk-r-sm);
+  border: 1px solid var(--_bd);
+  background: var(--_bg); color: var(--_fg);
+  cursor: pointer; white-space: nowrap;
+  transition: transform .15s var(--rk-ease), box-shadow .18s, background .18s, border-color .18s, color .18s;
+}
+.rk-btn:hover { transform: translateY(-1px); }
+.rk-btn:active { transform: translateY(0); }
+.rk-btn:focus-visible { outline: 3px solid var(--rk-gold-soft); outline-offset: 2px; }
+.rk-btn .rk-btn__ico { font-size: 16px; line-height: 1; }
+
+/* — variante — */
+.rk-btn--primary { --_bg: var(--rk-green); --_fg:#fff; box-shadow: var(--rk-shadow-sm); }
+.rk-btn--primary:hover { --_bg: #163d29; box-shadow: var(--rk-shadow-md); }
+.rk-btn--secondary { --_bg: var(--rk-card); --_fg: var(--rk-ink); --_bd: var(--rk-line); box-shadow: var(--rk-shadow-sm); }
+.rk-btn--secondary:hover { --_bd: var(--rk-ink-3); }
+.rk-btn--ghost { --_bg: transparent; --_fg: var(--rk-ink-2); --_bd: transparent; }
+.rk-btn--ghost:hover { --_bg: var(--rk-card); --_fg: var(--rk-ink); box-shadow: var(--rk-shadow-sm); }
+.rk-btn--gold { --_bg: transparent; --_fg: var(--rk-gold-2); --_bd: var(--rk-gold); }
+.rk-btn--gold:hover { --_bg: var(--rk-gold-soft); }
+.rk-btn--danger { --_bg: transparent; --_fg: var(--rk-danger); --_bd: color-mix(in oklab, var(--rk-danger) 35%, transparent); }
+.rk-btn--danger:hover { --_bg: var(--rk-danger-soft); }
+
+/* — oblike / velikosti — */
+.rk-btn--pill { border-radius: var(--rk-r-pill); }
+.rk-btn--sm { font-size: 13px; padding: 8px 13px; min-height: 38px; border-radius: var(--rk-r-xs); }
+.rk-btn--lg { font-size: 17px; padding: 15px 26px; min-height: 52px; }
+.rk-btn--block { width: 100%; }
+
+/* gumb samo z ikono (npr. "Več" / ⋯) */
+.rk-iconbtn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--rk-2);
+  min-width: 44px; min-height: 44px; padding: 0 14px;
+  border-radius: var(--rk-r-sm);
+  border: 1px solid var(--rk-line);
+  background: var(--rk-card); color: var(--rk-ink-2);
+  font-family: var(--rk-font-sans); font-size: 14px; font-weight: 600;
+  cursor: pointer; box-shadow: var(--rk-shadow-sm);
+  transition: border-color .18s, color .18s, background .18s, transform .15s var(--rk-ease);
+}
+.rk-iconbtn:hover { color: var(--rk-ink); border-color: var(--rk-ink-3); transform: translateY(-1px); }
+
+/* skupina gumbov v vrsti */
+.rk-btn-row { display: flex; align-items: center; gap: var(--rk-2); flex-wrap: wrap; }
+
+/* ----------------------------------------------------------
+   6. PAGE HEADER — 3 variante (mix & match)
+   ---------------------------------------------------------- */
+/* skupni "top row": nazaj  +  akcije */
+.rk-head__top { display: flex; align-items: center; justify-content: space-between; gap: var(--rk-4); }
+.rk-head__title { display: flex; flex-direction: column; gap: var(--rk-1); }
+
+/* VARIANTA A — Light (privzeto za sezname/obrazce) */
+.rk-head--light { margin-bottom: var(--rk-8); }
+.rk-head--light .rk-head__main { margin-top: var(--rk-5); display: flex; align-items: flex-end; justify-content: space-between; gap: var(--rk-4); flex-wrap: wrap; }
+
+/* VARIANTA B — Dark band (za pregledne/landing strani modula) */
+.rk-head--band {
+  background: linear-gradient(180deg, var(--rk-forest-2), var(--rk-forest));
+  color: #fff;
+  border-radius: 0 0 var(--rk-r-xl) var(--rk-r-xl);
+  margin: calc(-1 * var(--rk-8)) calc(-1 * var(--rk-6)) var(--rk-8);
+  padding: var(--rk-6) var(--rk-6) var(--rk-8);
+}
+.rk-head--band .rk-eyebrow { color: var(--rk-gold); }
+.rk-head--band .rk-h1 { color: #fff; }
+.rk-head--band .rk-head__main { margin-top: var(--rk-5); display: flex; align-items: flex-end; justify-content: space-between; gap: var(--rk-4); flex-wrap: wrap; }
+@media (max-width: 720px){ .rk-head--band { margin: calc(-1 * var(--rk-5)) calc(-1 * var(--rk-4)) var(--rk-6); padding: var(--rk-5) var(--rk-4) var(--rk-6); } }
+
+/* VARIANTA C — Analytics band (band + vgrajene statistike) */
+.rk-head--stats { /* deduje band; dodaj .rk-head--band tudi */ }
+.rk-head--stats .rk-statstrip { margin-top: var(--rk-6); }
+
+/* ----------------------------------------------------------
+   7. KARTICE
+   ---------------------------------------------------------- */
+.rk-card {
+  background: var(--rk-card);
+  border: 1px solid var(--rk-line-2);
+  border-radius: var(--rk-r-lg);
+  box-shadow: var(--rk-shadow-md);
+}
+.rk-card--pad { padding: var(--rk-6); }
+.rk-card--flat { box-shadow: none; }
+.rk-card--hover { transition: transform .18s var(--rk-ease), box-shadow .2s; cursor: pointer; }
+.rk-card--hover:hover { transform: translateY(-3px); box-shadow: var(--rk-shadow-lg); }
+
+/* ----------------------------------------------------------
+   8. STAT CARDS  (+ statstrip layout)
+   ---------------------------------------------------------- */
+.rk-statgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--rk-4); }
+.rk-statstrip { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: var(--rk-3); }
+
+.rk-stat { background: var(--rk-card); border: 1px solid var(--rk-line-2); border-radius: var(--rk-r-md); padding: var(--rk-5) var(--rk-5); box-shadow: var(--rk-shadow-sm); }
+.rk-stat__label { font-family: var(--rk-font-mono); font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--rk-ink-3); margin: 0 0 var(--rk-3); }
+.rk-stat__value { font-size: 30px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.rk-stat__value--green  { color: var(--rk-green-text); }
+.rk-stat__value--gold   { color: var(--rk-gold-2); }
+.rk-stat__value--danger { color: var(--rk-danger); }
+.rk-stat__foot { margin-top: var(--rk-2); font-size: 13px; color: var(--rk-ink-3); }
+
+/* stat na temnem pasu */
+.rk-on-dark .rk-stat,
+.rk-stat--ondark { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.10); box-shadow: none; }
+.rk-on-dark .rk-stat__label, .rk-stat--ondark .rk-stat__label { color: rgba(255,255,255,.55); }
+.rk-on-dark .rk-stat__value, .rk-stat--ondark .rk-stat__value { color: #fff; }
+
+/* ----------------------------------------------------------
+   9. LIST ROW  (npr. vrstica računa)
+   ---------------------------------------------------------- */
+.rk-list { background: var(--rk-card); border: 1px solid var(--rk-line-2); border-radius: var(--rk-r-lg); box-shadow: var(--rk-shadow-md); overflow: hidden; }
+.rk-row { display: flex; align-items: center; gap: var(--rk-4); padding: var(--rk-5) var(--rk-6); border-top: 1px solid var(--rk-line-2); }
+.rk-row:first-child { border-top: none; }
+.rk-row:hover { background: var(--rk-card-2); }
+.rk-row__main { min-width: 0; flex: 1; }
+.rk-row__title { font-weight: 700; font-size: 16px; color: var(--rk-ink); }
+.rk-row__sub { font-family: var(--rk-font-mono); font-size: 12.5px; color: var(--rk-ink-3); margin-top: 2px; }
+.rk-row__amount { text-align: right; }
+.rk-row__price { font-weight: 800; font-size: 18px; font-variant-numeric: tabular-nums; }
+.rk-row__actions { display: flex; align-items: center; gap: var(--rk-2); flex-shrink: 0; }
+@media (max-width: 720px){
+  .rk-row { flex-wrap: wrap; }
+  .rk-row__actions { width: 100%; }
+}
+
+/* ----------------------------------------------------------
+   10. BADGE / STATUS PILL
+   ---------------------------------------------------------- */
+.rk-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--rk-font-mono); font-size: 11.5px; font-weight: 600; letter-spacing: .03em;
+  padding: 4px 10px; border-radius: var(--rk-r-pill);
+  background: var(--rk-green-050); color: var(--rk-ink-2);
+}
+.rk-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .9; }
+.rk-badge--sent    { background: var(--rk-warn-soft);   color: var(--rk-warn); }      /* Poslano */
+.rk-badge--paid    { background: var(--rk-green-050);   color: var(--rk-green-text); }/* Plačano */
+.rk-badge--unpaid  { background: var(--rk-danger-soft);  color: var(--rk-danger); }    /* Neplačano */
+.rk-badge--draft   { background: #ECEAE1;               color: var(--rk-ink-3); }     /* Osnutek  */
+.rk-badge--info    { background: var(--rk-gold-soft);   color: var(--rk-gold-2); }
+
+/* ----------------------------------------------------------
+   11. INFO / WARNING BANNER  (dosledna navodila)
+   ---------------------------------------------------------- */
+.rk-note {
+  display: flex; gap: var(--rk-3);
+  border-radius: var(--rk-r-md);
+  padding: var(--rk-4) var(--rk-5);
+  font-size: 14.5px; line-height: 1.55;
+}
+.rk-note__ico { font-size: 18px; line-height: 1.4; flex-shrink: 0; }
+.rk-note__body { color: var(--rk-ink-2); }
+.rk-note__body b, .rk-note__body strong { color: var(--rk-ink); }
+.rk-note--tip  { background: var(--rk-info-soft); }
+.rk-note--tip  .rk-note__body b { color: var(--rk-info-text); }
+.rk-note--warn { background: var(--rk-gold-soft); }
+.rk-note--warn .rk-note__body { color: #6b531a; }
+.rk-note--warn .rk-note__body b { color: #4d3a0f; }
+.rk-note ol { margin: var(--rk-2) 0 0; padding-left: 1.2em; display: grid; gap: 4px; }
+.rk-note ol li::marker { font-family: var(--rk-font-mono); font-weight: 700; }
+
+/* ----------------------------------------------------------
+   12. OBRAZCI — styled inputs/selects (zamenjava native!)
+   ---------------------------------------------------------- */
+.rk-field { display: flex; flex-direction: column; gap: var(--rk-2); }
+.rk-label { font-family: var(--rk-font-mono); font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--rk-ink-3); }
+.rk-input, .rk-select {
+  font-family: var(--rk-font-sans); font-size: 15px; color: var(--rk-ink);
+  background: var(--rk-card); border: 1px solid var(--rk-line); border-radius: var(--rk-r-sm);
+  padding: 12px 14px; min-height: 46px; width: 100%;
+  transition: border-color .18s, box-shadow .18s;
+}
+.rk-input:focus, .rk-select:focus { outline: none; border-color: var(--rk-green-mid); box-shadow: 0 0 0 3px var(--rk-green-050); }
+.rk-input::placeholder { color: var(--rk-ink-3); }
+/* select: lasten puščica, brez native chrome */
+.rk-select {
+  -webkit-appearance: none; appearance: none; cursor: pointer; padding-right: 40px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238A9088' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center;
+}
+.rk-formrow { display: grid; grid-template-columns: 1fr 1fr; gap: var(--rk-4); }
+@media (max-width: 560px){ .rk-formrow { grid-template-columns: 1fr; } }
+
+/* ----------------------------------------------------------
+   13. TABS  (segmentirana navigacija znotraj strani)
+   ---------------------------------------------------------- */
+.rk-tabs { display: flex; gap: var(--rk-1); border-bottom: 1px solid var(--rk-line); overflow-x: auto; scrollbar-width: none; }
+.rk-tabs::-webkit-scrollbar { display: none; }
+.rk-tab {
+  appearance: none; border: none; background: none; cursor: pointer; flex-shrink: 0; white-space: nowrap;
+  font-family: var(--rk-font-sans); font-size: 15px; font-weight: 600; color: var(--rk-ink-3);
+  padding: 14px 16px; display: inline-flex; align-items: center; gap: 8px;
+  border-bottom: 2.5px solid transparent; margin-bottom: -1px;
+  transition: color .18s, border-color .18s;
+}
+.rk-tab:hover { color: var(--rk-ink-2); }
+.rk-tab[aria-selected="true"], .rk-tab.is-active { color: var(--rk-ink); border-bottom-color: var(--rk-green); }
+
+/* segmentirani kontrolnik (view toggle) */
+.rk-seg { display: inline-flex; padding: 4px; background: var(--rk-card); border: 1px solid var(--rk-line); border-radius: var(--rk-r-pill); gap: 2px; }
+.rk-seg button { appearance: none; border: none; background: none; cursor: pointer; font-family: var(--rk-font-sans); font-size: 13px; font-weight: 600; color: var(--rk-ink-3); padding: 7px 14px; border-radius: var(--rk-r-pill); transition: background .18s, color .18s; }
+.rk-seg button.is-active { background: var(--rk-green); color: #fff; }
+
+/* ----------------------------------------------------------
+   14. TABELA / P&L
+   ---------------------------------------------------------- */
+.rk-table { width: 100%; border-collapse: collapse; }
+.rk-secrow th { text-align: left; font-family: var(--rk-font-mono); font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: var(--rk-4) var(--rk-6); }
+.rk-secrow--in  th { background: var(--rk-forest); color: var(--rk-gold); }
+.rk-secrow--in  th .rk-secrow__amt { color: var(--rk-green-text); float: right; }
+.rk-secrow--out th { background: #4A1E1E; color: #E9B9A8; }
+.rk-secrow--out th .rk-secrow__amt { color: #F0B5A0; float: right; }
+.rk-table td { padding: var(--rk-4) var(--rk-6); border-bottom: 1px solid var(--rk-line-2); font-size: 15px; }
+.rk-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.rk-table tr:last-child td { border-bottom: none; }
+.rk-totalrow { background: var(--rk-forest); color: #fff; }
+.rk-totalrow td { font-weight: 800; font-size: 17px; border: none; color: #fff; }
+.rk-totalrow td:last-child { color: var(--rk-gold); font-size: 22px; }
+
+/* ----------------------------------------------------------
+   15. EMPTY STATE  (dosleden vzorec za prazne sezname)
+   ---------------------------------------------------------- */
+.rk-empty { text-align: center; padding: var(--rk-12) var(--rk-6); display: flex; flex-direction: column; align-items: center; gap: var(--rk-3); }
+.rk-empty__emoji { font-size: 44px; line-height: 1; }
+.rk-empty__title { font-size: 22px; font-weight: 800; letter-spacing: -.01em; }
+.rk-empty__sub { color: var(--rk-ink-2); max-width: 38ch; }
+.rk-empty .rk-btn { margin-top: var(--rk-2); }
+
+/* ----------------------------------------------------------
+   16. QUICK TILE  (bližnjica — kot na dashboardu)
+   ---------------------------------------------------------- */
+.rk-tilegrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: var(--rk-4); }
+.rk-tile { display: flex; flex-direction: column; gap: var(--rk-3); padding: var(--rk-5); background: var(--rk-card); border: 1px solid var(--rk-line-2); border-radius: var(--rk-r-md); cursor: pointer; box-shadow: var(--rk-shadow-sm); transition: transform .18s var(--rk-ease), box-shadow .2s, border-color .18s; }
+.rk-tile:hover { transform: translateY(-3px); box-shadow: var(--rk-shadow-lg); }
+.rk-tile.is-active { border-color: var(--rk-green); box-shadow: 0 0 0 1px var(--rk-green); }
+.rk-tile__ico { width: 44px; height: 44px; border-radius: var(--rk-r-sm); display: grid; place-items: center; font-size: 20px; background: var(--rk-green-050); color: var(--rk-green-mid); }
+.rk-tile.is-active .rk-tile__ico { background: var(--rk-green); color: #fff; }
+.rk-tile__label { font-weight: 700; font-size: 15px; }
+
+/* ----------------------------------------------------------
+   17. UTILITIES
+   ---------------------------------------------------------- */
+.rk-stack   { display: flex; flex-direction: column; }
+.rk-row-x   { display: flex; align-items: center; }
+.rk-between { justify-content: space-between; }
+.rk-gap-2 { gap: var(--rk-2); } .rk-gap-3 { gap: var(--rk-3); } .rk-gap-4 { gap: var(--rk-4); } .rk-gap-6 { gap: var(--rk-6); }
+.rk-mt-4 { margin-top: var(--rk-4); } .rk-mt-6 { margin-top: var(--rk-6); } .rk-mt-8 { margin-top: var(--rk-8); }
+.rk-wrap { flex-wrap: wrap; }
+.rk-grow { flex: 1; }

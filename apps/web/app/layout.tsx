@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Newsreader, Bricolage_Grotesque, Plus_Jakarta_Sans, Fraunces } from "next/font/google";
+import { Geist, Geist_Mono, Newsreader, Bricolage_Grotesque, Plus_Jakarta_Sans, Fraunces, Schibsted_Grotesk, JetBrains_Mono } from "next/font/google";
+
+const rkSans = Schibsted_Grotesk({ subsets: ["latin"], weight: ["400","500","600","700","800","900"], variable: "--rk-font-sans" })
+const rkSerif = Newsreader({ subsets: ["latin"], weight: ["400","500"], style: ["italic"], variable: "--rk-font-serif" })
+const rkMono = JetBrains_Mono({ subsets: ["latin"], weight: ["400","500","600","700"], variable: "--rk-font-mono" })
 import "./globals.css";
+import "./styles/racunko-ds.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
