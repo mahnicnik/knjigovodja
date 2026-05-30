@@ -156,6 +156,7 @@ export default function StatistikaPage() {
       {/* Topbar */}
       <div style={{ background:'#fff', borderBottom:'0.5px solid rgba(0,0,0,0.08)', padding:'16px 28px', display:'flex', alignItems:'center', justifyContent:'space-between', position:'sticky', top:0, zIndex:10 }}>
         <div>
+          <a href='/dashboard' style={{ display:'inline-flex', alignItems:'center', gap:'6px', fontSize:'13px', color:'var(--rk-ink-3)', textDecoration:'none', marginBottom:'6px', fontFamily:'var(--rk-font-mono)' }}>← Domov</a>
           <div style={{ fontSize:'22px', fontWeight:'500', color:'#0D1F12' }}>Statistika</div>
           <div style={{ fontSize:'12px', color:'#888', marginTop:'2px' }}>{org?.name} · {currentYear}</div>
         </div>
