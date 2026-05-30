@@ -166,7 +166,7 @@ export default function AvansniRacuniPage() {
             <div style={{ fontSize: 20, color: '#fff', fontWeight: 500, marginTop: 4 }}>Avansni računi</div>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <Link href="/invoices" style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)', padding: '8px 16px', borderRadius: 8, fontSize: 13, textDecoration: 'none' }}>← Računi</Link>
+            <Link href="/dashboard" style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)', padding: '8px 16px', borderRadius: 8, fontSize: 13, textDecoration: 'none' }}>← Domov</Link>
             <button onClick={() => setModal('advance')} style={{ background: '#1D9E75', color: '#fff', border: 0, padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>+ Nov avansni račun</button>
           </div>
         </div>
