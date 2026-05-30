@@ -1,26 +1,109 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ============================================================
+   RAČUNKO — globals.css
+   Integrira racunko-ds.css design sistem z Tailwind razredi.
+   racunko-ds.css je uvožen v layout.tsx.
+   ============================================================ */
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* — Osnova — */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--rk-paper);
+  color: var(--rk-ink);
+  font-family: var(--rk-font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* — Tailwind overrides → rk design sistem — */
+
+/* Ozadja */
+.bg-white        { background: var(--rk-card) !important; }
+.bg-gray-50      { background: var(--rk-paper) !important; }
+.bg-gray-100     { background: var(--rk-paper-2) !important; }
+.bg-gray-900     { background: var(--rk-forest) !important; }
+.bg-gray-800     { background: var(--rk-forest-2) !important; }
+
+/* Besedilo */
+.text-gray-900   { color: var(--rk-ink) !important; }
+.text-gray-700   { color: var(--rk-ink-2) !important; }
+.text-gray-600   { color: var(--rk-ink-2) !important; }
+.text-gray-500   { color: var(--rk-ink-3) !important; }
+.text-gray-400   { color: var(--rk-ink-3) !important; }
+.text-white      { color: #fff !important; }
+
+/* Robovi */
+.border-gray-100 { border-color: var(--rk-line-2) !important; }
+.border-gray-200 { border-color: var(--rk-line) !important; }
+.border-gray-300 { border-color: var(--rk-line) !important; }
+
+/* Kartice — rounded-xl + border + bg-white */
+.rounded-xl      { border-radius: var(--rk-r-md) !important; }
+.rounded-2xl     { border-radius: var(--rk-r-lg) !important; }
+.rounded-full    { border-radius: var(--rk-r-pill) !important; }
+
+/* Gumbi */
+.bg-gray-900.text-white,
+button.bg-gray-900 {
+  background: var(--rk-green) !important;
+  color: #fff !important;
+  border-radius: var(--rk-r-sm) !important;
+  font-family: var(--rk-font-sans) !important;
+  font-weight: 600 !important;
+  min-height: 44px;
+  transition: background .18s;
+}
+.bg-gray-900.text-white:hover,
+button.bg-gray-900:hover {
+  background: #163d29 !important;
+}
+
+/* Input polja */
+input, select, textarea {
+  font-family: var(--rk-font-sans) !important;
+  color: var(--rk-ink) !important;
+  background: var(--rk-card) !important;
+  border-color: var(--rk-line) !important;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none !important;
+  border-color: var(--rk-green-mid) !important;
+  box-shadow: 0 0 0 3px var(--rk-green-050) !important;
+}
+input::placeholder, textarea::placeholder {
+  color: var(--rk-ink-3) !important;
+}
+
+/* Sence */
+.shadow-sm { box-shadow: var(--rk-shadow-sm) !important; }
+.shadow    { box-shadow: var(--rk-shadow-md) !important; }
+.shadow-lg { box-shadow: var(--rk-shadow-lg) !important; }
+
+/* Status barve */
+.text-green-600  { color: var(--rk-green-text) !important; }
+.bg-green-50     { background: var(--rk-green-050) !important; }
+.text-red-500    { color: var(--rk-danger) !important; }
+.bg-red-50       { background: var(--rk-danger-soft) !important; }
+.text-amber-600  { color: var(--rk-warn) !important; }
+.bg-amber-50     { background: var(--rk-warn-soft) !important; }
+.text-yellow-600 { color: var(--rk-gold-2) !important; }
+.bg-yellow-50    { background: var(--rk-gold-soft) !important; }
+
+/* Focus ring */
+.focus\:ring-2:focus {
+  box-shadow: 0 0 0 3px var(--rk-green-050) !important;
+}
+.focus\:ring-gray-900:focus {
+  box-shadow: 0 0 0 3px var(--rk-green-050) !important;
+  border-color: var(--rk-green-mid) !important;
+}
+
+/* AppLayout sidebar — ohrani forest green */
+aside { background: var(--rk-forest) !important; }
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  body {
+    background: var(--rk-paper);
+    color: var(--rk-ink);
+  }
 }
