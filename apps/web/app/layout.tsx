@@ -5,7 +5,8 @@ const rkSans = Schibsted_Grotesk({ subsets: ["latin"], weight: ["400","500","600
 const rkSerif = Newsreader({ subsets: ["latin"], weight: ["400","500"], style: ["italic"], variable: "--rk-font-serif" })
 const rkMono = JetBrains_Mono({ subsets: ["latin"], weight: ["400","500","600","700"], variable: "--rk-font-mono" })
 import "./globals.css";
-import "./styles/racunko-ds.css";
+import "../public/racunko-ds.css";
+
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
