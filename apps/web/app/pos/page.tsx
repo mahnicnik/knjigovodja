@@ -4471,6 +4471,26 @@ function ZReportModal({ posData, onClose }) {
         })
       }
 
+      // Sinhroniziraj promet z računko.si
+      try {
+        const dateStr = data.date.toISOString().slice(0, 10)
+        await fetch('/api/pos/sync-income', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date: dateStr,
+            amount: data.totalRevenue,
+            refunds: data.totalRefunds,
+            description: `POS promet — ŠIRM fitness&bar (Z#${reportNumber})`,
+            z_report_id: zReport?.id,
+          })
+        })
+        // Označi Z-poročilo kot poslano
+        await createClient().from('z_reports').update({ sent_to_racunko: true }).eq('id', zReport?.id)
+      } catch (syncErr) {
+        console.warn('Sync z računko.si ni uspel:', syncErr)
+      }
+
       setSaved(true)
       setTimeout(() => { setSaved(false); onClose() }, 2000)
     } catch (e) {
