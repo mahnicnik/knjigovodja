@@ -523,14 +523,25 @@ export default function DashboardPage() {
   }, [data.yearRevenue, data.taxSystem, month])
 
   /* ============ COMPUTED: ONBOARDING CHECKLIST ============ */
+  const [dismissedSteps, setDismissedSteps] = React.useState<number[]>(() => {
+    try { return JSON.parse(localStorage.getItem('rk_dismissed_steps') || '[]') } catch { return [] }
+  })
+  function dismissStep(id: number) {
+    const next = [...dismissedSteps, id]
+    setDismissedSteps(next)
+    localStorage.setItem('rk_dismissed_steps', JSON.stringify(next))
+  }
+
   const onboardingSteps = useMemo(() => {
     const profileDone = !!(org?.name && org?.tax_number && org?.iban)
     return [
-      { id: 1, label: 'Profil podjetja', done: profileDone, href: '/nastavitve' },
-      { id: 2, label: 'Prvi račun',       done: data.hasInvoices, href: '/invoices/new' },
-      { id: 3, label: 'Uvozi prvi strošek', done: data.hasExpenses, href: '/expenses' },
-    ]
-  }, [org, data])
+      { id: 1, label: 'Profil podjetja',       done: profileDone,         href: '/nastavitve',         optional: false },
+      { id: 2, label: 'Prvi račun',             done: data.hasInvoices,    href: '/invoices/new',       optional: false },
+      { id: 3, label: 'Uvozi prvi strošek',     done: data.hasExpenses,    href: '/expenses',           optional: false },
+      { id: 4, label: 'Nastavi davčno blagajno', done: false,              href: '/nastavitve/blagajna', optional: true },
+      { id: 5, label: 'Povabi računovodjo',     done: false,               href: '/nastavitve/ekipa',   optional: true },
+    ].filter(s => !dismissedSteps.includes(s.id))
+  }, [org, data, dismissedSteps])
   const onboardingDone = onboardingSteps.filter(s => s.done).length
   const onboardingTotal = onboardingSteps.length
   const onboardingPct = (onboardingDone / onboardingTotal) * 100
@@ -700,10 +711,22 @@ export default function DashboardPage() {
             <div className="rk-onboard-bar"><div className="rk-onboard-bar-fill" style={{ width: `${onboardingPct}%` }} /></div>
             <div className="rk-onboard-list">
               {onboardingSteps.map(s => (
-                <Link key={s.id} href={s.href} className={`rk-ob-step ${s.done ? 'done' : ''}`}>
-                  <span className="rk-ob-num">{s.done ? '✓' : s.id}</span>
-                  <span className="rk-ob-label">{s.label}</span>
-                </Link>
+                <div key={s.id} style={{ display:'flex', alignItems:'center', gap:6 }}>
+                  <Link href={s.href} className={`rk-ob-step ${s.done ? 'done' : ''}`} style={{ flex:1 }}>
+                    <span className="rk-ob-num">{s.done ? '✓' : s.id}</span>
+                    <span className="rk-ob-label">
+                      {s.label}
+                      {(s as any).optional && <span style={{ fontSize:10, color:'var(--rk-ink-3)', marginLeft:6, fontWeight:400 }}>opcijsko</span>}
+                    </span>
+                  </Link>
+                  {(s as any).optional && !s.done && (
+                    <button onClick={(e) => { e.preventDefault(); dismissStep(s.id) }}
+                      title="Skrij ta korak"
+                      style={{ background:'none', border:'none', cursor:'pointer', color:'var(--rk-ink-3)', fontSize:16, padding:'2px 6px', borderRadius:4, lineHeight:1 }}>
+                      ×
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           </section>
