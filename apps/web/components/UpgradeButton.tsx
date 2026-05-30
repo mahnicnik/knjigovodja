@@ -61,7 +61,7 @@ export default function UpgradeButton({
             Preusmerjam...
           </>
         ) : (
-          'Nadgradi na Pro — €19/mes'
+          'Nadgradi na Pro — €9.99/mes'
         )}
       </button>
       {error && <p className="mt-2 text-xs text-red-600">⚠️ {error}</p>}
