@@ -74,7 +74,7 @@ export default function TermsPage() {
 
           <h2>3. Plačilni pogoji</h2>
           <p><strong>Brezplačni plan (Starter):</strong> Na voljo brezplačno z omejitvami (do 5 računov mesečno, 10 AI vprašanj).</p>
-          <p><strong>Pro plan:</strong> €19 mesečno, zaračunano mesečno. Brez letne vezave. Prekličete kadarkoli.</p>
+          <p><strong>Pro plan:</strong> €9.99 mesečno, zaračunano mesečno. Brez letne vezave. Prekličete kadarkoli.</p>
           <p>Ob neplačilu za Pro plan vas obvestimo in po 7 dneh preklopimo na brezplačni plan. Vaši podatki ostanejo.</p>
 
           <h2>4. Vaši podatki</h2>

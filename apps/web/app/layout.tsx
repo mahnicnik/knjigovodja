@@ -51,7 +51,7 @@ export const metadata: Metadata = {
     apple: "/favicon.svg",
   },
   title: "Računko — AI računovodja za slovenskega s.p.",
-  description: "Zamenja računovodja za €19.99/mesec. AI ki pozna FURS, vaše dejanske podatke in slovensko davčno pravo. Brez vezave, brez kreditne kartice.",
+  description: "Zamenja računovodja za €9.99/mesec. AI ki pozna FURS, vaše dejanske podatke in slovensko davčno pravo. Brez vezave, brez kreditne kartice.",
 };
 
 export default function RootLayout({
