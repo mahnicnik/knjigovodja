@@ -527,9 +527,8 @@ export default function DashboardPage() {
     const profileDone = !!(org?.name && org?.tax_number && org?.iban)
     return [
       { id: 1, label: 'Profil podjetja', done: profileDone, href: '/nastavitve' },
-      { id: 2, label: 'Prva stranka',     done: data.hasClients, href: '/clients' },
-      { id: 3, label: 'Prvi račun',       done: data.hasInvoices, href: '/invoices/new' },
-      { id: 4, label: 'Uvozi prvi strošek', done: data.hasExpenses, href: '/expenses' },
+      { id: 2, label: 'Prvi račun',       done: data.hasInvoices, href: '/invoices/new' },
+      { id: 3, label: 'Uvozi prvi strošek', done: data.hasExpenses, href: '/expenses' },
     ]
   }, [org, data])
   const onboardingDone = onboardingSteps.filter(s => s.done).length
