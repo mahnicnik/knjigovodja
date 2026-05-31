@@ -5997,6 +5997,7 @@ function ReportsScreen({ posData, auth }) {
   const [showZReport, setShowZReport] = useState(false)
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
+  const [selectedStaffId, setSelectedStaffId] = useState('all')
 
   useEffect(() => { loadReport(period) }, [period])
 

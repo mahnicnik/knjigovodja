@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "Ra\u010dunko POS",
+    "slug": "racunko-pos",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "racunko",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "si.racunko.pos"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0d2818"
+      },
+      "package": "si.racunko.pos"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "0977458d-5708-4bfb-9b58-de924b143aef"
+      }
+    }
+  }
+}
