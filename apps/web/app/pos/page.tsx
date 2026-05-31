@@ -1670,6 +1670,7 @@ function CalendarScreen({ posData }) {
   const [selectedStaff, setSelectedStaff] = useState('all')
   const [selectedSpace, setSelectedSpace] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
+  const [draggingId, setDraggingId] = useState<string|null>(null)
 
   const hours = Array.from({length:14}, (_, i) => 7 + i) // 7:00 - 20:00
   const HOUR_H = 60 // px per hour
@@ -1700,6 +1701,9 @@ function CalendarScreen({ posData }) {
     if (view === 'day') {
       from = new Date(currentDate); from.setHours(0,0,0,0)
       to = new Date(currentDate); to.setHours(23,59,59,999)
+    } else if (view === 'month') {
+      from = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
+      to = new Date(currentDate.getFullYear(), currentDate.getMonth()+1, 0, 23, 59, 59)
     } else {
       from = new Date(weekDates[0]); from.setHours(0,0,0,0)
       to = new Date(weekDates[6]); to.setHours(23,59,59,999)
@@ -1718,8 +1722,24 @@ function CalendarScreen({ posData }) {
   function navigate(dir) {
     const d = new Date(currentDate)
     if (view === 'day') d.setDate(d.getDate() + dir)
+    else if (view === 'month') d.setMonth(d.getMonth() + dir)
     else d.setDate(d.getDate() + dir*7)
     setCurrentDate(d)
+  }
+
+  // Drag & drop — premakni booking
+  async function moveBooking(bookingId: string, newStart: Date) {
+    const b = bookings.find((x:any) => x.id === bookingId)
+    if (!b) return
+    const oldStart = new Date(b.start_at)
+    const diff = newStart.getTime() - oldStart.getTime()
+    const newEnd = b.end_at ? new Date(new Date(b.end_at).getTime() + diff) : null
+    await createClient().from('bookings').update({
+      start_at: newStart.toISOString(),
+      ...(newEnd ? { end_at: newEnd.toISOString() } : {})
+    }).eq('id', bookingId)
+    await loadBookings()
+    setDraggingId(null)
   }
 
   function goToday() { setCurrentDate(new Date()) }
@@ -1769,7 +1789,7 @@ function CalendarScreen({ posData }) {
 
         {/* View toggle */}
         <div style={{ display:'flex', gap:2, background:T.surface3, padding:3, borderRadius:8 }}>
-          {[['day','Dan'],['week','Teden']].map(([v,l])=>(
+          {[['day','Dan'],['week','Teden'],['month','Mesec']].map(([v,l])=>(
             <button key={v} onClick={()=>setView(v)} style={{ padding:'5px 12px', borderRadius:6, cursor:'pointer', fontFamily:'inherit', border:'none', fontWeight:700, fontSize:11, background:view===v?T.header:'transparent', color:view===v?T.headerInk:T.ink }}>{l}</button>
           ))}
         </div>
@@ -1797,8 +1817,76 @@ function CalendarScreen({ posData }) {
         </button>
       </div>
 
+      {/* Mesečni pogled */}
+      {view === 'month' && (
+        <div style={{ flex:1, overflow:'auto', padding:16 }}>
+          {(() => {
+            const year = currentDate.getFullYear()
+            const month = currentDate.getMonth()
+            const firstDay = new Date(year, month, 1)
+            const lastDay = new Date(year, month+1, 0)
+            const startDow = (firstDay.getDay()+6)%7 // ponedeljek=0
+            const totalCells = Math.ceil((startDow + lastDay.getDate()) / 7) * 7
+            const cells = Array.from({length: totalCells}, (_, i) => {
+              const dayNum = i - startDow + 1
+              if (dayNum < 1 || dayNum > lastDay.getDate()) return null
+              return new Date(year, month, dayNum)
+            })
+            return (
+              <div>
+                {/* Dnevi v tednu */}
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:2, marginBottom:4 }}>
+                  {['Pon','Tor','Sre','Čet','Pet','Sob','Ned'].map(d => (
+                    <div key={d} style={{ textAlign:'center', fontSize:10, fontWeight:700, color:T.muted, padding:'4px 0' }}>{d}</div>
+                  ))}
+                </div>
+                {/* Celice */}
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:2 }}>
+                  {cells.map((day, i) => {
+                    if (!day) return <div key={i} style={{ minHeight:80, background:T.surface2, borderRadius:6 }}/>
+                    const dayBookings = bookings.filter(b => {
+                      const bd = new Date(b.start_at)
+                      return bd.getDate()===day.getDate() && bd.getMonth()===day.getMonth()
+                    })
+                    const today = isToday(day)
+                    return (
+                      <div key={i}
+                        onDragOver={e => e.preventDefault()}
+                        onDrop={e => {
+                          if (!draggingId) return
+                          const d = new Date(day); d.setHours(9,0,0,0)
+                          moveBooking(draggingId, d)
+                        }}
+                        onClick={() => { setCurrentDate(day); setView('day') }}
+                        style={{ minHeight:80, background:today?T.accentSoft:T.surface, borderRadius:8, border:'1px solid '+(today?T.accent:T.lineSoft), padding:6, cursor:'pointer' }}>
+                        <div style={{ fontSize:12, fontWeight:800, color:today?T.accent:T.ink, marginBottom:4 }}>{day.getDate()}</div>
+                        {dayBookings.slice(0,3).map(b => {
+                          const ss = statusStyle(b.status)
+                          return (
+                            <div key={b.id}
+                              draggable
+                              onDragStart={e => { e.stopPropagation(); setDraggingId(b.id); e.dataTransfer.effectAllowed='move' }}
+                              onClick={e => { e.stopPropagation(); setBookingModal(b) }}
+                              style={{ fontSize:10, fontWeight:600, padding:'2px 6px', borderRadius:4, marginBottom:2, background:ss.bg, color:ss.text, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', cursor:'grab' }}>
+                              {new Date(b.start_at).toLocaleTimeString('sl-SI',{hour:'2-digit',minute:'2-digit'})} {b.customers?.name||'Stranka'}
+                            </div>
+                          )
+                        })}
+                        {dayBookings.length > 3 && (
+                          <div style={{ fontSize:9, color:T.muted, fontWeight:700 }}>+{dayBookings.length-3} več</div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
+        </div>
+      )}
+
       {/* Glavna vsebina */}
-      <div style={{ flex:1, overflow:'auto', position:'relative' }}>
+      <div style={{ flex:1, overflow:'auto', position:'relative', display: view==='month'?'none':'flex', flexDirection:'column' }}>
         {therapists.length === 0 && view === 'day' ? (
           <div style={{ padding:60, textAlign:'center', color:T.muted }}>
             <div style={{ fontSize:32, marginBottom:8 }}>👥</div>
@@ -1878,8 +1966,18 @@ function CalendarScreen({ posData }) {
                   <div key={ci} style={{ borderRight:'1px solid '+T.lineSoft, position:'relative', background:T.surface }}>
                     {/* Urne linije */}
                     {hours.map(h=>(
-                      <div key={h} style={{ height:HOUR_H, borderTop:'1px solid '+T.lineSoft, cursor:'pointer' }}
+                      <div key={h}
+                        style={{ height:HOUR_H, borderTop:'1px solid '+T.lineSoft, cursor:'pointer', background:draggingId?'transparent':undefined }}
+                        onDragOver={e => { e.preventDefault(); e.currentTarget.style.background='rgba(31,107,58,0.08)' }}
+                        onDragLeave={e => { e.currentTarget.style.background='' }}
+                        onDrop={e => {
+                          e.currentTarget.style.background=''
+                          if (!draggingId) return
+                          const d = new Date(colDate); d.setHours(h,0,0,0)
+                          moveBooking(draggingId, d)
+                        }}
                         onClick={()=>{
+                          if (draggingId) return
                           const d = new Date(colDate)
                           d.setHours(h,0,0,0)
                           setBookingModal({ start_at: d.toISOString(), staff_id: colStaffId })
@@ -1893,8 +1991,12 @@ function CalendarScreen({ posData }) {
                       const svc = b.services
                       const cust = b.customers
                       return (
-                        <div key={b.id} onClick={()=>setBookingModal(b)}
-                          style={{ position:'absolute', top, left:2, right:2, height:height-2, borderRadius:7, background:svc?.color?svc.color+'25':ss.bg, border:'2px solid '+(svc?.color||ss.border), cursor:'pointer', overflow:'hidden', padding:'3px 7px', zIndex:1 }}>
+                        <div key={b.id}
+                          draggable
+                          onDragStart={e => { setDraggingId(b.id); e.dataTransfer.effectAllowed='move' }}
+                          onDragEnd={() => setDraggingId(null)}
+                          onClick={()=>setBookingModal(b)}
+                          style={{ position:'absolute', top, left:2, right:2, height:height-2, borderRadius:7, background:svc?.color?svc.color+'25':ss.bg, border:'2px solid '+(svc?.color||ss.border), cursor:'grab', overflow:'hidden', padding:'3px 7px', zIndex:1, opacity:draggingId===b.id?0.5:1 }}>
                           <div style={{ fontWeight:700, fontSize:11, color:svc?.color||ss.text, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
                             {cust?.name || b.customer_name || 'Neznana stranka'}
                           </div>
