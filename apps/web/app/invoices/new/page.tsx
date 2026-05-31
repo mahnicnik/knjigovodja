@@ -28,6 +28,14 @@ export default function NewInvoicePage() {
   const [dueDate, setDueDate] = useState(new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0])
   const [items, setItems] = useState<LineItem[]>([{ description: '', quantity: 1, unit_price: 0, vat_rate: 22 }])
   const [notes, setNotes] = useState('')
+  const [serviceDate, setServiceDate] = useState('')
+  const [serviceDateTo, setServiceDateTo] = useState('')
+  const [headerText, setHeaderText] = useState('')
+  const [partners, setPartners] = useState<any[]>([])
+  const [showPartnerTab, setShowPartnerTab] = useState(false)
+  const [partnerSearch, setPartnerSearch] = useState('')
+  const [newPartner, setNewPartner] = useState({ name: '', tax_number: '', address: '', email: '', iban: '' })
+  const [savingPartner, setSavingPartner] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const router = useRouter()
   const supabase = createClient()
@@ -52,6 +60,9 @@ export default function NewInvoicePage() {
         const { count } = await supabase.from('issued_invoices').select('*', { count: 'exact', head: true }).eq('org_id', o.id)
         const num = String((count || 0) + 1).padStart(3, '0')
         setInvoiceNumber(`${new Date().getFullYear()}-${num}`)
+        // Naloži partnerje
+        const { data: pts } = await supabase.from('invoice_partners').select('*').eq('org_id', o.id).order('name')
+        setPartners(pts || [])
       }
     }
     load()
@@ -77,6 +88,9 @@ export default function NewInvoicePage() {
       issue_date: issueDate, due_date: dueDate, line_items: items,
       amount_net: subtotal, vat_amount: vatAmount, amount_total: total,
       status, notes, reference: `SI00 ${invoiceNumber}`,
+      service_date: serviceDate || null,
+      service_date_to: serviceDateTo || null,
+      header_text: headerText || null,
     })
     if (error) { alert('Napaka: ' + error.message); setLoading(false); return }
     if (status === 'sent') {
