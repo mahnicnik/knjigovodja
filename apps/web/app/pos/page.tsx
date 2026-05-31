@@ -2005,6 +2005,12 @@ function CalendarScreen({ posData }) {
                               {svc?.name || 'Storitev'} · {b.duration_min||60} min
                             </div>
                           )}
+                          {height > 50 && b.staff && (
+                            <div style={{ fontSize:9, fontWeight:600, display:'flex', alignItems:'center', gap:3, marginTop:1 }}>
+                              <div style={{ width:8, height:8, borderRadius:'50%', background:b.staff.color||T.accent, flexShrink:0 }}/>
+                              <span style={{ color:T.muted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{b.staff.name}</span>
+                            </div>
+                          )}
                           {height > 55 && b.status === 'no_show' && (
                             <div style={{ fontSize:9, fontWeight:800, color:T.danger }}>⚠️ NI PRIŠEL</div>
                           )}
