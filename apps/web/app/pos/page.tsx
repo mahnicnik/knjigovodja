@@ -1669,6 +1669,7 @@ function CalendarScreen({ posData }) {
   const [bookingModal, setBookingModal] = useState(null) // null | {} | booking obj
   const [selectedStaff, setSelectedStaff] = useState('all')
   const [selectedSpace, setSelectedSpace] = useState('all')
+  const [filterStatus, setFilterStatus] = useState('all')
 
   const hours = Array.from({length:14}, (_, i) => 7 + i) // 7:00 - 20:00
   const HOUR_H = 60 // px per hour
@@ -1782,6 +1783,15 @@ function CalendarScreen({ posData }) {
           </select>
         )}
 
+        {/* Status filter */}
+        <div style={{ display:'flex', gap:4 }}>
+          {[['all','Vsi'],['confirmed','Potrjeni'],['arrived','Prišli'],['no_show','Odsotni']].map(([v,l])=>(
+            <button key={v} onClick={()=>setFilterStatus(v)}
+              style={{ padding:'4px 10px', borderRadius:6, cursor:'pointer', fontFamily:'inherit', border:'1px solid '+(filterStatus===v?T.accent:T.line), fontSize:11, fontWeight:filterStatus===v?700:400, background:filterStatus===v?T.accentSoft:'transparent', color:filterStatus===v?T.accent:T.muted }}>
+              {l}
+            </button>
+          ))}
+        </div>
         <button onClick={()=>setBookingModal({})} style={{ marginLeft:'auto', ...btnP, display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
           <KI name="plus" size={13}/> Nova rezervacija
         </button>
@@ -1822,9 +1832,23 @@ function CalendarScreen({ posData }) {
                         <div style={{ width:28, height:28, borderRadius:999, background:s.color||T.accent, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:10, flexShrink:0 }}>
                           {s.name.split(' ').map(w=>w[0]).join('').slice(0,2)}
                         </div>
-                        <div>
+                        <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ fontWeight:700, fontSize:12 }}>{s.name}</div>
                           <div style={{ fontSize:9, color:T.muted }}>{s.role}</div>
+                          {(() => {
+                            const staffBookings = bookings.filter(b => b.staff_id === s.id)
+                            const workHours = hours.length
+                            const bookedHours = staffBookings.reduce((sum, b) => sum + (b.duration_min||60)/60, 0)
+                            const pct = Math.min(100, Math.round(bookedHours/workHours*100))
+                            return pct > 0 ? (
+                              <div style={{ marginTop:2, display:'flex', alignItems:'center', gap:4 }}>
+                                <div style={{ flex:1, height:3, background:T.surface3, borderRadius:99 }}>
+                                  <div style={{ width:pct+'%', height:'100%', background:pct>80?T.danger:T.accent, borderRadius:99 }}/>
+                                </div>
+                                <span style={{ fontSize:9, color:T.muted, fontWeight:700 }}>{pct}%</span>
+                              </div>
+                            ) : null
+                          })()}
                         </div>
                       </>
                     ) : (
@@ -1846,7 +1870,8 @@ function CalendarScreen({ posData }) {
                   const bd = new Date(b.start_at)
                   const sameDay = bd.getDate()===colDate.getDate() && bd.getMonth()===colDate.getMonth()
                   const sameStaff = view === 'week' || !colStaffId || b.staff_id === colStaffId
-                  return sameDay && sameStaff
+                  const matchStatus = filterStatus === 'all' || b.status === filterStatus
+                  return sameDay && sameStaff && matchStatus
                 })
 
                 return (
