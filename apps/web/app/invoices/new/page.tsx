@@ -377,10 +377,24 @@ export default function NewInvoicePage() {
                 <label className="text-xs text-gray-500 block mb-1">Rok plačila</label>
                 <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={inp} />
               </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Datum opravljene storitve (od)</label>
+                <input type="date" value={serviceDate} onChange={e => setServiceDate(e.target.value)} className={inp} />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Datum opravljene storitve (do)</label>
+                <input type="date" value={serviceDateTo} onChange={e => setServiceDateTo(e.target.value)} className={inp} />
+              </div>
             </div>
           </div>
 
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
+            <div style={{ marginBottom: 16 }}>
+              <label className="text-xs text-gray-500 block mb-1">Besedilo nad tabelo (neobvezno)</label>
+              <textarea value={headerText} onChange={e => setHeaderText(e.target.value)}
+                placeholder="Npr: Na podlagi pogodbe z dne 1.1.2026..."
+                rows={2} className={inp} style={{ resize: 'vertical' as any }} />
+            </div>
             <h3 className="font-medium text-gray-900 mb-4">Storitve in blago</h3>
             <div className="grid grid-cols-12 gap-2 mb-2 px-1">
               <div className="col-span-5 text-xs font-medium text-gray-400">Storitev</div>
