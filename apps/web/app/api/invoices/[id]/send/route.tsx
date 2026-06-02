@@ -19,7 +19,14 @@ export async function POST(
       return NextResponse.json({ error: 'Manjkajo obvezna polja (to, subject)' }, { status: 400 })
     }
 
-    const supabase = createClient()
+    const { cookies } = await import('next/headers')
+    const cookieStore = await cookies()
+    const { createServerClient } = await import('@supabase/ssr')
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { cookies: { getAll: () => cookieStore.getAll() } }
+    )
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })

@@ -18,12 +18,10 @@ export default function LoginScreen() {
       return;
     }
     setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       Alert.alert('Napaka prijave', error.message);
-      return;
     }
-    Alert.alert('Login OK', 'user: ' + data.user?.id?.slice(0,8));
     setLoading(false);
   }
 

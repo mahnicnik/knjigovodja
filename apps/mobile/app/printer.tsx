@@ -6,11 +6,15 @@ import {
 import { router } from 'expo-router';
 import { colors } from '../lib/colors';
 
-let ThermalPrinter: any = null;
+let BluetoothManager: any = null;
+let BluetoothEscposPrinter: any = null;
 try {
-  ThermalPrinter = require('react-native-thermal-receipt-printer-image-qr').default;
-} catch (e) {
-  console.log('Thermal printer not available');
+  const mod = require('@ccdilan/react-native-bluetooth-escpos-printer');
+  BluetoothManager = mod.BluetoothManager;
+  BluetoothEscposPrinter = mod.BluetoothEscposPrinter;
+  console.log('BT Printer loaded:', typeof BluetoothManager);
+} catch (e: any) {
+  console.log('Printer error:', e.message);
 }
 
 export default function PrinterScreen() {
@@ -20,41 +24,45 @@ export default function PrinterScreen() {
   const [connecting, setConnecting] = useState<string | null>(null);
 
   async function scanDevices() {
-    if (!ThermalPrinter) {
+    if (!BluetoothManager) {
       Alert.alert('Napaka', 'Tiskalnik ni na voljo v tej verziji app-a.');
       return;
     }
     setScanning(true);
     try {
-      const found = await ThermalPrinter.getBluetoothDeviceList();
-      setDevices(found || []);
+      const paired = await BluetoothManager.enableBluetooth();
+      const devices = JSON.parse(paired || '[]');
+      setDevices(devices);
     } catch (e: any) {
+      console.log('SCAN ERROR:', e.message);
       Alert.alert('Napaka', e.message || 'Iskanje ni uspelo');
     }
     setScanning(false);
   }
 
   async function connectDevice(device: any) {
-    setConnecting(device.macAddress);
+    const deviceId = device.macAddress || device.inner_mac_address;
+    setConnecting(deceId);
     try {
-      await ThermalPrinter.connectBluetoothPrinter(device.macAddress);
+      await BLEPrinter.connect(deviceId);
       setConnected(device);
       Alert.alert('Uspeh', 'Tiskalnik ' + device.deviceName + ' povezan!');
     } catch (e: any) {
+      console.log('CONNECT ERROR:', JSON.stringify(e), e.message);
       Alert.alert('Napaka', e.message || 'Povezava ni uspela');
     }
     setConnecting(null);
   }
 
   async function testPrint() {
-    if (!connected || !ThermalPrinter) return;
+    if (!connected || !BluetoothEscposPrinter) return;
     try {
-      await ThermalPrinter.printText('\n');
-      await ThermalPrinter.printText('=== RACUNKO POS ===\n');
-      await ThermalPrinter.printText('Test tiskanje\n');
-      await ThermalPrinter.printText('Tiskalnik deluje!\n');
-      await ThermalPrinter.printText('==================\n');
-      await ThermalPrinter.printText('\n\n\n');
+      await BluetoothEscposPrinter.printText('\n', {});
+      await BluetoothEscposPrinter.printText('=== RACUNKO POS ===\n', {});
+      await BluetoothEscposPrinter.printText('Test tiskanje\n', {});
+      await BluetoothEscposPrinter.printText('Tiskalnik deluje!\n', {});
+      await BluetoothEscposPrinter.printText('==================\n', {});
+      await BluetoothEscposPrinter.printText('\n\n\n', {});
       Alert.alert('Uspeh', 'Test natisnjen!');
     } catch (e: any) {
       Alert.alert('Napaka tiskanja', e.message);
@@ -63,7 +71,7 @@ export default function PrinterScreen() {
 
   async function disconnect() {
     try {
-      await ThermalPrinter.disconnectPrinter();
+      await BluetoothManager.disconnect();
       setConnected(null);
     } catch (e) {}
   }
@@ -108,7 +116,7 @@ export default function PrinterScreen() {
       {/* Devices list */}
       <FlatList
         data={devices}
-        keyExtractor={d => d.macAddress}
+        keyExtractor={(d, i) => d.address || d.macAddress || String(i)}
         contentContainerStyle={{ padding: 16, gap: 8 }}
         ListEmptyComponent={
           !scanning ? (
@@ -127,8 +135,8 @@ export default function PrinterScreen() {
           >
             <Text style={s.deviceIcon}>🖨️</Text>
             <View style={{ flex: 1 }}>
-              <Text style={s.deviceName}>{item.deviceName || 'Neznana naprava'}</Text>
-              <Text style={s.deviceMac}>{item.macAddress}</Text>
+              <Text style={s.deviceName}>{item.name || item.deviceName || 'Neznana naprava'}</Text>
+              <Text style={s.deviceMac}>{item.address || item.macAddress}</Text>
             </View>
             {connecting === item.macAddress ? (
               <ActivityIndicator color={colors.accent} />

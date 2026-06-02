@@ -15,6 +15,7 @@ export default function RootLayout() {
   useEffect(() => {
     checkSession();
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      console.log('AUTH EVENT:', event);
       if (event === 'SIGNED_OUT') {
         setAuth(null);
         router.replace('/login');
@@ -24,6 +25,7 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
+    console.log('READY:', ready, 'AUTH:', !!auth);
     if (!ready) return;
     if (auth) {
       router.replace('/pin');
