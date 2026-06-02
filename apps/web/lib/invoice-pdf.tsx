@@ -5,9 +5,9 @@ import QRCode from 'qrcode'
 Font.register({
   family: 'Inter',
   fonts: [
-    { src: 'https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMa1ZL7.woff2', fontWeight: 400 },
+    { src: 'https://rsms.me/inter/font-files/Inter-Regular.woff2', fontWeight: 400 },
     { src: 'https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHufvQtMwCp50KnMa2JL7SUc.woff2', fontWeight: 600 },
-    { src: 'https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMa1pL7SUc.woff2', fontWeight: 700 },
+    { src: 'https://rsms.me/inter/font-files/Inter-Bold.woff2', fontWeight: 700 },
   ],
 })
 
