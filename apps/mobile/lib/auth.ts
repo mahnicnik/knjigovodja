@@ -3,6 +3,7 @@ import { createContext, useContext } from 'react';
 export interface OrgContext {
   userId: string;
   orgId: string;
+  businessId: string;
   orgName: string;
   role: string;
 }
