@@ -22,6 +22,7 @@ export default function NewInvoicePage() {
   const [clientTaxNumber, setClientTaxNumber] = useState('')
   const [clientAddress, setClientAddress] = useState('')
   const [clientIban, setClientIban] = useState('')
+  const [reference, setReference] = useState('')
   const [taxLookupLoading, setTaxLookupLoading] = useState(false)
   const [taxLookupError, setTaxLookupError] = useState('')
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0])
@@ -87,7 +88,7 @@ export default function NewInvoicePage() {
       client_address: clientAddress, client_iban: clientIban,
       issue_date: issueDate, due_date: dueDate, line_items: items,
       amount_net: subtotal, vat_amount: vatAmount, amount_total: total,
-      status, notes, reference: `SI00 ${invoiceNumber}`,
+      status, notes, reference: reference || `SI00 ${invoiceNumber}`,
       service_date: serviceDate || null,
       service_date_to: serviceDateTo || null,
       header_text: headerText || null,
@@ -440,7 +441,12 @@ export default function NewInvoicePage() {
             </div>
             <div className="mt-4 pt-4 border-t border-gray-100">
               <div className="text-xs text-gray-500 mb-1">Sklic</div>
-              <div className="font-mono text-xs bg-gray-50 rounded-lg px-3 py-2">SI00 {invoiceNumber}</div>
+              <input
+                className="font-mono text-xs bg-gray-50 rounded-lpx-3 py-2 w-full border border-gray-200 outline-none"
+                value={reference || `SI00 ${invoiceNumber}`}
+                onChange={e => setReference(e.target.value)}
+                placeholder={`SI00 ${invoiceNumber}`}
+              />
             </div>
             {org && (
               <div className="mt-4 pt-4 border-t border-gray-100">
