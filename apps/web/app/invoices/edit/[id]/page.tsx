@@ -36,6 +36,7 @@ export default function EditInvoicePage() {
   const [serviceDateTo, setServiceDateTo] = useState('')
   const [headerText, setHeaderText] = useState('')
   const [partners, setPartners] = useState<any[]>([])
+  const [partnerSaved, setPartnerSaved] = useState(false)
   const [showPartnerTab, setShowPartnerTab] = useState(false)
   const [partnerSearch, setPartnerSearch] = useState('')
   const [newPartner, setNewPartner] = useState({ name: '', tax_number: '', address: '', email: '', iban: '' })

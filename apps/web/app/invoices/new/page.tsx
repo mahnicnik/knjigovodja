@@ -33,6 +33,29 @@ export default function NewInvoicePage() {
   const [serviceDateTo, setServiceDateTo] = useState('')
   const [headerText, setHeaderText] = useState('')
   const [partners, setPartners] = useState<any[]>([])
+  const [partnerSaved, setPartnerSaved] = useState(false)
+
+  async function savePartner() {
+    if (!clientName.trim() || !org) return
+    setSavingPartner(true)
+    const existing = partners.find(p => p.name === clientName)
+    if (existing) {
+      await supabase.from('invoice_partners').update({
+        email: clientEmail, tax_number: clientTaxNumber,
+        address: clientAddress, iban: clientIban,
+      }).eq('id', existing.id)
+    } else {
+      await supabase.from('invoice_partners').insert({
+        org_id: org.id, name: clientName, email: clientEmail,
+        tax_number: clientTaxNumber, address: clientAddress, iban: clientIban,
+      })
+    }
+    const { data: pts } = await supabase.from('invoice_partners').select('*').eq('org_id', org.id).order('name')
+    setPartners(pts || [])
+    setSavingPartner(false)
+    setPartnerSaved(true)
+    setTimeout(() => setPartnerSaved(false), 2000)
+  }
   const [showPartnerTab, setShowPartnerTab] = useState(false)
   const [partnerSearch, setPartnerSearch] = useState('')
   const [newPartner, setNewPartner] = useState({ name: '', tax_number: '', address: '', email: '', iban: '' })
@@ -137,6 +160,28 @@ export default function NewInvoicePage() {
           <div style={{ background:'#fff', borderRadius:'12px', border:'0.5px solid rgba(0,0,0,0.08)', padding:'16px' }}>
             <div style={{ fontSize:'13px', fontWeight:'500', color:'#0D1F12', marginBottom:'12px' }}>Stranka</div>
             <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
+              {partners.length > 0 && (
+                <div>
+                  <label style={{ fontSize:'11px', color:'#888', display:'block', marginBottom:'4px' }}>Izberi obstoječo stranko</label>
+                  <select
+                    style={{ width:'100%', padding:'9px 12px', borderRadius:'9px', border:'1px solid #e5e7eb', fontSize:'13px', background:'#fff', color:'#111', outline:'none' }}
+                    onChange={e => {
+                      const p = partners.find(p => p.id === e.target.value)
+                      if (p) {
+                        setClientName(p.name || '')
+                        setClientEmail(p.email || '')
+                        setClientTaxNumber(p.tax_number || '')
+                        setClientAddress(p.address || '')
+                        setClientIban(p.iban || '')
+                      }
+                    }}
+                    defaultValue=""
+                  >
+                    <option value="">-- Izberi stranko --</option>
+                    {partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+              )}
               <div>
                 <label style={{ fontSize:'11px', color:'#888', display:'block', marginBottom:'4px' }}>Ime podjetja / stranke *</label>
                 <input value={clientName} onChange={e => setClientName(e.target.value)} placeholder="Agencija Pixel d.o.o." className={inp} />
@@ -158,6 +203,16 @@ export default function NewInvoicePage() {
                   </button>
                 </div>
               {taxLookupError && <div style={{fontSize:11,color:'#a83232',marginTop:4}}>{taxLookupError}</div>}
+              {clientName && (
+                <button
+                  type="button"
+                  onClick={savePartner}
+                  disabled={savingPartner}
+                  style={{ marginTop:'4px', padding:'6px 12px', borderRadius:'8px', border:'1px solid #0d2818', background: partnerSaved ? '#0d2818' : 'transparent', color: partnerSaved ? '#fff' : '#0d2818', fontSize:'12px', fontWeight:'600', cursor:'pointer', display:'inline-flex', alignItems:'center', gap:'6px' }}
+                >
+                  {partnerSaved ? '✓ Shranjeno' : savingPartner ? '...' : '💾 Shrani stranko'}
+                </button>
+              )}
                 <div style={{fontSize:11,color:'#1f6b3a',marginTop:4}}>Vnesi davčno številko za avtopolnitev podatkov o podjetju</div>
               </div>
             </div>
