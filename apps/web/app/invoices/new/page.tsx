@@ -212,11 +212,21 @@ export default function NewInvoicePage() {
                 >
                   {partnerSaved ? '✓ Shranjeno' : savingPartner ? '...' : '💾 Shrani stranko'}
                 </button>
-              )}
+              }
                 <div style={{fontSize:11,color:'#1f6b3a',marginTop:4}}>Vnesi davčno številko za avtopolnitev podatkov o podjetju</div>
               </div>
             </div>
           </div>
+          {clientName && (
+            <button
+              type="button"
+              onClick={savePartner}
+              disabled={savingPartner}
+              style={{ marginTop:'12px', padding:'8px 14px', borderRadius:'8px', border:'1px solid #0d2818', background: partnerSaved ? '#0d2818' : 'transparent', color: partnerSaved ? '#fff' : '#0d2818', fontSize:'12px', fontWeight:'600', cursor:'pointer', display:'inline-flex', alignItems:'center', gap:'6px' }}
+            >
+              {partnerSaved ? '✓ Shranjeno' : savingPartner ? '...' : 'Shrani stranko za prihodnjic'}
+            </button>
+          )}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:12}}>
               <div>
                 <label style={{fontSize:"11px",color:"#888",display:"block",marginBottom:"4px"}}>Naslov stranke</label>
