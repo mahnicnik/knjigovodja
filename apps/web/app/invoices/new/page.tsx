@@ -212,7 +212,7 @@ export default function NewInvoicePage() {
                 >
                   {partnerSaved ? '✓ Shranjeno' : savingPartner ? '...' : '💾 Shrani stranko'}
                 </button>
-              }
+              )}
                 <div style={{fontSize:11,color:'#1f6b3a',marginTop:4}}>Vnesi davčno številko za avtopolnitev podatkov o podjetju</div>
               </div>
             </div>
