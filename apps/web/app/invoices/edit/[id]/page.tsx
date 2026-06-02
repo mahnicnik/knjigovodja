@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import posthog from 'posthog-js'
@@ -16,6 +16,7 @@ interface LineItem {
 export default function EditInvoicePage() {
   const params = useParams()
   const invoiceId = params?.id as string
+  const router = useRouter()
   const [org, setOrg] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [invoiceNumber, setInvoiceNumber] = useState('')
