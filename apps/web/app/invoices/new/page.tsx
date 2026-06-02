@@ -444,7 +444,11 @@ export default function NewInvoicePage() {
               <input
                 className="font-mono text-xs bg-gray-50 rounded-lpx-3 py-2 w-full border border-gray-200 outline-none"
                 value={reference || `SI00 ${invoiceNumber}`}
-                onChange={e => setReference(e.target.value)}
+                onChange={e => {
+                  setReference(e.target.value)
+                  const match = e.target.value.match(/SI\d+\s+(.+)/)
+                  if (match) setInvoiceNumber(match[1].trim())
+                }}
                 placeholder={`SI00 ${invoiceNumber}`}
               />
             </div>
