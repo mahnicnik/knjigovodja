@@ -419,6 +419,13 @@ ${!isStorno && !isDobropis ? `
                         </button>
                       )}
                       <button
+                        onClick={() => window.location.href = '/invoices/edit/' + inv.id}
+                        style={{ width: '100%', padding: '10px 16px', textAlign: 'left', fontSize: '13px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                       assName="hover:bg-gray-50"
+                      >
+                        ✏️ Uredi račun
+                      </button>
+                      <button
                         onClick={() => podvoji(inv)}
                         disabled={actionLoading === 'podvoji_' + inv.id}
                         style={{ width: '100%', padding: '10px 16px', textAlign: 'left', fontSize: '13px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
