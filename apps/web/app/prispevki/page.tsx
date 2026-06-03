@@ -142,7 +142,7 @@ export default function PrispevkiPage() {
   )
 
   const cc = org?.contribution_class || 8
-  const contrib = SP_CONTRIBUTIONS[cc]
+  const contrib = rates || { piz: 0, zzzs: 0, zaposlovanje: 0 }
   const monthStr = String(selectedMonth + 1).padStart(2, '0')
   const yearShort = String(selectedYear).slice(-2)
   const akAmt = parseFloat(akontacija) || 0
