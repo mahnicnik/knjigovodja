@@ -38,7 +38,7 @@ export default function NastavitevPage() {
   const [form, setForm] = useState({
     name: '', tax_number: '', vat_number: '', vat_registered: false,
     iban: '', bic: '', address: '', post_code: '', city: '',
-    phone: '', email: '', contribution_class: 8,
+    phone: '', email: '', contribution_class: 8, contrib_piz: 0, contrib_zzzs: 0, contrib_zaposlovanje: 0, contrib_starsevstvo: 0, contrib_akontacija: 0,
   })
   const supabase = createClient()
 
@@ -70,7 +70,7 @@ export default function NastavitevPage() {
         iban: o.iban || '', bic: o.bic || '', address: o.address || '',
         post_code: o.post_code || '', city: o.city || '',
         phone: o.phone || '', email: o.email || '',
-        contribution_class: o.contribution_class || 8,
+        contribution_class: o.contribution_class || 8, contrib_piz: o.contrib_piz || 0, contrib_zzzs: o.contrib_zzzs || 0, contrib_zaposlovanje: o.contrib_zaposlovanje || 0, contrib_starsevstvo: o.contrib_starsevstvo || 0, contrib_akontacija: o.contrib_akontacija || 0,
       })
     }
     setLoading(false)
@@ -83,7 +83,7 @@ export default function NastavitevPage() {
       name: form.name, tax_number: form.tax_number, vat_number: form.vat_number,
       vat_registered: form.vat_registered, iban: form.iban, bic: form.bic,
       address: form.address, post_code: form.post_code, city: form.city,
-      phone: form.phone, email: form.email, contribution_class: form.contribution_class,
+      phone: form.phone, email: form.email, contribution_class: form.contribution_class, contrib_piz: form.contrib_piz, contrib_zzzs: form.contrib_zzzs, contrib_zaposlovanje: form.contrib_zaposlovanje, contrib_starsevstvo: form.contrib_starsevstvo, contrib_akontacija: form.contrib_akontacija,
     }).eq('id', org.id)
     if (!error) { setSaved(true); setTimeout(() => setSaved(false), 3000) }
     setSaving(false)
@@ -226,21 +226,39 @@ export default function NastavitevPage() {
                 )}
               </div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Prispevni razred</div>
-                <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 12, color: '#1e40af', lineHeight: 1.5 }}>
-                  <strong>Kako vem kateri razred je moj?</strong><br/>
-                  Preverite vašo <strong>FURS odločbo</strong> ali UPN nalog za prispevke.
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Mesečni prispevki</div>
+                <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '12px 14px', marginBottom: 16, fontSize: 12, color: '#1e40af', lineHeight: 1.6 }}>
+                  <strong>Kje najdem svoje zneski?</strong><br/>
+                  <strong>Možnost 1:</strong> Vprašajte vašo računovodkinjo — ona vam pošlje UPN naloge z zneski.<br/>
+                  <strong>Možnost 2:</strong> Prijavite se v <a href="https://edavki.durs.si" target="_blank" style={{textDecoration:'underline'}}>eDavki portal</a> → Obračuni → Prispevki za socialno varnost → tam vidite predizpolnjene zneski za vsak mesec.<br/>
+                  <strong>Možnost 3:</strong> FURS vam vsako leto pošlje odločbo z zneski prispevkov.
                 </div>
-                <select value={form.contribution_class}
-                  onChange={e => setForm({...form, contribution_class: parseInt(e.target.value)})}
-                  className={inp}>
-                  {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15].map(c => (
-                    <option key={c} value={c}>Razred {c} — €{(SP_CONTRIBUTIONS[c]/12).toFixed(2)}/mes</option>
-                  ))}
-                </select>
-                <div style={{ fontSize: 12, color: '#888', marginTop: 8 }}>
-                  Mesečni prispevki: <strong>€{(SP_CONTRIBUTIONS[form.contribution_class]/12).toFixed(2)}</strong>
-                  &nbsp;·&nbsp; Letno: <strong>€{SP_CONTRIBUTIONS[form.contribution_class].toFixed(2)}</strong>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>PIZ — pokojninsko (€/mes)</label>
+                    <input type="number" step="0.01" value={form.contrib_piz || ''} onChange={e => setForm({...form, contrib_piz: parseFloat(e.target.value) || 0})} placeholder="370.51" className={inp} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>ZZZS — zdravstveno (€/mes)</label>
+                    <input type="number" step="0.01" value={form.contrib_zzzs || ''} onChange={e => setForm({...form, contrib_zzzs: parseFloat(e.target.value) || 0})} placeholder="274.45" className={inp} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Zaposlovanje (€/mes)</label>
+                    <input type="number" step="0.01" value={form.contrib_zaposlovanje || ''} onChange={e => setForm({...form, contrib_zaposlovanje: parseFloat(e.target.value) || 0})} placeholder="3.04" className={inp} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Starševsko varstvo (€/mes)</label>
+                    <input type="number" step="0.01" value={form.contrib_starsevstvo || ''} onChange={e => setForm({...form, contrib_starsevstvo: parseFloat(e.target.value) || 0})} placeholder="3.04" className={inp} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Akontacija dohodnine (€/mes)</label>
+                    <input type="number" step="0.01" value={form.contrib_akontacija || ''} onChange={e => setForm({...form, contrib_akontacija: parseFloat(e.target.value) || 0})} placeholder="105.70" className={inp} />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 4 }}>
+                    <div style={{ fontSize: 12, color: '#555' }}>
+                      Skupaj: <strong>€{(Number(form.contrib_piz || 0) + Number(form.contrib_zzzs || 0) + Number(form.contrib_zaposlovanje || 0) + Number(form.contrib_starsevstvo || 0) + Number(form.contrib_akontacija || 0)).toFixed(2)}/mes</strong>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
