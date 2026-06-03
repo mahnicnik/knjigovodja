@@ -45,6 +45,10 @@ export default function PrispevkiPage() {
   const [qrPIZ, setQrPIZ] = useState<string>('')
   const [qrZZZS, setQrZZZS] = useState<string>('')
   const [qrAkontacija, setQrAkontacija] = useState<string>('')
+  const [qrZaposlovanje, setQrZaposlovanje] = useState<string>('')
+  const [qrStarsevstvo, setQrStarsevstvo] = useState<string>('')
+  const [qrZaposlovanje, setQrZaposlovanje] = useState<string>('')
+  const [qrStarsevstvo, setQrStarsevstvo] = useState<string>('')
   const [akontacija, setAkontacija] = useState('')
   const [rates, setRates] = useState<any>(null)
   const [ratesLoading, setRatesLoading] = useState(true)
@@ -85,53 +89,60 @@ export default function PrispevkiPage() {
     const dueDate = `${selectedYear}-${monthStr}-15`
     const taxNum = org.tax_number
 
-    // PIZ
-    const pizUPN = buildUPN({
-      payerName: org.name,
-      payerAddress: org.address || '',
-      payerCity: `${org.post_code || ''} ${org.city || ''}`,
-      amount: contrib.piz,
-      iban: 'SI56 0110 0888 1000 030',
-      reference: `SI19 ${taxNum} ZP${monthStr}${yearShort}`,
-      description: `Prispevek ZPIZ s.p. ${MONTHS_FULL[selectedMonth]} ${selectedYear}`,
-      dueDate,
+    const payer = { payerName: org.name, payerAddress: org.address || '', payerCity: `${org.post_code || ''} ${org.city || ''}` }
+    const monthLabel = `${MONTHS_FULL[selectedMonth]} ${selectedYear}`
+
+    // PIZ - SI56 0110 0888 2000 003, sklic SI19 {davčna}-44008
+    const pizUPN = buildUPN({ ...payer, amount: contrib.piz,
+      iban: 'SI56 0110 0888 2000 003',
+      reference: `SI19 ${taxNum}-44008`,
+      description: `Prispevki za PIZ s.p. ${monthLabel}`, dueDate,
     })
 
-    // ZZZS
-    const zzzsUPN = buildUPN({
-      payerName: org.name,
-      payerAddress: org.address || '',
-      payerCity: `${org.post_code || ''} ${org.city || ''}`,
-      amount: contrib.zzzs,
-      iban: 'SI56 0110 0888 1000 030',
-      reference: `SI19 ${taxNum} ZZ${monthStr}${yearShort}`,
-      description: `Prispevek ZZZS s.p. ${MONTHS_FULL[selectedMonth]} ${selectedYear}`,
-      dueDate,
+    // ZZZS - SI56 0110 0888 3000 073, sklic SI19 {davčna}-45004
+    const zzzsUPN = buildUPN({ ...payer, amount: contrib.zzzs,
+      iban: 'SI56 0110 0888 3000 073',
+      reference: `SI19 ${taxNum}-45004`,
+      description: `Prispevki za zdravstvo s.p. ${monthLabel}`, dueDate,
     })
 
-    const [qr1, qr2] = await Promise.all([
+    // Zaposlovanje - SI56 0110 0888 1000 030, sklic SI19 {davčna}-42005
+    const zapoUPN = buildUPN({ ...payer, amount: (contrib as any).zaposlovanje || 3.04,
+      iban: 'SI56 0110 0888 1000 030',
+      reference: `SI19 ${taxNum}-42005`,
+      description: `Prispevki za zaposlovanje s.p. ${monthLabel}`, dueDate,
+    })
+
+    // Starševstvo - SI56 0110 0888 1000 030, sklic SI19 {davčna}-43001
+    const starUPN = buildUPN({ ...payer, amount: (contrib as any)['starševo'] || 3.04,
+      iban: 'SI56 0110 0888 1000 030',
+      reference: `SI19 ${taxNum}-43001`,
+      description: `Prispevki za starševsko varstvo s.p. ${monthLabel}`, dueDate,
+    })
+
+    const [qr1, qr2, qr4, qr5] = await Promise.all([
       QRCode.toDataURL(pizUPN, { width: 200, margin: 1 }),
       QRCode.toDataURL(zzzsUPN, { width: 200, margin: 1 }),
+      QRCode.toDataURL(zapoUPN, { width: 200, margin: 1 }),
+      QRCode.toDataURL(starUPN, { width: 200, margin: 1 }),
     ])
     setQrPIZ(qr1)
     setQrZZZS(qr2)
+    setQrZaposlovanje(qr4)
+    setQrStarsevstvo(qr5)
 
-    // Akontacija (če je vnesena)
+    // Akontacija - SI56 0110 0888 1000 030, sklic SI19 {davčna}-40002
     if (akontacija && parseFloat(akontacija) > 0) {
-      const akUPN = buildUPN({
-        payerName: org.name,
-        payerAddress: org.address || '',
-        payerCity: `${org.post_code || ''} ${org.city || ''}`,
-        amount: parseFloat(akontacija),
+      const akUPN = buildUPN({ ...payer, amount: parseFloat(akontacija),
         iban: 'SI56 0110 0888 1000 030',
-        reference: `SI19 ${taxNum} AK${monthStr}${yearShort}`,
-        description: `Akontacija dohodnine ${MONTHS_FULL[selectedMonth]} ${selectedYear}`,
-        dueDate,
+        reference: `SI19 ${taxNum}-40002`,
+        description: `Akontacija dohodnine ${monthLabel}`, dueDate,
       })
       const qr3 = await QRCode.toDataURL(akUPN, { width: 200, margin: 1 })
       setQrAkontacija(qr3)
     } else {
       setQrAkontacija('')
+    }
     }
   }
 
@@ -183,7 +194,7 @@ export default function PrispevkiPage() {
           <div className="text-sm text-gray-400 mb-1">Skupaj za plačilo ta mesec</div>
           <div className="text-4xl font-semibold">€{total.toFixed(2)}</div>
           <div className="text-xs text-gray-500 mt-2">
-            ZPIZ €{contrib.piz.toFixed(2)} + ZZZS €{contrib.zzzs.toFixed(2)}
+            PIZ €{contrib.piz.toFixed(2)} + ZZZS €{contrib.zzzs.toFixed(2)} + Zaposlovanje €{((contrib as any).zaposlovanje || 3.04).toFixed(2)} + Starš. €{((contrib as any)['starševo'] || 3.04).toFixed(2)}
             {akAmt > 0 && ` + Akontacija €${akAmt.toFixed(2)}`}
           </div>
         </div>
