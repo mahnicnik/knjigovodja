@@ -455,7 +455,7 @@ export default function DashboardPage() {
         id: 'prispevki',
         severity: daysUntil15 <= 3 ? 'urgent' : 'warning',
         title: `Prispevki s.p. zapadejo čez ${daysUntil15} ${daysUntil15 === 1 ? 'dan' : 'dni'}`,
-        subtitle: '€522 · ZPIZ + ZZZS',
+        subtitle: 'ZPIZ + ZZZS + Zaposlovanje + Starš.',
         href: '/prispevki',
       })
     }
@@ -550,7 +550,7 @@ export default function DashboardPage() {
   /* ============ COMPUTED: SMART FOCUS BANNER (najbližji rok) ============ */
   const focus = useMemo(() => {
     const candidates = [
-      { name: 'Prispevki za s.p.', amount: 522, days: daysUntil15, day: 15, href: '/prispevki', emoji: '⏰' },
+      { name: 'Prispevki za s.p.', amount: Number(org?.contrib_piz||0)+Number(org?.contrib_zzzs||0)+Number(org?.contrib_zaposlovanje||3.04)+Number(org?.contrib_starsevstvo||3.04), days: daysUntil15, day: 15, href: '/prispevki', emoji: '⏰' },
       { name: 'Akontacija dohodnine', amount: 84, days: daysUntil15, day: 15, href: '/dohodnina', emoji: '📋' },
     ]
     if (data.hasEmployees) {
@@ -566,7 +566,7 @@ export default function DashboardPage() {
   /* ============ DEADLINES (right panel) ============ */
   const deadlines = useMemo(() => {
     const list = [
-      { name: 'Prispevki s.p.',       date: `15. ${MONTHS_SHORT[month]}`, amount: 522, days: daysUntil15, href: '/prispevki', urgent: daysUntil15 <= 7 && daysUntil15 >= 0 },
+      { name: 'Prispevki s.p.',       date: `15. ${MONTHS_SHORT[month]}`, amount: Number(org?.contrib_piz||0)+Number(org?.contrib_zzzs||0)+Number(org?.contrib_zaposlovanje||3.04)+Number(org?.contrib_starsevstvo||3.04), days: daysUntil15, href: '/prispevki', urgent: daysUntil15 <= 7 && daysUntil15 >= 0 },
       { name: 'Akontacija dohodnine', date: `15. ${MONTHS_SHORT[month]}`, amount: 84,  days: daysUntil15, href: '/dohodnina', urgent: false },
     ]
     if (data.hasEmployees) {

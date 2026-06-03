@@ -62,24 +62,18 @@ export default function PrispevkiPage() {
   }, [])
 
   useEffect(() => {
-    async function loadRates() {
-      if (!org) return
-      const cc = org.contribution_class || 8
-      const { data } = await supabase
-        .from('sp_contribution_rates')
-        .select('*')
-        .eq('year', selectedYear)
-        .eq('contribution_class', cc)
-        .order('valid_from', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      setRates(data)
-    }
-    loadRates()
-  }, [org, selectedYear])
+    if (!org) return
+    setRates({
+      piz: org.contrib_piz || 0,
+      zzzs: org.contrib_zzzs || 0,
+      zaposlovanje: org.contrib_zaposlovanje || 3.04,
+      'starševo': org.contrib_starsevstvo || 3.04,
+    })
+    if (org.contrib_akontacija > 0) setAkontacija(String(org.contrib_akontacija))
+  }, [org])
 
   useEffect(() => {
-    if (org && (rates !== undefined)) generateQRs()
+    if (org) generateQRs()
   }, [org, rates, selectedMonth, selectedYear, akontacija])
 
   async function generateQRs() {
