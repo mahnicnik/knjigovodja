@@ -5,23 +5,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import QRCode from 'qrcode'
 
-const SP_CONTRIBUTIONS: Record<number, { piz: number; zzzs: number }> = {
-  1:  { piz: 167.61, zzzs: 47.60 },
-  2:  { piz: 195.55, zzzs: 55.54 },
-  3:  { piz: 223.48, zzzs: 63.48 },
-  4:  { piz: 251.41, zzzs: 71.41 },
-  5:  { piz: 279.35, zzzs: 79.35 },
-  6:  { piz: 307.28, zzzs: 87.29 },
-  7:  { piz: 335.21, zzzs: 95.22 },
-  8:  { piz: 350.28, zzzs: 99.71 },
-  9:  { piz: 391.08, zzzs: 111.09 },
-  10: { piz: 419.01, zzzs: 119.02 },
-  11: { piz: 446.95, zzzs: 126.96 },
-  12: { piz: 474.88, zzzs: 134.89 },
-  13: { piz: 502.81, zzzs: 142.83 },
-  14: { piz: 558.68, zzzs: 158.70 },
-  15: { piz: 614.55, zzzs: 174.57 },
-}
+// Prispevki se nalagajo iz Supabase tabele sp_contribution_rates
 
 const MONTHS_FULL = ['Januar','Februar','Marec','April','Maj','Junij',
                      'Julij','Avgust','September','Oktober','November','December']
@@ -62,6 +46,8 @@ export default function PrispevkiPage() {
   const [qrZZZS, setQrZZZS] = useState<string>('')
   const [qrAkontacija, setQrAkontacija] = useState<string>('')
   const [akontacija, setAkontacija] = useState('')
+  const [rates, setRates] = useState<any>(null)
+  const [ratesLoading, setRatesLoading] = useState(true)
   const supabase = createClient()
 
   useEffect(() => { load() }, [])
@@ -83,7 +69,17 @@ export default function PrispevkiPage() {
   async function generateQRs() {
     if (!org) return
     const cc = org.contribution_class || 8
-    const contrib = SP_CONTRIBUTIONS[cc]
+    // Naloži aktualne prispevke iz Supabase
+    const supabase = createClient()
+    const { data: rateData } = await supabase
+      .from('sp_contribution_rates')
+      .select('*')
+      .eq('year', selectedYear)
+      .eq('contribution_class', cc)
+      .order('valid_from', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const contrib = rateData || rates || { piz: 0, zzzs: 0, zaposlovanje: 0, "starševo": 0 }
     const monthStr = String(selectedMonth + 1).padStart(2, '0')
     const yearShort = String(selectedYear).slice(-2)
     const dueDate = `${selectedYear}-${monthStr}-15`
