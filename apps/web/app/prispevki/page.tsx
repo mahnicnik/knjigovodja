@@ -11,6 +11,30 @@ function buildUPN(p: {
   payerName: string; payerAddress: string; payerCity: string;
   amount: number; iban: string; reference: string; description: string; dueDate: string;
 }) {
+  const amt = Math.round(p.amount * 100).toString().padStart(11, '0')
+  const [y, m, d] = p.dueDate.split('-')
+  const due = d + '.' + m + '.' + y
+  const iban = p.iban.replace(/\s/g, '')
+  const ref = p.reference.replace(/\s/g, '')
+  return [
+    'UPNQR',
+    '',
+    '',
+    '',
+    p.payerName,
+    p.payerAddress,
+    p.payerCity,
+    amt,
+    due,
+    'OTHR',
+    p.description,
+    iban,
+    ref,
+    '',
+    '',
+    '',
+  ].join('\n')
+}) {
   const fmt = (s: string, len: number) => s.substring(0, len).padEnd(len, ' ')
   const amt = Math.round(p.amount * 100).toString().padStart(11, '0')
   return [
