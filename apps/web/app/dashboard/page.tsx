@@ -742,7 +742,7 @@ export default function DashboardPage() {
                 {focus.name}{focus.amount > 0 ? <> (<b>€{focus.amount}</b>)</> : null} zapadejo <b>{focus.days === 0 ? 'danes' : focus.days === 1 ? 'jutri' : `čez ${focus.days} dni`}</b>. Vse je pripravljeno za UPN nakazilo.
               </div>
             </div>
-            <button className="rk-focus-cta" onClick={() => setUpnOpen(true)}>Plačaj zdaj →</button>
+            <button className="rk-focus-cta" onClick={() => window.location.href='/prispevki'}>Plačaj zdaj →</button>
           </section>
         )}
 
