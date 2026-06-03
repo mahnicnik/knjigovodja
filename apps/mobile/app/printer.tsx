@@ -9,7 +9,7 @@ import { colors } from '../lib/colors';
 let BluetoothManager: any = null;
 let BluetoothEscposPrinter: any = null;
 try {
-  const mod = require('@ccdilan/react-native-bluetooth-escpos-printer');
+  const mod = require('@vardrz/react-native-bluetooth-escpos-printer');
   BluetoothManager = mod.BluetoothManager;
   BluetoothEscposPrinter = mod.BluetoothEscposPrinter;
   console.log('BT Printer loaded:', typeof BluetoothManager);
