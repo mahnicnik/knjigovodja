@@ -34,29 +34,7 @@ function buildUPN(p: {
     '',
     '',
   ].join('\n')
-}) {
-  const fmt = (s: string, len: number) => s.substring(0, len).padEnd(len, ' ')
-  const amt = Math.round(p.amount * 100).toString().padStart(11, '0')
-  return [
-    'UPNQR',
-    fmt('', 33), // payer IBAN (blank)
-    'NaN',
-    'NaN',
-    fmt(p.payerName, 33),
-    fmt(p.payerAddress, 33),
-    fmt(p.payerCity, 33),
-    amt,
-    p.dueDate.replace(/-/g, ''),
-    '',
-    fmt(p.iban.replace(/\s/g, ''), 34),
-    fmt(p.reference.replace(/\s/g, ''), 26),
-    fmt(p.description, 42),
-    '',
-    '',
-    '',
-  ].join('\n')
 }
-
 export default function PrispevkiPage() {
   const [org, setOrg] = useState<any>(null)
   const [loading, setLoading] = useState(true)
