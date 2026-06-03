@@ -107,6 +107,7 @@ export default function PrispevkiPage() {
       iban: 'SI56011008881000030', reference: `SI19${taxNum}-43001`,
       description: `Prispevki za staršev. varstvo ${monthLabel}`, dueDate })
 
+    console.log('UPN PIZ:', pizUPN)
     const [qr1, qr2, qr3, qr4] = await Promise.all([
       QRCode.toDataURL(pizUPN, { width: 200, margin: 1 }),
       QRCode.toDataURL(zzzsUPN, { width: 200, margin: 1 }),
