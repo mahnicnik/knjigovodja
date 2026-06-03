@@ -32,6 +32,7 @@ const RAIL_GROUPS = [
     badge: true,
     items: [
       { href: '/invoices',            icon: 'invoices', label: 'Izdani računi' },
+      { href: '/dobavnice',           icon: 'invoices', label: 'Dobavnice' },
       { href: '/predracuni',          icon: 'doc',      label: 'Predračuni' },
       { href: '/ponavljajoci-racuni', icon: 'repeat',   label: 'Ponavljajoči računi' },
       { href: '/avansni-racuni',      icon: 'doc',      label: 'Avansni računi' },
