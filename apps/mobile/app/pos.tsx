@@ -155,27 +155,35 @@ export default function PosScreen() {
     try {
       const now = new Date()
       const dateStr = now.toLocaleDateString('sl-SI') + ' ' + now.toLocaleTimeString('sl-SI', {hour:'2-digit',minute:'2-digit'})
-      let receipt = ''
-      receipt += '================================\n'
-      receipt += (auth?.orgName || 'Racunko POS').padStart(20 + Math.floor((auth?.orgName||'').length/2)).substring(0,32) + '\n'
-      receipt += '================================\n'
-      receipt += dateStr + '\n'
-      receipt += '--------------------------------\n'
-      cart.forEach(l => {
-        const name = l.item.name.substring(0, 20)
+      const center = (s: string, w: number = 32) => {
+        const pad = Math.max(0, Math.floor((w - s.length) / 2))
+        return ' '.repeat(pad) + s
+      }
+      const org = (auth as any)?.org
+      let r = ''
+      r += '================================\n'
+      r += center((org?.name || auth?.orgName || 'Racunko POS').substring(0,30)) + '\n'
+      if (org?.address) r += center((org.address + (org.post_code ? ', ' + org.post_code : '') + (org.city ? ' ' + org.city : '')).substring(0,32)) + '\n'
+      if (org?.tax_number) r += center('ID DDV: ' + org.tax_number) + '\n'
+      r += '================================\n'
+      r += 'Racun: ' + order.id.substring(0,8) + '\n'
+      r += 'Datum: ' + dateStr + '\n'
+      r += '--------------------------------\n'
+      cart.forEach((l: any) => {
+        const name = l.item.name.substring(0, 18)
         const price = (l.item.price * l.qty).toFixed(2) + ' EUR'
-        receipt += name.padEnd(32 - price.length) + price + '\n'
-        if (l.qty > 1) receipt += '  ' + l.qty + ' x ' + l.item.price.toFixed(2) + '\n'
+        r += name.padEnd(32 - price.length) + price + '\n'
+        if (l.qty > 1) r += '  ' + l.qty + ' x ' + l.item.price.toFixed(2) + ' EUR\n'
       })
-      receipt += '--------------------------------\n'
-      receipt += 'SKUPAJ:'.padEnd(24) + total.toFixed(2) + ' EUR\n'
-      receipt += (payMethod === 'cash' ? 'Gotovina' : payMethod === 'card' ? 'Kartica' : 'Bon').padEnd(24) + total.toFixed(2) + ' EUR\n'
-      if (change > 0) receipt += 'Vrniti:'.padEnd(24) + change.toFixed(2) + ' EUR\n'
-      receipt += '================================\n'
-      receipt += '      Hvala za obisk!\n'
-      receipt += '================================\n'
-      receipt += '\n\n\n'
-      await BluetoothPrinter.printText(receipt)
+      r += '--------------------------------\n'
+      r += 'SKUPAJ:'.padEnd(23) + total.toFixed(2) + ' EUR\n'
+      r += (payMethod === 'cash' ? 'Gotovina' : payMethod === 'card' ? 'Kartica' : 'Bon').padEnd(23) + total.toFixed(2) + ' EUR\n'
+      if (change > 0) r += 'Vrniti:'.padEnd(23) + change.toFixed(2) + ' EUR\n'
+      r += '================================\n'
+      r += center('Hvala za obisk!') + '\n'
+      r += '================================\n'
+      r += '\n\n\n'
+      await BluetoothPrinter.printText(r)
     } catch (e: any) {
       console.log('PRINT ERROR:', e.message)
     }
