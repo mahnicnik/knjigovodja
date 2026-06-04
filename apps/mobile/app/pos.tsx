@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, FlatList,
   SafeAreaView, Alert, ActivityIndicator, ScrollView,
-  TextInput, Modal, Dimensions, StatusBar
+  TextInput, Modal, Dimensions, StatusBar, Switch
 } from 'react-native';
 import { router } from 'expo-router';
 import { useCart } from '../lib/cart';
