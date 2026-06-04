@@ -38,6 +38,7 @@ export default function PosScreen() {
   const [payMethod, setPayMethod] = useState<'cash'|'card'|'bon'>('cash');
   const [given, setGiven] = useState('');
   const [discount, setDiscount] = useState(0);
+  const [fursEnabled, setFursEnabled] = useState(true);
 
   useEffect(() => { if (auth?.businessId) loadData(); }, [auth?.businessId]);
 
