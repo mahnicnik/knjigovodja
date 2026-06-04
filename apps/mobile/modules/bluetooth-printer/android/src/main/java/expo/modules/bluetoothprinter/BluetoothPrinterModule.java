@@ -86,7 +86,13 @@ public class BluetoothPrinterModule extends ReactContextBaseJavaModule {
         new Thread(() -> {
             try {
                 if (outputStream == null) { promise.reject("NOT_CONNECTED", "Tiskalnik ni povezan"); return; }
-                outputStream.write(text.getBytes("UTF-8"));
+                String fixed = text
+            .replace("\u0161", "s").replace("\u0160", "S")
+            .replace("\u010d", "c").replace("\u010c", "C")
+            .replace("\u017e", "z").replace("\u017d", "Z")
+            .replace("\u0107", "c").replace("\u0106", "C")
+            .replace("\u0111", "d").replace("\u0110", "D");
+        outputStream.write(fixed.getBytes("ISO-8859-1"));
                 outputStream.flush();
                 // Feed papirja
                 outputStream.write(new byte[]{0x0A, 0x0A, 0x0A});
