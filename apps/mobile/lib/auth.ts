@@ -6,6 +6,14 @@ export interface OrgContext {
   businessId: string;
   orgName: string;
   role: string;
+  org?: {
+    name: string;
+    address?: string;
+    city?: string;
+    post_code?: string;
+    tax_number?: string;
+    iban?: string;
+  };
 }
 
 export const AuthContext = createContext<OrgContext | null>(null);

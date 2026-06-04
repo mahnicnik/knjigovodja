@@ -46,7 +46,7 @@ export default function RootLayout() {
   async function loadOrg(userId: string) {
     const { data } = await supabase
       .from('org_members')
-      .select('org_id, role, organizations(id, name, pos_business_id)')
+      .select('org_id, role, organizations(id, name, pos_business_id, address, city, post_code, tax_number, iban)')
       .eq('user_id', userId)
       .limit(1)
       .single();
@@ -58,6 +58,14 @@ export default function RootLayout() {
         businessId: org?.pos_business_id || data.org_id,
         orgName: org?.name || '',
         role: data.role,
+        org: {
+          name: org?.name || '',
+          address: org?.address || '',
+          city: org?.city || '',
+          post_code: org?.post_code || '',
+          tax_number: org?.tax_number || '',
+          iban: org?.iban || '',
+        },
       });
     }
     setReady(true);
