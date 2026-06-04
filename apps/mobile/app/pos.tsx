@@ -264,6 +264,7 @@ export default function PosScreen() {
       setCartOpen(false);
       setGiven('');
       setDiscount(0);
+      printReceipt(order, {});
       Alert.alert('✅ Plačilo uspešno',
         `${payMethod === 'cash' ? 'Gotovina' : payMethod === 'card' ? 'Kartica' : 'Bon'} — ${total.toFixed(2)} €${change > 0 ? `\nVrniti: ${change.toFixed(2)} €` : ''}`
       );
