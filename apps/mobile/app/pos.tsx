@@ -576,7 +576,7 @@ export default function PosScreen() {
             </ScrollView>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#f8f8f8', borderTopWidth: 1, borderColor: '#eee' }}>
-              <Switch value={fursEnabled} onValueChange={setFursEnabled} trackColor={{ false: '#ccc', true: '#1f6bhumbColor={fursEnabled ? '#fff' : '#fff'} />
+              <Switch value={fursEnabled} onValueChange={setFursEnabled} trackColor={{ false: '#ccc', true: '#1f6b3a' }} thumbColor={'#fff'} />
               <Text style={{ marginLeft: 10, fontSize: 13, color: '#444', flex: 1 }}>Davčno potrdi (FURS)</Text>
             </View>
             <View style={s.modalFooter}>
