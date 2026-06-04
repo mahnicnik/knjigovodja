@@ -6,16 +6,7 @@ import {
 import { router } from 'expo-router';
 import { colors } from '../lib/colors';
 
-let BluetoothManager: any = null;
-let BluetoothEscposPrinter: any = null;
-try {
-  const mod = require('@vardrz/react-native-bluetooth-escpos-printer');
-  BluetoothManager = mod.BluetoothManager;
-  BluetoothEscposPrinter = mod.BluetoothEscposPrinter;
-  console.log('BT Printer loaded:', typeof BluetoothManager);
-} catch (e: any) {
-  console.log('Printer error:', e.message);
-}
+import BluetoothPrinter from '../modules/bluetooth-printer'
 
 export default function PrinterScreen() {
   const [devices, setDevices] = useState<any[]>([]);
@@ -24,13 +15,13 @@ export default function PrinterScreen() {
   const [connecting, setConnecting] = useState<string | null>(null);
 
   async function scanDevices() {
-    if (!BluetoothManager) {
+    if (!BluetoothPrinter) {
       Alert.alert('Napaka', 'Tiskalnik ni na voljo v tej verziji app-a.');
       return;
     }
     setScanning(true);
     try {
-      const paired = await BluetoothManager.enableBluetooth();
+      const paired = await BluetoothPrinter.getDeviceList();
       const devices = JSON.parse(paired || '[]');
       setDevices(devices);
     } catch (e: any) {
@@ -55,14 +46,14 @@ export default function PrinterScreen() {
   }
 
   async function testPrint() {
-    if (!connected || !BluetoothEscposPrinter) return;
+    if (!connected || !BluetoothPrinter) return;
     try {
-      await BluetoothEscposPrinter.printText('\n', {});
-      await BluetoothEscposPrinter.printText('=== RACUNKO POS ===\n', {});
-      await BluetoothEscposPrinter.printText('Test tiskanje\n', {});
-      await BluetoothEscposPrinter.printText('Tiskalnik deluje!\n', {});
-      await BluetoothEscposPrinter.printText('==================\n', {});
-      await BluetoothEscposPrinter.printText('\n\n\n', {});
+      await BluetoothPrinter.printText('\n', {});
+      await BluetoothPrinter.printText('=== RACUNKO POS ===\n', {});
+      await BluetoothPrinter.printText('Test tiskanje\n', {});
+      await BluetoothPrinter.printText('Tiskalnik deluje!\n', {});
+      await BluetoothPrinter.printText('==================\n', {});
+      await BluetoothPrinter.printText('\n\n\n', {});
       Alert.alert('Uspeh', 'Test natisnjen!');
     } catch (e: any) {
       Alert.alert('Napaka tiskanja', e.message);
@@ -71,7 +62,7 @@ export default function PrinterScreen() {
 
   async function disconnect() {
     try {
-      await BluetoothManager.disconnect();
+      await BluetoothPrinter.disconnect();
       setConnected(null);
     } catch (e) {}
   }

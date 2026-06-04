@@ -15,7 +15,13 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0d2818"
       },
-      "package": "si.racunko.pos"
+      "package": "si.racunko.pos",
+      "permissions": [
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.BLUETOOTH_SCAN"
+      ]
     },
     "plugins": [
       "expo-router"
