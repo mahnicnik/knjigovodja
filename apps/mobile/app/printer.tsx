@@ -21,9 +21,8 @@ export default function PrinterScreen() {
     }
     setScanning(true);
     try {
-      const paired = await BluetoothPrinter.getDeviceList();
-      const devices = JSON.parse(paired || '[]');
-      setDevices(devices);
+      const devices = await BluetoothPrinter.getDeviceList();
+      setDevices(devices || []);
     } catch (e: any) {
       console.log('SCAN ERROR:', e.message);
       Alert.alert('Napaka', e.message || 'Iskanje ni uspelo');
@@ -32,12 +31,12 @@ export default function PrinterScreen() {
   }
 
   async function connectDevice(device: any) {
-    const deviceId = device.macAddress || device.inner_mac_address;
-    setConnecting(deceId);
+    const mac = device.address || device.macAddress;
+    setConnecting(mac);
     try {
-      await BLEPrinter.connect(deviceId);
+      await BluetoothPrinter.connect(mac);
       setConnected(device);
-      Alert.alert('Uspeh', 'Tiskalnik ' + device.deviceName + ' povezan!');
+      Alert.alert('Uspeh', 'Tiskalnik ' + (device.name || device.deviceName || mac) + ' povezan!');
     } catch (e: any) {
       console.log('CONNECT ERROR:', JSON.stringify(e), e.message);
       Alert.alert('Napaka', e.message || 'Povezava ni uspela');

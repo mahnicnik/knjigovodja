@@ -9,6 +9,7 @@ import { useCart } from '../lib/cart';
 import { supabase } from '../lib/supabase';
 import { AuthContext } from '../lib/auth';
 import { colors } from '../lib/colors';
+import BluetoothPrinter from '../modules/bluetooth-printer';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -150,6 +151,36 @@ export default function PosScreen() {
   const change = payMethod === 'cash' && given ? Math.max(0, parseFloat(given) - total) : 0;
   const cartQty = cart.reduce((s, l) => s + l.qty, 0);
 
+  async function printReceipt(order: any) {
+    try {
+      const now = new Date()
+      const dateStr = now.toLocaleDateString('sl-SI') + ' ' + now.toLocaleTimeString('sl-SI', {hour:'2-digit',minute:'2-digit'})
+      let receipt = ''
+      receipt += '================================\n'
+      receipt += (auth?.orgName || 'Racunko POS').padStart(20 + Math.floor((auth?.orgName||'').length/2)).substring(0,32) + '\n'
+      receipt += '================================\n'
+      receipt += dateStr + '\n'
+      receipt += '--------------------------------\n'
+      cart.forEach(l => {
+        const name = l.item.name.substring(0, 20)
+        const price = (l.item.price * l.qty).toFixed(2) + ' EUR'
+        receipt += name.padEnd(32 - price.length) + price + '\n'
+        if (l.qty > 1) receipt += '  ' + l.qty + ' x ' + l.item.price.toFixed(2) + '\n'
+      })
+      receipt += '--------------------------------\n'
+      receipt += 'SKUPAJ:'.padEnd(24) + total.toFixed(2) + ' EUR\n'
+      receipt += (payMethod === 'cash' ? 'Gotovina' : payMethod === 'card' ? 'Kartica' : 'Bon').padEnd(24) + total.toFixed(2) + ' EUR\n'
+      if (change > 0) receipt += 'Vrniti:'.padEnd(24) + change.toFixed(2) + ' EUR\n'
+      receipt += '================================\n'
+      receipt += '      Hvala za obisk!\n'
+      receipt += '================================\n'
+      receipt += '\n\n\n'
+      await BluetoothPrinter.printText(receipt)
+    } catch (e: any) {
+      console.log('PRINT ERROR:', e.message)
+    }
+  }
+
   async function submitPayment() {
     if (cart.length === 0) return;
     setPaying(true);
@@ -189,6 +220,7 @@ export default function PosScreen() {
       setCartOpen(false);
       setGiven('');
       setDiscount(0);
+      printReceipt(order);
       Alert.alert('✅ Plačilo uspešno',
         `${payMethod === 'cash' ? 'Gotovina' : payMethod === 'card' ? 'Kartica' : 'Bon'} — ${total.toFixed(2)} €${change > 0 ? `\nVrniti: ${change.toFixed(2)} €` : ''}`
       );
