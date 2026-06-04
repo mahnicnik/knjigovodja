@@ -155,6 +155,12 @@ export default function PosScreen() {
     try {
       const now = new Date()
       const dateStr = now.toLocaleDateString('sl-SI') + ' ' + now.toLocaleTimeString('sl-SI', {hour:'2-digit',minute:'2-digit'})
+      const fixChars = (s: string) => s
+        .replace(/š/g,'s').replace(/Š/g,'S')
+        .replace(/č/g,'c').replace(/Č/g,'C')
+        .replace(/ž/g,'z').replace(/Ž/g,'Z')
+        .replace(/đ/g,'d').replace(/Đ/g,'D')
+        .replace(/ć/g,'c').replace(/Ć/g,'C')
       const center = (s: string, w: number = 32) => {
         const pad = Math.max(0, Math.floor((w - s.length) / 2))
         return ' '.repeat(pad) + s
@@ -162,7 +168,7 @@ export default function PosScreen() {
       const org = (auth as any)?.org
       let r = ''
       r += '================================\n'
-      r += center((org?.name || auth?.orgName || 'Racunko POS').substring(0,30)) + '\n'
+      r += center(fixChars(org?.name || auth?.orgName || 'Racunko POS').substring(0,30)) + '\n'
       if (org?.address) r += center((org.address + (org.post_code ? ', ' + org.post_code : '') + (org.city ? ' ' + org.city : '')).substring(0,32)) + '\n'
       if (org?.tax_number) r += center('ID DDV: ' + org.tax_number) + '\n'
       r += '================================\n'
@@ -172,7 +178,7 @@ export default function PosScreen() {
       cart.forEach((l: any) => {
         const name = l.item.name.substring(0, 18)
         const price = (l.item.price * l.qty).toFixed(2) + ' EUR'
-        r += name.padEnd(32 - price.length) + price + '\n'
+        r += fixChars(name).padEnd(32 - price.length) + price + '\n'
         if (l.qty > 1) r += '  ' + l.qty + ' x ' + l.item.price.toFixed(2) + ' EUR\n'
       })
       r += '--------------------------------\n'
