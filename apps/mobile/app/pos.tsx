@@ -151,7 +151,7 @@ export default function PosScreen() {
   const change = payMethod === 'cash' && given ? Math.max(0, parseFloat(given) - total) : 0;
   const cartQty = cart.reduce((s, l) => s + l.qty, 0);
 
-  async function printReceipt(order: any) {
+  async function printReceipt(order: any, invoice?: any, fursData?: any) {
     try {
       const now = new Date()
       const dateStr = now.toLocaleDateString('sl-SI') + ' ' + now.toLocaleTimeString('sl-SI', {hour:'2-digit',minute:'2-digit'})
@@ -186,12 +186,41 @@ export default function PosScreen() {
       r += (payMethod === 'cash' ? 'Gotovina' : payMethod === 'card' ? 'Kartica' : 'Bon').padEnd(23) + total.toFixed(2) + ' EUR\n'
       if (change > 0) r += 'Vrniti:'.padEnd(23) + change.toFixed(2) + ' EUR\n'
       r += '================================\n'
+      if (fursData?.eor) {
+        r += '--------------------------------\n'
+        r += 'EOR: ' + fursData.eor.substring(0,32) + '\n'
+        if (fursData?.zoi) r += 'ZOI: ' + fursData.zoi.substring(0,32) + '\n'
+        if (fursData?.invoiceNumber) r += 'St: ' + fursData.invoiceNumber + '\n'
+      }
       r += center('Hvala za obisk!') + '\n'
       r += '================================\n'
       r += '\n\n\n'
       await BluetoothPrinter.printText(r)
     } catch (e: any) {
       console.log('PRINT ERROR:', e.message)
+    }
+  }
+
+  async function confirmWithFurs(invoiceId: string): Promise<{eor?: string, zoi?: string, invoiceNumber?: string}> {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return {}
+      const res = await fetch('https://xn--raunko-j2a.si/api/furs/confirm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + session.access_token,
+          'Cookie': 'sb-access-token=' + session.access_token,
+        },
+        body: JSON.stringify({ invoiceId, paymentType: payMethod === 'card' ? 'card' : 'cash' }),
+      })
+      const data = await res.json()
+      if (data.success) return { eor: data.eor, zoi: data.zoi, invoiceNumber: data.invoiceNumber }
+      console.log('FURS error:', data.error)
+      return {}
+    } catch (e: any) {
+      console.log('FURS error:', e.message)
+      return {}
     }
   }
 
@@ -234,7 +263,6 @@ export default function PosScreen() {
       setCartOpen(false);
       setGiven('');
       setDiscount(0);
-      printReceipt(order);
       Alert.alert('✅ Plačilo uspešno',
         `${payMethod === 'cash' ? 'Gotovina' : payMethod === 'card' ? 'Kartica' : 'Bon'} — ${total.toFixed(2)} €${change > 0 ? `\nVrniti: ${change.toFixed(2)} €` : ''}`
       );
