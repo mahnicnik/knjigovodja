@@ -5,7 +5,6 @@
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "^2.106.2",
-    "@vardrz/react-native-bluetooth-escpos-printer": "^0.1.2",
     "expo": "~56.0.8",
     "expo-constants": "~56.0.16",
     "expo-dev-client": "~56.0.18",
@@ -21,15 +20,13 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
-    "patch-package": "^8.0.1",
     "typescript": "~6.0.3"
   },
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web",
-    "postinstall": "node fix-gradle.js"
+    "web": "expo start --web"
   },
   "private": true,
   "resolutions": {
