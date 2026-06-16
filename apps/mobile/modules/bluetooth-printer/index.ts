@@ -15,6 +15,9 @@ export default {
   async printText(text: string): Promise<void> {
     return BluetoothPrinter.printText(text)
   },
+  async printQR(data: string, size?: number): Promise<void> {
+    return BluetoothPrinter.printQR(data, size || 6)
+  },
   async printBytes(bytes: number[]): Promise<void> {
     return BluetoothPrinter.printBytes(bytes)
   },
