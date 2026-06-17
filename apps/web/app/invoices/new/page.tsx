@@ -1,5 +1,6 @@
 'use client'
 
+import UpgradeModal from '@/components/UpgradeModal'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
@@ -37,6 +38,7 @@ export default function NewInvoicePage() {
   const [partnerSaved, setPartnerSaved] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [invoiceCount, setInvoiceCount] = useState(0)
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const router = useRouter()
   const supabase = createClient()
 
@@ -136,8 +138,8 @@ export default function NewInvoicePage() {
     // Free plan limit: max 5 računov
     const isFree = !['pro', 'pro_pos'].includes(org.subscription_status)
     if (isFree && invoiceCount >= 5) {
-      alert('Brezplačni plan omogoča največ 5 računov. Nadgradite na Pro za neomejene račune.')
-      router.push('/nastavitve#narocnina')
+      setShowUpgradeModal(true)
+      setLoading(false)
       return
     }
     setLoading(true)
@@ -299,6 +301,13 @@ export default function NewInvoicePage() {
 
   // ── DESKTOP LAYOUT ──
   return (
+    <>
+    <UpgradeModal
+      open={showUpgradeModal}
+      onClose={() => setShowUpgradeModal(false)}
+      feature="Ustvarjanje računov"
+      requiredPlan="pro"
+    />
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
         <div>
@@ -417,5 +426,6 @@ export default function NewInvoicePage() {
         </div>
       </div>
     </div>
+    </>
   )
 }
