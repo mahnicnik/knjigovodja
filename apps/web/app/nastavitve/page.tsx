@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import posthog from 'posthog-js'
 import UpgradeButton from '@/components/UpgradeButton'
+import ManageSubscriptionButton from '@/components/ManageSubscriptionButton'
 
 const SP_CONTRIBUTIONS: Record<number, number> = {
   1: 2584.92, 2: 3012.36, 3: 3439.20, 4: 3866.04, 5: 4293.00,
@@ -382,7 +383,7 @@ export default function NastavitevPage() {
                 <p style={{ fontSize: 12, color: '#888' }}>Pro + POS — vse funkcije vključno z blagajno.</p>
               )}
               {isPro && (
-                <p style={{ fontSize: 12, color: '#888', marginTop: 8 }}>Za upravljanje naročnine kontaktirajte podporo.</p>
+                <ManageSubscriptionButton />
               )}
             </div>
 
