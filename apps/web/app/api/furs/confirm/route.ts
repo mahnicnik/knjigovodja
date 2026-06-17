@@ -33,6 +33,18 @@ export async function POST(req: NextRequest) {
       .from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
     if (!member) return NextResponse.json({ error: 'Org ni najdena' }, { status: 404 })
 
+    // Preveri subscription - FURS je samo Pro
+    const { data: org0 } = await supabase
+      .from('organizations')
+      .select('subscription_status')
+      .eq('id', member.org_id)
+      .single()
+
+    const isPro = org0?.subscription_status === 'pro' || org0?.subscription_status === 'pro_pos'
+    if (!isPro) {
+      return NextResponse.json({ error: 'FURS fiskalizacija je na voljo samo v Pro paketu.' }, { status: 403 })
+    }
+
     // Pridobi invoice
     const { data: invoice } = await supabase
       .from('issued_invoices')
