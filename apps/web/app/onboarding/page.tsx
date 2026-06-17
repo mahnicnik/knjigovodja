@@ -131,6 +131,20 @@ function computeQuickActions(answers: Answers): string[] {
   return qa.slice(0, 6)
 }
 
+function recommendPlan(answers: Answers): { plan: 'pro' | 'pro_pos', reason: string } {
+  const dejavnost = (answers.dejavnost as string[]) || []
+  const needsPos = dejavnost.includes('gostinstvo') || dejavnost.includes('blago')
+  const hasFitness = dejavnost.includes('storitve') && answers.tip === 'sp'
+
+  if (needsPos) {
+    return { plan: 'pro_pos', reason: 'Gostinstvo in prodaja blaga zahtevata POS blagajno.' }
+  }
+  if (answers.extras && (answers.extras as string[]).includes('blagajna')) {
+    return { plan: 'pro_pos', reason: 'Izbrali ste POS blagajno.' }
+  }
+  return { plan: 'pro', reason: 'Za vaše poslovanje zadostuje Pro paket.' }
+}
+
 export default function OnboardingPage() {
   const router = useRouter()
   const supabase = createClient()
@@ -255,7 +269,7 @@ export default function OnboardingPage() {
         active_modules: 18 - computeHiddenNav(finalAnswers).length,
       })
 
-      router.push('/dashboard')
+      router.push('/dobrodosli')
 
     } catch (e: any) {
       setError(`Nepričakovana napaka: ${e.message}`)
@@ -420,6 +434,20 @@ export default function OnboardingPage() {
                     {error}
                   </div>
                 )}
+
+                {(() => {
+                  const rec = recommendPlan(finalAnswers)
+                  const isPos = rec.plan === 'pro_pos'
+                  return (
+                    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '16px', marginBottom: '16px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: '700', color: '#15803d', marginBottom: '4px' }}>
+                        💡 Priporočeni paket: {isPos ? 'Pro + POS (€24.99/mes)' : 'Pro (€9.99/mes)'}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#166534' }}>{rec.reason}</div>
+                      <div style={{ fontSize: '11px', color: '#4ade80', marginTop: '6px' }}>Paket izberete po registraciji v Nastavitvah.</div>
+                    </div>
+                  )
+                })()}
 
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <button onClick={() => setStep(visibleSteps.length - 1)} style={{
