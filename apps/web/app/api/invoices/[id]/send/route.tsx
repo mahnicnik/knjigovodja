@@ -60,6 +60,13 @@ export async function POST(
       return NextResponse.json({ error: 'Nimate dostopa do tega računa' }, { status: 403 })
     }
 
+    // Preveri subscription - email pošiljanje je samo Pro
+    const subStatus = org.subscription_status || 'free'
+    const isPro = subStatus === 'pro' || subStatus === 'pro_pos'
+    if (!isPro) {
+      return NextResponse.json({ error: 'Pošiljanje računov po emailu je na voljo samo v Pro paketu.' }, { status: 403 })
+    }
+
     // Generiraj UPN QR
     const qrDataUrl = await generateUpnQr(invoice, org)
 
