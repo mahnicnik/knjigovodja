@@ -375,12 +375,20 @@ ${!isStorno && !isDobropis ? `
                       ⬇ PDF
                     </button>
                     {inv.status !== 'storno' && (
-                      <button
-                        onClick={() => setSendModalInv(inv)}
-                        className="border border-gray-900 bg-gray-900 text-white rounded-xl px-3 py-1.5 text-xs hover:bg-gray-800 transition-colors"
-                      >
-                        📧 Pošlji
-                        {inv.client_tax_number && (
+                      isFree ? (
+                        <a href="/nastavitve#narocnina" style={{ border: '1px solid #d1d5db', background: '#f9fafb', color: '#9ca3af', borderRadius: 12, padding: '6px 12px', fontSize: 12, textDecoration: 'none', cursor: 'pointer' }} title="Nadgradi na Pro za email pošiljanje">
+                          🔒 Pošlji
+                        </a>
+                      ) : (
+                        <button
+                          onClick={() => setSendModalInv(inv)}
+                          className="border border-gray-900 bg-gray-900 text-white rounded-xl px-3 py-1.5 text-xs hover:bg-gray-800 transition-colors"
+                        >
+                          📧 Pošlji
+                        </button>
+                      )
+                    )}
+                    {inv.client_tax_number && (
                       <button
                         onClick={async () => {
                           const r = await fetch(`/api/invoices/${inv.id}/ujp`, { method: 'POST' })
@@ -396,8 +404,6 @@ ${!isStorno && !isDobropis ? `
                         className="border border-blue-600 text-blue-600 rounded-xl px-3 py-1.5 text-xs hover:bg-blue-50 transition-colors"
                       >
                         📄 UJP
-                      </button>
-                    )}
                       </button>
                     )}
                     <button
