@@ -36,6 +36,7 @@ export default function NewInvoicePage() {
   const [savingPartner, setSavingPartner] = useState(false)
   const [partnerSaved, setPartnerSaved] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [invoiceCount, setInvoiceCount] = useState(0)
   const router = useRouter()
   const supabase = createClient()
 
@@ -55,6 +56,7 @@ export default function NewInvoicePage() {
         const o = (member as any).organizations
         setOrg(o)
         const { count } = await supabase.from('issued_invoices').select('*', { count: 'exact', head: true }).eq('org_id', o.id)
+        setInvoiceCount(count || 0)
         const num = String((count || 0) + 1).padStart(3, '0')
         setInvoiceNumber(`${new Date().getFullYear()}-${num}`)
         const { data: pts } = await supabase.from('invoice_partners').select('*').eq('org_id', o.id).order('name')
@@ -131,6 +133,13 @@ export default function NewInvoicePage() {
 
   async function handleSave(status: 'draft' | 'sent') {
     if (!org) return
+    // Free plan limit: max 5 računov
+    const isFree = !['pro', 'pro_pos'].includes(org.subscription_status)
+    if (isFree && invoiceCount >= 5) {
+      alert('Brezplačni plan omogoča največ 5 računov. Nadgradite na Pro za neomejene račune.')
+      router.push('/nastavitve#narocnina')
+      return
+    }
     setLoading(true)
     const { error } = await supabase.from('issued_invoices').insert({
       org_id: org.id, invoice_number: invoiceNumber, invoice_type: 'invoice',
