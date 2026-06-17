@@ -293,6 +293,9 @@ ${!isStorno && !isDobropis ? `
 
   const totalSent = invoices.filter(i => i.status !== 'draft' && i.status !== 'storno').reduce((s, i) => s + Number(i.amount_total), 0)
   const totalPaid = invoices.filter(i => i.status === 'paid').reduce((s, i) => s + Number(i.amount_total), 0)
+  const isFree = !['pro', 'pro_pos'].includes(org?.subscription_status)
+  const invoiceCount = invoices.length
+  const atLimit = isFree && invoiceCount >= 5
   const totalUnpaid = invoices.filter(i => i.status === 'sent' || i.status === 'overdue').reduce((s, i) => s + Number(i.amount_total), 0)
 
   return (
@@ -302,9 +305,22 @@ ${!isStorno && !isDobropis ? `
           <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900">← Domov</Link>
           <h1 className="font-semibold text-gray-900 mt-0.5">Izdani računi</h1>
         </div>
-        <Link href="/invoices/new" className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium">
-          + Nov račun
-        </Link>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {isFree && (
+            <div style={{ fontSize: 12, color: atLimit ? '#dc2626' : '#888', background: atLimit ? '#fef2f2' : '#f3f4f6', padding: '4px 10px', borderRadius: 20, fontWeight: 600 }}>
+              {invoiceCount}/5 računov
+            </div>
+          )}
+          {atLimit ? (
+            <a href="/nastavitve#narocnina" style={{ background: '#1D9E75', color: '#fff', padding: '8px 16px', borderRadius: 12, fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>
+              Nadgradi →
+            </a>
+          ) : (
+            <Link href="/invoices/new" className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium">
+              + Nov račun
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="max-w-4xl mx-auto px-6 py-8">
