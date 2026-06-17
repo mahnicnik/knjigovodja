@@ -633,7 +633,12 @@ export default function DashboardPage() {
               </div>
               <div className="rk-rail-dropdown">
                 <div className="rk-rail-dropdown-label">{group.label}</div>
-                {group.items?.map((item: any) => {
+                {group.items?.filter((item: any) => {
+                  if (item.href === '/pos') {
+                    return org?.subscription_status === 'pro_pos'
+                  }
+                  return true
+                }).map((item: any) => {
                   const active = pathname === item.href
                   return (
                     <Link key={item.href} href={item.href} className={`rk-rail-dropdown-item ${active ? 'active' : ''}`}>
