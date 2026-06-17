@@ -110,7 +110,8 @@ export default function NastavitevPage() {
     </div>
   )
 
-  const isPro = org?.subscription_status === 'pro'
+  const isPro = org?.subscription_status === 'pro' || org?.subscription_status === 'pro_pos'
+  const isProPos = org?.subscription_status === 'pro_pos'
   const inp = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
 
   return (
@@ -355,30 +356,81 @@ export default function NastavitevPage() {
 
         {/* PLAN */}
         {activeSection === 'plan' && (
-          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>⭐ Naročnina</div>
-              <span style={{ padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: isPro ? '#0D1F12' : '#f3f4f6', color: isPro ? '#fff' : '#6b7280' }}>
-                {isPro ? 'PRO' : 'STARTER'}
-              </span>
-            </div>
-            {isPro ? (
-              <div style={{ fontSize: 13, color: '#555' }}>
-                {org.plan_expires_at && <p>Naslednje plačilo: <strong>{new Date(org.plan_expires_at).toLocaleDateString('sl-SI', { day: 'numeric', month: 'long', year: 'numeric' })}</strong></p>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Trenutni plan */}
+            <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>⭐ Naročnina</div>
+                <span style={{ padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                  background: isProPos ? '#0a3d2b' : isPro ? '#0D1F12' : '#f3f4f6',
+                  color: isPro ? '#fff' : '#6b7280' }}>
+                  {isProPos ? 'PRO + POS' : isPro ? 'PRO' : 'FREE'}
+                </span>
+              </div>
+              {org.plan_expires_at && (
+                <p style={{ fontSize: 13, color: '#555', marginBottom: 8 }}>
+                  Naslednje plačilo: <strong>{new Date(org.plan_expires_at).toLocaleDateString('sl-SI', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
+                </p>
+              )}
+              {!isPro && (
+                <p style={{ fontSize: 12, color: '#888' }}>Brezplačni plan — do 5 računov/mesec.</p>
+              )}
+              {isPro && !isProPos && (
+                <p style={{ fontSize: 12, color: '#888' }}>Pro plan — neomejeni računi, email, FURS.</p>
+              )}
+              {isProPos && (
+                <p style={{ fontSize: 12, color: '#888' }}>Pro + POS — vse funkcije vključno z blagajno.</p>
+              )}
+              {isPro && (
                 <p style={{ fontSize: 12, color: '#888', marginTop: 8 }}>Za upravljanje naročnine kontaktirajte podporo.</p>
+              )}
+            </div>
+
+            {/* Paketi */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+              {/* Free */}
+              <div style={{ background: '#fff', borderRadius: 16, border: '2px solid ' + (!isPro ? '#0D1F12' : '#f0f0f0'), padding: 20 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>🆓 Free</div>
+                <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 12 }}>€0</div>
+                {['Do 5 računov/mesec', 'PDF download', 'Prispevki / UPN QR'].map(f => (
+                  <div key={f} style={{ fontSize: 12, color: '#555', marginBottom: 6, display: 'flex', gap: 6 }}>
+                    <span style={{ color: '#16a34a' }}>✓</span> {f}
+                  </div>
+                ))}
               </div>
-            ) : (
-              <div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
-                  {['Neomejeno število računov','Letno poročilo in DDV obračun','Stripe integracija','AI pomočnik za knjiženje','Prioritetna podpora'].map(f => (
-                    <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#444' }}>
-                      <span style={{ color: '#16a34a', fontWeight: 700 }}>✓</span> {f}
-                    </div>
-                  ))}
-                </div>
-                <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} />
+
+              {/* Pro */}
+              <div style={{ background: '#fff', borderRadius: 16, border: '2px solid ' + (isPro && !isProPos ? '#1D9E75' : '#f0f0f0'), padding: 20 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>💼 Pro</div>
+                <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 12 }}>€9.99<span style={{ fontSize: 13, fontWeight: 400, color: '#888' }}>/mes</span></div>
+                {['Neomejeni računi', 'Email pošiljanje', 'FURS fiskalizacija', 'Dobavnice', 'Prispevki / UPN QR'].map(f => (
+                  <div key={f} style={{ fontSize: 12, color: '#555', marginBottom: 6, display: 'flex', gap: 6 }}>
+                    <span style={{ color: '#16a34a' }}>✓</span> {f}
+                  </div>
+                ))}
+                {!isPro && (
+                  <div style={{ marginTop: 16 }}>
+                    <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} targetPlan="pro" />
+                  </div>
+                )}
               </div>
-            )}
+
+              {/* Pro + POS */}
+              <div style={{ background: '#fff', borderRadius: 16, border: '2px solid ' + (isProPos ? '#1D9E75' : '#f0f0f0'), padding: 20 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>🖥️ Pro + POS</div>
+                <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 12 }}>€24.99<span style={{ fontSize: 13, fontWeight: 400, color: '#888' }}>/mes</span></div>
+                {['Vse iz Pro paketa', 'POS blagajna', 'Koledar & termini', 'Člani & paketi', 'Inventar', 'Upravljanje ekipe'].map(f => (
+                  <div key={f} style={{ fontSize: 12, color: '#555', marginBottom: 6, display: 'flex', gap: 6 }}>
+                    <span style={{ color: '#16a34a' }}>✓</span> {f}
+                  </div>
+                ))}
+                {!isProPos && (
+                  <div style={{ marginTop: 16 }}>
+                    <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} targetPlan="pro_pos" />
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 

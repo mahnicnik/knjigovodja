@@ -1,15 +1,16 @@
 'use client'
-
 import { useState } from 'react'
 
 interface UpgradeButtonProps {
-  subscriptionStatus?: 'free' | 'pro' | 'cancelled' | 'past_due'
+  subscriptionStatus?: 'free' | 'pro' | 'pro_pos' | 'cancelled' | 'past_due'
+  targetPlan?: 'pro' | 'pro_pos'
   className?: string
   variant?: 'primary' | 'inline'
 }
 
-export default function UpgradeButton({ 
-  subscriptionStatus = 'free', 
+export default function UpgradeButton({
+  subscriptionStatus = 'free',
+  targetPlan = 'pro',
   className = '',
   variant = 'primary'
 }: UpgradeButtonProps) {
@@ -19,19 +20,14 @@ export default function UpgradeButton({
   const handleUpgrade = async () => {
     setLoading(true)
     setError(null)
-
     try {
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: targetPlan }),
       })
-
       const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Napaka pri ustvarjanju plačila')
-      }
-
+      if (!res.ok) throw new Error(data.error || 'Napaka pri ustvarjanju plačila')
       if (data.url) {
         window.location.href = data.url
       } else {
@@ -43,7 +39,13 @@ export default function UpgradeButton({
     }
   }
 
-  if (subscriptionStatus === 'pro') return null
+  // Že ima ta plan ali višji
+  if (subscriptionStatus === 'pro_pos') return null
+  if (subscriptionStatus === 'pro' && targetPlan === 'pro') return null
+
+  const label = targetPlan === 'pro_pos'
+    ? subscriptionStatus === 'pro' ? 'Dodaj POS blagajno — €25/mes' : 'Nadgradi na Pro + POS — €25/mes'
+    : 'Nadgradi na Pro — €9.99/mes'
 
   const buttonClass = variant === 'inline'
     ? 'inline-flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-800 disabled:opacity-40 transition-colors'
@@ -60,9 +62,7 @@ export default function UpgradeButton({
             </svg>
             Preusmerjam...
           </>
-        ) : (
-          'Nadgradi na Pro — €9.99/mes'
-        )}
+        ) : label}
       </button>
       {error && <p className="mt-2 text-xs text-red-600">⚠️ {error}</p>}
     </div>

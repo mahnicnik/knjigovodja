@@ -16,6 +16,12 @@ export async function POST(request: NextRequest) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       { cookies: { getAll() { return cookieStore.getAll() } } }
     )
+    const body2 = await request.json().catch(() => ({}))
+    const targetPlan = body2.plan === 'pro_pos' ? 'pro_pos' : 'pro'
+    const priceId = targetPlan === 'pro_pos'
+      ? process.env.STRIPE_PRO_POS_PRICE_ID!
+      : process.env.STRIPE_PRO_PRICE_ID!
+
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
@@ -64,7 +70,7 @@ export async function POST(request: NextRequest) {
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [{
-        price: process.env.STRIPE_PRO_PRICE_ID!,
+        price: priceId,
         quantity: 1,
       }],
       success_url: `${process.env.NEXT_PUBLIC_APP_URL}/nastavitve?success=true`,
