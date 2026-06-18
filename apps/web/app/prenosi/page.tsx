@@ -115,8 +115,12 @@ export default function DownloadPage() {
                   <div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>iOS & Android · Prihaja kmalu</div>
                 </div>
               </div>
-              <div style={{ background: '#f9fafb', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#666' }}>
-                📣 Mobilna aplikacija je v razvoju. Obvestili vas bomo ko bo na voljo.
+              <a href={release?.assets?.find((a: any) => a.name.endsWith('.apk'))?.browser_download_url || '#'}
+                style={{ display: 'inline-block', background: '#0D1F12', color: '#fff', padding: '10px 20px', borderRadius: 10, fontWeight: 600, fontSize: 14, textDecoration: 'none' }}>
+                ⬇ Prenesi APK
+              </a>
+              <div style={{ fontSize: 12, color: '#888', marginTop: 8 }}>
+                Android 8.0+ · Omogočite nameščanje iz neznanih virov v nastavitvah
               </div>
             </div>
 
