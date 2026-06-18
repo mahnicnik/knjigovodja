@@ -18,14 +18,14 @@ export default function RegisterPage() {
     setLoading(true)
     setError('')
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { full_name: name } }
     })
-
+    console.log('SignUp:', JSON.stringify({error, uid: data?.user?.id}))
     if (error) {
-      setError(error.message)
+      setError(error.message + ' status=' + (error as any).status + ' code=' + (error as any).code)
       setLoading(false)
       return
     }
