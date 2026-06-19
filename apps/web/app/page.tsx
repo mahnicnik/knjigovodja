@@ -291,8 +291,8 @@ export default function LandingPage() {
             <a href="#faq">FAQ</a>
           </nav>
           <div className="nav-cta">
-            <a href="#" className="btn btn-ghost">Prijava</a>
-            <a href="#cene" className="btn btn-primary">Začni brezplačno →</a>
+            <a href="/login" className="btn btn-ghost">Prijava</a>
+            <a href="/register" className="btn btn-primary">Začni brezplačno →</a>
           </div>
         </div>
       </nav>
@@ -311,7 +311,7 @@ export default function LandingPage() {
           </h1>
           <p className="hero-sub">Računko je poslovni portal za slovenskega podjetnika. Fakturiranje, blagajna, davki, člani, ekipa — brez papirjev.</p>
           <div className="hero-cta">
-            <a href="#cene" className="btn btn-primary btn-lg">Začni brezplačno →</a>
+            <a href="/register" className="btn btn-primary btn-lg">Začni brezplačno →</a>
             <a href="#funkcije" className="btn btn-quiet btn-lg">Oglej si funkcije</a>
           </div>
           <p className="hero-proof">Brez kreditne kartice · Podatki v EU · Nastavitev v 5 minutah</p>
@@ -675,7 +675,7 @@ export default function LandingPage() {
                     <li key={f}><Check />{f.includes('Neomejeni') || f.includes('Vse iz') ? <strong>{f}</strong> : f}</li>
                   ))}
                 </ul>
-                <a href="#" className={p.ctaClass}>{p.cta}</a>
+                <a href="/register" className={p.ctaClass}>{p.cta}</a>
               </div>
             ))}
           </div>
@@ -709,7 +709,7 @@ export default function LandingPage() {
           <h2 className="final-h">Računko + računovodja —<br /><em>najboljša kombinacija.</em></h2>
           <p className="final-sub">Računko pokrije fakturiranje, davke in blagajno. Za letni zaključek, revizijo ali d.o.o. pa vas <strong>povežemo z računovodjem, ki pozna Računko</strong> — manj dela za vse.</p>
           <div style={{display:'flex',gap:12,justifyContent:'center',flexWrap:'wrap'}}>
-            <a href="#cene" className="btn btn-on-dark btn-lg">Začni brezplačno →</a>
+            <a href="/register" className="btn btn-on-dark btn-lg">Začni brezplačno →</a>
             <a href="#" className="btn btn-lg" style={{background:'rgba(255,255,255,0.1)',color:'#F4EFE6',border:'1px solid rgba(255,255,255,0.2)'}}>Najdi partnerskega računovodja</a>
           </div>
           <p className="final-trust" style={{marginTop:28}}>Brez kreditne kartice · Podatki v EU · Nastavitev v 5 minutah</p>
