@@ -96,6 +96,7 @@ export default function AvansniRacuniPage() {
         vat_amount: Math.round(vatAmount * 100) / 100,
         amount_total: advanceAmount,
         advance_amount: advanceAmount,
+        total_contract_value: totalAmount,
         status: 'draft',
         notes: `Avansni račun ${advancePct}% od skupne vrednosti ${fmt(totalAmount)}`,
       }).select().single()
@@ -112,7 +113,8 @@ export default function AvansniRacuniPage() {
     if (!orgId) return
     setSaving(true)
     try {
-      const remaining = advance.amount_total - (advance.advance_amount ?? 0)
+      const contractValue = (advance as any).total_contract_value ?? advance.amount_total
+      const remaining = contractValue - (advance.advance_amount ?? 0)
       const amountNet = isVatRegistered ? remaining / 1.22 : remaining
       const vatAmount = remaining - amountNet
 
@@ -131,7 +133,7 @@ export default function AvansniRacuniPage() {
         issue_date: today,
         due_date: new Date(Date.now() + 30 * 864e5).toISOString().split('T')[0],
         line_items: [
-          { description: advance.line_items[0]?.description?.replace('Avans za: ', '') ?? 'Storitev', quantity: 1, unit_price: advance.amount_total, amount_net: isVatRegistered ? advance.amount_total / 1.22 : advance.amount_total, vat_rate: isVatRegistered ? 22 : 0, vat_amount: isVatRegistered ? advance.amount_total - advance.amount_total / 1.22 : 0 },
+          { description: advance.line_items[0]?.description?.replace('Avans za: ', '') ?? 'Storitev', quantity: 1, unit_price: contractValue, amount_net: isVatRegistered ? contractValue / 1.22 : contractValue, vat_rate: isVatRegistered ? 22 : 0, vat_amount: isVatRegistered ? contractValue - contractValue / 1.22 : 0 },
           { description: `Odbitek avansa (${advance.invoice_number})`, quantity: 1, unit_price: -(advance.advance_amount ?? 0), amount_net: isVatRegistered ? -(advance.advance_amount ?? 0) / 1.22 : -(advance.advance_amount ?? 0), vat_rate: isVatRegistered ? 22 : 0, vat_amount: isVatRegistered ? -(advance.advance_amount ?? 0) + (advance.advance_amount ?? 0) / 1.22 : 0 },
         ],
         amount_net: Math.round(amountNet * 100) / 100,
