@@ -189,7 +189,12 @@ export default function NewInvoicePage() {
         <label style={{ fontSize:'11px', color:'#888', display:'block', marginBottom:'4px' }}>Davčna številka stranke</label>
         <div style={{display:'flex', gap:6}}>
           <input value={clientTaxNumber}
-            onChange={e => setClientTaxNumber(e.target.value)}
+            onChange={e => {
+              const val = e.target.value
+              setClientTaxNumber(val)
+              const digits = val.replace(/[^0-9]/g, '')
+              if (digits.length === 8) lookupByTaxNumber(val)
+            }}
             onKeyDown={e => e.key==='Enter' && lookupByTaxNumber(clientTaxNumber)}
             placeholder="SI12345678 ali 12345678" className={inp} style={{flex:1}} />
           <button onClick={() => lookupByTaxNumber(clientTaxNumber)} disabled={taxLookupLoading}
