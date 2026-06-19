@@ -66,10 +66,10 @@ export default function PrispevkiPage() {
   useEffect(() => {
     if (!org) return
     setRates({
-      piz: org.contrib_piz || 0,
-      zzzs: org.contrib_zzzs || 0,
-      zaposlovanje: org.contrib_zaposlovanje || 3.04,
-      'starševo': org.contrib_starsevstvo || 3.04,
+      piz: org.contrib_piz ?? 0,
+      zzzs: org.contrib_zzzs ?? 0,
+      zaposlovanje: org.contrib_zaposlovanje ?? 3.04,
+      'starševo': org.contrib_starsevstvo ?? 3.04,
     })
     if (org.contrib_akontacija > 0) setAkontacija(String(org.contrib_akontacija))
   }, [org])
@@ -99,7 +99,7 @@ export default function PrispevkiPage() {
       iban: 'SI56011008883000073', reference: `SI19${taxNum}-45004`,
       description: `Prispevki za zdravstvo ${monthLabel}`, dueDate })
 
-    const zapoUPN = buildUPN({ ...payer, amount: Number(contrib.zaposlovanje || 3.04),
+    const zapoUPN = buildUPN({ ...payer, amount: Number(contrib.zaposlovanje ?? 3.04),
       iban: 'SI56011008881000030', reference: `SI19${taxNum}-42005`,
       description: `Prispevki za zaposlovanje ${monthLabel}`, dueDate })
 
@@ -138,7 +138,7 @@ export default function PrispevkiPage() {
   const monthStr = String(selectedMonth + 1).padStart(2, '0')
   const yearShort = String(selectedYear).slice(-2)
   const akAmt = parseFloat(akontacija) || 0
-  const total = Number(contrib.piz) + Number(contrib.zzzs) + Number(contrib.zaposlovanje || 3.04) + Number((contrib as any)['starševo'] || 3.04) + akAmt
+  const total = Number(contrib.piz) + Number(contrib.zzzs) + Number(contrib.zaposlovanje ?? 3.04) + Number((contrib as any)['starševo'] ?? 3.04) + akAmt
 
   const QRCard = ({ title, subtitle, amount, qr, iban, reference }: any) => (
     <div className="bg-white rounded-2xl border border-gray-100 p-5">
@@ -196,7 +196,7 @@ export default function PrispevkiPage() {
           <div className="text-sm text-gray-400 mb-1">Skupaj za plačilo ta mesec</div>
           <div className="text-4xl font-semibold">€{total.toFixed(2)}</div>
           <div className="text-xs text-gray-500 mt-2">
-            PIZ €{Number(contrib.piz).toFixed(2)} + ZZZS €{Number(contrib.zzzs).toFixed(2)} + Zaposl. €{Number(contrib.zaposlovanje || 3.04).toFixed(2)} + Starš. €{Number((contrib as any)['starševo'] || 3.04).toFixed(2)}
+            PIZ €{Number(contrib.piz).toFixed(2)} + ZZZS €{Number(contrib.zzzs).toFixed(2)} + Zaposl. €{Number(contrib.zaposlovanje ?? 3.04).toFixed(2)} + Starš. €{Number((contrib as any)['starševo'] ?? 3.04).toFixed(2)}
             {akAmt > 0 && ` + Akontacija €${akAmt.toFixed(2)}`}
           </div>
         </div>
@@ -212,11 +212,11 @@ export default function PrispevkiPage() {
             iban="SI56 0110 0888 3000 073"
             reference={`SI19 ${org?.tax_number?.replace('SI','')}-45004`} />
           <QRCard title="Zaposlovanje" subtitle="Prispevek za zaposlovanje"
-            amount={contrib.zaposlovanje || 3.04} qr={qrZaposlovanje}
+            amount={contrib.zaposlovanje ?? 3.04} qr={qrZaposlovanje}
             iban="SI56 0110 0888 1000 030"
             reference={`SI19 ${org?.tax_number?.replace('SI','')}-42005`} />
           <QRCard title="Starševsko varstvo" subtitle="Prispevek za starševstvo"
-            amount={(contrib as any)['starševo'] || 3.04} qr={qrStarsevstvo}
+            amount={(contrib as any)['starševo'] ?? 3.04} qr={qrStarsevstvo}
             iban="SI56 0110 0888 1000 030"
             reference={`SI19 ${org?.tax_number?.replace('SI','')}-43001`} />
         </div>

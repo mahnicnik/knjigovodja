@@ -303,7 +303,7 @@ export default function AvansniRacuniPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
                   <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Skupna vrednost (€) *</label>
-                  <input type="number" step="0.01" value={totalAmount} onChange={e => setTotalAmount(Number(e.target.value))} style={inp} />
+                  <input type="number" step="0.01" value={totalAmount || ''} onChange={e => setTotalAmount(e.target.value === '' ? 0 : Number(e.target.value))} placeholder="0.00" style={inp} />
                 </div>
                 <div>
                   <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Delež avansa (%)</label>
