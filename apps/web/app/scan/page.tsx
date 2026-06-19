@@ -80,6 +80,12 @@ export default function ScanPage() {
     try {
       // PDF — pošljemo direktno na API kot dokument
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+        const maxPdfBytes = 4 * 1024 * 1024 // 4MB (limit zaradi serverless 4.5MB body limita)
+        if (file.size > maxPdfBytes) {
+          alert(`PDF je prevelik (${(file.size / 1024 / 1024).toFixed(1)}MB). Največja dovoljena velikost je 4MB. Poskusite stisniti PDF ali naložiti fotografijo računa namesto PDF-ja.`)
+          setProcessing(false)
+          return
+        }
         const arrayBuffer = await file.arrayBuffer()
         const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
         // Shranimo PDF base64 za API klic

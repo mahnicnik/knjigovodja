@@ -162,7 +162,7 @@ export default function NewInvoicePage() {
   const inp = "w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
 
   // Partner sekcija — skupna za mobile in desktop
-  const PartnerSection = () => (
+  const PartnerSection = (
     <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
       {partners.length > 0 && (
         <div>
@@ -235,7 +235,7 @@ export default function NewInvoicePage() {
         <div style={{ padding:'12px 16px', display:'flex', flexDirection:'column', gap:'10px' }}>
           <div style={{ background:'#fff', borderRadius:'12px', border:'0.5px solid rgba(0,0,0,0.08)', padding:'16px' }}>
             <div style={{ fontSize:'13px', fontWeight:'500', color:'#0D1F12', marginBottom:'12px' }}>Stranka</div>
-            <PartnerSection />
+            {PartnerSection}
           </div>
           <div style={{ background:'#fff', borderRadius:'12px', border:'0.5px solid rgba(0,0,0,0.08)', padding:'16px' }}>
             <div style={{ fontSize:'13px', fontWeight:'500', color:'#0D1F12', marginBottom:'12px' }}>Datumi</div>
@@ -325,7 +325,7 @@ export default function NewInvoicePage() {
         <div className="col-span-2 space-y-6">
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
             <h3 className="font-medium text-gray-900 mb-4">Podatki stranke</h3>
-            <PartnerSection />
+            {PartnerSection}
           </div>
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
             <h3 className="font-medium text-gray-900 mb-4">Datumi</h3>
