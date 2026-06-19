@@ -52,6 +52,7 @@ export default function REK1Page() {
   const [loading, setLoading] = useState(true)
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [grossOverrides, setGrossOverrides] = useState<Record<string, number>>({})
   const supabase = createClient()
 
   useEffect(() => { load() }, [])
@@ -72,7 +73,9 @@ export default function REK1Page() {
     setLoading(false)
   }
 
-  function generateREK1(emp: any) {
+  function generateREK1(emp: any, grossSalaryOverride?: number) {
+    const effectiveGross = grossSalaryOverride !== undefined ? grossSalaryOverride : Number(emp.gross_salary)
+    emp = { ...emp, gross_salary: effectiveGross }
     const p = calcPayroll(Number(emp.gross_salary), emp.dependents || 0)
     const monthStr = String(selectedMonth + 1).padStart(2, '0')
     const dateFrom = `${selectedYear}-${monthStr}-01`
@@ -110,7 +113,7 @@ export default function REK1Page() {
   }
 
   function downloadREK1(emp: any) {
-    const xml = generateREK1(emp)
+    const xml = generateREK1(emp, grossOverrides[emp.id])
     const blob = new Blob([xml], { type: 'application/xml' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -186,7 +189,9 @@ export default function REK1Page() {
         ) : (
           <div className="space-y-4">
             {employees.map(emp => {
-              const p = calcPayroll(Number(emp.gross_salary), emp.dependents || 0)
+              const grossOverride = grossOverrides[emp.id]
+              const grossSalary = grossOverride !== undefined ? grossOverride : Number(emp.gross_salary)
+              const p = calcPayroll(grossSalary, emp.dependents || 0)
               return (
                 <div key={emp.id} className="bg-white rounded-2xl border border-gray-100 p-6">
                   <div className="flex justify-between items-start mb-4">
@@ -207,7 +212,15 @@ export default function REK1Page() {
                     <div className="bg-gray-50 rounded-xl p-4">
                       <div className="text-xs font-medium text-gray-500 mb-2 uppercase">Delojemalec</div>
                       <div className="space-y-1.5 text-xs">
-                        <div className="flex justify-between"><span className="text-gray-600">Bruto plača</span><span className="font-medium">€{Number(emp.gross_salary).toFixed(2)}</span></div>
+                        <div className="flex justify-between items-center"><span className="text-gray-600">Bruto plača</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={grossSalary || ''}
+                            onChange={e => setGrossOverrides(prev => ({ ...prev, [emp.id]: e.target.value === '' ? 0 : Number(e.target.value) }))}
+                            className="w-24 text-right font-medium border border-gray-200 rounded-lg px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-900"
+                          />
+                        </div>
                         <div className="flex justify-between"><span className="text-gray-600">ZPIZ (15.50%)</span><span>−€{p.ee_piz.toFixed(2)}</span></div>
                         <div className="flex justify-between"><span className="text-gray-600">ZZZS (6.36%)</span><span>−€{p.ee_zzzs.toFixed(2)}</span></div>
                         <div className="flex justify-between"><span className="text-gray-600">Dohodnina</span><span>−€{p.incomeTax.toFixed(2)}</span></div>
