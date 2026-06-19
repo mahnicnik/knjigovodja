@@ -96,7 +96,7 @@ export default function PotniNalogiPage() {
       const seq = String((count ?? 0) + 1).padStart(3, '0')
       const orderNumber = `PN-${year}-${seq}`
 
-      const { data: order } = await supabase.from('travel_orders').insert({
+      const { data: order, error: insertError } = await supabase.from('travel_orders').insert({
         org_id: orgId,
         order_number: orderNumber,
         employee_name: employeeName.trim(),
@@ -114,6 +114,11 @@ export default function PotniNalogiPage() {
         status: 'draft',
         notes: notes.trim() || null,
       }).select().single()
+      if (insertError) {
+        showToast(`Napaka pri shranjevanju: ${insertError.message}`)
+        setSaving(false)
+        return
+      }
 
       setOrders(prev => [order!, ...prev])
       setShowForm(false)
