@@ -182,6 +182,7 @@ export default function DashboardPage() {
   const [savingQA, setSavingQA] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [paletteQuery, setPaletteQuery] = useState('')
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
   const [paletteSelectedIdx, setPaletteSelectedIdx] = useState(0)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [draggedQaIdx, setDraggedQaIdx] = useState<number | null>(null)
@@ -657,9 +658,27 @@ export default function DashboardPage() {
             <Icon name="settings" />
             <span className="rk-tip">Nastavitve</span>
           </Link>
-          <Link href="/nastavitve" className="rk-rail-avatar">
-            {ownerName.charAt(0).toUpperCase() || 'U'}
-          </Link>
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => setAvatarMenuOpen(v => !v)} className="rk-rail-avatar" style={{ border: 'none', cursor: 'pointer' }}>
+              {ownerName.charAt(0).toUpperCase() || 'U'}
+            </button>
+            {avatarMenuOpen && (
+              <>
+                <div onClick={() => setAvatarMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 1500 }} />
+                <div style={{ position: 'absolute', bottom: 0, left: 56, background: '#fff', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.25)', border: '1px solid #e4e8e2', minWidth: 180, padding: 6, zIndex: 1501 }}>
+                  <Link href="/nastavitve" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, fontSize: 13, fontWeight: 500, color: '#1a2e25', textDecoration: 'none' }}>
+                    ⚙️ Nastavitve
+                  </Link>
+                  <button
+                    onClick={async () => { const { createClient } = await import('@/lib/supabase'); await createClient().auth.signOut(); window.location.href = '/login' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, fontSize: 13, fontWeight: 500, color: '#a83232', background: 'none', border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer' }}
+                  >
+                    ↪ Odjava
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </aside>
 
