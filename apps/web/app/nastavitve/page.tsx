@@ -25,6 +25,36 @@ const SECTIONS = [
   { id: 'api',          icon: '🔑', label: 'API ključi',         desc: 'Integracije, dostop' },
 ]
 
+const SI_BANKS: Record<string, string> = {
+  '01': 'BSLJSI2X', // Banka Slovenije
+  '02': 'LJBASI2X', // NLB
+  '03': 'SKBASI2X', // SKB
+  '04': 'KBMASI2X', // Nova KBM
+  '05': 'ABANSI2X', // Abanka
+  '06': 'BACXSI22', // Banka Sparkasse
+  '10': 'HDELSI22', // Delavska hranilnica
+  '12': 'GORESI2X', // Gorenjska banka
+  '14': 'SZKBSI2X', // Sberbank
+  '17': 'CMBSSI22', // Banka Celje
+  '19': 'HBPGSI22', // Hranilnica Bank Vipava
+  '24': 'KSPISI22', // Hranilnica Lon
+  '25': 'AHASI22',  // Addiko Bank
+  '26': 'PBSISI22', // Primorska banka
+  '29': 'KZBLSI2X', // Karantanija banka
+  '30': 'KSPISI22', // Sparkasse
+  '33': 'SABRSI22', // SID banka
+  '34': 'RACASI22', // Raiffeisen
+  '35': 'UJBASI22', // Unicredit
+  '60': 'SSAVSI22', // SKB
+  '61': 'SDBASI22', // Delta banka
+  '65': 'JADISI22', // Banka Intesa Sanpaolo
+}
+function detectBIC(iban: string): string {
+  const clean = iban.replace(/\s/g, '').toUpperCase()
+  if (!clean.startsWith('SI56') || clean.length < 8) return ''
+  const bankCode = clean.substring(4, 6)
+  return SI_BANKS[bankCode] || ''
+}
 export default function NastavitevPage() {
   const [org, setOrg] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -274,7 +304,16 @@ export default function NastavitevPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
                 <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>IBAN (TRR)</label>
-                <input value={form.iban} onChange={e => setForm({...form, iban: e.target.value})} placeholder="SI56 6100 0001 2345 678" className={inp} style={{ fontFamily: 'monospace' }}/>
+                <input
+                  value={form.iban}
+                  onFocus={e => { if (!form.iban) setForm({...form, iban: 'SI56'}) }}
+                  onChange={e => {
+                    const val = e.target.value
+                    setForm({...form, iban: val})
+                    const detectedBic = detectBIC(val)
+                    if (detectedBic && !form.bic) setForm(prev => ({...prev, iban: val, bic: detectedBic}))
+                  }}
+                  placeholder="SI56 6100 0001 2345 678" className={inp} style={{ fontFamily: 'monospace' }}/>
               </div>
               <div>
                 <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>BIC / SWIFT</label>
