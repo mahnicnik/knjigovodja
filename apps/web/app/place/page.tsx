@@ -75,6 +75,7 @@ const MONTHS = ['Januar','Februar','Marec','April','Maj','Junij','Julij','Avgust
 export default function PlacePage() {
   const [org, setOrg] = useState<any>(null)
   const [employees, setEmployees] = useState<any[]>([])
+  const [employeeSearch, setEmployeeSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [showCalc, setShowCalc] = useState(false)
@@ -456,7 +457,16 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
           </div>
         ) : (
           <div className="space-y-6">
-            {employees.map(emp => {
+            {employees.length > 3 && (
+              <input
+                type="text"
+                value={employeeSearch}
+                onChange={e => setEmployeeSearch(e.target.value)}
+                placeholder="🔍 Išči zaposlenega po imenu…"
+                style={{ width: '100%', padding: '12px 16px', borderRadius: 12, border: '1px solid #e5e7eb', fontSize: 14, outline: 'none' }}
+              />
+            )}
+            {employees.filter(emp => emp.full_name?.toLowerCase().includes(employeeSearch.toLowerCase())).map(emp => {
               const empExtras = getExtras(emp.id)
               const p = calcPayroll(Number(emp.gross_salary), emp.dependents || 0, empExtras)
               const regres = calcRegres(Number(emp.gross_salary))
