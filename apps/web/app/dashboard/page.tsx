@@ -183,6 +183,7 @@ export default function DashboardPage() {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [paletteQuery, setPaletteQuery] = useState('')
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
+  const [activityTab, setActivityTab] = useState<'all' | 'invoices' | 'expenses'>('all')
   const [paletteSelectedIdx, setPaletteSelectedIdx] = useState(0)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [draggedQaIdx, setDraggedQaIdx] = useState<number | null>(null)
@@ -193,6 +194,7 @@ export default function DashboardPage() {
     overdueAmount: 0, overdueCount: 0,
     yearRevenue: 0,
     recentInvoices: [] as any[],
+    recentExpenses: [] as any[],
     openInvoices: [] as OpenInvoice[],
     hasEmployees: false,
     hasClients: false,
@@ -316,6 +318,7 @@ export default function DashboardPage() {
       const unpaid = invoices.filter((i:any) => i.status === 'sent')
       const overdue = invoices.filter((i:any) => i.status === 'sent' && i.due_date < today)
       const recent = [...invoices].sort((a:any,b:any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 5)
+      const recentExp = [...receipts].sort((a:any,b:any) => new Date(b.created_at || b.receipt_date).getTime() - new Date(a.created_at || a.receipt_date).getTime()).slice(0, 5)
       const openInvs: OpenInvoice[] = unpaid.map((i:any) => ({
         id: i.id,
         due_date: i.due_date,
@@ -340,6 +343,7 @@ export default function DashboardPage() {
         overdueCount: overdue.length,
         yearRevenue,
         recentInvoices: recent,
+        recentExpenses: recentExp,
         openInvoices: openInvs,
         hasEmployees: (empRes.data || []).length > 0,
         hasClients: (cliRes.data || []).length > 0,
@@ -936,36 +940,64 @@ export default function DashboardPage() {
             <div className="rk-panel-head">
               <h3>Zadnja aktivnost</h3>
               <div className="rk-tabs">
-                <span className="rk-tab active">Vse</span>
-                <Link href="/invoices" className="rk-tab">Računi</Link>
-                <Link href="/expenses" className="rk-tab">Stroški</Link>
+                <button onClick={() => setActivityTab('all')} className={`rk-tab ${activityTab === 'all' ? 'active' : ''}`} style={{ border: 'none', background: activityTab === 'all' ? undefined : 'none' }}>Vse</button>
+                <button onClick={() => setActivityTab('invoices')} className={`rk-tab ${activityTab === 'invoices' ? 'active' : ''}`} style={{ border: 'none', background: activityTab === 'invoices' ? undefined : 'none' }}>Računi</button>
+                <button onClick={() => setActivityTab('expenses')} className={`rk-tab ${activityTab === 'expenses' ? 'active' : ''}`} style={{ border: 'none', background: activityTab === 'expenses' ? undefined : 'none' }}>Stroški</button>
               </div>
             </div>
-            {data.recentInvoices.length === 0 ? (
-              <div style={{ padding: '40px 26px', textAlign: 'center', color: 'var(--ink3)' }}>
-                <div style={{ fontSize: '13px', marginBottom: '8px' }}>Še ni aktivnosti</div>
-                <Link href="/invoices/new" style={{ fontSize: '12px', color: 'var(--green)', fontWeight: 600 }}>+ Ustvari prvi račun</Link>
-              </div>
-            ) : data.recentInvoices.map((inv: any) => {
-              const isOverdue = inv.status === 'sent' && inv.due_date < today
-              const isPaid = inv.status === 'paid'
-              const initial = (inv.client_name || '?').charAt(0).toUpperCase()
-              const d = new Date(inv.issue_date)
-              const dateStr = `${d.getDate()}. ${MONTHS_SHORT[d.getMonth()]}`
-              return (
-                <Link key={inv.id} href="/invoices" className="rk-act-row">
-                  <div className={`rk-act-ico ${isOverdue ? 'late' : ''}`}>{initial}</div>
-                  <div>
-                    <div className="rk-act-name">{inv.client_name}</div>
-                    <div className="rk-act-sub">#{inv.invoice_number} · {isPaid ? 'plačano' : isOverdue ? 'zapadel' : 'poslano'} {dateStr}</div>
+            {(() => {
+              type ActItem = { id: string; kind: 'invoice' | 'expense'; sortDate: string; data: any }
+              const invItems: ActItem[] = data.recentInvoices.map((inv: any) => ({ id: inv.id, kind: 'invoice', sortDate: inv.created_at || inv.issue_date, data: inv }))
+              const expItems: ActItem[] = data.recentExpenses.map((exp: any) => ({ id: exp.id, kind: 'expense', sortDate: exp.created_at || exp.receipt_date, data: exp }))
+              let items: ActItem[] = activityTab === 'invoices' ? invItems : activityTab === 'expenses' ? expItems : [...invItems, ...expItems].sort((a, b) => new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime()).slice(0, 5)
+              if (items.length === 0) {
+                return (
+                  <div style={{ padding: '40px 26px', textAlign: 'center', color: 'var(--ink3)' }}>
+                    <div style={{ fontSize: '13px', marginBottom: '8px' }}>Še ni aktivnosti</div>
+                    <Link href="/invoices/new" style={{ fontSize: '12px', color: 'var(--green)', fontWeight: 600 }}>+ Ustvari prvi račun</Link>
                   </div>
-                  <div className={`rk-act-amt ${isOverdue ? 'neg' : 'in'}`}>+€{Math.round(Number(inv.amount_total))}</div>
-                  <div className={`rk-pill ${isPaid ? 'paid' : isOverdue ? 'late' : 'sent'}`}>
-                    {isPaid ? 'Plačano' : isOverdue ? 'Zamuda' : 'Poslano'}
-                  </div>
-                </Link>
-              )
-            })}
+                )
+              }
+              return items.map((item) => {
+                if (item.kind === 'invoice') {
+                  const inv = item.data
+                  const isOverdue = inv.status === 'sent' && inv.due_date < today
+                  const isPaid = inv.status === 'paid'
+                  const initial = (inv.client_name || '?').charAt(0).toUpperCase()
+                  const d = new Date(inv.issue_date)
+                  const dateStr = `${d.getDate()}. ${MONTHS_SHORT[d.getMonth()]}`
+                  return (
+                    <Link key={inv.id} href={`/invoices?open=${inv.id}`} className="rk-act-row">
+                      <div className={`rk-act-ico ${isOverdue ? 'late' : ''}`}>{initial}</div>
+                      <div>
+                        <div className="rk-act-name">{inv.client_name}</div>
+                        <div className="rk-act-sub">#{inv.invoice_number} · {isPaid ? 'plačano' : isOverdue ? 'zapadel' : 'poslano'} {dateStr}</div>
+                      </div>
+                      <div className={`rk-act-amt ${isOverdue ? 'neg' : 'in'}`}>+€{Math.round(Number(inv.amount_total))}</div>
+                      <div className={`rk-pill ${isPaid ? 'paid' : isOverdue ? 'late' : 'sent'}`}>
+                        {isPaid ? 'Plačano' : isOverdue ? 'Zamuda' : 'Poslano'}
+                      </div>
+                    </Link>
+                  )
+                } else {
+                  const exp = item.data
+                  const initial = (exp.vendor_name || exp.supplier_name || '?').charAt(0).toUpperCase()
+                  const d = new Date(exp.receipt_date)
+                  const dateStr = `${d.getDate()}. ${MONTHS_SHORT[d.getMonth()]}`
+                  return (
+                    <Link key={exp.id} href="/expenses" className="rk-act-row">
+                      <div className="rk-act-ico">{initial}</div>
+                      <div>
+                        <div className="rk-act-name">{exp.vendor_name || exp.supplier_name || 'Strošek'}</div>
+                        <div className="rk-act-sub">strošek · {dateStr}</div>
+                      </div>
+                      <div className="rk-act-amt neg">−€{Math.round(Number(exp.amount_net || exp.amount_total || 0))}</div>
+                      <div className="rk-pill">Strošek</div>
+                    </Link>
+                  )
+                }
+              })
+            })()}
           </div>
 
           <div className="rk-panel">
