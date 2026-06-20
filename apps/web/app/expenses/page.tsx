@@ -11,6 +11,7 @@ export default function ExpensesPage() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState({
     vendor: '',
     receipt_date: new Date().toISOString().split('T')[0],
@@ -44,6 +45,18 @@ export default function ExpensesPage() {
     setLoading(false)
   }
 
+  function openEdit(exp: any) {
+    setForm({
+      vendor: exp.vendor || '',
+      receipt_date: exp.receipt_date,
+      amount_net: String(exp.amount_net),
+      vat_rate: String(exp.vat_rate),
+      description: exp.description || '',
+      category: exp.category || categories[0],
+    })
+    setEditingId(exp.id)
+    setShowForm(true)
+  }
   async function handleSave() {
     if (!org || !form.vendor || !form.amount_net) return
     setSaving(true)
@@ -52,7 +65,7 @@ export default function ExpensesPage() {
     const vatAmount = amountNet * (vatRate / 100)
     const amountTotal = amountNet + vatAmount
 
-    const { error } = await supabase.from('receipts').insert({
+    const payload = {
       org_id: org.id,
       vendor: form.vendor,
       receipt_date: form.receipt_date,
@@ -64,7 +77,10 @@ export default function ExpensesPage() {
       category: form.category,
       status: 'confirmed',
       is_deductible: true,
-    })
+    }
+    const { error } = editingId
+      ? await supabase.from('receipts').update(payload).eq('id', editingId)
+      : await supabase.from('receipts').insert(payload)
 
     if (error) {
       alert('Napaka: ' + error.message)
@@ -219,10 +235,10 @@ export default function ExpensesPage() {
                 disabled={saving || !form.vendor || !form.amount_net}
                 className="flex-1 bg-gray-900 text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-40"
               >
-                {saving ? 'Shranjujem...' : 'Shrani strošek'}
+                {saving ? 'Shranjujem...' : editingId ? 'Posodobi strošek' : 'Shrani strošek'}
               </button>
               <button
-                onClick={() => setShowForm(false)}
+                onClick={() => { setShowForm(false); setEditingId(null) }}
                 className="border border-gray-200 rounded-xl px-6 py-2.5 text-sm"
               >
                 Prekliči
@@ -272,7 +288,7 @@ export default function ExpensesPage() {
               <div className="col-span-1 text-xs font-medium text-gray-500 text-right">Skupaj</div>
             </div>
             {expenses.map((exp, i) => (
-              <div key={exp.id} className={`grid grid-cols-12 gap-2 px-6 py-3 items-center ${i < expenses.length-1 ? 'border-b border-gray-50' : ''}`}>
+              <div key={exp.id} onClick={() => openEdit(exp)} className={`grid grid-cols-12 gap-2 px-6 py-3 items-center cursor-pointer hover:bg-gray-50 transition-colors ${i < expenses.length-1 ? 'border-b border-gray-50' : ''}`}>
                 <div className="col-span-2 text-xs text-gray-500">
                   {new Date(exp.receipt_date).toLocaleDateString('sl-SI')}
                 </div>
