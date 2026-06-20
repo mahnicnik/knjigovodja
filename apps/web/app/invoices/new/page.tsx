@@ -12,6 +12,7 @@ interface LineItem {
   quantity: number
   unit_price: number
   vat_rate: number
+  discount_pct?: number
 }
 
 export default function NewInvoicePage() {
@@ -28,7 +29,7 @@ export default function NewInvoicePage() {
   const [taxLookupError, setTaxLookupError] = useState('')
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0])
   const [dueDate, setDueDate] = useState(new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0])
-  const [items, setItems] = useState<LineItem[]>([{ description: '', quantity: 1, unit_price: 0, vat_rate: 22 }])
+  const [items, setItems] = useState<LineItem[]>([{ description: '', quantity: 1, unit_price: 0, vat_rate: 22, discount_pct: 0 }])
   const [notes, setNotes] = useState('')
   const [serviceDate, setServiceDate] = useState('')
   const [serviceDateTo, setServiceDateTo] = useState('')
@@ -123,14 +124,15 @@ export default function NewInvoicePage() {
     }
   }
 
-  function addItem() { setItems([...items, { description: '', quantity: 1, unit_price: 0, vat_rate: 22 }]) }
+  function addItem() { setItems([...items, { description: '', quantity: 1, unit_price: 0, vat_rate: 22, discount_pct: 0 }]) }
   function removeItem(i: number) { setItems(items.filter((_, idx) => idx !== i)) }
   function updateItem(i: number, field: keyof LineItem, value: any) {
     const updated = [...items]; updated[i] = { ...updated[i], [field]: value }; setItems(updated)
   }
 
-  const subtotal = items.reduce((s, item) => s + item.quantity * item.unit_price, 0)
-  const vatAmount = items.reduce((s, item) => s + item.quantity * item.unit_price * (item.vat_rate / 100), 0)
+  const lineNet = (item: LineItem) => item.quantity * item.unit_price * (1 - (item.discount_pct || 0) / 100)
+  const subtotal = items.reduce((s, item) => s + lineNet(item), 0)
+  const vatAmount = items.reduce((s, item) => s + lineNet(item) * (item.vat_rate / 100), 0)
   const total = subtotal + vatAmount
 
   async function handleSave(status: 'draft' | 'sent') {
@@ -266,7 +268,7 @@ export default function NewInvoicePage() {
                   </div>
                   <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
                     <input value={item.description} onChange={e => updateItem(i, 'description', e.target.value)} placeholder="Opis storitve" className={inp} />
-                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'8px' }}>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 0.8fr', gap:'8px' }}>
                       <div>
                         <label style={{ fontSize:'10px', color:'#888', display:'block', marginBottom:'3px' }}>Količina</label>
                         <input type="number" value={item.quantity} onChange={e => updateItem(i, 'quantity', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none text-center" />
@@ -282,6 +284,10 @@ export default function NewInvoicePage() {
                           <option value={9.5}>9.5%</option>
                           <option value={0}>0%</option>
                         </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize:'10px', color:'#888', display:'block', marginBottom:'3px' }}>Popust %</label>
+                        <input type="number" min={0} max={100} value={item.discount_pct || 0} onChange={e => updateItem(i, 'discount_pct', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none text-center" />
                       </div>
                     </div>
                   </div>
@@ -363,20 +369,22 @@ export default function NewInvoicePage() {
               <div className="col-span-5 text-xs font-medium text-gray-400">Storitev</div>
               <div className="col-span-2 text-xs font-medium text-gray-400 text-center">Količina</div>
               <div className="col-span-2 text-xs font-medium text-gray-400 text-right">Cena (€)</div>
-              <div className="col-span-2 text-xs font-medium text-gray-400 text-center">DDV</div>
+              <div className="col-span-1 text-xs font-medium text-gray-400 text-center">DDV</div>
+              <div className="col-span-1 text-xs font-medium text-gray-400 text-center">Popust</div>
               <div className="col-span-1"></div>
             </div>
             <div className="space-y-2 mb-4">
               {items.map((item, i) => (
                 <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                  <div className="col-span-5"><input value={item.description} onChange={e => updateItem(i, 'description', e.target.value)} placeholder="Opis storitve" className={inp} /></div>
+                  <div className="col-span-4"><input value={item.description} onChange={e => updateItem(i, 'description', e.target.value)} placeholder="Opis storitve" className={inp} /></div>
                   <div className="col-span-2"><input type="number" value={item.quantity} onChange={e => updateItem(i, 'quantity', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none text-center" /></div>
                   <div className="col-span-2"><input type="number" value={item.unit_price} onChange={e => updateItem(i, 'unit_price', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none text-right" /></div>
-                  <div className="col-span-2">
-                    <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none">
+                  <div className="col-span-1">
+                    <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-2 py-2 text-sm focus:outline-none">
                       <option value={22}>22%</option><option value={9.5}>9.5%</option><option value={0}>0%</option>
                     </select>
                   </div>
+                  <div className="col-span-1"><input type="number" min={0} max={100} value={item.discount_pct || 0} onChange={e => updateItem(i, 'discount_pct', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-2 py-2 text-sm focus:outline-none text-center" /></div>
                   <div className="col-span-1 flex justify-center">
                     {items.length > 1 && <button onClick={() => removeItem(i)} className="text-gray-300 hover:text-red-500 text-xl">×</button>}
                   </div>
