@@ -126,7 +126,7 @@ export default function PoslovnaPorocila() {
             <select value={year} onChange={e => setYear(Number(e.target.value))} style={{ background: 'rgba(255,255,255,0.1)', color: '#fff', border: 0, borderRadius: 8, padding: '8px 12px', fontSize: 13 }}>
               {[2023, 2024, 2025, 2026].map(y => <option key={y} value={y} style={{ color: '#000' }}>{y}</option>)}
             </select>
-            <Link href="/statistika" style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)', padding: '8px 16px', borderRadius: 8, fontSize: 13, textDecoration: 'none' }}>← Statistika</Link>
+            <button onClick={() => router.back()} style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)', padding: '8px 16px', borderRadius: 8, fontSize: 13, border: 'none', cursor: 'pointer' }}>← Nazaj</button>
           </div>
         </div>
 
