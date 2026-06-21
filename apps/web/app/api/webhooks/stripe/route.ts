@@ -1,110 +1,228 @@
-import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import { NextRequest, NextResponse } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+import crypto from 'crypto'
 
-export const runtime = 'nodejs';
-export const maxDuration = 60;
+/**
+ * Stripe Webhook Handler — za uporabnikove lastne Stripe naročnine/plačila
+ *
+ * Sprejme webhook od uporabnikovega lastnega Stripe accounta (npr. njegove
+ * SaaS aplikacije) ob uspešnem plačilu in avtomatsko:
+ * 1. Ustvari issued_invoice v Računko
+ * 2. Doda KPO vnos (knjiga prihodkov)
+ *
+ * Nastavitev v Stripe dashboardu uporabnika:
+ * Stripe → Developers → Webhooks → Add endpoint
+ * - URL: https://racunko.si/api/webhooks/stripe?org_id=VAŠ_ORG_ID
+ * - Events: checkout.session.completed, invoice.paid
+ * - Signing secret: (vnesi v Računko nastavitve → Integracije → Stripe)
+ *
+ * POMEMBNO: To je webhook za UPORABNIKOV lasten Stripe account (npr. za
+ * njegovo aplikacijo ki pobira plačila), NE za Računko subscription Stripe.
+ */
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-});
+async function getSupabase() {
+  const cookieStore = await cookies()
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      cookies: {
+        get(name: string) { return cookieStore.get(name)?.value },
+        set() {}, remove() {},
+      },
+    }
+  )
+}
+
+/**
+ * Preveri Stripe webhook podpis (HMAC-SHA256 po Stripe specifikaciji).
+ * Stripe pošlje header: t=timestamp,v1=signature
+ */
+function verifyStripeSignature(payload: string, sigHeader: string, secret: string): boolean {
+  try {
+    const parts = sigHeader.split(',').reduce((acc: Record<string, string>, part) => {
+      const [k, v] = part.split('=')
+      acc[k] = v
+      return acc
+    }, {})
+    const timestamp = parts['t']
+    const signature = parts['v1']
+    if (!timestamp || !signature) return false
+
+    const signedPayload = `${timestamp}.${payload}`
+    const computed = crypto.createHmac('sha256', secret).update(signedPayload, 'utf8').digest('hex')
+
+    return crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(signature))
+  } catch {
+    return false
+  }
+}
+
+async function generateInvoiceNumber(supabase: any, orgId: string): Promise<string> {
+  const year = new Date().getFullYear()
+  const { count } = await supabase
+    .from('issued_invoices')
+    .select('*', { count: 'exact', head: true })
+    .eq('org_id', orgId)
+    .like('invoice_number', `STR-${year}-%`)
+
+  const seq = String((count ?? 0) + 1).padStart(4, '0')
+  return `STR-${year}-${seq}`
+}
 
 export async function POST(req: NextRequest) {
   try {
-    let base64: string;
-    let existingItems: { id: string; name: string; barcode?: string }[] = [];
-    const contentType = req.headers.get('content-type') || '';
+    const supabase = await getSupabase()
 
-    if (contentType.includes('multipart/form-data')) {
-      const formData = await req.formData();
-      const file = formData.get('file') as File | null;
-      if (!file) return NextResponse.json({ error: 'Datoteka manjka' }, { status: 400 });
-      const arrayBuffer = await file.arrayBuffer();
-      base64 = Buffer.from(arrayBuffer).toString('base64');
-    } else if (contentType.includes('application/json')) {
-      const body = await req.json();
-      existingItems = body.items || [];
-      if (body.pdfBase64) base64 = body.pdfBase64;
-      else if (body.base64) base64 = body.base64;
-      else if (body.fileData) base64 = body.fileData.replace(/^data:[^;]+;base64,/, '');
-      else return NextResponse.json({ error: 'Manjka pdfBase64 polje v JSON' }, { status: 400 });
-    } else {
-      const arrayBuffer = await req.arrayBuffer();
-      if (!arrayBuffer.byteLength) return NextResponse.json({ error: `Nepodprt Content-Type: ${contentType}` }, { status: 400 });
-      base64 = Buffer.from(arrayBuffer).toString('base64');
+    const { searchParams } = new URL(req.url)
+    const orgId = searchParams.get('org_id')
+
+    if (!orgId) {
+      return NextResponse.json({ error: 'org_id parameter manjka' }, { status: 400 })
     }
 
-    const itemsContext = existingItems.length > 0
-      ? `\n\nObstoječi artikli v blagajni (za ujemanje po imenu ALI barcode):\n${existingItems.map(i => `- id: "${i.id}", naziv: "${i.name}"${i.barcode ? `, barcode: "${i.barcode}"` : ''}`).join('\n')}`
-      : '\n\nV blagajni še ni artiklov — za vse nastavi ujemanje_id na null.';
+    const rawBody = await req.text()
+    const signature = req.headers.get('stripe-signature') ?? ''
 
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'document',
-              source: { type: 'base64', media_type: 'application/pdf', data: base64 },
-            },
-            {
-              type: 'text',
-              text: `Iz te slovenske dobavnice izlušči SAMO glavne produkte (NE embalaže, NE zabojev, NE steklenic).
-Za vsak artikel poišči ujemanje med obstoječimi artikli po EAN/barcode najprej, potem po imenu.
-Odgovori SAMO z validnim JSON-om, brez markdown blokov, brez razlag.${itemsContext}
+    const { data: integration } = await supabase
+      .from('integrations')
+      .select('webhook_secret, settings')
+      .eq('org_id', orgId)
+      .eq('type', 'stripe')
+      .eq('is_active', true)
+      .maybeSingle()
 
-JSON struktura:
-{
-  "dobavitelj": "ime dobavitelja",
-  "stevilka_dokumenta": "številka računa/dobavnice",
-  "datum": "YYYY-MM-DD",
-  "artikli": [
-    {
-      "naziv": "ime artikla iz dobavnice",
-      "ean": "EAN/barcode koda ali null",
-      "kolicina": 160,
-      "enota": "kos",
-      "cena_brez_ddv": 1.1989,
-      "popust_procent": 12.0,
-      "neto_cena_brez_ddv": 1.0575,
-      "ddv_stopnja": 22,
-      "neto_cena_z_ddv": 1.29,
-      "vrednost_brez_ddv": 169.20,
-      "vrednost_z_ddv": 206.42,
-      "ujemanje_id": "id obstoječega artikla ali null",
-      "ujemanje_ime": "ime obstoječega artikla ali null"
-    }
-  ],
-  "skupaj_brez_ddv": 329.45,
-  "skupaj_ddv": 72.49,
-  "skupaj_z_ddv": 401.94
-}`,
-            },
-          ],
-        },
-      ],
-    });
-
-    const textBlock = response.content.find((b) => b.type === 'text');
-    if (!textBlock || textBlock.type !== 'text') {
-      return NextResponse.json({ error: 'AI ni vrnil odgovora' }, { status: 500 });
+    if (!integration) {
+      return NextResponse.json({ error: 'Stripe integracija ni nastavljena' }, { status: 404 })
     }
 
-    const cleaned = textBlock.text
-      .replace(/^```json\s*/i, '')
-      .replace(/^```\s*/i, '')
-      .replace(/```\s*$/i, '')
-      .trim();
+    if (integration.webhook_secret && signature) {
+      const isValid = verifyStripeSignature(rawBody, signature, integration.webhook_secret)
+      if (!isValid) {
+        return NextResponse.json({ error: 'Neveljaven podpis' }, { status: 401 })
+      }
+    }
 
-    const parsed = JSON.parse(cleaned);
-    return NextResponse.json(parsed);
+    const event = JSON.parse(rawBody)
 
-  } catch (err) {
-    console.error('[import-delivery] error:', err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Unknown error' },
-      { status: 500 }
-    );
+    // Obravnavamo samo dogodke uspešnega plačila
+    const handledEvents = ['checkout.session.completed', 'invoice.paid', 'payment_intent.succeeded']
+    if (!handledEvents.includes(event.type)) {
+      return NextResponse.json({ message: `Event ${event.type} ignoriran` }, { status: 200 })
+    }
+
+    const obj = event.data.object
+
+    // Preveri ali račun za ta Stripe objekt že obstaja
+    const externalRef = `stripe-${obj.id}`
+    const { data: existing } = await supabase
+      .from('issued_invoices')
+      .select('id')
+      .eq('org_id', orgId)
+      .eq('external_reference', externalRef)
+      .maybeSingle()
+
+    if (existing) {
+      return NextResponse.json({ message: 'Račun že obstaja', invoiceId: existing.id }, { status: 200 })
+    }
+
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('*')
+      .eq('id', orgId)
+      .single()
+
+    if (!org) {
+      return NextResponse.json({ error: 'Org ni najdena' }, { status: 404 })
+    }
+
+    // Znesek je v Stripe vedno v najmanjši enoti valute (centi)
+    const amountTotal = (obj.amount_total ?? obj.amount_paid ?? obj.amount ?? 0) / 100
+    if (amountTotal <= 0) {
+      return NextResponse.json({ message: 'Znesek 0 — preskočeno' }, { status: 200 })
+    }
+
+    const amountNet = amountTotal / (org.vat_registered ? 1.22 : 1)
+    const vatAmount = org.vat_registered ? amountTotal - amountNet : 0
+
+    // Stranka — Stripe checkout session ima customer_details, invoice ima customer_email
+    const customerEmail = obj.customer_details?.email ?? obj.customer_email ?? null
+    const customerName = obj.customer_details?.name ?? obj.customer_name ?? customerEmail ?? 'Stranka iz Stripe'
+
+    const description = obj.description ?? `Stripe plačilo #${obj.id}`
+
+    const lineItems = [{
+      description,
+      quantity: 1,
+      unit_price: Math.round(amountNet * 100) / 100,
+      amount_net: Math.round(amountNet * 100) / 100,
+      vat_rate: org.vat_registered ? 22 : 0,
+      vat_amount: Math.round(vatAmount * 100) / 100,
+    }]
+
+    const invoiceNumber = await generateInvoiceNumber(supabase, orgId)
+    const issueDate = new Date().toISOString().split('T')[0]
+
+    const { data: invoice, error: invErr } = await supabase
+      .from('issued_invoices')
+      .insert({
+        org_id: orgId,
+        invoice_number: invoiceNumber,
+        invoice_type: 'invoice',
+        client_name: customerName,
+        client_email: customerEmail,
+        issue_date: issueDate,
+        due_date: issueDate,
+        service_date_from: issueDate,
+        service_date_to: issueDate,
+        line_items: lineItems,
+        amount_net: Math.round(amountNet * 100) / 100,
+        vat_amount: Math.round(vatAmount * 100) / 100,
+        amount_total: Math.round(amountTotal * 100) / 100,
+        status: 'paid',
+        paid_at: new Date().toISOString(),
+        paid_amount: amountTotal,
+        notes: `Stripe plačilo — ${event.type} (${obj.id})`,
+        external_reference: externalRef,
+      })
+      .select('id')
+      .single()
+
+    if (invErr || !invoice) {
+      throw new Error(`Napaka pri ustvarjanju računa: ${invErr?.message}`)
+    }
+
+    await supabase.from('kpo_entries').insert({
+      org_id: orgId,
+      entry_date: issueDate,
+      description: `Stripe — ${customerName}`,
+      entry_type: 'income',
+      income: amountNet,
+      vat_out: vatAmount,
+      invoice_id: invoice.id,
+      category: 'spletna_prodaja',
+      notes: `Avtomatski vnos iz Stripe`,
+    })
+
+    await supabase.from('integration_logs').insert({
+      org_id: orgId,
+      integration_type: 'stripe',
+      external_id: obj.id,
+      invoice_id: invoice.id,
+      status: 'success',
+      payload: { event_type: event.type, amount_total: amountTotal },
+    })
+
+    return NextResponse.json({
+      success: true,
+      invoiceId: invoice.id,
+      invoiceNumber,
+      message: `Račun ${invoiceNumber} ustvarjen za Stripe plačilo ${obj.id}`,
+    })
+
+  } catch (e: any) {
+    console.error('Stripe integration webhook error:', e)
+    return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }
