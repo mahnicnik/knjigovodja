@@ -8,7 +8,7 @@ import HowTo from '@/components/HowTo'
 
 interface Integration {
   id: string
-  type: 'woocommerce' | 'shopify'
+  type: 'woocommerce' | 'shopify' | 'stripe'
   is_active: boolean
   settings: {
     shop_url?: string
@@ -37,6 +37,9 @@ export default function IntegrationPage() {
   const [shModal, setShModal] = useState(false)
   const [shUrl, setShUrl] = useState('')
   const [shSecret, setShSecret] = useState('')
+  // Stripe form
+  const [strModal, setStrModal] = useState(false)
+  const [strSecret, setStrSecret] = useState('')
 
   function showToast(type: 'success' | 'error', msg: string) {
     setToast({ type, msg })
@@ -71,17 +74,18 @@ export default function IntegrationPage() {
     load()
   }, [router, supabase])
 
-  async function saveIntegration(type: 'woocommerce' | 'shopify', shopUrl: string, secret: string) {
+  async function saveIntegration(type: 'woocommerce' | 'shopify' | 'stripe', shopUrl: string, secret: string) {
     if (!orgId) return
-    if (!shopUrl.trim()) { showToast('error', 'URL trgovine je obvezen'); return }
+    if (type !== 'stripe' && !shopUrl.trim()) { showToast('error', 'URL trgovine je obvezen'); return }
 
     setSaving(true)
     try {
       const existing = integrations.find(i => i.type === type)
+      const settings = type === 'stripe' ? {} : { shop_url: shopUrl.trim() }
 
       if (existing) {
         await supabase.from('integrations').update({
-          settings: { shop_url: shopUrl.trim() },
+          settings,
           webhook_secret: secret,
           is_active: true,
         }).eq('id', existing.id)
@@ -89,7 +93,7 @@ export default function IntegrationPage() {
         await supabase.from('integrations').insert({
           org_id: orgId,
           type,
-          settings: { shop_url: shopUrl.trim() },
+          settings,
           webhook_secret: secret,
           is_active: true,
         })
@@ -101,7 +105,8 @@ export default function IntegrationPage() {
 
       if (type === 'woocommerce') setWcModal(false)
       if (type === 'shopify') setShModal(false)
-      showToast('success', `${type === 'woocommerce' ? 'WooCommerce' : 'Shopify'} integracija shranjena`)
+      if (type === 'stripe') setStrModal(false)
+      showToast('success', `${type === 'woocommerce' ? 'WooCommerce' : type === 'shopify' ? 'Shopify' : 'Stripe'} integracija shranjena`)
     } catch (e: any) {
       showToast('error', e.message)
     } finally {
@@ -127,6 +132,7 @@ export default function IntegrationPage() {
 
   const wcIntegration = integrations.find(i => i.type === 'woocommerce')
   const shIntegration = integrations.find(i => i.type === 'shopify')
+  const strIntegration = integrations.find(i => i.type === 'stripe')
 
   if (loading) return (
     <div style={{ padding: 48, textAlign: 'center', color: '#888' }}>Nalagam...</div>
@@ -262,6 +268,60 @@ export default function IntegrationPage() {
           )}
         </div>
 
+        {/* STRIPE */}
+        <div style={{ background: '#fff', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.08)', padding: 24, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: strIntegration ? 16 : 0 }}>
+            <div style={{ width: 48, height: 48, borderRadius: 12, background: '#635BFF', display: 'grid', placeItems: 'center', fontSize: 24, flexShrink: 0 }}>💳</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: '#0D1F12' }}>Stripe</div>
+              <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>Plačila iz vaše lastne aplikacije</div>
+            </div>
+            {strIntegration ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => toggleIntegration(strIntegration.id, strIntegration.is_active)} style={{
+                  padding: '6px 12px', borderRadius: 6, border: 0, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  background: strIntegration.is_active ? '#E1F5EE' : '#FEE2E2',
+                  color: strIntegration.is_active ? '#0E5E3B' : '#DC2626',
+                }}>
+                  {strIntegration.is_active ? '✓ Aktiven' : '✕ Neaktiven'}
+                </button>
+                <button onClick={() => { setStrSecret(strIntegration.webhook_secret); setStrModal(true) }} style={{ padding: '6px 12px', borderRadius: 6, border: '0.5px solid rgba(0,0,0,0.12)', fontSize: 12, cursor: 'pointer', background: '#fff' }}>Uredi</button>
+                <button onClick={() => deleteIntegration(strIntegration.id, 'Stripe')} style={{ padding: '6px 12px', borderRadius: 6, border: 0, fontSize: 12, cursor: 'pointer', background: '#FEE2E2', color: '#DC2626' }}>Briši</button>
+              </div>
+            ) : (
+              <button onClick={() => { setStrSecret(generateSecret()); setStrModal(true) }} style={{ background: '#0D1F12', color: '#fff', border: 0, borderRadius: 8, padding: '8px 16px', fontSize: 13, cursor: 'pointer' }}>
+                + Poveži
+              </button>
+            )}
+          </div>
+          <HowTo
+  title="Kako povežem Stripe?"
+  steps={[
+    { icon: '🔑', title: 'Kopirajte Webhook URL', desc: 'Ta URL boste vnesli v Stripe nastavitve.', code: `${webhookBaseUrl}/stripe?org_id=${orgId}`, copyable: true },
+    { icon: '💳', title: 'Odprite Stripe Dashboard', desc: 'Pojdite na: Developers → Webhooks → Add endpoint' },
+    { icon: '📋', title: 'Izpolnite podatke', desc: 'Events: checkout.session.completed, invoice.paid · URL: (iz koraka 1)' },
+    { icon: '✅', title: 'Kopirajte Signing secret', desc: 'Stripe vam ob ustvarjanju webhooka pokaže "Signing secret" — kopirajte ga spodaj v polje Webhook Secret.' },
+  ]}
+  tip="Uporabite vaš LASTEN Stripe webhook (za vašo aplikacijo/produkt) — ne za Računko naročnino."
+/>
+          {strIntegration && (
+            <div style={{ background: '#F7F6F2', borderRadius: 10, padding: '14px 16px' }}>
+              <div style={{ fontSize: 11, color: '#888', marginBottom: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em' }}>Webhook URL za Stripe</div>
+              <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#0D1F12', wordBreak: 'break-all', background: '#fff', padding: '8px 12px', borderRadius: 6, border: '0.5px solid rgba(0,0,0,0.1)' }}>
+                {webhookBaseUrl}/stripe?org_id={orgId}
+              </div>
+              <div style={{ fontSize: 11, color: '#888', marginTop: 10, marginBottom: 4, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em' }}>Webhook Secret (Stripe Signing secret)</div>
+              <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#0D1F12', background: '#fff', padding: '8px 12px', borderRadius: 6, border: '0.5px solid rgba(0,0,0,0.1)' }}>
+                {strIntegration.webhook_secret}
+              </div>
+              <div style={{ fontSize: 12, color: '#888', marginTop: 10, lineHeight: 1.5 }}>
+                V Stripe: <strong>Developers → Webhooks → Add endpoint</strong><br />
+                Events: <strong>checkout.session.completed, invoice.paid</strong> · URL: (zgoraj)
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* INTEGRATION LOGS */}
         <IntegrationLogs orgId={orgId} supabase={supabase} />
 
@@ -325,6 +385,31 @@ export default function IntegrationPage() {
         </div>
       )}
 
+      {/* STRIPE MODAL */}
+      {strModal && (
+        <div onClick={e => { if (e.target === e.currentTarget) setStrModal(false) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+          <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 480, padding: 28 }}>
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>💳 Stripe nastavitve</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Webhook Secret (Stripe Signing secret) *</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input value={strSecret} onChange={e => setStrSecret(e.target.value)} placeholder="whsec_..." style={{ ...inp, flex: 1 }} />
+                  <button onClick={() => setStrSecret(generateSecret())} style={{ padding: '8px 12px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.15)', fontSize: 12, cursor: 'pointer', background: '#F7F6F2', flexShrink: 0 }}>↺ Novo</button>
+                </div>
+                <div style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>Prilepite Signing secret iz Stripe → Webhooks → vaš endpoint</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
+              <button onClick={() => setStrModal(false)} style={{ padding: '9px 16px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.12)', fontSize: 13, cursor: 'pointer', background: '#fff' }}>Prekliči</button>
+              <button onClick={() => saveIntegration('stripe', 'stripe', strSecret)} disabled={saving} style={{ padding: '9px 18px', borderRadius: 8, border: 0, fontSize: 13, fontWeight: 500, cursor: 'pointer', background: '#0D1F12', color: '#fff', opacity: saving ? 0.6 : 1 }}>
+                {saving ? 'Shranjujem...' : 'Shrani'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* TOAST */}
       {toast && (
         <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: toast.type === 'success' ? '#0D1F12' : '#A32D2D', color: '#fff', padding: '12px 20px', borderRadius: 999, fontSize: 13, fontWeight: 500, zIndex: 3000, boxShadow: '0 8px 24px rgba(0,0,0,0.2)' }}>
@@ -361,7 +446,7 @@ function IntegrationLogs({ orgId, supabase }: { orgId: string | null; supabase: 
             <span style={{ fontSize: 14 }}>{log.status === 'success' ? '✅' : '❌'}</span>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 12, fontWeight: 500, color: '#0D1F12' }}>
-                {log.integration_type === 'woocommerce' ? '🛒 WooCommerce' : '🏪 Shopify'} · #{log.external_id}
+                {log.integration_type === 'woocommerce' ? '🛒 WooCommerce' : log.integration_type === 'shopify' ? '🏪 Shopify' : '💳 Stripe'} · #{log.external_id}
               </div>
               <div style={{ fontSize: 11, color: '#888' }}>
                 {new Date(log.created_at).toLocaleString('sl-SI')}
