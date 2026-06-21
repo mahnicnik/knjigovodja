@@ -209,8 +209,43 @@ export default function BankaPage() {
     setProcessing(true)
 
     try {
-      const text = await file.text()
-      const parsed = parseCSV(text, selectedBank)
+      let parsed: BankTransaction[] = []
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+
+      if (isPdf) {
+        const maxPdfBytes = 4 * 1024 * 1024
+        if (file.size > maxPdfBytes) {
+          showToast(`PDF je prevelik (${(file.size / 1024 / 1024).toFixed(1)}MB). Največja dovoljena velikost je 4MB.`)
+          setProcessing(false)
+          return
+        }
+        const arrayBuffer = await file.arrayBuffer()
+        const pdfBase64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
+        const res = await fetch('/api/banka/parse-pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pdfBase64 }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          showToast(data.error || 'Napaka pri branju PDF izpiska')
+          setProcessing(false)
+          return
+        }
+        parsed = (data.transactions || []).map((t: any) => ({
+          date: t.date,
+          description: t.description || '',
+          amount: Number(t.amount) || 0,
+          type: t.type === 'debit' ? 'debit' : 'credit',
+          reference: t.reference || '',
+          matched_invoice: null,
+          selected: true,
+          raw: JSON.stringify(t),
+        }))
+      } else {
+        const text = await file.text()
+        parsed = parseCSV(text, selectedBank)
+      }
 
       if (parsed.length === 0) {
         showToast('Ni bilo mogoče prebrati transakcij. Preverite format banke.')
@@ -299,7 +334,7 @@ export default function BankaPage() {
                 ))}
               </div>
 
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#0D1F12', marginBottom: 12 }}>2. Naložite CSV izpisek</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#0D1F12', marginBottom: 12 }}>2. Naložite izpisek (CSV ali PDF)</div>
               <div style={{ fontSize: 12, color: '#888', marginBottom: 12, lineHeight: 1.6 }}>
                 <strong>{BANK_FORMATS[selectedBank]?.name}</strong> → Spletna banka → Račun → Promet → Izvozi CSV
               </div>
@@ -316,10 +351,10 @@ export default function BankaPage() {
               >
                 <div style={{ fontSize: 32, marginBottom: 8 }}>📁</div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: '#0D1F12', marginBottom: 4 }}>
-                  {processing ? 'Analiziram...' : 'Kliknite ali povlecite CSV datoteko'}
+                  {processing ? 'Analiziram...' : 'Kliknite ali povlecite CSV / PDF datoteko'}
                 </div>
-                <div style={{ fontSize: 12, color: '#888' }}>Podprte: .csv, .txt</div>
-                <input ref={fileRef} type="file" accept=".csv,.txt,.xls,.xlsx" onChange={handleFile} style={{ display: 'none' }} />
+                <div style={{ fontSize: 12, color: '#888' }}>Podprte: .csv, .txt, .pdf</div>
+                <input ref={fileRef} type="file" accept=".csv,.txt,.xls,.xlsx,.pdf" onChange={handleFile} style={{ display: 'none' }} />
               </div>
             </div>
 
