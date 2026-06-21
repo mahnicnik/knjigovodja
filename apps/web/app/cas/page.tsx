@@ -128,6 +128,14 @@ export default function CasPage() {
   // Statistike
   const totalHours = filtered.reduce((s, e) => s + e.hours, 0)
   const billableHours = filtered.filter(e => e.is_billable).reduce((s, e) => s + e.hours, 0)
+  const MONTHLY_NORM = 176
+  const now = new Date()
+  const monthHours = entries
+    .filter(e => { const d = new Date(e.date); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() })
+    .reduce((s, e) => s + e.hours, 0)
+  const regularHours = Math.min(monthHours, MONTHLY_NORM)
+  const overtimeHours = Math.max(0, monthHours - MONTHLY_NORM)
+  const normaPct = Math.min(100, (monthHours / MONTHLY_NORM) * 100)
   const totalValue = filtered.filter(e => e.is_billable && e.hourly_rate).reduce((s, e) => s + e.hours * (e.hourly_rate ?? 0), 0)
   const uninvoiced = filtered.filter(e => e.is_billable && !e.invoice_id && e.hourly_rate).reduce((s, e) => s + e.hours * (e.hourly_rate ?? 0), 0)
 
@@ -167,6 +175,17 @@ export default function CasPage() {
               <div style={{ fontSize: 20, fontWeight: 700, color: s.color }}>{s.value}</div>
             </div>
           ))}
+        </div>
+        <div style={{ maxWidth: 960, margin: '12px auto 0', background: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: '14px 16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>Mesečna norma ({MONTHLY_NORM}h)</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: overtimeHours > 0 ? '#FCD34D' : '#fff' }}>
+              {regularHours.toFixed(1)}h redno{overtimeHours > 0 ? ` + ${overtimeHours.toFixed(1)}h nadur` : ''}
+            </div>
+          </div>
+          <div style={{ height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${normaPct}%`, background: overtimeHours > 0 ? '#FCD34D' : '#1D9E75', borderRadius: 3, transition: 'width 0.3s' }} />
+          </div>
         </div>
       </div>
 
