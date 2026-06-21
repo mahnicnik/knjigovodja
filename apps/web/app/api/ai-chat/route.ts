@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { getPostHogClient } from '@/lib/posthog-server'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -8,6 +10,26 @@ const client = new Anthropic({
 
 export async function POST(request: NextRequest) {
   try {
+    const cookieStore = await cookies()
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { cookies: { getAll: () => cookieStore.getAll() } }
+    )
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })
+    }
+    const { data: member } = await supabase
+      .from('org_members')
+      .select('organizations(subscription_status)')
+      .eq('user_id', user.id)
+      .maybeSingle()
+    const subStatus = (member as any)?.organizations?.subscription_status
+    const isPro = subStatus === 'pro' || subStatus === 'pro_pos'
+    if (!isPro) {
+      return NextResponse.json({ error: 'AI računovodja je na voljo samo v Pro paketu.' }, { status: 403 })
+    }
     const { messages, context, orgData } = await request.json()
 
     getPostHogClient().capture({

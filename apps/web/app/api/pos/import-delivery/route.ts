@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -10,6 +12,25 @@ const anthropic = new Anthropic({
 
 export async function POST(req: NextRequest) {
   try {
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { cookies: { getAll: () => cookieStore.getAll() } }
+    );
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 });
+    }
+    const { data: member } = await supabase
+      .from('org_members')
+      .select('organizations(subscription_status)')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    const subStatus = (member as any)?.organizations?.subscription_status;
+    if (subStatus !== 'pro_pos') {
+      return NextResponse.json({ error: 'AI uvoz dobavnic je na voljo samo v Pro + POS paketu.' }, { status: 403 });
+    }
     let base64: string;
     let existingItems: { id: string; name: string; barcode?: string }[] = [];
     const contentType = req.headers.get('content-type') || '';
