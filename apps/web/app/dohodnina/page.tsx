@@ -48,6 +48,8 @@ export default function DohodninaPage() {
   // Vhodni podatki
   const [revenue, setRevenue] = useState('')
   const [expenses, setExpenses] = useState('')
+  const [inputMode, setInputMode] = useState<'ytd' | 'avg'>('ytd')
+  const [avgMonthlyRevenue, setAvgMonthlyRevenue] = useState('')
   const [contributionClass, setContributionClass] = useState(8)
   const [dependents, setDependents] = useState(0)
   const [month, setMonth] = useState(new Date().getMonth() + 1)
@@ -96,8 +98,9 @@ export default function DohodninaPage() {
   const annualContributions = SP_CONTRIBUTIONS[contributionClass] || SP_CONTRIBUTIONS[8]
   const monthlyContributions = annualContributions / 12
 
-  // Ekstrapoliraj na letno če je samo delno leto
-  const annualRevenue = month < 12 ? (rev / month) * 12 : rev
+  // Ekstrapoliraj na letno če je samo delno leto, ali uporabi povprečni mesečni prihodek
+  const avgMonthly = parseFloat(avgMonthlyRevenue) || 0
+  const annualRevenue = inputMode === 'avg' ? avgMonthly * 12 : (month < 12 ? (rev / month) * 12 : rev)
   const annualExpenses = month < 12 ? (exp / month) * 12 : exp
 
   // Davčna osnova
@@ -133,7 +136,7 @@ export default function DohodninaPage() {
       <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
         <div>
           <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900">← Domov</Link>
-          <h1 className="font-semibold text-gray-900 mt-0.5">Dohodnina kalkulator</h1>
+          <h1 className="font-semibold text-gray-900 mt-0.5">Akontacija dohodnine</h1>
         </div>
         <div className="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-lg">2026</div>
       </div>
@@ -146,6 +149,11 @@ export default function DohodninaPage() {
             <h3 className="font-medium text-gray-900 mb-4 text-sm">Vaši podatki</h3>
 
             <div className="space-y-3">
+              <div className="flex gap-2 mb-1">
+                <button onClick={() => setInputMode('ytd')} className={`flex-1 text-xs py-1.5 rounded-lg font-medium ${inputMode === 'ytd' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'}`}>Prihodki YTD</button>
+                <button onClick={() => setInputMode('avg')} className={`flex-1 text-xs py-1.5 rounded-lg font-medium ${inputMode === 'avg' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'}`}>Povprečje/mes</button>
+              </div>
+              {inputMode === 'ytd' ? (
               <div>
                 <label className="text-xs text-gray-500 block mb-1">
                   Prihodki YTD (€)
@@ -159,6 +167,21 @@ export default function DohodninaPage() {
                   className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
                 />
               </div>
+              ) : (
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">
+                  Povprečni mesečni prihodek (€)
+                  <span className="text-gray-400 ml-1">— oceni letni prihodek</span>
+                </label>
+                <input
+                  type="number"
+                  value={avgMonthlyRevenue}
+                  onChange={e => setAvgMonthlyRevenue(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                />
+              </div>
+              )}
 
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Odhodki YTD (€)</label>
