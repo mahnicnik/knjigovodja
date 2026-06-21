@@ -1,43 +1,50 @@
-import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import { NextRequest, NextResponse } from 'next/server'
+import Anthropic from '@anthropic-ai/sdk'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 
-export const runtime = 'nodejs';
-export const maxDuration = 60;
+const client = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+})
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-});
-
-export async function POST(req: NextRequest) {
+/**
+ * Parsiranje PDF bančnega izpiska prek AI ekstrakcije.
+ * Vrne array transakcij v istem formatu kot CSV parser (parseCSV).
+ * Samo Pro/Pro+POS — uporablja Claude API kredite.
+ */
+export async function POST(request: NextRequest) {
   try {
-    let base64: string;
-    let existingItems: { id: string; name: string; barcode?: string }[] = [];
-    const contentType = req.headers.get('content-type') || '';
+    const cookieStore = await cookies()
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { cookies: { getAll: () => cookieStore.getAll() } }
+    )
 
-    if (contentType.includes('multipart/form-data')) {
-      const formData = await req.formData();
-      const file = formData.get('file') as File | null;
-      if (!file) return NextResponse.json({ error: 'Datoteka manjka' }, { status: 400 });
-      const arrayBuffer = await file.arrayBuffer();
-      base64 = Buffer.from(arrayBuffer).toString('base64');
-    } else if (contentType.includes('application/json')) {
-      const body = await req.json();
-      existingItems = body.items || [];
-      if (body.pdfBase64) base64 = body.pdfBase64;
-      else if (body.base64) base64 = body.base64;
-      else if (body.fileData) base64 = body.fileData.replace(/^data:[^;]+;base64,/, '');
-      else return NextResponse.json({ error: 'Manjka pdfBase64 polje v JSON' }, { status: 400 });
-    } else {
-      const arrayBuffer = await req.arrayBuffer();
-      if (!arrayBuffer.byteLength) return NextResponse.json({ error: `Nepodprt Content-Type: ${contentType}` }, { status: 400 });
-      base64 = Buffer.from(arrayBuffer).toString('base64');
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })
     }
 
-    const itemsContext = existingItems.length > 0
-      ? `\n\nObstoječi artikli v blagajni (za ujemanje po imenu ALI barcode):\n${existingItems.map(i => `- id: "${i.id}", naziv: "${i.name}"${i.barcode ? `, barcode: "${i.barcode}"` : ''}`).join('\n')}`
-      : '\n\nV blagajni še ni artiklov — za vse nastavi ujemanje_id na null.';
+    const { data: member } = await supabase
+      .from('org_members')
+      .select('organizations(subscription_status)')
+      .eq('user_id', user.id)
+      .maybeSingle()
 
-    const response = await anthropic.messages.create({
+    const subStatus = (member as any)?.organizations?.subscription_status
+    const isPro = subStatus === 'pro' || subStatus === 'pro_pos'
+    if (!isPro) {
+      return NextResponse.json({ error: 'Uvoz PDF bančnega izpiska je na voljo samo v Pro paketu.' }, { status: 403 })
+    }
+
+    const { pdfBase64 } = await request.json()
+
+    if (!pdfBase64) {
+      return NextResponse.json({ error: 'pdfBase64 manjka' }, { status: 400 })
+    }
+
+    const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 4096,
       messages: [
@@ -46,65 +53,50 @@ export async function POST(req: NextRequest) {
           content: [
             {
               type: 'document',
-              source: { type: 'base64', media_type: 'application/pdf', data: base64 },
+              source: {
+                type: 'base64',
+                media_type: 'application/pdf',
+                data: pdfBase64,
+              },
             },
             {
               type: 'text',
-              text: `Iz te slovenske dobavnice izlušči SAMO glavne produkte (NE embalaže, NE zabojev, NE steklenic).
-Za vsak artikel poišči ujemanje med obstoječimi artikli po EAN/barcode najprej, potem po imenu.
-Odgovori SAMO z validnim JSON-om, brez markdown blokov, brez razlag.${itemsContext}
+              text: `Analiziraj ta bančni izpisek (PDF) in izlušči VSE transakcije. Za vsako transakcijo vrni objekt s polji:
+- date: datum transakcije v formatu YYYY-MM-DD
+- description: opis/namen plačila (kdo je plačnik/prejemnik, referenca)
+- amount: znesek transakcije (samo pozitivno število, brez predznaka, brez €)
+- type: "credit" če je denar prišel na račun (priliv), "debit" če je denar odšel z računa (odliv)
+- reference: referenčna številka plačila če obstaja, sicer prazen string
 
-JSON struktura:
-{
-  "dobavitelj": "ime dobavitelja",
-  "stevilka_dokumenta": "številka računa/dobavnice",
-  "datum": "YYYY-MM-DD",
-  "artikli": [
-    {
-      "naziv": "ime artikla iz dobavnice",
-      "ean": "EAN/barcode koda ali null",
-      "kolicina": 160,
-      "enota": "kos",
-      "cena_brez_ddv": 1.1989,
-      "popust_procent": 12.0,
-      "neto_cena_brez_ddv": 1.0575,
-      "ddv_stopnja": 22,
-      "neto_cena_z_ddv": 1.29,
-      "vrednost_brez_ddv": 169.20,
-      "vrednost_z_ddv": 206.42,
-      "ujemanje_id": "id obstoječega artikla ali null",
-      "ujemanje_ime": "ime obstoječega artikla ali null"
-    }
-  ],
-  "skupaj_brez_ddv": 329.45,
-  "skupaj_ddv": 72.49,
-  "skupaj_z_ddv": 401.94
-}`,
+Vrni SAMO JSON array vseh transakcij, brez dodatnega besedila, v tej obliki:
+[
+  {"date": "2026-01-15", "description": "Plačilo računa #2026-001", "amount": 150.00, "type": "credit", "reference": "SI00 123"}
+]
+
+Če je izpisek dolg in ima veliko transakcij, izlušči jih VSE — ne izpuščaj nobene.`,
             },
           ],
         },
       ],
-    });
+    })
 
-    const textBlock = response.content.find((b) => b.type === 'text');
-    if (!textBlock || textBlock.type !== 'text') {
-      return NextResponse.json({ error: 'AI ni vrnil odgovora' }, { status: 500 });
+    const text = response.content[0].type === 'text' ? response.content[0].text : ''
+    const jsonMatch = text.match(/\[[\s\S]*\]/)
+
+    if (!jsonMatch) {
+      return NextResponse.json({ error: 'Ni bilo mogoče prebrati transakcij iz PDF-ja' }, { status: 422 })
     }
 
-    const cleaned = textBlock.text
-      .replace(/^```json\s*/i, '')
-      .replace(/^```\s*/i, '')
-      .replace(/```\s*$/i, '')
-      .trim();
+    const transactions = JSON.parse(jsonMatch[0])
 
-    const parsed = JSON.parse(cleaned);
-    return NextResponse.json(parsed);
+    if (!Array.isArray(transactions) || transactions.length === 0) {
+      return NextResponse.json({ error: 'V PDF-ju ni bilo najdenih transakcij' }, { status: 422 })
+    }
 
-  } catch (err) {
-    console.error('[import-delivery] error:', err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Unknown error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ transactions })
+
+  } catch (error: any) {
+    console.error('Banka PDF parse error:', error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
