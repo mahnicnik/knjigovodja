@@ -93,6 +93,7 @@ export default function PlacePage() {
   const [form, setForm] = useState({
     full_name: '', tax_number: '', iban: '', gross_salary: '',
     employment_type: 'full_time', start_date: new Date().toISOString().split('T')[0], dependents: 0,
+    annual_leave_days: 20,
   })
 
   const supabase = createClient()
@@ -128,9 +129,9 @@ export default function PlacePage() {
       org_id: org.id, full_name: form.full_name, tax_number: form.tax_number,
       iban: form.iban, gross_salary: parseFloat(form.gross_salary),
       employment_type: form.employment_type, start_date: form.start_date,
-      dependents: form.dependents, status: 'active',
+      dependents: form.dependents, annual_leave_days: form.annual_leave_days, status: 'active',
     })
-    setForm({ full_name: '', tax_number: '', iban: '', gross_salary: '', employment_type: 'full_time', start_date: new Date().toISOString().split('T')[0], dependents: 0 })
+    setForm({ full_name: '', tax_number: '', iban: '', gross_salary: '', employment_type: 'full_time', start_date: new Date().toISOString().split('T')[0], dependents: 0, annual_leave_days: 20 })
     setShowForm(false)
     setSaving(false)
     load()
@@ -422,6 +423,8 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
                 <select value={form.dependents} onChange={e=>setForm({...form,dependents:parseInt(e.target.value)})} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none">
                   <option value={0}>Brez</option><option value={1}>1 otrok</option><option value={2}>2 otroka</option><option value={3}>3+</option>
                 </select></div>
+              <div><label className="text-xs text-gray-500 block mb-1">Letni dopust (dni)</label>
+                <input type="number" min={20} value={form.annual_leave_days} onChange={e=>setForm({...form,annual_leave_days:parseInt(e.target.value)||20})} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none" /></div>
             </div>
             <div className="flex gap-3">
               <button onClick={handleAddEmployee} disabled={saving||!form.full_name||!form.gross_salary} className="flex-1 bg-gray-900 text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-40">
