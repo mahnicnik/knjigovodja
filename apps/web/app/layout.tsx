@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import PageHelp from "@/components/PageHelp";
 import { Geist, Geist_Mono, Newsreader, Bricolage_Grotesque, Plus_Jakarta_Sans, Fraunces, Schibsted_Grotesk, JetBrains_Mono } from "next/font/google";
 
 const rkSans = Schibsted_Grotesk({ subsets: ["latin"], weight: ["400","500","600","700","800","900"], variable: "--rk-font-sans" })
@@ -80,7 +81,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="Računko" />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
       </head>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">{children}<PageHelp /></body>
     </html>
   );
 }
