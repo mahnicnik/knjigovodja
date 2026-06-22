@@ -241,7 +241,13 @@ export async function confirmWithFurs(
     let proxyData: any = {}
     try { proxyData = JSON.parse(proxyRaw) } catch { proxyData = { error: proxyRaw } }
     console.log('FURS proxy data:', JSON.stringify(proxyData))
-    if (proxyData.error) throw new Error('Proxy napaka: ' + proxyData.error)
+    if (proxyData.error) {
+      const errMsg = String(proxyData.error)
+      if (errMsg.includes('SSL') || errMsg.includes('ssl') || errMsg.includes('decryption') || errMsg.includes('record mac')) {
+        throw new Error('SSL napaka pri FURS: Certifikat ni veljaven ali ni registriran pri FURS. Preverite ali imate pravi TaxCA certifikat in ali je blagajna registrirana pri FURS.')
+      }
+      throw new Error('Proxy napaka: ' + proxyData.error)
+    }
     const response = { ok: (proxyData.status ?? 0) >= 200 && (proxyData.status ?? 0) < 300, status: proxyData.status ?? 0, text: async () => proxyData.body ?? '' }
 
     if (!response.ok) {
