@@ -60,10 +60,17 @@ export async function POST(req: NextRequest) {
       .single()
 
     const p12Buffer = Buffer.from(cert.certificate_data, 'base64')
-    const { privateKeyPem, certificatePem } = extractFromP12(
-      p12Buffer,
-      cert.certificate_password ?? ''
-    )
+    let privateKeyPem: string, certificatePem: string
+    try {
+      const extracted = extractFromP12(p12Buffer, cert.certificate_password ?? '')
+      privateKeyPem = extracted.privateKeyPem
+      certificatePem = extracted.certificatePem
+    } catch (e: any) {
+      return NextResponse.json({
+        success: false,
+        error: 'Napačno geslo certifikata ali neveljavna .p12 datoteka. Preverite geslo in ponovno naložite certifikat.'
+      }, { status: 400 })
+    }
 
     const config: FursConfig = {
       taxNumber: org?.tax_number ?? '91390419',
