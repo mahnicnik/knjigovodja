@@ -264,7 +264,7 @@ export default function PageHelp() {
         style={{
           position: 'fixed',
           bottom: 24,
-          right: 24,
+          left: 24,
           width: 44,
           height: 44,
           borderRadius: '50%',
@@ -294,7 +294,7 @@ export default function PageHelp() {
           style={{
             position: 'fixed', inset: 0,
             background: 'rgba(0,0,0,0.45)',
-            display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end',
+            display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-start',
             padding: 24, zIndex: 2000,
           }}
         >
