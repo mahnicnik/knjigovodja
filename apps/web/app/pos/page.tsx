@@ -6577,6 +6577,191 @@ function EmojiPicker({ value, onChange }) {
 }
 
 // ─── Catalog (Kategorije + Artikli) CRUD ──────────────────────
+// ─── Uvoz cenika (AI) ─────────────────────────────────────────
+function CenikImportModal({ onClose, posData }) {
+  const fileRef = useRef(null)
+  const [processing, setProcessing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [items, setItems] = useState([])
+  const [error, setError] = useState('')
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setProcessing(true)
+    setError('')
+    try {
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+      let body
+      if (isPdf) {
+        const maxBytes = 4 * 1024 * 1024
+        if (file.size > maxBytes) {
+          setError(`PDF je prevelik (${(file.size / 1024 / 1024).toFixed(1)}MB). Največja velikost je 4MB.`)
+          setProcessing(false)
+          return
+        }
+        const arrayBuffer = await file.arrayBuffer()
+        const pdfBase64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
+        body = { pdfBase64 }
+      } else {
+        const dataUrl = await new Promise((resolve) => {
+          const reader = new FileReader()
+          reader.onload = (ev) => resolve(ev.target.result)
+          reader.readAsDataURL(file)
+        })
+        body = { image: dataUrl.split(',')[1], mediaType: file.type }
+      }
+      const res = await fetch('/api/pos/parse-cenik', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || 'Napaka pri branju cenika')
+        setProcessing(false)
+        return
+      }
+      setItems((data.items || []).map((it) => ({
+        name: it.name || '',
+        category: it.category || '',
+        unit: it.unit || 'kos',
+        price: Number(it.price) || 0,
+        vat_rate: Number(it.vat_rate) ?? 22,
+        selected: true,
+      })))
+    } catch (e) {
+      setError('Napaka: ' + e.message)
+    }
+    setProcessing(false)
+  }
+
+  function updateItem(i, field, value) {
+    setItems(prev => prev.map((it, idx) => idx === i ? { ...it, [field]: value } : it))
+  }
+  function removeItem(i) {
+    setItems(prev => prev.filter((_, idx) => idx !== i))
+  }
+  function toggleAll(selected) {
+    setItems(prev => prev.map(it => ({ ...it, selected })))
+  }
+
+  async function saveAll() {
+    setSaving(true)
+    setError('')
+    try {
+      const toInsert = items.filter(it => it.selected && it.name.trim())
+      if (toInsert.length === 0) {
+        setError('Izberite vsaj en izdelek')
+        setSaving(false)
+        return
+      }
+      // Poiščemo ali ustvarimo kategorije po imenu
+      const sb = createClient()
+      const categoryNames = [...new Set(toInsert.map(it => it.category.trim()).filter(Boolean))]
+      const categoryMap = {}
+      for (const catName of categoryNames) {
+        const existing = posData.categories.find(c => c.name?.toLowerCase() === catName.toLowerCase())
+        if (existing) {
+          categoryMap[catName] = existing.id
+        } else {
+          const { data: newCat, error: catErr } = await sb.from('categories').insert({
+            business_id: BUSINESS_ID, name: catName, color: '#1f6b3a', icon: '📦', sort_order: posData.categories.length,
+          }).select('id').single()
+          if (!catErr && newCat) categoryMap[catName] = newCat.id
+        }
+      }
+
+      const { error: insertError } = await sb.from('items').insert(
+        toInsert.map(it => ({
+          business_id: BUSINESS_ID,
+          category_id: it.category.trim() ? (categoryMap[it.category.trim()] ?? null) : null,
+          name: it.name.trim(),
+          price: it.price,
+          unit: it.unit || 'kos',
+          vat_rate: it.vat_rate,
+          item_type: 'simple',
+          archived: false,
+        }))
+      )
+      if (insertError) {
+        setError('Napaka pri shranjevanju: ' + insertError.message)
+        setSaving(false)
+        return
+      }
+      posData.refresh()
+      onClose()
+    } catch (e) {
+      setError('Napaka: ' + e.message)
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div onClick={e => { if (e.target === e.currentTarget) onClose() }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3000, padding: 16 }}>
+      <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 720, maxHeight: '85vh', overflowY: 'auto', padding: 28 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>📷 Uvozi artikle iz cenika</div>
+          <button onClick={onClose} style={{ background: 'none', border: 0, fontSize: 20, cursor: 'pointer', color: '#aaa' }}>×</button>
+        </div>
+
+        {items.length === 0 ? (
+          <div>
+            <p style={{ fontSize: 13, color: '#888', marginBottom: 16, lineHeight: 1.6 }}>
+              Naložite fotografijo ali PDF vašega cenika — AI bo samodejno prepoznal izdelke, kategorije in cene.
+            </p>
+            <div
+              onClick={() => fileRef.current?.click()}
+              style={{ border: '2px dashed #e5e7eb', borderRadius: 12, padding: 48, textAlign: 'center', cursor: 'pointer', background: '#FAFAF8' }}
+            >
+              <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>
+                {processing ? 'Analiziram cenik...' : 'Kliknite ali povlecite sliko / PDF cenika'}
+              </div>
+              <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>Podprte: JPG, PNG, PDF</div>
+              <input ref={fileRef} type="file" accept="image/*,.pdf" onChange={handleFile} style={{ display: 'none' }} />
+            </div>
+            {error && <div style={{ marginTop: 16, fontSize: 13, color: '#DC2626' }}>{error}</div>}
+          </div>
+        ) : (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>Najdenih {items.length} izdelkov — preverite pred shranjevanjem</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => toggleAll(true)} style={{ fontSize: 12, color: '#1D9E75', background: 'none', border: 0, cursor: 'pointer' }}>Izberi vse</button>
+                <button onClick={() => toggleAll(false)} style={{ fontSize: 12, color: '#888', background: 'none', border: 0, cursor: 'pointer' }}>Počisti</button>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: '45vh', overflowY: 'auto' }}>
+              {items.map((it, i) => (
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: '20px 2fr 1fr 70px 60px 60px 24px', gap: 6, alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #f5f5f5' }}>
+                  <input type="checkbox" checked={it.selected} onChange={e => updateItem(i, 'selected', e.target.checked)} />
+                  <input value={it.name} onChange={e => updateItem(i, 'name', e.target.value)} style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '5px 7px', fontSize: 12 }} />
+                  <input value={it.category} onChange={e => updateItem(i, 'category', e.target.value)} placeholder="Kategorija" style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '5px 7px', fontSize: 12 }} />
+                  <input value={it.unit} onChange={e => updateItem(i, 'unit', e.target.value)} style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '5px 7px', fontSize: 12, textAlign: 'center' }} />
+                  <input type="number" step="0.01" value={it.price} onChange={e => updateItem(i, 'price', Number(e.target.value))} style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '5px 7px', fontSize: 12, textAlign: 'right' }} />
+                  <select value={it.vat_rate} onChange={e => updateItem(i, 'vat_rate', Number(e.target.value))} style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '4px 2px', fontSize: 12 }}>
+                    <option value={22}>22%</option>
+                    <option value={9.5}>9.5%</option>
+                    <option value={0}>0%</option>
+                  </select>
+                  <button onClick={() => removeItem(i)} style={{ background: 'none', border: 0, color: '#aaa', cursor: 'pointer', fontSize: 16 }}>×</button>
+                </div>
+              ))}
+            </div>
+            {error && <div style={{ marginTop: 12, fontSize: 13, color: '#DC2626' }}>{error}</div>}
+            <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
+              <button onClick={() => setItems([])} style={{ padding: '9px 16px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13, background: '#fff', cursor: 'pointer' }}>Prekliči</button>
+              <button onClick={saveAll} disabled={saving} style={{ flex: 1, padding: '9px 16px', borderRadius: 8, border: 0, fontSize: 13, fontWeight: 600, background: '#0D1F12', color: '#fff', cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+                {saving ? 'Shranjujem...' : `Shrani ${items.filter(it => it.selected).length} izbranih artiklov`}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 function CatalogSection({ posData }) {
   const [catModal, setCatModal] = useState(null)
   const [itemModal, setItemModal] = useState(null)
@@ -6584,6 +6769,7 @@ function CatalogSection({ posData }) {
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
   const [activeTab, setActiveTab] = useState('categories')
+  const [cenikModal, setCenikModal] = useState(false)
   const [modifierGroups, setModifierGroups] = useState<any[]>([])
   const [itemModifierLinks, setItemModifierLinks] = useState<Record<string,string[]>>({})
   const [modGroupModal, setModGroupModal] = useState<any>(null)
@@ -6709,11 +6895,15 @@ function CatalogSection({ posData }) {
       )}
 
       {activeTab==='surovine' && <SestavineSection posData={posData}/>}
+      {cenikModal && <CenikImportModal onClose={()=>setCenikModal(false)} posData={posData} />}
       {activeTab==='items' && (
         <div>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
             <div style={{ fontSize:18, fontWeight:700 }}>Artikli ({posData.items.length})</div>
-            <button onClick={()=>setItemModal({vat_rate:9.5,unit:'kos',fav:false,kitchen:false,bookable:false})} style={btnP}>+ Dodaj artikel</button>
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={()=>setCenikModal(true)} style={{...btnP, background:T.surface2, color:T.ink, border:'1px solid '+T.line}}>📷 Uvozi iz cenika</button>
+              <button onClick={()=>setItemModal({vat_rate:9.5,unit:'kos',fav:false,kitchen:false,bookable:false})} style={btnP}>+ Dodaj artikel</button>
+            </div>
           </div>
           {posData.items.map(it => (
             <div key={it.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'11px 14px', background:T.surface, borderRadius:10, marginBottom:4, border:'1px solid '+T.line }}>
