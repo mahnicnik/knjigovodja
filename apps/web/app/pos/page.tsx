@@ -6585,6 +6585,32 @@ function CenikImportModal({ onClose, posData }) {
   const [items, setItems] = useState([])
   const [error, setError] = useState('')
 
+  function compressImage(dataUrl) {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      const img = new Image()
+      img.onload = () => {
+        const maxSize = 1600
+        let { width, height } = img
+        if (width > maxSize || height > maxSize) {
+          if (width > height) {
+            height = (height / width) * maxSize
+            width = maxSize
+          } else {
+            width = (width / height) * maxSize
+            height = maxSize
+          }
+        }
+        canvas.width = width
+        canvas.height = height
+        ctx.drawImage(img, 0, 0, width, height)
+        resolve(canvas.toDataURL('image/jpeg', 0.85))
+      }
+      img.src = dataUrl
+    })
+  }
+
   async function handleFile(e) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -6615,7 +6641,8 @@ function CenikImportModal({ onClose, posData }) {
           reader.onload = (ev) => resolve(ev.target.result)
           reader.readAsDataURL(file)
         })
-        body = { image: dataUrl.split(',')[1], mediaType: file.type }
+        const compressed = await compressImage(dataUrl)
+        body = { image: compressed.split(',')[1], mediaType: 'image/jpeg' }
       }
       const res = await fetch('/api/pos/parse-cenik', {
         method: 'POST',
