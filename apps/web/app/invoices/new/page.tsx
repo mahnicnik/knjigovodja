@@ -156,7 +156,15 @@ export default function NewInvoicePage() {
       service_date_to: serviceDateTo || null,
       header_text: headerText || null,
     })
-    if (error) { alert('Napaka: ' + error.message); setLoading(false); return }
+    if (error) {
+      if (error.message.includes('issued_invoices_org_id_invoice_number_key') || error.message.includes('duplicate key')) {
+        alert(`Račun s številko "${invoiceNumber}" že obstaja. Spremenite številko računa in poskusite znova.`)
+      } else {
+        alert('Napaka: ' + error.message)
+      }
+      setLoading(false)
+      return
+    }
     posthog.capture(status === 'sent' ? 'invoice_created' : 'invoice_drafted', { invoice_number: invoiceNumber, amount_total: total })
     router.push('/invoices')
   }
@@ -366,11 +374,11 @@ export default function NewInvoicePage() {
             </div>
             <h3 className="font-medium text-gray-900 mb-4">Storitve in blago</h3>
             <div className="grid grid-cols-12 gap-2 mb-2 px-1">
-              <div className="col-span-5 text-xs font-medium text-gray-400">Storitev</div>
+              <div className="col-span-4 text-xs font-medium text-gray-400">Storitev</div>
               <div className="col-span-2 text-xs font-medium text-gray-400 text-center">Količina</div>
               <div className="col-span-2 text-xs font-medium text-gray-400 text-right">Cena (€)</div>
               <div className="col-span-1 text-xs font-medium text-gray-400 text-center">DDV</div>
-              <div className="col-span-1 text-xs font-medium text-gray-400 text-center">Popust</div>
+              <div className="col-span-2 text-xs font-medium text-gray-400 text-center">Popust %</div>
               <div className="col-span-1"></div>
             </div>
             <div className="space-y-2 mb-4">
@@ -384,7 +392,7 @@ export default function NewInvoicePage() {
                       <option value={22}>22%</option><option value={9.5}>9.5%</option><option value={0}>0%</option>
                     </select>
                   </div>
-                  <div className="col-span-1"><input type="number" min={0} max={100} value={item.discount_pct || 0} onChange={e => updateItem(i, 'discount_pct', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-2 py-2 text-sm focus:outline-none text-center" /></div>
+                  <div className="col-span-2"><input type="number" min={0} max={100} value={item.discount_pct || 0} onChange={e => updateItem(i, 'discount_pct', +e.target.value)} style={{ MozAppearance: 'textfield' as any }} className="w-full border border-gray-200 rounded-xl px-2 py-2 text-sm focus:outline-none text-center [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></div>
                   <div className="col-span-1 flex justify-center">
                     {items.length > 1 && <button onClick={() => removeItem(i)} className="text-gray-300 hover:text-red-500 text-xl">×</button>}
                   </div>
