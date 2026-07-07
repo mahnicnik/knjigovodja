@@ -263,7 +263,7 @@ export default function PageHelp() {
         onClick={() => setOpen(true)}
         style={{
           position: 'fixed',
-          bottom: 24,
+          bottom: 100,
           left: 24,
           width: 44,
           height: 44,
