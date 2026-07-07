@@ -6601,7 +6601,13 @@ function CenikImportModal({ onClose, posData }) {
           return
         }
         const arrayBuffer = await file.arrayBuffer()
-        const pdfBase64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
+        const bytes = new Uint8Array(arrayBuffer)
+        let binary = ''
+        const chunkSize = 8192
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize))
+        }
+        const pdfBase64 = btoa(binary)
         body = { pdfBase64 }
       } else {
         const dataUrl = await new Promise((resolve) => {
