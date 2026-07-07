@@ -6,9 +6,58 @@
 
 import { createClient } from '@/lib/supabase'
 
-// ─── Business ID — hardkodiran za ŠIRM ───────────────────────────────
-// Vzeto iz seed SQL (04_seed_sirm.sql)
-export const BUSINESS_ID = '00000000-0000-0000-0000-000000000001'
+// ─── Business ID — multi-tenant: dinamično nastavljen glede na org ──
+// Live binding: ko resolveBusinessId() spremeni to vrednost, se sprememba
+// avtomatsko odraža povsod kjer je BUSINESS_ID uvožen (ES module semantics).
+export let BUSINESS_ID: string = ''
+
+/**
+ * Nastavi BUSINESS_ID glede na trenutno prijavljeno organizacijo.
+ * Če organizacija še nima povezanega POS biznisa (pos_business_id je null),
+ * samodejno ustvari nov `businesses` zapis in ga poveže.
+ * Kliči to ENKRAT ob nalaganju POS strani, preden se naloži karkoli drugega.
+ */
+export async function resolveBusinessId(orgId: string, orgName: string, ownerUserId: string): Promise<string> {
+  const supabase = sb()
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('pos_business_id')
+    .eq('id', orgId)
+    .single()
+
+  if (org?.pos_business_id) {
+    BUSINESS_ID = org.pos_business_id
+    return BUSINESS_ID
+  }
+
+  // Ni še POS biznisa — ustvarimo novega
+  const { data: newBiz, error } = await supabase
+    .from('businesses')
+    .insert({
+      name: orgName,
+      owner_user_id: ownerUserId,
+      profile_type: 'trznica',
+      vat_rate: 22.00,
+      currency: 'EUR',
+      language: 'sl-SI',
+      master_pin: '9999',
+      auto_lock_ms: 60000,
+      furs_enabled: false,
+      pos_settings: {},
+      furs_config: {},
+    })
+    .select('id')
+    .single()
+
+  if (error || !newBiz) {
+    throw new Error('Napaka pri ustvarjanju POS biznisa: ' + (error?.message ?? 'neznana napaka'))
+  }
+
+  await supabase.from('organizations').update({ pos_business_id: newBiz.id }).eq('id', orgId)
+
+  BUSINESS_ID = newBiz.id
+  return BUSINESS_ID
+}
 
 // ─── Supabase client ──────────────────────────────────────────────────
 // Vsakič ustvarimo nov client (Next.js SSR safe)

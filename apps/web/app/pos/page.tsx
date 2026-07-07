@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { pos, BUSINESS_ID } from '@/lib/pos-client'
+import { pos, BUSINESS_ID, resolveBusinessId } from '@/lib/pos-client'
 import { buildReceiptHTML } from '@/lib/receipt'
 import { WorkStatusBar, ClockInModal } from '@/lib/work-session-components'
 import { getCurrentSession, openSession, getSessionStats, closeSession, getLastCarryOver, type CashSession, type SessionStats } from '@/lib/cash-session'
@@ -126,10 +126,30 @@ function usePosData() {
   const [businessProfile, setBusinessProfile] = useState('all')
   const [loading, setLoading] = useState(true)
   const [reloadKey, setReloadKey] = useState(0)
+  const [bizReady, setBizReady] = useState(false)
 
   const refresh = useCallback(() => setReloadKey(k => k + 1), [])
 
   useEffect(() => {
+    async function initBusiness() {
+      try {
+        const sb2 = createClient()
+        const { data: { user } } = await sb2.auth.getUser()
+        if (!user) return
+        const { data: mem } = await sb2.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+        if (!mem) return
+        const { data: o } = await sb2.from('organizations').select('name').eq('id', mem.org_id).single()
+        await resolveBusinessId(mem.org_id, o?.name || 'Moj biznis', user.id)
+        setBizReady(true)
+      } catch (e) {
+        console.error('Napaka pri inicializaciji POS biznisa:', e)
+      }
+    }
+    initBusiness()
+  }, [])
+
+  useEffect(() => {
+    if (!bizReady) return
     async function load() {
       setLoading(true)
       try {
@@ -168,7 +188,7 @@ function usePosData() {
       setLoading(false)
     }
     load()
-  }, [reloadKey])
+  }, [reloadKey, bizReady])
 
   function itemsIn(catId) {
     if (catId === 'cat-fav') {
