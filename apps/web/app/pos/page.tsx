@@ -7148,6 +7148,8 @@ function CatalogSection({ posData }) {
                         <div style={{ fontWeight:600, fontSize:12 }}>{mg.name}{mg.required?' (obvezno)':''}{mg.multi_select?' (vec izbir)':''}</div>
                         <div style={{ fontSize:11, color:T.muted }}>{(mg.item_modifiers||[]).map((m:any) => m.name + (m.price_delta?(m.price_delta>0?'+':'')+m.price_delta+'€':'')).join(' · ')}</div>
                       </div>
+                      <button onClick={(e:any) => { e.stopPropagation(); setModGroupModal({ id: mg.id, name: mg.name, required: mg.required, multi_select: mg.multi_select, modifiers: (mg.item_modifiers||[]).length > 0 ? mg.item_modifiers.map((m:any) => ({ id: m.id, name: m.name, price_delta: m.price_delta })) : [{name:'',price_delta:0}] }) }} style={{ background:'none', border:'none', cursor:'pointer', color:T.muted, padding:4 }} title="Uredi">✏️</button>
+                      <button onClick={async (e:any) => { e.stopPropagation(); if (!confirm(`Izbrišem modifier grupo "${mg.name}"?`)) return; await createClient().from('item_modifier_group_links').delete().eq('group_id', mg.id); await createClient().from('item_modifiers').delete().eq('group_id', mg.id); await createClient().from('item_modifier_groups').delete().eq('id', mg.id); const { data: mg2 } = await createClient().from('item_modifier_groups').select('*, item_modifiers(*)').eq('business_id', BUSINESS_ID).order('sort_order'); setModifierGroups(mg2 || []) }} style={{ background:'none', border:'none', cursor:'pointer', color:T.danger, padding:4 }} title="Izbriši">🗑️</button>
                     </div>
                   )
                 })}
