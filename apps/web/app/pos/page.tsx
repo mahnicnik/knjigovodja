@@ -9046,10 +9046,12 @@ function KlasikApp() {
             vatRate: line.vat_rate || 22, mods: line.mods || [], note: line.note || null,
           })))
           await pos.spaces.updateTableStatus(activeTable.id, 'occupied')
+          posData.refresh()
         } else if (existing) {
           // Cart je prazen - izbrišemo prazno naročilo če obstaja
           await pos.orders.closeOrderEmpty(existing.id)
           await pos.spaces.updateTableStatus(activeTable.id, 'free')
+          posData.refresh()
         }
       }
       // 2. Naloži naročilo nove mize (če obstaja)
