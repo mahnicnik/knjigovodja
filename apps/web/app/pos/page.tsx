@@ -857,6 +857,9 @@ function ReceiptToast({ data, onClose }) {
     if (data) {
       // Avtomatski print
       autoPrint(data)
+      // Avtomatsko zapri potrditveno okno po tisku (ni treba rocno klikati Zapri)
+      const t = setTimeout(() => { onClose() }, 1000)
+      return () => clearTimeout(t)
     }
   }, [data])
 
