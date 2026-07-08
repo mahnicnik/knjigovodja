@@ -406,6 +406,67 @@ export const pos = {
       if (error) throw error
       return data
     },
+    async syncSessionToKPO(orgId: string, sessionFrom: string, sessionTo: string): Promise<{ productIncome: number; serviceIncome: number } | null> {
+      const db = sb()
+      // Pridobi vse plačane naročitve v tem sessionu, z vrsticami in tipom artikla
+      const { data: orders } = await db
+        .from('orders')
+        .select('id, closed_at, order_lines(qty, unit_price, vat_rate, voided, item_id, service_id)')
+        .eq('business_id', BUSINESS_ID)
+        .eq('status', 'paid')
+        .gte('closed_at', sessionFrom)
+        .lte('closed_at', sessionTo)
+      if (!orders || orders.length === 0) return null
+
+      let productNet = 0, productVat = 0
+      let serviceNet = 0, serviceVat = 0
+
+      for (const o of orders as any[]) {
+        for (const l of o.order_lines || []) {
+          if (l.voided) continue
+          const lineTotal = Number(l.qty || 0) * Number(l.unit_price || 0)
+          const rate = Number(l.vat_rate || 22)
+          const net = rate > 0 ? lineTotal / (1 + rate / 100) : lineTotal
+          const vat = lineTotal - net
+          if (l.service_id) {
+            serviceNet += net
+            serviceVat += vat
+          } else {
+            productNet += net
+            productVat += vat
+          }
+        }
+      }
+
+      const today = new Date(sessionTo).toISOString().split('T')[0]
+
+      if (productNet > 0) {
+        await db.from('kpo_entries').insert({
+          org_id: orgId,
+          entry_date: today,
+          description: `POS blagajna — prodaja izdelkov (${today})`,
+          entry_type: 'income',
+          income: Math.round(productNet * 100) / 100,
+          vat_out: Math.round(productVat * 100) / 100,
+          category: 'pos_prodaja',
+          notes: 'Avtomatski dnevni povzetek iz POS blagajne',
+        })
+      }
+      if (serviceNet > 0) {
+        await db.from('kpo_entries').insert({
+          org_id: orgId,
+          entry_date: today,
+          description: `POS blagajna — prodaja storitev (${today})`,
+          entry_type: 'income',
+          income: Math.round(serviceNet * 100) / 100,
+          vat_out: Math.round(serviceVat * 100) / 100,
+          category: 'pos_storitve',
+          notes: 'Avtomatski dnevni povzetek iz POS blagajne',
+        })
+      }
+
+      return { productIncome: productNet, serviceIncome: serviceNet }
+    },
     async closeOrderEmpty(orderId: string) {
       // Izbriše prazno naročilo (brez vrstic) - uporabljeno ko uporabnik zapusti mizo brez artiklov
       await sb().from('order_lines').delete().eq('order_id', orderId)
