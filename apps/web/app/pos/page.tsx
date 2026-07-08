@@ -4004,6 +4004,8 @@ function InventoryScreen({ posData }) {
                             <div style={{ fontWeight:600, fontSize:12 }}>{mg.name} {mg.required?'(obvezno)':''} {mg.multi_select?'(več izbir)':''}</div>
                             <div style={{ fontSize:11, color:T.muted }}>{(mg.item_modifiers||[]).map((m:any) => m.name + (m.price_delta ? (m.price_delta>0?'+':'')+m.price_delta+'€' : '')).join(' · ')}</div>
                           </div>
+                          <button onClick={(e) => { e.stopPropagation(); setModGroupModal({ id: mg.id, name: mg.name, required: mg.required, multi_select: mg.multi_select, modifiers: (mg.item_modifiers||[]).length > 0 ? mg.item_modifiers.map((m:any) => ({ id: m.id, name: m.name, price_delta: m.price_delta })) : [{name:'',price_delta:0}] }) }} style={{ background:'none', border:'none', cursor:'pointer', color:T.muted, padding:4 }} title="Uredi">✏️</button>
+                          <button onClick={async (e) => { e.stopPropagation(); if (!confirm(`Izbrišem modifier grupo "${mg.name}"?`)) return; await createClient().from('item_modifier_group_links').delete().eq('group_id', mg.id); await createClient().from('item_modifiers').delete().eq('group_id', mg.id); await createClient().from('item_modifier_groups').delete().eq('id', mg.id); const { data: mg2 } = await createClient().from('item_modifier_groups').select('*, item_modifiers(*)').eq('business_id', BUSINESS_ID).order('sort_order'); setModifierGroups(mg2 || []) }} style={{ background:'none', border:'none', cursor:'pointer', color:T.danger, padding:4 }} title="Izbriši">🗑️</button>
                         </div>
                       )
                     })}
@@ -4052,9 +4054,16 @@ function InventoryScreen({ posData }) {
                 <button onClick={()=>setModGroupModal(null)} style={btnS}>Prekliči</button>
                 <button onClick={async()=>{
                   if (!modGroupModal.name.trim()) return
-                  const { data: mg } = await createClient().from('item_modifier_groups').insert({ business_id:BUSINESS_ID, name:modGroupModal.name, required:modGroupModal.required, multi_select:modGroupModal.multi_select }).select().single()
-                  if (mg && modGroupModal.modifiers.filter((m:any)=>m.name).length > 0) {
-                    await createClient().from('item_modifiers').insert(modGroupModal.modifiers.filter((m:any)=>m.name).map((m:any,i:number)=>({ group_id:mg.id, name:m.name, price_delta:m.price_delta||0, sort_order:i })))
+                  let groupId = modGroupModal.id
+                  if (groupId) {
+                    await createClient().from('item_modifier_groups').update({ name:modGroupModal.name, required:modGroupModal.required, multi_select:modGroupModal.multi_select }).eq('id', groupId)
+                    await createClient().from('item_modifiers').delete().eq('group_id', groupId)
+                  } else {
+                    const { data: mg } = await createClient().from('item_modifier_groups').insert({ business_id:BUSINESS_ID, name:modGroupModal.name, required:modGroupModal.required, multi_select:modGroupModal.multi_select }).select().single()
+                    groupId = mg?.id
+                  }
+                  if (groupId && modGroupModal.modifiers.filter((m:any)=>m.name).length > 0) {
+                    await createClient().from('item_modifiers').insert(modGroupModal.modifiers.filter((m:any)=>m.name).map((m:any,i:number)=>({ group_id:groupId, name:m.name, price_delta:m.price_delta||0, sort_order:i })))
                   }
                   const { data: mgData } = await createClient().from('item_modifier_groups').select('*, item_modifiers(*)').eq('business_id', BUSINESS_ID).order('sort_order')
                   setModifierGroups(mgData || [])
@@ -4096,9 +4105,16 @@ function InventoryScreen({ posData }) {
                 <button onClick={()=>setModGroupModal(null)} style={btnS}>Prekliči</button>
                 <button onClick={async()=>{
                   if (!modGroupModal.name.trim()) return
-                  const { data: mg } = await createClient().from('item_modifier_groups').insert({ business_id:BUSINESS_ID, name:modGroupModal.name, required:modGroupModal.required, multi_select:modGroupModal.multi_select }).select().single()
-                  if (mg && modGroupModal.modifiers.filter((m:any)=>m.name).length > 0) {
-                    await createClient().from('item_modifiers').insert(modGroupModal.modifiers.filter((m:any)=>m.name).map((m:any,i:number)=>({ group_id:mg.id, name:m.name, price_delta:m.price_delta||0, sort_order:i })))
+                  let groupId = modGroupModal.id
+                  if (groupId) {
+                    await createClient().from('item_modifier_groups').update({ name:modGroupModal.name, required:modGroupModal.required, multi_select:modGroupModal.multi_select }).eq('id', groupId)
+                    await createClient().from('item_modifiers').delete().eq('group_id', groupId)
+                  } else {
+                    const { data: mg } = await createClient().from('item_modifier_groups').insert({ business_id:BUSINESS_ID, name:modGroupModal.name, required:modGroupModal.required, multi_select:modGroupModal.multi_select }).select().single()
+                    groupId = mg?.id
+                  }
+                  if (groupId && modGroupModal.modifiers.filter((m:any)=>m.name).length > 0) {
+                    await createClient().from('item_modifiers').insert(modGroupModal.modifiers.filter((m:any)=>m.name).map((m:any,i:number)=>({ group_id:groupId, name:m.name, price_delta:m.price_delta||0, sort_order:i })))
                   }
                   const { data: mgData } = await createClient().from('item_modifier_groups').select('*, item_modifiers(*)').eq('business_id', BUSINESS_ID).order('sort_order')
                   setModifierGroups(mgData || [])
@@ -7178,9 +7194,16 @@ function CatalogSection({ posData }) {
               <button onClick={()=>setModGroupModal(null)} style={btnS}>Preklic</button>
               <button onClick={async()=>{
                 if (!modGroupModal.name.trim()) return
-                const { data: mg } = await createClient().from('item_modifier_groups').insert({ business_id:BUSINESS_ID, name:modGroupModal.name, required:modGroupModal.required, multi_select:modGroupModal.multi_select }).select().single()
-                if (mg && modGroupModal.modifiers.filter((m:any)=>m.name).length > 0) {
-                  await createClient().from('item_modifiers').insert(modGroupModal.modifiers.filter((m:any)=>m.name).map((m:any,idx:number)=>({ group_id:mg.id, name:m.name, price_delta:m.price_delta||0, sort_order:idx })))
+                let groupId = modGroupModal.id
+                if (groupId) {
+                  await createClient().from('item_modifier_groups').update({ name:modGroupModal.name, required:modGroupModal.required, multi_select:modGroupModal.multi_select }).eq('id', groupId)
+                  await createClient().from('item_modifiers').delete().eq('group_id', groupId)
+                } else {
+                  const { data: mg } = await createClient().from('item_modifier_groups').insert({ business_id:BUSINESS_ID, name:modGroupModal.name, required:modGroupModal.required, multi_select:modGroupModal.multi_select }).select().single()
+                  groupId = mg?.id
+                }
+                if (groupId && modGroupModal.modifiers.filter((m:any)=>m.name).length > 0) {
+                  await createClient().from('item_modifiers').insert(modGroupModal.modifiers.filter((m:any)=>m.name).map((m:any,idx:number)=>({ group_id:groupId, name:m.name, price_delta:m.price_delta||0, sort_order:idx })))
                 }
                 const { data: mgData } = await createClient().from('item_modifier_groups').select('*, item_modifiers(*)').eq('business_id', BUSINESS_ID).order('sort_order')
                 setModifierGroups(mgData || [])
