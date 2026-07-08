@@ -95,8 +95,9 @@ export default function BlagajnaPage() {
           .eq('org_id', member.org_id)
           .eq('is_active', true)
 
+        const { data: orgTestMode } = await supabase.from('organizations').select('furs_test_mode').eq('id', member.org_id).single()
         setConfig({
-          testMode: process.env.NEXT_PUBLIC_FURS_TEST_MODE === 'true',
+          testMode: orgTestMode?.furs_test_mode ?? (process.env.NEXT_PUBLIC_FURS_TEST_MODE === 'true'),
           premises: (premises || []).map(p => ({
             id: p.id,
             businessPremiseId: p.premise_id,
@@ -120,9 +121,16 @@ export default function BlagajnaPage() {
   }, [])
 
   async function saveConfig(updated: FursConfig) {
-    // saveConfig se ne uporablja več za prostore/naprave
-    // samo posodobi lokalni state
     setConfig(updated)
+    try {
+      const { data: { user } } = await createClient().auth.getUser()
+      if (!user) return
+      const { data: member } = await createClient().from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+      if (!member) return
+      await createClient().from('organizations').update({ furs_test_mode: updated.testMode }).eq('id', member.org_id)
+    } catch (e) {
+      console.error('Napaka pri shranjevanju test načina:', e)
+    }
   }
 
   async function uploadCert() {

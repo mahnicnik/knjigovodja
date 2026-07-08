@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     // Pridobi davčno številko
     const { data: org } = await supabase
       .from('organizations')
-      .select('tax_number')
+      .select('tax_number, furs_test_mode')
       .eq('id', member.org_id)
       .single()
 
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
       deviceId: device?.device_id ?? 'RACUNKO01',
       privateKeyPem,
       certificatePem,
-      isTest: process.env.FURS_TEST_MODE !== 'false',
+      isTest: org?.furs_test_mode ?? true,
     }
 
     const testData: FursInvoiceData = {

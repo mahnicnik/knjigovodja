@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
       deviceId: deviceIdCode,
       privateKeyPem,
       certificatePem,
-      isTest: process.env.FURS_TEST_MODE !== 'false',
+      isTest: org?.furs_test_mode ?? true,
     }
 
     // Log start
