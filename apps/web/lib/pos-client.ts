@@ -396,15 +396,51 @@ export const pos = {
         .eq('id', orderId)
       if (error) throw error
     },
-    async getOpenOnTable(tableId: string): Promise<PosOrder | null> {
+    async getOpenOnTable(tableId: string): Promise<any | null> {
       const { data, error } = await sb()
         .from('orders')
-        .select('*')
+        .select('*, order_lines(*)')
         .eq('table_id', tableId)
-        .eq('status', 'open')
+        .in('status', ['open', 'on_hold'])
         .maybeSingle()
       if (error) throw error
-      return data as PosOrder | null
+      return data
+    },
+    async closeOrderEmpty(orderId: string) {
+      // Izbriše prazno naročilo (brez vrstic) - uporabljeno ko uporabnik zapusti mizo brez artiklov
+      await sb().from('order_lines').delete().eq('order_id', orderId)
+      const { error } = await sb().from('orders').delete().eq('id', orderId)
+      if (error) throw error
+    },
+    async replaceLines(orderId: string, lines: Array<{
+      itemId?: string
+      serviceId?: string
+      name: string
+      qty: number
+      unitPrice: number
+      vatRate: number
+      mods?: Array<{ name: string; delta: number }>
+      note?: string
+    }>) {
+      await sb().from('order_lines').delete().eq('order_id', orderId)
+      if (lines.length === 0) return
+      const rows = lines.map(line => {
+        const modAdd = (line.mods ?? []).reduce((s, m) => s + m.delta, 0)
+        return {
+          order_id: orderId,
+          item_id: line.itemId ?? null,
+          service_id: line.serviceId ?? null,
+          name: line.name,
+          qty: line.qty,
+          unit_price: line.unitPrice,
+          vat_rate: line.vatRate,
+          mods: line.mods ?? [],
+          note: line.note ?? null,
+          total: (line.unitPrice + modAdd) * line.qty,
+        }
+      })
+      const { error } = await sb().from('order_lines').insert(rows)
+      if (error) throw error
     },
   },
 

@@ -1099,7 +1099,7 @@ function PremiseSelectScreen({ auth, onSelected }) {
 
 // FLOOR SCREEN — real DB spaces + tables
 // ================================================================
-function FloorScreen({ spaces, setActiveTable, setScreen }) {
+function FloorScreen({ spaces, switchToTable, setScreen }) {
   const [selectedSpace, setSelectedSpace] = useState(null)
 
   useEffect(() => {
@@ -1138,7 +1138,7 @@ function FloorScreen({ spaces, setActiveTable, setScreen }) {
           ))}
         </div>
         <div style={{ marginLeft:'auto' }}>
-          <button onClick={() => { setActiveTable(null); setScreen('sale') }} style={{ padding:'8px 14px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', background:T.accent, color:'#fff', border:'none', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', gap:6 }}>
+          <button onClick={() => { switchToTable(null); setScreen('sale') }} style={{ padding:'8px 14px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', background:T.accent, color:'#fff', border:'none', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', gap:6 }}>
             <KI name="plus" size={14}/> Hitra prodaja
           </button>
         </div>
@@ -1150,7 +1150,7 @@ function FloorScreen({ spaces, setActiveTable, setScreen }) {
           const w = t.seats<=2 ? 96 : t.seats<=4 ? 118 : 154
           const h = t.seats<=2 ? 96 : t.seats<=4 ? 92 : 116
           return (
-            <button key={t.id} onClick={() => { setActiveTable(t); setScreen('sale') }}
+            <button key={t.id} onClick={() => { switchToTable(t); setScreen('sale') }}
               style={{ position:'absolute', left:`${t.x}%`, top:`${t.y}%`, width:w, height:h, background:st.bg, border:'2px solid '+st.stroke, borderRadius: isRound ? '50%' : 14, cursor:'pointer', fontFamily:'inherit', color:T.ink, padding:8, textAlign:'center', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2, boxShadow:'0 2px 6px rgba(0,0,0,0.05)' }}>
               <div style={{ fontSize:17, fontWeight:800 }}>{t.name}</div>
               <div style={{ fontSize:10, color:T.muted, display:'flex', alignItems:'center', gap:3 }}>
@@ -9029,6 +9029,50 @@ function KlasikApp() {
   const [activeTable, setActiveTable] = useState(null)
   const [activeCustomer, setActiveCustomer] = useState(null)
   const [cart, setCart] = useState([])
+  const [tableSwitching, setTableSwitching] = useState(false)
+
+  async function switchToTable(newTable) {
+    if (tableSwitching) return
+    setTableSwitching(true)
+    try {
+      // 1. Shrani trenutni cart za prejšnjo mizo (če je bila izbrana in ima artikle)
+      if (activeTable) {
+        const existing = await pos.orders.getOpenOnTable(activeTable.id)
+        if (cart.length > 0) {
+          const cashierId = auth?.user?.id || null
+          const orderId = existing ? existing.id : await pos.orders.openOrder({ tableId: activeTable.id, customerId: activeCustomer?.id, cashierId })
+          await pos.orders.replaceLines(orderId, cart.map(line => ({
+            itemId: line.id, name: line.name, qty: line.qty, unitPrice: line.price,
+            vatRate: line.vat_rate || 22, mods: line.mods || [], note: line.note || null,
+          })))
+          await pos.spaces.updateTableStatus(activeTable.id, 'occupied')
+        } else if (existing) {
+          // Cart je prazen - izbrišemo prazno naročilo če obstaja
+          await pos.orders.closeOrderEmpty(existing.id)
+          await pos.spaces.updateTableStatus(activeTable.id, 'free')
+        }
+      }
+      // 2. Naloži naročilo nove mize (če obstaja)
+      if (newTable) {
+        const existing = await pos.orders.getOpenOnTable(newTable.id)
+        if (existing && existing.order_lines) {
+          setCart(existing.order_lines.map((l) => ({
+            id: l.item_id, name: l.name, qty: l.qty, price: Number(l.unit_price),
+            vat_rate: l.vat_rate, mods: l.mods || [], note: l.note || null,
+          })))
+        } else {
+          setCart([])
+        }
+      } else {
+        setCart([])
+      }
+      setActiveTable(newTable)
+    } catch (e) {
+      console.error('Napaka pri menjavi mize:', e)
+      alert('Napaka pri shranjevanju mize: ' + e.message)
+    }
+    setTableSwitching(false)
+  }
   const [happyHourActive, setHappyHourActive] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [modifierPickModal, setModifierPickModal] = useState<any>(null)
@@ -9155,7 +9199,7 @@ function KlasikApp() {
           {activeTable && (
             <div style={{ display:'flex', alignItems:'center', gap:6 }}>
               <KI name="chair" size={14}/><span>Miza: <b>{activeTable.name}</b></span>
-              <button onClick={() => setActiveTable(null)} style={{ background:'rgba(13,40,24,0.15)', border:'none', cursor:'pointer', padding:'3px 6px', borderRadius:5, color:'inherit', display:'flex' }}><KI name="x" size={11}/></button>
+              <button onClick={() => switchToTable(null)} style={{ background:'rgba(13,40,24,0.15)', border:'none', cursor:'pointer', padding:'3px 6px', borderRadius:5, color:'inherit', display:'flex' }}><KI name="x" size={11}/></button>
             </div>
           )}
           {activeCustomer && (
@@ -9171,7 +9215,7 @@ function KlasikApp() {
       <div style={{ flex:1, display:'flex', overflow:'hidden', minHeight:0 }}>
         <SideNav screen={screen} setScreen={setScreen} nav={nav}/>
         <div style={{ flex:1, display:'flex', overflow:'hidden', minWidth:0 }}>
-          {screen==='floor'     && <FloorScreen spaces={posData.spaces} setActiveTable={setActiveTable} setScreen={setScreen}/>}
+          {screen==='floor'     && <FloorScreen spaces={posData.spaces} switchToTable={switchToTable} setScreen={setScreen}/>}
           {screen==='sale'      && <SaleScreen activeTable={activeTable} setActiveTable={setActiveTable} activeCustomer={activeCustomer} cart={cart} setCart={setCart} addItem={addItem} adjustQty={adjustQty} setPaymentOpen={setPaymentOpen} totals={totals} setActiveCustomer={setActiveCustomer} posData={posData} happyHourActive={happyHourActive} setHappyHourActive={setHappyHourActive} cashSession={cashSession} onNeedOpenCash={()=>setShowOpenCash(true)} auth={auth}/>}
           {screen==='calendar'  && <CalendarScreen posData={posData}/>}
           {screen==='customers' && <CustomersScreen posData={posData} setActiveCustomer={setActiveCustomer} setScreen={setScreen} setSellPackageModal={setSellPackageModal}/>}
