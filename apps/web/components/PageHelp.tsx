@@ -236,6 +236,20 @@ const PAGE_HELP: Record<string, PageHelpContent> = {
     ],
     tip: 'AI računovodja je na voljo samo v Pro paketu.',
   },
+  '/pos': {
+    title: 'POS blagajna',
+    description: 'Celoten sistem za prodajo, mize, zaloge in blagajniško poslovanje na enem mestu.',
+    steps: [
+      { icon: '🪑', title: 'Prostori', desc: 'Kliknite na mizo da začnete naročilo — artikli se avtomatsko shranijo na to mizo, tudi če preklopite na drugo.' },
+      { icon: '🛒', title: 'Prodaja / Hitra prodaja', desc: 'Izberite artikle iz kategorij ali poiščite po imenu/šifri. "Hitra prodaja" je za prodajo brez mize (npr. bar).' },
+      { icon: '💳', title: 'Plačilo', desc: 'V košarici kliknite "Plačaj" — izberite gotovino ali kartico. Račun se davčno potrdi pri FURS samodejno.' },
+      { icon: '💾', title: 'Shrani / Odloži', desc: '"Shrani" odloži naročilo za kasneje (npr. gost še ni plačal) — najdete ga nazaj pod "Naročila".' },
+      { icon: '👥', title: 'Zaposleni & PIN', desc: 'Vsak zaposleni ima svoj PIN za prijavo v blagajno (Nastavitve → Zaposleni & PIN).' },
+      { icon: '📦', title: 'Kategorije & Artikli', desc: 'Dodajajte artikle ročno ali z AI uvozom cenika (naložite fotografijo/PDF cenika).' },
+      { icon: '🔒', title: 'Odpri/Zaključi blagajno', desc: 'Na začetku dneva odprite blagajno z začetnim stanjem gotovine, na koncu jo zaključite (Z-poročilo) — promet se avtomatsko prenese v KPO knjigo.' },
+    ],
+    tip: 'Za pravilno FURS potrjevanje mora biti naložen veljaven TaxCA certifikat v Nastavitve → FURS & DDV.',
+  },
 }
 
 const DEFAULT_HELP: PageHelpContent = {
