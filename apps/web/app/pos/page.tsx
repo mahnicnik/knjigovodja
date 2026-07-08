@@ -2622,6 +2622,7 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
                 ['kartice','Paketi & predplačilo'+(customerPackages.filter(p=>p.active).length?' '+customerPackages.filter(p=>p.active).length:'')],
                 ['zgodovina','Zgodovina'+(customerOrders.length?' '+customerOrders.length:'')],
                 ['opombe','Opombe'],
+                ['uredi','Uredi'],
               ].map(([id,lbl])=>(
                 <button key={id} onClick={()=>setActiveTab(id)}
                   style={{ padding:'8px 14px', background:'none', border:'none', borderBottom:activeTab===id?'2px solid '+T.accent:'2px solid transparent', marginBottom:-2, cursor:'pointer', fontFamily:'inherit', fontWeight:activeTab===id?700:500, fontSize:12, color:activeTab===id?T.accent:T.muted }}>
@@ -2645,6 +2646,9 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
             )}
             {activeTab === 'opombe' && (
               <CustomerNotesTab customer={selected} onSave={()=>posData.refresh()}/>
+            )}
+            {activeTab === 'uredi' && (
+              <CustomerProfileEditTab customer={selected} onSave={()=>{posData.refresh();setSelectedId(s=>s)}}/>
             )}
             {activeTab === 'klinicno' && (
               <CustomerClinicalTab customer={selected} posData={posData}/>
@@ -2863,6 +2867,17 @@ function CustomerProfileEditTab({ customer, onSave }) {
   const [data, setData] = useState({...customer})
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  async function removeCustomer() {
+    if (!confirm(`Izbrišem stranko "${customer.name}"? Tega dejanja ni mogoče razveljaviti.`)) return
+    setDeleting(true)
+    try {
+      const { error } = await createClient().from('customers').delete().eq('id', customer.id)
+      if (error) throw error
+      onSave()
+    } catch(e) { alert(e.message) }
+    setDeleting(false)
+  }
   useEffect(() => { setData({...customer}); setSaved(false) }, [customer.id])
   async function save() {
     setSaving(true)
@@ -2911,6 +2926,7 @@ function CustomerProfileEditTab({ customer, onSave }) {
       </div>
       <div style={{ display:'flex', gap:8, marginTop:16, alignItems:'center' }}>
         <button onClick={save} disabled={saving} style={{ ...btnP, opacity:saving?0.6:1 }}>{saving?'Shranjujem...':'Shrani spremembe'}</button>
+        <button onClick={removeCustomer} disabled={deleting} style={{ ...btnS, color:T.danger, opacity:deleting?0.6:1 }}>{deleting?'Brišem...':'🗑️ Izbriši stranko'}</button>
         {saved && <span style={{ fontSize:12, color:T.accent, fontWeight:600 }}>✓ Shranjeno</span>}
       </div>
     </div>
