@@ -20,6 +20,11 @@ export default function NewInvoicePage() {
   const [loading, setLoading] = useState(false)
   const [invoiceNumber, setInvoiceNumber] = useState('')
   const [clientName, setClientName] = useState('')
+  const [unknownPayer, setUnknownPayer] = useState(false)
+  React.useEffect(() => {
+    if (unknownPayer) setClientName('Neznan plačnik')
+    else if (clientName === 'Neznan plačnik') setClientName('')
+  }, [unknownPayer])
   const [clientEmail, setClientEmail] = useState('')
   const [clientTaxNumber, setClientTaxNumber] = useState('')
   const [clientAddress, setClientAddress] = useState('')
@@ -28,7 +33,7 @@ export default function NewInvoicePage() {
   const [taxLookupLoading, setTaxLookupLoading] = useState(false)
   const [taxLookupError, setTaxLookupError] = useState('')
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0])
-  const [dueDate, setDueDate] = useState(new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0])
+  const [dueDate, setDueDate] = useState(new Date(Date.now() + 14*24*60*60*1000).toISOString().split('T')[0])
   const [items, setItems] = useState<LineItem[]>([{ description: '', quantity: 1, unit_price: 0, vat_rate: 22, discount_pct: 0 }])
   const [notes, setNotes] = useState('')
   const [serviceDate, setServiceDate] = useState('')
@@ -189,7 +194,11 @@ export default function NewInvoicePage() {
       )}
       <div>
         <label style={{ fontSize:'11px', color:'#888', display:'block', marginBottom:'4px' }}>Ime podjetja / stranke *</label>
-        <input value={clientName} onChange={e => setClientName(e.target.value)} placeholder="Agencija Pixel d.o.o." className={inp} />
+        <input value={clientName} onChange={e => setClientName(e.target.value)} placeholder="Agencija Pixel d.o.o." className={inp} disabled={unknownPayer} style={unknownPayer ? { opacity: 0.5 } : undefined} />
+        <label style={{ display:'flex', alignItems:'center', gap:'6px', marginTop:'6px', fontSize:'12px', color:'#666', cursor:'pointer' }}>
+          <input type="checkbox" checked={unknownPayer} onChange={e => setUnknownPayer(e.target.checked)} />
+          Plačnik neznan
+        </label>
       </div>
       <div>
         <label style={{ fontSize:'11px', color:'#888', display:'block', marginBottom:'4px' }}>Email stranke</label>
