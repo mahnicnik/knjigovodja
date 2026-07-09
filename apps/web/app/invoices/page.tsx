@@ -265,7 +265,6 @@ ${!isStorno && !isDobropis ? `
   </div>
 </div>` : ''}
 <div class="footer">Dokument je izdan elektronsko &middot; ${org.name} &middot; ${new Date().getFullYear()}</div>
-<script>window.onload=function(){window.print()}</script>
 </body></html>`
 
     const w = window.open('', '_blank')
