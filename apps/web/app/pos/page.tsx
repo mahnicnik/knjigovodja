@@ -9259,7 +9259,13 @@ function KlasikApp() {
 
       {/* BODY */}
       <div style={{ flex:1, display:'flex', overflow:'hidden', minHeight:0 }}>
-        <SideNav screen={screen} setScreen={setScreen} nav={nav}/>
+        <SideNav screen={screen} setScreen={(id) => {
+          // Ce zapuscamo prodajni zaslon z aktivno mizo, najprej pravilno
+          // shrani kosarico in sprosti mizo (namesto da activeTable ostane
+          // "obtican" in trak "Miza: X" ostane prikazan povsod po aplikaciji)
+          if (id !== 'sale' && activeTable) { switchToTable(null) }
+          setScreen(id)
+        }} nav={nav}/>
         <div style={{ flex:1, display:'flex', overflow:'hidden', minWidth:0 }}>
           {screen==='floor'     && <FloorScreen spaces={posData.spaces} switchToTable={switchToTable} setScreen={setScreen}/>}
           {screen==='sale'      && <SaleScreen activeTable={activeTable} setActiveTable={setActiveTable} activeCustomer={activeCustomer} cart={cart} setCart={setCart} addItem={addItem} adjustQty={adjustQty} setPaymentOpen={setPaymentOpen} totals={totals} setActiveCustomer={setActiveCustomer} posData={posData} happyHourActive={happyHourActive} setHappyHourActive={setHappyHourActive} cashSession={cashSession} onNeedOpenCash={()=>setShowOpenCash(true)} auth={auth}/>}
