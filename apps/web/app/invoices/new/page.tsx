@@ -21,7 +21,7 @@ export default function NewInvoicePage() {
   const [invoiceNumber, setInvoiceNumber] = useState('')
   const [clientName, setClientName] = useState('')
   const [unknownPayer, setUnknownPayer] = useState(false)
-  React.useEffect(() => {
+  useEffect(() => {
     if (unknownPayer) setClientName('Neznan plačnik')
     else if (clientName === 'Neznan plačnik') setClientName('')
   }, [unknownPayer])
@@ -63,6 +63,9 @@ export default function NewInvoicePage() {
       if (member) {
         const o = (member as any).organizations
         setOrg(o)
+        if (!o.vat_registered) {
+          setItems(prev => prev.map(item => ({ ...item, vat_rate: 0 })))
+        }
         const { count } = await supabase.from('issued_invoices').select('*', { count: 'exact', head: true }).eq('org_id', o.id)
         setInvoiceCount(count || 0)
         const num = String((count || 0) + 1).padStart(3, '0')
@@ -129,7 +132,7 @@ export default function NewInvoicePage() {
     }
   }
 
-  function addItem() { setItems([...items, { description: '', quantity: 1, unit_price: 0, vat_rate: 22, discount_pct: 0 }]) }
+  function addItem() { setItems([...items, { description: '', quantity: 1, unit_price: 0, vat_rate: org?.vat_registered ? 22 : 0, discount_pct: 0 }]) }
   function removeItem(i: number) { setItems(items.filter((_, idx) => idx !== i)) }
   function updateItem(i: number, field: keyof LineItem, value: any) {
     const updated = [...items]; updated[i] = { ...updated[i], [field]: value }; setItems(updated)
