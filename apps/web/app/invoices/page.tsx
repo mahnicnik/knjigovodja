@@ -315,9 +315,14 @@ ${!isStorno && !isDobropis ? `
               Nadgradi →
             </a>
           ) : (
-            <Link href="/invoices/new" className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium">
-              + Nov račun
-            </Link>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Link href="/invoices/import" className="border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium">
+                Uvozi iz PDF
+              </Link>
+              <Link href="/invoices/new" className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium">
+                + Nov račun
+              </Link>
+            </div>
           )}
         </div>
       </div>
