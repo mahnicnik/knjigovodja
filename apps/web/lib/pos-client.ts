@@ -397,14 +397,18 @@ export const pos = {
       if (error) throw error
     },
     async getOpenOnTable(tableId: string): Promise<any | null> {
+      // .maybeSingle() vrze napako ce obstaja vec kot ena ujemajoca vrstica.
+      // Ce pride do redke podvojitve (npr. race condition), vzamemo najnovejso
+      // namesto da metoda crasha in tiho pokvari osvezevanje mize.
       const { data, error } = await sb()
         .from('orders')
         .select('*, order_lines(*)')
         .eq('table_id', tableId)
         .in('status', ['open', 'on_hold'])
-        .maybeSingle()
+        .order('opened_at', { ascending: false })
+        .limit(1)
       if (error) throw error
-      return data
+      return data && data.length > 0 ? data[0] : null
     },
     async syncSessionToKPO(orgId: string, sessionFrom: string, sessionTo: string): Promise<{ productIncome: number; serviceIncome: number } | null> {
       const db = sb()

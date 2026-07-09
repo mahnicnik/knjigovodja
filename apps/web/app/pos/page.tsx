@@ -9407,6 +9407,9 @@ function KlasikApp() {
                       }))
                       setCart(newCart)
                       await pos.orders.resumeOrder(o.id)
+                      // KLJUCNO: nastavi activeTable na mizo tega narocila, sicer open_order()
+                      // ne najde obstojecega 'open' narocila in ustvari podvojeno narocilo pri placilu
+                      setActiveTable(o.table_id ? { id: o.table_id, name: o.tables?.name || label } : null)
                       const updated = await pos.orders.getHeldOrders()
                       setHeldOrders(updated)
                       setHeldOrdersOpen(false)
