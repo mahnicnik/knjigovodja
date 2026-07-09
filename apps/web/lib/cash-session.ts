@@ -154,13 +154,16 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
   const to = session.closed_at || new Date().toISOString()
 
   // PROMET — payments joinanih z orders
-  const { data: orders } = await db
+  const { data: orders, error: ordersError } = await db
     .from('orders')
-    .select('id, payments(method, amount, tip), order_lines(qty, unit_price, vat_rate, voided)')
+    .select('id, payments(method, amount), order_lines(qty, unit_price, vat_rate, voided)')
     .eq('business_id', BUSINESS_ID)
     .eq('status', 'paid')
     .gte('closed_at', from)
     .lte('closed_at', to)
+  if (ordersError) {
+    console.error('getSessionStats: napaka pri branju narocil', ordersError)
+  }
 
   // VRAČILA
   const { data: refunds } = await db
