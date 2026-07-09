@@ -4415,6 +4415,14 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
       // Pridobi org za izpis
       const { data: member } = await createClient().from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
       const { data: org } = member ? await createClient().from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
+      // Prenesi dnevni promet POS blagajne v KPO knjigo (izdelki/storitve loceno)
+      if (member) {
+        try {
+          await pos.orders.syncSessionToKPO(member.org_id, session.opened_at, updatedSession.closed_at)
+        } catch (kpoErr) {
+          console.warn('KPO sinhronizacija ni uspela:', kpoErr)
+        }
+      }
       const { data: allSessions } = await createClient().from('cash_sessions').select('id').eq('business_id', '00000000-0000-0000-0000-000000000001').order('created_at', { ascending: true })
       const sessionNumber = (allSessions || []).findIndex(s => s.id === session.id) + 1
       const cashierName = user.email?.split('@')[0] || ''
