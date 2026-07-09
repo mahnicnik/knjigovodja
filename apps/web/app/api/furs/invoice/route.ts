@@ -124,14 +124,14 @@ export async function POST(req: NextRequest) {
 
     const deviceIdCode = device?.device_id ?? 'RACUNKO01'
 
-    // Sequence — štejemo vse POS račune s FURS EOR (placeholder business_id
-    // pomeni da imamo eno organizacijo na POS-u; ko bo multi-tenant, popravimo)
-    const { count: confirmedCount } = await supabase
-      .from('orders')
-      .select('id, payments!inner(furs_eor)', { count: 'exact', head: true })
-      .not('payments.furs_eor', 'is', null)
-
-    const sequenceNumber = (confirmedCount ?? 0) + 1
+    // Atomarno stevilo preko DB sekvence (RPC get_next_pos_invoice_number).
+    // Prejsnja implementacija je stela vrstice "preberi-nato-povecaj", kar je
+    // povzrocalo kolizije stevilk pri hitro zaporednih/socasnih placilih.
+    const { data: seqData, error: seqError } = await supabase.rpc('get_next_pos_invoice_number')
+    if (seqError) {
+      return NextResponse.json({ error: 'Napaka pri generiranju številke računa: ' + seqError.message }, { status: 500 })
+    }
+    const sequenceNumber = seqData as number
     const invoiceNumberFull = `${premise.premise_id}-${deviceIdCode}-${sequenceNumber}`
 
     const amountTotal = Number(total ?? order.total)
