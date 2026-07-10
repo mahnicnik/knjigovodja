@@ -492,18 +492,21 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         cashierId,
       })
 
-      // 2. Dodaj vrstice
-      for (const line of cart) {
-        await pos.orders.addLine(orderId, {
-          itemId: line.id,
-          name: line.name,
-          qty: line.qty,
-          unitPrice: line.happyHourApplied ? line.price * 0.8 : line.price,
-          vatRate: line.vat_rate || 22,
-          mods: line.mods || [],
-          note: line.note || null,
-        })
-      }
+      // 2. Nadomesti vrstice (NE dodajaj!) - narocilo je lahko ze imelo
+      // shranjene vrstice iz prejsnjega switchToTable() klica (ko je uporabnik
+      // zapustil mizo in se vrnil). Ce bi tu uporabili addLine(), bi se vrstice
+      // podvojile, orders.total bi bil napacen, in pay_order() ne bi nikoli
+      // oznacil narocila kot placano (SUM(placil) < napacno visok total) -
+      // to je bil pravi koren izgubljenih/obticanih miznih racunov.
+      await pos.orders.replaceLines(orderId, cart.map(line => ({
+        itemId: line.id,
+        name: line.name,
+        qty: line.qty,
+        unitPrice: line.happyHourApplied ? line.price * 0.8 : line.price,
+        vatRate: line.vat_rate || 22,
+        mods: line.mods || [],
+        note: line.note || null,
+      })))
 
       // 3. Plačaj + FURS
       let fursEor = null
