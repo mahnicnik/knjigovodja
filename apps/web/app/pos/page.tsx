@@ -45,7 +45,7 @@ const CFG = {
   masterPin: '9999',
   rolePresets: {
     Lastnik:   { sale:true,  openCash:true,  refund:true,  voidReceipt:true,  manualDiscount:true,  dailyClose:true,  viewMembers:true,  editMembers:true,  manageBookings:true, viewSales:true,  viewRevenue:true,  viewReports:true,  exportData:true,  editPrices:true,  manageStaff:true,  editSpaces:true,  systemSettings:true  },
-    Vodja:     { sale:true,  openCash:true,  refund:true,  voidReceipt:true,  manualDiscount:true,  dailyClose:true,  viewMembers:true,  editMembers:true,  manageBookings:true, viewSales:true,  viewRevenue:true,  viewReports:true,  exportData:true,  editPrices:true,  manageStaff:false, editSpaces:true,  systemSettings:true  },
+    Vodja:     { sale:true,  openCash:true,  refund:true,  voidReceipt:true,  manualDiscount:true,  dailyClose:true,  viewMembers:true,  editMembers:true,  manageBookings:true, viewSales:true,  viewRevenue:true,  viewReports:false, exportData:true,  editPrices:true,  manageStaff:false, editSpaces:true,  systemSettings:false },
     Blagajnik: { sale:true,  openCash:true,  refund:false, voidReceipt:false, manualDiscount:false, dailyClose:false, viewMembers:true,  editMembers:false, manageBookings:true, viewSales:false, viewRevenue:false, viewReports:false, exportData:false, editPrices:false, manageStaff:false, editSpaces:false, systemSettings:false },
     Trener:    { sale:false, openCash:false, refund:false, voidReceipt:false, manualDiscount:false, dailyClose:false, viewMembers:true,  editMembers:false, manageBookings:true, viewSales:false, viewRevenue:false, viewReports:false, exportData:false, editPrices:false, manageStaff:false, editSpaces:false, systemSettings:false },
     Terapevt:  { sale:false, openCash:false, refund:false, voidReceipt:false, manualDiscount:false, dailyClose:false, viewMembers:true,  editMembers:true,  manageBookings:true, viewSales:false, viewRevenue:false, viewReports:false, exportData:false, editPrices:false, manageStaff:false, editSpaces:false, systemSettings:false },
@@ -5498,7 +5498,10 @@ function OrdersScreen({ posData, auth }) {
         <div style={{ padding:'16px 20px', borderBottom:'1px solid '+T.line, display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
           <div style={{ fontWeight:700, fontSize:16 }}>Računi</div>
           <div style={{ display:'flex', gap:4, alignItems:'center', flexWrap:'wrap' }}>
-            {[['today','Danes'],['week','Teden'],['month','Mesec'],['custom','Po meri'],['all','Vse']].map(([id,lbl])=>(
+            {(auth?.user?.is_master || auth?.user?.role === 'Lastnik'
+                ? [['today','Danes'],['week','Teden'],['month','Mesec'],['custom','Po meri'],['all','Vse']]
+                : [['today','Danes']]
+              ).map(([id,lbl])=>(
               <button key={id} onClick={()=>{setPeriod(id)}} style={{ padding:'5px 10px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, background:period===id?T.accent:'transparent', color:period===id?'#fff':T.muted }}>
                 {lbl}
               </button>
@@ -5638,13 +5641,13 @@ function OrdersScreen({ posData, auth }) {
                 💳 Spremeni plačilo
               </button>
             )}
-            {isToday(selectedOrder.closed_at) && !selectedOrder.voided_at && auth.permissions?.voidReceipt && (
+            {isToday(selectedOrder.closed_at) && !selectedOrder.voided_at && (
               <button onClick={()=>setShowVoid(true)}
                 style={{ padding:'7px 14px', borderRadius:8, border:'none', background:'rgba(168,50,50,0.1)', color:T.danger, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', gap:6 }}>
                 🗑️ Storno
               </button>
             )}
-            {isToday(selectedOrder.closed_at) && !selectedOrder.voided_at && auth.permissions?.refund && (
+            {isToday(selectedOrder.closed_at) && !selectedOrder.voided_at && (
               <button onClick={()=>setShowRefund(true)}
                 style={{ padding:'7px 14px', borderRadius:8, border:'none', background:'rgba(37,99,235,0.1)', color:'#2563eb', cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', gap:6 }}>
                 ↩️ Vračilo
@@ -6520,12 +6523,13 @@ function ReportsScreen({ posData, auth }) {
 // ADMIN SCREEN — full CRUD
 // ================================================================
 function AdminScreen({ auth, posData }) {
-  const [section, setSection] = useState('staff')
+  const isOwner = !!(auth?.user?.is_master || auth?.user?.role === 'Lastnik')
+  const [section, setSection] = useState(isOwner ? 'staff' : 'profile')
   const supabase = createClient()
 
-  const sections = [
+  const allSections = [
     { id:'profile',    label:'Tip poslovanja',        icon:'home'     },
-    { id:'staff',      label:'Zaposleni & PIN',       icon:'users'    },
+    { id:'staff',      label:'Zaposleni & PIN',       icon:'users',   ownerOnly:true },
     { id:'spaces',     label:'Prostori & Mize',       icon:'chair'    },
     { id:'categories', label:'Kategorije & Artikli',  icon:'grid'     },
     { id:'storitve',   label:'Storitve',              icon:'calendar' },
@@ -6533,9 +6537,10 @@ function AdminScreen({ auth, posData }) {
     { id:'happyhour',  label:'Happy hour',            icon:'happy'    },
     { id:'kuhinja',    label:'Kuhinja & display',     icon:'receipt'  },
     { id:'autolock',   label:'Avt. zaklepanje',       icon:'pin'      },
-    { id:'furs',       label:'FURS & DDV',            icon:'receipt'  },
+    { id:'furs',       label:'FURS & DDV',            icon:'receipt', ownerOnly:true },
     { id:'inventura',  label:'Inventura',             icon:'scale'    },
   ]
+  const sections = allSections.filter(sec => !sec.ownerOnly || isOwner)
 
   return (
     <div style={{ flex:1, display:'flex', minHeight:0 }}>
