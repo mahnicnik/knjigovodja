@@ -9134,6 +9134,7 @@ function KlasikApp() {
         const existing = await pos.orders.getOpenOnTable(newTable.id)
         if (existing && existing.order_lines) {
           setCart(existing.order_lines.map((l) => ({
+            lineId: Math.random().toString(36).slice(2),
             id: l.item_id, name: l.name, qty: l.qty, price: Number(l.unit_price),
             vat_rate: l.vat_rate, mods: l.mods || [], note: l.note || null,
           })))
