@@ -474,6 +474,15 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
     setProcessing(true)
     setError(null)
     try {
+      // KLJUCNO: pri dlje odprtih mizah (vec rund, dolgo cakanje) avtentikacijski
+      // JWT zeton lahko poteče. Preden zacnemo placilni tok, eksplicitno osvezimo
+      // sejo - sicer openOrder/addLine/pay lahko tiho spodletijo sredi postopka,
+      // medtem ko FURS (server-side) se vedno uspe in natisne racun.
+      const { data: sessionCheck, error: sessionError } = await createClient().auth.refreshSession()
+      if (sessionError || !sessionCheck?.session) {
+        throw new Error('Seja je potekla. Prosimo, ponovno se prijavite in poskusite znova.')
+      }
+
       const cashierId = auth.user.id || null
 
       // 1. Odpri naročilo
@@ -614,6 +623,17 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         })),
       })
     } catch (e) {
+      // KLJUCNO ZA DIAGNOSTIKO: trajno zabelezi vsako napako v placilnem toku,
+      // da naslednjic ne rabimo detektivsko rekonstruirati vzroka iz posrednih podatkov
+      try {
+        await createClient().from('furs_log').insert({
+          org_id: null,
+          invoice_id: null,
+          status: 'client_error',
+          error_message: 'POS submitPayment napaka: ' + (e?.message || String(e)),
+          raw_request: { source: 'pos_client_error', stack: e?.stack || null, cart_snapshot: cart },
+        })
+      } catch (logErr) { console.error('Napaka pri beleženju napake:', logErr) }
       setError(e.message || 'Napaka pri plačilu')
       setProcessing(false)
     }
