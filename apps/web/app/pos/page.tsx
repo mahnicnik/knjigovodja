@@ -6530,7 +6530,7 @@ function AdminScreen({ auth, posData }) {
   const allSections = [
     { id:'profile',    label:'Tip poslovanja',        icon:'home'     },
     { id:'staff',      label:'Zaposleni & PIN',       icon:'users',   ownerOnly:true },
-    { id:'spaces',     label:'Prostori & Mize',       icon:'chair'    },
+    { id:'spaces',     label:'Prostori & Mize',       icon:'chair',   ownerOnly:true },
     { id:'categories', label:'Kategorije & Artikli',  icon:'grid'     },
     { id:'storitve',   label:'Storitve',              icon:'calendar' },
     { id:'packages',   label:'Paketi',                icon:'package'  },
