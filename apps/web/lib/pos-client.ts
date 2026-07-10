@@ -513,16 +513,19 @@ export const pos = {
   reports: {
     async dailyStats(date?: string): Promise<DailyStats> {
       const today = date ?? new Date().toISOString().substring(0, 10)
+      // KLJUCNO: izkljuci storirana narocila (status='voided') iz prometa -
+      // placilo ostane v payments tudi po stornu, ampak ne sme steti v PROMET
       const { data, error } = await sb()
         .from('payments')
         .select('amount, order_id')
         .gte('paid_at', `${today}T00:00:00`)
         .lte('paid_at', `${today}T23:59:59`)
-        // Filter by business via orders
+        // Filter by business via orders, izkljuci storirana
         .in('order_id', (await sb()
           .from('orders')
           .select('id')
           .eq('business_id', BUSINESS_ID)
+          .neq('status', 'voided')
         ).data?.map(o => o.id) ?? [])
 
       const payments = data ?? []
