@@ -4870,6 +4870,51 @@ function ZReportModal({ posData, onClose }) {
 // STORNO MODAL
 // ─────────────────────────────────────────────────────────────────
 
+
+function ChangePaymentModal({ order, payment, onClose, onChanged }) {
+  const [method, setMethod] = React.useState(payment?.method || 'cash')
+  const [saving, setSaving] = React.useState(false)
+  const [error, setError] = React.useState('')
+  async function handleSave() {
+    if (method === payment?.method) { onClose(); return }
+    setSaving(true)
+    setError('')
+    try {
+      const { error: err } = await createClient().from('payments').update({ method }).eq('id', payment.id)
+      if (err) throw err
+      onChanged()
+      onClose()
+    } catch (e: any) {
+      setError(e.message || 'Napaka pri spremembi plačila')
+    }
+    setSaving(false)
+  }
+  return (
+    <Modal open onClose={saving ? undefined : onClose} width={380}>
+      <ModalHeader title="Spremeni način plačila" onClose={onClose}/>
+      <div style={{ padding:20, display:'flex', flexDirection:'column', gap:14 }}>
+        <div style={{ fontSize:12, color:T.muted }}>
+          Račun #{order.number || order.id.slice(-6)} — davčna fiskalizacija (ZOI/EOR) ostane nespremenjena, spremeni se samo evidentiran način plačila.
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:6 }}>
+          {CFG.paymentMethods.map(pm => (
+            <button key={pm.id} onClick={() => setMethod(pm.id)} style={{ padding:'12px 8px', borderRadius:10, cursor:'pointer', background: method===pm.id ? T.accent : T.chipBg, color: method===pm.id ? '#fff' : 'inherit', border:'none', display:'flex', alignItems:'center', gap:8, fontWeight:600, fontSize:13, fontFamily:'inherit' }}>
+              <span style={{ fontSize:20 }}>{pm.icon}</span>{pm.name}
+            </button>
+          ))}
+        </div>
+        {error && <div style={{ color:T.danger, fontSize:12 }}>{error}</div>}
+        <div style={{ display:'flex', gap:8 }}>
+          <button onClick={onClose} disabled={saving} style={{ flex:1, padding:'11px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'1px solid '+T.line, background:'transparent', fontWeight:600, fontSize:13 }}>Prekliči</button>
+          <button onClick={handleSave} disabled={saving} style={{ flex:1, padding:'11px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'none', background:T.accent, color:'#fff', fontWeight:700, fontSize:13 }}>
+            {saving ? 'Shranjujem...' : 'Shrani'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 function VoidModal({ order, lines, payment, posData, auth, onClose, onVoided }) {
   const [reason, setReason] = React.useState('')
   const [saving, setSaving] = React.useState(false)
@@ -5223,6 +5268,7 @@ function OrdersScreen({ posData, auth }) {
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0,10))
   const [showVoid, setShowVoid] = React.useState(false)
   const [showRefund, setShowRefund] = React.useState(false)
+  const [showChangePayment, setShowChangePayment] = React.useState(false)
 
   // Preveri ali je račun od danes
   function isToday(dateStr) {
@@ -5523,6 +5569,14 @@ function OrdersScreen({ posData, auth }) {
           onRefunded={()=>{ setSelectedOrder(null); loadOrders() }}
         />
       )}
+      {showChangePayment && selectedOrder && orderPayment && (
+        <ChangePaymentModal
+          order={selectedOrder}
+          payment={orderPayment}
+          onClose={()=>setShowChangePayment(false)}
+          onChanged={()=>{ loadOrders() }}
+        />
+      )}
       {/* Detail */}
       {selectedOrder && (
         <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
@@ -5578,6 +5632,12 @@ function OrdersScreen({ posData, auth }) {
               style={{ padding:'7px 14px', borderRadius:8, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, display:'flex', alignItems:'center', gap:6 }}>
               🖨️ Ponovni izpis
             </button>
+            {isToday(selectedOrder.closed_at) && !selectedOrder.voided_at && orderPayment && (
+              <button onClick={()=>setShowChangePayment(true)}
+                style={{ padding:'7px 14px', borderRadius:8, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, display:'flex', alignItems:'center', gap:6 }}>
+                💳 Spremeni plačilo
+              </button>
+            )}
             {isToday(selectedOrder.closed_at) && !selectedOrder.voided_at && auth.permissions?.voidReceipt && (
               <button onClick={()=>setShowVoid(true)}
                 style={{ padding:'7px 14px', borderRadius:8, border:'none', background:'rgba(168,50,50,0.1)', color:T.danger, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', gap:6 }}>
