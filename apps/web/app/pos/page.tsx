@@ -5017,6 +5017,138 @@ function ChangePaymentModal({ order, payment, onClose, onChanged }) {
   )
 }
 
+
+// ─────────────────────────────────────────────────────────────────
+// UPRAVLJANJE MIZE — prenos na drugo mizo/zaposlenega, zdruzitev
+// ─────────────────────────────────────────────────────────────────
+function TableActionsModal({ activeTable, posData, auth, onClose, onDone }) {
+  const [tab, setTab] = React.useState('table') // table | staff | merge
+  const [targetTableId, setTargetTableId] = React.useState('')
+  const [targetStaffId, setTargetStaffId] = React.useState('')
+  const [sourceTableId, setSourceTableId] = React.useState('')
+  const [saving, setSaving] = React.useState(false)
+  const [error, setError] = React.useState('')
+  const [allTables, setAllTables] = React.useState([])
+  React.useEffect(() => {
+    createClient().from('tables').select('id, name, status').order('name').then(({ data }) => setAllTables(data || []))
+  }, [])
+  const otherTables = allTables.filter(t => t.id !== activeTable.id)
+  const freeTables = otherTables.filter(t => t.status !== 'occupied')
+  const occupiedTables = otherTables.filter(t => t.status === 'occupied')
+
+  async function moveToTable() {
+    if (!targetTableId) return
+    setSaving(true); setError('')
+    try {
+      const existing = await pos.orders.getOpenOnTable(activeTable.id)
+      if (!existing) throw new Error('Na tej mizi ni odprtega naročila')
+      const db = createClient()
+      const { error: err } = await db.from('orders').update({ table_id: targetTableId }).eq('id', existing.id)
+      if (err) throw err
+      await db.from('tables').update({ status: 'free' }).eq('id', activeTable.id)
+      await db.from('tables').update({ status: 'occupied' }).eq('id', targetTableId)
+      onDone()
+      onClose()
+    } catch (e: any) { setError(e.message || 'Napaka') }
+    setSaving(false)
+  }
+
+  async function moveToStaff() {
+    if (!targetStaffId) return
+    setSaving(true); setError('')
+    try {
+      const existing = await pos.orders.getOpenOnTable(activeTable.id)
+      if (!existing) throw new Error('Na tej mizi ni odprtega naročila')
+      const { error: err } = await createClient().from('orders').update({ cashier_id: targetStaffId }).eq('id', existing.id)
+      if (err) throw err
+      onDone()
+      onClose()
+    } catch (e: any) { setError(e.message || 'Napaka') }
+    setSaving(false)
+  }
+
+  async function mergeTables() {
+    if (!sourceTableId) return
+    setSaving(true); setError('')
+    try {
+      const db = createClient()
+      const current = await pos.orders.getOpenOnTable(activeTable.id)
+      const source = await pos.orders.getOpenOnTable(sourceTableId)
+      if (!current) throw new Error('Na tej mizi ni odprtega naročila')
+      if (!source) throw new Error('Izbrana miza nima odprtega naročila')
+      const { error: err } = await db.from('order_lines').update({ order_id: current.id }).eq('order_id', source.id)
+      if (err) throw err
+      await db.from('orders').update({ status: 'cancelled' }).eq('id', source.id)
+      await db.from('tables').update({ status: 'free' }).eq('id', sourceTableId)
+      onDone()
+      onClose()
+    } catch (e: any) { setError(e.message || 'Napaka') }
+    setSaving(false)
+  }
+
+  const tabs = [
+    { id: 'table', label: '🔄 Druga miza' },
+    { id: 'staff', label: '👤 Zaposleni' },
+    { id: 'merge', label: '🔗 Združi' },
+  ]
+  return (
+    <Modal open onClose={saving ? undefined : onClose} width={400}>
+      <ModalHeader title={`Upravljaj mizo: ${activeTable.name}`} onClose={onClose}/>
+      <div style={{ padding:20, display:'flex', flexDirection:'column', gap:14 }}>
+        <div style={{ display:'flex', gap:4 }}>
+          {tabs.map(t => (
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{ flex:1, padding:'8px 6px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:700, background: tab===t.id?T.accent:T.chipBg, color: tab===t.id?'#fff':'inherit' }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'table' && (
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            <div style={{ fontSize:12, color:T.muted }}>Prenesi trenutno naročilo na drugo (prosto) mizo.</div>
+            <select value={targetTableId} onChange={e=>setTargetTableId(e.target.value)} style={{ padding:'9px 12px', borderRadius:9, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13 }}>
+              <option value="">-- Izberi mizo --</option>
+              {freeTables.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+            {error && <div style={{ color:T.danger, fontSize:12 }}>{error}</div>}
+            <button onClick={moveToTable} disabled={saving || !targetTableId} style={{ padding:'11px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'none', background:T.accent, color:'#fff', fontWeight:700, fontSize:13, opacity: !targetTableId?0.5:1 }}>
+              {saving ? 'Prenašam...' : 'Prenesi naročilo'}
+            </button>
+          </div>
+        )}
+
+        {tab === 'staff' && (
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            <div style={{ fontSize:12, color:T.muted }}>Prenesi odgovornost za naročilo na drugega zaposlenega (npr. ob menjavi izmene).</div>
+            <select value={targetStaffId} onChange={e=>setTargetStaffId(e.target.value)} style={{ padding:'9px 12px', borderRadius:9, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13 }}>
+              <option value="">-- Izberi zaposlenega --</option>
+              {(posData.staffList||[]).map((st:any) => <option key={st.id} value={st.id}>{st.name}</option>)}
+            </select>
+            {error && <div style={{ color:T.danger, fontSize:12 }}>{error}</div>}
+            <button onClick={moveToStaff} disabled={saving || !targetStaffId} style={{ padding:'11px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'none', background:T.accent, color:'#fff', fontWeight:700, fontSize:13, opacity: !targetStaffId?0.5:1 }}>
+              {saving ? 'Prenašam...' : 'Prenesi odgovornost'}
+            </button>
+          </div>
+        )}
+
+        {tab === 'merge' && (
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            <div style={{ fontSize:12, color:T.muted }}>Združi naročilo z druge (zasedene) mize v trenutno naročilo. Druga miza se sprosti.</div>
+            <select value={sourceTableId} onChange={e=>setSourceTableId(e.target.value)} style={{ padding:'9px 12px', borderRadius:9, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13 }}>
+              <option value="">-- Izberi mizo za združitev --</option>
+              {occupiedTables.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+            {error && <div style={{ color:T.danger, fontSize:12 }}>{error}</div>}
+            <button onClick={mergeTables} disabled={saving || !sourceTableId} style={{ padding:'11px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'none', background:T.accent, color:'#fff', fontWeight:700, fontSize:13, opacity: !sourceTableId?0.5:1 }}>
+              {saving ? 'Združujem...' : 'Združi mizi'}
+            </button>
+          </div>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
 function VoidModal({ order, lines, payment, posData, auth, onClose, onVoided }) {
   const [reason, setReason] = React.useState('')
   const [saving, setSaving] = React.useState(false)
@@ -9323,6 +9455,7 @@ function KlasikApp() {
   const [modifierPickModal, setModifierPickModal] = useState<any>(null)
   const [receipt, setReceipt] = useState(null)
   const [cashSession, setCashSession] = React.useState(null)
+  const [showTableActions, setShowTableActions] = React.useState(false)
   const [sessionLoaded, setSessionLoaded] = React.useState(false)
   const [showOpenCash, setShowOpenCash] = React.useState(false)
   const [showVmesnoStanje, setShowVmesnoStanje] = React.useState(false)
@@ -9444,6 +9577,7 @@ function KlasikApp() {
           {activeTable && (
             <div style={{ display:'flex', alignItems:'center', gap:6 }}>
               <KI name="chair" size={14}/><span>Miza: <b>{activeTable.name}</b></span>
+              <button onClick={() => setShowTableActions(true)} title="Upravljaj mizo" style={{ background:'rgba(13,40,24,0.15)', border:'none', cursor:'pointer', padding:'3px 8px', borderRadius:5, color:'inherit', display:'flex', fontWeight:800, fontSize:13 }}>⋯</button>
               <button onClick={() => switchToTable(null)} style={{ background:'rgba(13,40,24,0.15)', border:'none', cursor:'pointer', padding:'3px 6px', borderRadius:5, color:'inherit', display:'flex' }}><KI name="x" size={11}/></button>
             </div>
           )}
@@ -9656,6 +9790,7 @@ function KlasikApp() {
       {showClockIn && <ClockInModal posData={posData} onClose={()=>setShowClockIn(false)} onClockedIn={()=>{ setShowClockIn(false); setWsRefreshKey(k=>k+1) }}/>}
       {showOpenCash && <OpenCashModal posData={posData} auth={auth} onClose={()=>setShowOpenCash(false)} onOpened={(s)=>{ setCashSession(s); setShowOpenCash(false) }}/>}
       {showVmesnoStanje && cashSession && <VmesnoStanjeModal session={cashSession} posData={posData} auth={auth} onClose={()=>setShowVmesnoStanje(false)}/>}
+      {showTableActions && activeTable && <TableActionsModal activeTable={activeTable} posData={posData} auth={auth} onClose={()=>setShowTableActions(false)} onDone={()=>{ switchToTable(null); posData.refresh() }}/>}
       {showCloseCash && cashSession && <CloseCashModal session={cashSession} posData={posData} auth={auth} onClose={()=>setShowCloseCash(false)} onClosed={()=>{ setCashSession(null); refreshSession() }}/>}
       
       {auth.locked && <LockScreen auth={auth}/>}
