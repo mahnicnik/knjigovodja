@@ -188,6 +188,8 @@ export default function DashboardPage() {
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [draggedQaIdx, setDraggedQaIdx] = useState<number | null>(null)
 
+  const [emailPendingCount, setEmailPendingCount] = useState(0)
+  const [emailConnectionsCount, setEmailConnectionsCount] = useState(0)
   const [data, setData] = useState({
     revenue: 0, expenses: 0, vatDue: 0,
     unpaidCount: 0, unpaidAmount: 0,
@@ -298,13 +300,17 @@ export default function DashboardPage() {
       }
 
       // Load all data in parallel
-      const [invRes, expRes, empRes, cliRes, prefsRes2] = await Promise.all([
+      const [invRes, expRes, empRes, cliRes, prefsRes2, emailPendRes, emailConnRes] = await Promise.all([
         supabase.from('issued_invoices').select('*').eq('org_id', o.id).neq('status','draft'),
         supabase.from('receipts').select('*').eq('org_id', o.id),
         supabase.from('employees').select('id').eq('org_id', o.id).eq('status','active'),
         supabase.from('clients').select('id').eq('org_id', o.id).limit(1),
         supabase.from('user_preferences').select('onboarding_answers').eq('user_id', user.id).maybeSingle(),
+        supabase.from('email_scan_pending').select('id', { count: 'exact', head: true }).eq('org_id', o.id).eq('status', 'pending'),
+        supabase.from('email_connections').select('id', { count: 'exact', head: true }).eq('org_id', o.id).eq('is_active', true),
       ])
+      setEmailPendingCount(emailPendRes.count || 0)
+      setEmailConnectionsCount(emailConnRes.count || 0)
 
       const invoices = invRes.data || []
       const receipts = expRes.data || []
@@ -917,21 +923,27 @@ export default function DashboardPage() {
         </section>
         )}
 
-        {/* AI PROACTIVE CARD (DEMO) */}
+        {/* AI PROACTIVE CARD — povezano z /nastavitve/email-skeniranje */}
+        {(emailPendingCount > 0 || emailConnectionsCount === 0) && (
         <section className="rk-ai-card">
-          <div className="rk-demo-badge dark">DEMO podatki</div>
           <div className="rk-ai-orb">
             <Icon name="ai" size={22} />
           </div>
           <div className="rk-ai-text">
             <span className="label">AI računovodja predlaga</span>
-            Imate <b>3 stroške v e-pošti</b>, ki niso vneseni. Skupaj ~€240. Skeniram in vam jih dam v pregled?
+            {emailConnectionsCount === 0 ? (
+              <>Povežite e-mail račun in avtomatsko zaznajte stroške/račune v e-pošti.</>
+            ) : (
+              <>Imate <b>{emailPendingCount} {emailPendingCount === 1 ? 'strošek' : 'stroškov'} v e-pošti</b>, ki {emailPendingCount === 1 ? 'ni vnesen' : 'niso vneseni'}. Pregled in potrditev na eno mesto.</>
+            )}
           </div>
           <div className="rk-ai-actions">
-            <button className="rk-ai-btn secondary" onClick={() => showToast('Bom predlagal pozneje')}>Pozneje</button>
-            <button className="rk-ai-btn primary" onClick={() => showToast('Skeniram 3 stroške…')}>Da, skeniraj</button>
+            <a href="/nastavitve/email-skeniranje" className="rk-ai-btn primary" style={{ textDecoration: 'none' }}>
+              {emailConnectionsCount === 0 ? 'Poveži e-mail' : 'Pregled →'}
+            </a>
           </div>
         </section>
+        )}
 
         {/* LOWER ROW: ACTIVITY + DEADLINES */}
         <section className="rk-lower">
