@@ -10,6 +10,8 @@ function EmailSkeniranjeContent() {
   const [pending, setPending] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [scanning, setScanning] = useState(false)
+  const [rangeFrom, setRangeFrom] = useState('')
+  const [rangeTo, setRangeTo] = useState('')
   const [savingId, setSavingId] = useState<string | null>(null)
   const searchParams = useSearchParams()
   const supabase = createClient()
@@ -43,10 +45,14 @@ function EmailSkeniranjeContent() {
     setConnections(prev => prev.filter(c => c.id !== id))
   }
 
-  async function runScanNow() {
+  async function runScanNow(range?: { from: string; to: string }) {
     setScanning(true)
     try {
-      const res = await fetch('/api/email-scan/run', { method: 'POST' })
+      const res = await fetch('/api/email-scan/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(range ? { from: range.from, to: range.to } : {}),
+      })
       const data = await res.json()
       if (!res.ok) { alert('Napaka: ' + data.error); return }
       alert(`Skeniranje koncano. Najdenih ${data.found || 0} novih stroskov v pregled.`)
@@ -195,9 +201,32 @@ function EmailSkeniranjeContent() {
             </div>
           )}
           {connections.length > 0 && (
-            <button onClick={runScanNow} disabled={scanning} style={{ marginTop: 16, width: '100%', padding: '11px', borderRadius: 9, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600 }}>
-              {scanning ? 'Skeniram...' : '🔍 Preveri zdaj (rocno)'}
-            </button>
+            <>
+              <button onClick={() => runScanNow()} disabled={scanning} style={{ marginTop: 16, width: '100%', padding: '11px', borderRadius: 9, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600 }}>
+                {scanning ? 'Skeniram...' : '🔍 Preveri zdaj (od zadnjega skena)'}
+              </button>
+              <div style={{ marginTop: 12, padding: 14, background: '#faf9f7', borderRadius: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Ali preveri dolocen datumski razpon</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 10, color: '#999', display: 'block', marginBottom: 4 }}>Od</label>
+                    <input type="date" value={rangeFrom} onChange={e => setRangeFrom(e.target.value)}
+                      style={{ width: '100%', padding: '7px 10px', borderRadius: 7, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 10, color: '#999', display: 'block', marginBottom: 4 }}>Do</label>
+                    <input type="date" value={rangeTo} onChange={e => setRangeTo(e.target.value)}
+                      style={{ width: '100%', padding: '7px 10px', borderRadius: 7, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                  </div>
+                  <button
+                    onClick={() => rangeFrom && rangeTo && runScanNow({ from: rangeFrom, to: rangeTo })}
+                    disabled={scanning || !rangeFrom || !rangeTo}
+                    style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#0D1F12', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600, opacity: (!rangeFrom || !rangeTo) ? 0.5 : 1 }}>
+                    Skeniraj
+                  </button>
+                </div>
+              </div>
+            </>
           )}
         </div>
 

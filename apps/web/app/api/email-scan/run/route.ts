@@ -25,6 +25,15 @@ export async function POST(request: NextRequest) {
     const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
     if (!member) return NextResponse.json({ error: 'Org ni najdena' }, { status: 404 })
 
+    // Neobvezno: rocno izbrano casovno okno (namesto "od zadnjega skena naprej")
+    let customFrom: Date | null = null
+    let customTo: Date | null = null
+    try {
+      const body = await request.json().catch(() => ({}))
+      if (body.from) customFrom = new Date(body.from)
+      if (body.to) customTo = new Date(body.to)
+    } catch {}
+
     const { data: connections } = await supabase
       .from('email_connections')
       .select('*')
@@ -61,15 +70,17 @@ export async function POST(request: NextRequest) {
       }
 
       // Sestavi Gmail search query: od zadnjega skeniranja, ima prilogo, kljucne besede
-      const since = conn.last_scanned_at
+      const since = customFrom || (conn.last_scanned_at
         ? new Date(conn.last_scanned_at)
-        : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // privzeto zadnjih 7 dni
+        : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)) // privzeto zadnjih 7 dni
       const afterStr = Math.floor(since.getTime() / 1000)
+      const beforeStr = customTo ? Math.floor(customTo.getTime() / 1000) : null
       const keywords = (conn.keyword_filters || []).join(' OR ')
       const senderFilter = (conn.sender_filters || []).length > 0
         ? '(' + conn.sender_filters.map((s: string) => `from:${s}`).join(' OR ') + ')'
         : ''
-      const query = `has:attachment filename:pdf after:${afterStr} ${senderFilter} (${keywords})`.trim()
+      const beforePart = beforeStr ? `before:${beforeStr}` : ''
+      const query = `has:attachment filename:pdf after:${afterStr} ${beforePart} ${senderFilter} (${keywords})`.trim()
 
       const listRes = await fetch(
         `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=20`,
@@ -77,7 +88,9 @@ export async function POST(request: NextRequest) {
       )
       const listData = await listRes.json()
       if (!listRes.ok || !listData.messages) {
+        if (!customFrom) {
         await supabase.from('email_connections').update({ last_scanned_at: new Date().toISOString() }).eq('id', conn.id)
+      }
         continue
       }
 
@@ -167,7 +180,9 @@ Vrni SAMO JSON brez dodatnega besedila.`,
         }
       }
 
-      await supabase.from('email_connections').update({ last_scanned_at: new Date().toISOString() }).eq('id', conn.id)
+      if (!customFrom) {
+        await supabase.from('email_connections').update({ last_scanned_at: new Date().toISOString() }).eq('id', conn.id)
+      }
     }
 
     return NextResponse.json({ success: true, found: totalFound })
