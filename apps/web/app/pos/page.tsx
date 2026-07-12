@@ -1199,7 +1199,97 @@ function FloorScreen({ spaces, switchToTable, setScreen }) {
 // ================================================================
 // SALE SCREEN — real DB kategorije + artikli
 // ================================================================
+
+// ─────────────────────────────────────────────────────────────────
+// ODPIS / LASTNA PORABA / REPREZENTANCA MODAL
+// ─────────────────────────────────────────────────────────────────
+function WriteoffModal({ cart, auth, onClose, onDone }) {
+  const [reason, setReason] = React.useState('odpis')
+  const [note, setNote] = React.useState('')
+  const [saving, setSaving] = React.useState(false)
+  const [error, setError] = React.useState('')
+  const totalCost = cart.reduce((s, l) => s + Number(l.price || 0) * Number(l.qty || 0), 0)
+  const vatOnCost = totalCost - totalCost / 1.22
+  const reasons = [
+    { id: 'odpis', label: 'Odpis', desc: 'Pokvarjeno, poteklo, zlomljeno blago' },
+    { id: 'lastna_poraba', label: 'Lastna poraba', desc: 'Lastnik/zaposleni vzame za osebno rabo (DDV samoobdavčitev)' },
+    { id: 'reprezentanca', label: 'Reprezentanca', desc: 'Pogostitev poslovnih partnerjev' },
+  ]
+  async function handleSave() {
+    setSaving(true)
+    setError('')
+    try {
+      const { data: { user } } = await createClient().auth.getUser()
+      if (!user) throw new Error('Niste prijavljeni')
+      const { data: member } = await createClient().from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+      const { error: err } = await createClient().from('stock_writeoffs').insert({
+        business_id: '00000000-0000-0000-0000-000000000001',
+        org_id: member?.org_id || null,
+        reason,
+        items: cart.map(l => ({ item_id: l.id, name: l.name, qty: l.qty, unit_price: l.price, vat_rate: l.vat_rate || 22 })),
+        total_cost: totalCost,
+        vat_self_assessed: reason === 'lastna_poraba' ? vatOnCost : 0,
+        note: note || null,
+        created_by: user.id,
+      })
+      if (err) throw err
+      // Odstej zalogo enako kot pri prodaji, brez placila/FURS
+      for (const line of cart) {
+        if (line.item_type !== 'recipe' && line.stock !== null && line.stock !== undefined) {
+          const newStock = Math.max(0, (line.stock || 0) - line.qty)
+          await createClient().from('items').update({ stock: newStock }).eq('id', line.id)
+        }
+      }
+      onDone()
+      onClose()
+    } catch (e) {
+      setError(e.message || 'Napaka pri shranjevanju')
+    }
+    setSaving(false)
+  }
+  return (
+    <Modal open onClose={saving ? undefined : onClose} width={420}>
+      <ModalHeader title="Odpis / Poraba / Reprezentanca" onClose={onClose}/>
+      <div style={{ padding:20, display:'flex', flexDirection:'column', gap:14 }}>
+        <div style={{ fontSize:12, color:T.muted }}>
+          Artikli iz košarice se odštejejo iz zaloge brez prodaje in FURS fiskalizacije. Namenjeno internim evidencam po slovenski davčni zakonodaji.
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+          {reasons.map(r => (
+            <button key={r.id} onClick={() => setReason(r.id)} style={{ textAlign:'left', padding:'10px 12px', borderRadius:10, cursor:'pointer', background: reason===r.id ? T.accentSoft : T.surface, border: '1px solid ' + (reason===r.id ? T.accent : T.line), fontFamily:'inherit' }}>
+              <div style={{ fontWeight:700, fontSize:13, color: reason===r.id ? T.accent : T.ink }}>{r.label}</div>
+              <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>{r.desc}</div>
+            </button>
+          ))}
+        </div>
+        <div>
+          <label style={{ fontSize:11, color:T.muted, display:'block', marginBottom:4 }}>Opomba (neobvezno)</label>
+          <input value={note} onChange={e=>setNote(e.target.value)} placeholder="npr. razbita steklenica" style={{ width:'100%', padding:'9px 12px', borderRadius:9, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13 }}/>
+        </div>
+        <div style={{ background:T.surface, borderRadius:10, padding:'10px 12px', fontSize:12 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
+            <span>Nabavna vrednost:</span><span style={{ fontWeight:700 }}>€{totalCost.toFixed(2)}</span>
+          </div>
+          {reason === 'lastna_poraba' && (
+            <div style={{ display:'flex', justifyContent:'space-between', color:T.accent }}>
+              <span>DDV za samoobdavčitev:</span><span style={{ fontWeight:700 }}>€{vatOnCost.toFixed(2)}</span>
+            </div>
+          )}
+        </div>
+        {error && <div style={{ color:T.danger, fontSize:12 }}>{error}</div>}
+        <div style={{ display:'flex', gap:8 }}>
+          <button onClick={onClose} disabled={saving} style={{ flex:1, padding:'11px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'1px solid '+T.line, background:'transparent', fontWeight:600, fontSize:13 }}>Prekliči</button>
+          <button onClick={handleSave} disabled={saving} style={{ flex:1, padding:'11px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'none', background:T.accent, color:'#fff', fontWeight:700, fontSize:13 }}>
+            {saving ? 'Shranjujem...' : 'Potrdi'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart, addItem, adjustQty, setPaymentOpen, totals, setActiveCustomer, posData, happyHourActive, setHappyHourActive, cashSession, onNeedOpenCash, auth }) {
+  const [showWriteoff, setShowWriteoff] = React.useState(false)
   const [cartDiscount, setCartDiscount] = useState(0)
   const [proformaModal, setProformaModal] = useState(false)
   const [proformaRecipient, setProformaRecipient] = useState({ name:'', address:'', tax_number:'', vat_id:'' })
@@ -1290,6 +1380,7 @@ function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart
       {/* Košarica */}
       <SaleCart cart={cart} setCart={setCart} adjustQty={adjustQty} activeTable={activeTable} activeCustomer={activeCustomer} setPaymentOpen={setPaymentOpen} totals={totals} setActiveCustomer={setActiveCustomer} customers={posData.customers} cartDiscount={cartDiscount} setCartDiscount={setCartDiscount} cashSession={cashSession} onNeedOpenCash={onNeedOpenCash}
         auth={auth}
+        onWriteoff={() => setShowWriteoff(true)}
         onHoldOrder={async () => {
           if (cart.length === 0) return
           try {
@@ -1360,6 +1451,14 @@ ${cartDiscount > 0 ? `<div style="text-align:right;color:#666">Popust ${cartDisc
           if (w) { w.document.write(html); w.document.close() }
         }}
       />
+      {showWriteoff && (
+        <WriteoffModal
+          cart={cart}
+          auth={auth}
+          onClose={()=>setShowWriteoff(false)}
+          onDone={()=>{ setCart([]); posData.refresh() }}
+        />
+      )}
 
       {/* Proforma modal — podatki prejemnika */}
       {proformaModal && (
@@ -1457,7 +1556,7 @@ ${recipientHtml}
   )
 }
 
-function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPaymentOpen, totals, setActiveCustomer, customers, cartDiscount, setCartDiscount, cashSession, onNeedOpenCash, onHoldOrder, onProforma, auth }) {
+function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPaymentOpen, totals, setActiveCustomer, customers, cartDiscount, setCartDiscount, cashSession, onNeedOpenCash, onHoldOrder, onProforma, onWriteoff, auth }) {
   const [discountOpen, setDiscountOpen] = useState(false)
   const [discountInput, setDiscountInput] = useState('')
   const [splitOpen, setSplitOpen] = useState(false)
@@ -1560,6 +1659,9 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
             </button>
             <button onClick={onProforma} style={{ flex:1, padding:'9px 4px', borderRadius:8, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700, color:T.ink, display:'flex', alignItems:'center', justifyContent:'center', gap:4 }}>
               🧾 Predračun
+            </button>
+            <button onClick={onWriteoff} style={{ flex:1, padding:'9px 4px', borderRadius:8, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700, color:T.ink, display:'flex', alignItems:'center', justifyContent:'center', gap:4 }}>
+              📋 Odpis
             </button>
           </div>
         )}
