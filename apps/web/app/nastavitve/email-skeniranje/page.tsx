@@ -163,6 +163,22 @@ function EmailSkeniranjeContent() {
                       />
                     </div>
                   </div>
+                  {c.scan_schedule === 'custom' && (
+                    <div style={{ marginTop: 10 }}>
+                      <label style={{ fontSize: 11, color: '#999', display: 'block', marginBottom: 4 }}>
+                        Po meri urnik (cron izraz) — npr. "0 6 1 * *" = 1. v mesecu ob 6h, "0 6 1 1,4,7,10 *" = zacetek vsakega trimesecja
+                      </label>
+                      <input
+                        defaultValue={c.custom_cron || ''}
+                        onBlur={e => updateConnection(c.id, { custom_cron: e.target.value.trim() })}
+                        placeholder="0 6 1 1,4,7,10 *"
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: 7, border: '1px solid #e5e7eb', fontSize: 12, fontFamily: 'monospace' }}
+                      />
+                      <div style={{ fontSize: 10, color: '#aaa', marginTop: 4 }}>
+                        Format: minuta ura dan-v-mesecu mesec dan-v-tednu. Priporocljivo za konec trimesecja (DDV zavezanci) ali konec leta.
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

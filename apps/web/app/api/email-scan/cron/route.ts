@@ -39,14 +39,33 @@ export async function GET(request: NextRequest) {
     // Presodi ali je ta povezava "na vrsti" glede na urnik
     const last = conn.last_scanned_at ? new Date(conn.last_scanned_at) : null
     let due = false
-    if (!last) {
+    if (conn.scan_schedule === 'custom') {
+      // Enostaven cron matcher za polji "dan-v-mesecu" in "mesec" (format: min ura dan mesec dan-v-tednu).
+      // Cron sam tece dnevno ob 6h, zato preverimo samo ali se DANASNJI datum ujema z dan/mesec polji.
+      if (conn.custom_cron) {
+        const parts = conn.custom_cron.trim().split(/\s+/)
+        if (parts.length === 5) {
+          const [, , domField, monthField] = parts
+          const nowDay = now.getUTCDate()
+          const nowMonth = now.getUTCMonth() + 1
+          const matchField = (field: string, value: number) => {
+            if (field === '*') return true
+            return field.split(',').map(Number).includes(value)
+          }
+          const domOk = matchField(domField, nowDay)
+          const monthOk = matchField(monthField, nowMonth)
+          // Ne skeniraj vec kot enkrat isti dan
+          const alreadyToday = last && last.toDateString() === now.toDateString()
+          due = domOk && monthOk && !alreadyToday
+        }
+      }
+    } else if (!last) {
       due = true
     } else {
       const hoursSince = (now.getTime() - last.getTime()) / (1000 * 60 * 60)
       if (conn.scan_schedule === 'daily' && hoursSince >= 24) due = true
       else if (conn.scan_schedule === 'weekly' && hoursSince >= 24 * 7) due = true
       else if (conn.scan_schedule === 'monthly' && hoursSince >= 24 * 30) due = true
-      else if (conn.scan_schedule === 'custom') due = true // custom cron - vsak dan preveri (poenostavljeno)
     }
     if (!due) continue
 
