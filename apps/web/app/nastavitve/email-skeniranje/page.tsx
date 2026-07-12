@@ -1,10 +1,10 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 
-export default function EmailSkeniranjePage() {
+function EmailSkeniranjeContent() {
   const [org, setOrg] = useState<any>(null)
   const [connections, setConnections] = useState<any[]>([])
   const [pending, setPending] = useState<any[]>([])
@@ -200,5 +200,13 @@ export default function EmailSkeniranjePage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function EmailSkeniranjePage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: '#888' }}>Nalagam...</div>}>
+      <EmailSkeniranjeContent />
+    </Suspense>
   )
 }
