@@ -103,6 +103,17 @@ function EmailSkeniranjeContent() {
     setPending(prev => prev.filter(p => p.id !== id))
   }
 
+  function previewPdf(item: any) {
+    if (!item.pdf_base64) { alert('PDF ni na voljo za predogled'); return }
+    const byteChars = atob(item.pdf_base64)
+    const byteNumbers = new Array(byteChars.length)
+    for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i)
+    const byteArray = new Uint8Array(byteNumbers)
+    const blob = new Blob([byteArray], { type: 'application/pdf' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank')
+  }
+
   const scheduleLabels: Record<string, string> = { daily: 'Dnevno', weekly: 'Tedensko', monthly: 'Mesecno', custom: 'Po meri (cron)' }
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#888' }}>Nalagam...</div>
@@ -206,6 +217,7 @@ function EmailSkeniranjeContent() {
                     <div><span style={{ fontSize: 10, color: '#999' }}>Skupaj</span><div style={{ fontSize: 13, fontWeight: 700 }}>€{Number(item.extracted.amount_total || 0).toFixed(2)}</div></div>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => previewPdf(item)} style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600 }}>📄 Predogled</button>
                     <button onClick={() => rejectPending(item.id)} style={{ flex: 1, padding: '9px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600 }}>Zavrni</button>
                     <button onClick={() => confirmPending(item)} style={{ flex: 2, padding: '9px', borderRadius: 8, border: 'none', background: '#0D1F12', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700 }}>Potrdi in dodaj med stroske</button>
                   </div>

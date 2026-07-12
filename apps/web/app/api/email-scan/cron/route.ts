@@ -176,6 +176,7 @@ Vrni SAMO JSON brez dodatnega besedila.`,
               email_date: dateHeader ? new Date(dateHeader).toISOString() : null,
               attachment_name: pdfPart.filename,
               extracted,
+              pdf_base64: pdfBase64,
               status: 'pending',
             })
           } catch { continue }
