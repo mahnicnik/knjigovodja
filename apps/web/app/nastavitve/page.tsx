@@ -23,6 +23,7 @@ const SECTIONS = [
   { id: 'plan',         icon: '⭐', label: 'Naročnina',          desc: 'Plan, nadgradnja' },
   { id: 'racunovodja',  icon: '📒', label: 'Računovodja portal', desc: 'Dostop računovodje' },
   { id: 'api',          icon: '🔑', label: 'API ključi',         desc: 'Integracije, dostop' },
+  { id: 'email',        icon: '📧', label: 'E-mail skeniranje',  desc: 'Avtomatski uvoz stroškov' },
 ]
 
 const SI_BANKS: Record<string, string> = {
@@ -383,6 +384,16 @@ export default function NastavitevPage() {
           </div>
         )}
 
+        {/* E-MAIL SKENIRANJE */}
+        {activeSection === 'email' && (
+          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>📧 E-mail skeniranje</div>
+            <div style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>Avtomatsko zaznaj stroške/racune v e-posti in jih predlagaj v pregled pred vnosom</div>
+            <a href="/nastavitve/email-skeniranje" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#0D1F12', color: '#fff', padding: '11px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
+              📧 Upravljaj e-mail povezave →
+            </a>
+          </div>
+        )}
         {/* API KLJUČI */}
         {activeSection === 'api' && (
           <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
