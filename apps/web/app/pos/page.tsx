@@ -1661,7 +1661,7 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
               🧾 Predračun
             </button>
             <button onClick={onWriteoff} style={{ flex:1, padding:'9px 4px', borderRadius:8, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700, color:T.ink, display:'flex', alignItems:'center', justifyContent:'center', gap:4 }}>
-              📋 Odpis
+              ⋯ Več
             </button>
           </div>
         )}
