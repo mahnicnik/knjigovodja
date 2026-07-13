@@ -58,6 +58,15 @@ export default function PrivacyPage() {
             <li><strong>Tehnični podatki:</strong> IP naslov, tip brskalnika, čas dostopa (za varnost)</li>
           </ul>
 
+          <h2>2a. Dostop do Gmail (e-mail skeniranje stroškov)</h2>
+          <p>Če se v aplikaciji odločite povezati svoj Gmail račun preko funkcije "E-mail skeniranje", Računko z vašim izrecnim dovoljenjem (preko Google OAuth) pridobi <strong>samo bralni dostop</strong> (gmail.readonly) do vaše e-pošte, in sicer izključno za naslednji namen:</p>
+          <ul>
+            <li>Iskanje e-mail sporočil s PDF prilogami, ki vsebujejo ključne besede kot so "račun", "invoice", "faktura" ali "receipt"</li>
+            <li>Prenos in analiza teh PDF prilog z umetno inteligenco (Anthropic Claude), da se izluščijo podatki o stroških (dobavitelj, znesek, datum, DDV)</li>
+            <li>Prikaz izluščenih podatkov v vaši čakalni vrsti za ročni pregled in potrditev — noben podatek se ne vnese v vašo evidenco brez vaše izrecne potrditve</li>
+          </ul>
+          <p>Računko <strong>ne bere, ne shranjuje in ne obdeluje</strong> vsebine e-mail sporočil, ki ne ustrezajo tem kriterijem (PDF priloga + ključne besede). Dostop lahko kadarkoli prekličete v Nastavitve → E-mail skeniranje, ali preko nastavitev vašega Google računa (myaccount.google.com/permissions). Podatki, pridobljeni iz Gmaila (PDF dokumenti in izluščeni podatki), se hranijo v skladu s pravili iz točke 5 tega dokumenta.</p>
+          <p>Uporaba podatkov, pridobljenih preko Google API-jev, je skladna z <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer">Google API Services User Data Policy</a>, vključno z omejitvami glede omejene uporabe (Limited Use).</p>
           <h2>3. Namen obdelave podatkov</h2>
           <p>Vaše podatke obdelujemo za naslednje namene:</p>
           <ul>
@@ -85,6 +94,7 @@ export default function PrivacyPage() {
             <li><strong>Vercel</strong> — gostovanje aplikacije (EU strežniki)</li>
             <li><strong>Resend</strong> — pošiljanje transakcijskih emailov</li>
             <li><strong>Anthropic</strong> — AI računovodja (vaša vprašanja, brez shranjevanja)</li>
+            <li><strong>Google (Gmail API)</strong> — samo če se odločite povezati Gmail za e-mail skeniranje stroškov (glejte točko 2a)</li>
           </ul>
 
           <h2>7. Varnost podatkov</h2>
