@@ -6774,8 +6774,7 @@ function AdminScreen({ auth, posData }) {
     { id:'staff',      label:'Zaposleni & PIN',       icon:'users',   ownerOnly:true },
     { id:'spaces',     label:'Prostori & Mize',       icon:'chair',   ownerOnly:true },
     { id:'categories', label:'Kategorije & Artikli',  icon:'grid'     },
-    { id:'storitve',   label:'Storitve',              icon:'calendar' },
-    { id:'packages',   label:'Paketi',                icon:'package'  },
+    { id:'storitve',   label:'Storitve & Paketi',      icon:'calendar' },
     { id:'happyhour',  label:'Happy hour',            icon:'happy'    },
     { id:'kuhinja',    label:'Kuhinja & display',     icon:'receipt'  },
     { id:'autolock',   label:'Avt. zaklepanje',       icon:'pin'      },
@@ -6798,8 +6797,7 @@ function AdminScreen({ auth, posData }) {
         {section==='staff'      && <StaffSection posData={posData}/>}
         {section==='categories' && <CatalogSection posData={posData}/>}
         {section==='spaces'     && <SpacesSection posData={posData}/>}
-        {section==='packages'   && <PackagesAdminSection posData={posData}/>}
-        {section==='storitve'   && <StoritveCrudSection posData={posData}/>}
+        {section==='storitve'   && <StoritveInPaketiSection posData={posData}/>}
         {section==='happyhour'  && <HappyHourSection posData={posData}/>}
         {section==='kuhinja'    && <KuhinjaSection posData={posData}/>}
         {section==='autolock'   && <AutolockSection auth={auth}/>}
@@ -7847,8 +7845,31 @@ function SpacesSection({ posData }) {
 }
 
 // ─── Packages Admin CRUD — vse vrste ─────────────────────────
-function PackagesAdminSection({ posData }) {
-  const [modal, setModal] = useState(null)
+
+// ─── Storitve & Paketi — zdruzen zaslon z izbiro tipa ────────────
+function StoritveInPaketiSection({ posData }) {
+  const [svcModal, setSvcModal] = useState(null)
+  const [pkgModal, setPkgModal] = useState(null)
+  return (
+    <div>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+        <div>
+          <div style={{ fontSize:22, fontWeight:800 }}>Storitve & Paketi</div>
+          <div style={{ fontSize:12, color:T.muted, marginTop:4 }}>Storitve za rezervacije v koledarju, Paketi/Kartice za predplacilo strank.</div>
+        </div>
+        <div style={{ display:'flex', gap:8 }}>
+          <button onClick={()=>setSvcModal({color:'#1f6b3a',duration_min:60,active:true})} style={btnP}>+ Storitev</button>
+          <button onClick={()=>setPkgModal({template_type:'visits',activation_type:'purchase',validity_days:30,visits:10,vat_rate:22,notify_before_days:7,days_of_week:[]})} style={btnP}>+ Paket / Kartica</button>
+        </div>
+      </div>
+      <StoritveCrudSection posData={posData} modal={svcModal} setModal={setSvcModal}/>
+      <div style={{ height:1, background:T.line, margin:'24px 0' }}/>
+      <PackagesAdminSection posData={posData} modal={pkgModal} setModal={setPkgModal}/>
+    </div>
+  )
+}
+
+function PackagesAdminSection({ posData, modal, setModal }) {
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
   function showToast(msg, ok=true) { setToast({msg,ok}); setTimeout(()=>setToast(null),3000) }
@@ -7904,14 +7925,6 @@ function PackagesAdminSection({ posData }) {
 
   return (
     <div>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
-        <div>
-          <div style={{ fontSize:22, fontWeight:800 }}>Paketi & Kartice</div>
-          <div style={{ fontSize:12, color:T.muted, marginTop:4 }}>Predloge za prodajo strankam — članaraine, kartice, boni.</div>
-        </div>
-        <button onClick={()=>setModal({template_type:'visits',activation_type:'purchase',validity_days:30,visits:10,vat_rate:22,notify_before_days:7,days_of_week:[]})} style={btnP}>+ Dodaj paket</button>
-      </div>
-
       {/* Gruppiran prikaz */}
       {Object.entries(TEMPLATE_TYPES).map(([typeKey, typeConf]) => {
         const typePackages = posData.packageTemplates.filter(p => (p.template_type||p.type||'visits') === typeKey || (typeKey==='visits' && p.type==='visits' && !p.template_type) || (typeKey==='membership' && p.type==='unlimited' && !p.template_type))
@@ -8206,8 +8219,7 @@ function SestavineSection({ posData }) {
 }
 
 // ─── Storitve CRUD ────────────────────────────────────────────
-function StoritveCrudSection({ posData }) {
-  const [modal, setModal] = useState(null)
+function StoritveCrudSection({ posData, modal, setModal }) {
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
   const SVC_COLORS = ['#1f6b3a','#3a6e8f','#7b61b8','#c26a3a','#c76a98','#a83232','#e9b949','#1a1f1a']
@@ -8252,13 +8264,7 @@ function StoritveCrudSection({ posData }) {
 
   return (
     <div>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
-        <div>
-          <div style={{ fontSize:22, fontWeight:800 }}>Storitve</div>
-          <div style={{ fontSize:12, color:T.muted, marginTop:4 }}>Fizioterapija, masaža, PT, striženje... Za rezervacije v koledarju.</div>
-        </div>
-        <button onClick={()=>setModal({color:'#1f6b3a',duration_min:60,active:true})} style={btnP}>+ Dodaj storitev</button>
-      </div>
+      <div style={{ marginBottom:12, fontSize:15, fontWeight:700, color:T.muted }}>📋 Storitve (za rezervacije v koledarju)</div>
 
       {posData.services.length === 0 ? (
         <div style={{ padding:40, textAlign:'center', color:T.muted, background:T.surface, borderRadius:12, border:'1px solid '+T.line }}>Ni storitev — dodajte prvo</div>
