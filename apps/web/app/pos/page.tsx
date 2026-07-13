@@ -9,7 +9,7 @@ import { pos, BUSINESS_ID, resolveBusinessId } from '@/lib/pos-client'
 import { buildReceiptHTML } from '@/lib/receipt'
 import { WorkStatusBar, ClockInModal } from '@/lib/work-session-components'
 import { getCurrentSession, openSession, getSessionStats, closeSession, getLastCarryOver, type CashSession, type SessionStats } from '@/lib/cash-session'
-import { buildOpeningReceipt, buildVmesnoStanjeReceipt, buildZReportReceipt } from '@/lib/cash-session-receipt'
+import { buildOpeningReceipt, buildXReportReceipt, buildZReportReceipt } from '@/lib/cash-session-receipt'
 
 // ================================================================
 // TEMA
@@ -1758,6 +1758,15 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
                     <button disabled={selectedLines.length===0} onClick={()=>{
                       setSplitOpen(false)
                       setPaymentOpen({ discount:cartDiscount, splitLines: selectedLines, onSplitPaid: (paidItems) => {
+                        // KLJUCNO: dejansko zmanjsaj kolicine v kosarici za placane artikle,
+                        // ne samo sledi placilu loceno (prejsnja koda je pustila cart nedotaknjen,
+                        // zato je "5 Lasko" ostalo prikazano tudi po placilu 2 od 5)
+                        setCart(c => c.flatMap(l => {
+                          const paid = paidItems.find(p => p.lineId === l.lineId)
+                          if (!paid) return [l]
+                          const remainingQty = l.qty - paid.qty
+                          return remainingQty > 0 ? [{ ...l, qty: remainingQty }] : []
+                        }))
                         setSplitPaid(p=>[...p,...paidItems.map(l=>({lineId:l.lineId,qty:l.qty}))])
                         setSplitQty({})
                         const allPaid = cart.every(l => {
@@ -1765,7 +1774,6 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
                           return newPaidQty >= l.qty
                         })
                         if(allPaid) {
-                          setCart([])
                           setSplitPaid([])
                           setSplitQty({})
                         } else {
@@ -4436,7 +4444,7 @@ function VmesnoStanjeModal({ session, posData, auth, onClose }) {
       const sessionNumber = (allSessions || []).findIndex(s => s.id === session.id) + 1
       const cashierName = user?.email?.split('@')[0] || ''
 
-      const html = buildVmesnoStanjeReceipt({
+      const html = buildXReportReceipt({
         session,
         stats,
         org: org || { name: 'ŠIRM fitness&bar', tax_number: '', vat_registered: false },
