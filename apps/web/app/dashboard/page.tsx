@@ -923,8 +923,7 @@ export default function DashboardPage() {
         </section>
         )}
 
-        {/* AI PROACTIVE CARD — povezano z /nastavitve/email-skeniranje */}
-        {(emailPendingCount > 0 || emailConnectionsCount === 0) && (
+        {/* AI PROACTIVE CARD — povezano z /nastavitve/email-skeniranje, vedno vidna */}
         <section className="rk-ai-card">
           <div className="rk-ai-orb">
             <Icon name="ai" size={22} />
@@ -933,17 +932,18 @@ export default function DashboardPage() {
             <span className="label">AI računovodja predlaga</span>
             {emailConnectionsCount === 0 ? (
               <>Povežite e-mail račun in avtomatsko zaznajte stroške/račune v e-pošti.</>
-            ) : (
+            ) : emailPendingCount > 0 ? (
               <>Imate <b>{emailPendingCount} {emailPendingCount === 1 ? 'strošek' : 'stroškov'} v e-pošti</b>, ki {emailPendingCount === 1 ? 'ni vnesen' : 'niso vneseni'}. Pregled in potrditev na eno mesto.</>
+            ) : (
+              <>E-mail povezan, trenutno ni cakajocih stroskov za pregled. Vse urejeno ✓</>
             )}
           </div>
           <div className="rk-ai-actions">
             <a href="/nastavitve/email-skeniranje" className="rk-ai-btn primary" style={{ textDecoration: 'none' }}>
-              {emailConnectionsCount === 0 ? 'Poveži e-mail' : 'Pregled →'}
+              {emailConnectionsCount === 0 ? 'Poveži e-mail' : 'Odpri →'}
             </a>
           </div>
         </section>
-        )}
 
         {/* LOWER ROW: ACTIVITY + DEADLINES */}
         <section className="rk-lower">
