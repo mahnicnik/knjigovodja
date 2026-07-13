@@ -8231,6 +8231,28 @@ function StoritveCrudSection({ posData, modal, setModal }) {
     if (!modal?.duration_min) { showToast('Trajanje je obvezno',false); return }
     setSaving(true)
     try {
+      const db = createClient()
+      // KLJUCNO: sinhroniziraj z items tabelo, da je storitev prodajljiva v kosarici
+      const itemPayload = {
+        business_id: BUSINESS_ID,
+        name: modal.name,
+        price: Number(modal.price),
+        unit: 'ura',
+        vat_rate: 22,
+        bookable: true,
+        duration_min: Number(modal.duration_min),
+        item_type: 'simple',
+        archived: false,
+      }
+      let linkedItemId = modal.linked_item_id || null
+      if (linkedItemId) {
+        await db.from('items').update(itemPayload).eq('id', linkedItemId)
+      } else {
+        const { data: newItem, error: itemErr } = await db.from('items').insert(itemPayload).select().single()
+        if (itemErr) throw itemErr
+        linkedItemId = newItem.id
+      }
+
       const payload = {
         business_id: BUSINESS_ID,
         name: modal.name,
@@ -8238,23 +8260,29 @@ function StoritveCrudSection({ posData, modal, setModal }) {
         duration_min: Number(modal.duration_min),
         price: Number(modal.price),
         active: modal.active !== false,
+        linked_item_id: linkedItemId,
       }
       if (modal.id) {
-        const {error} = await createClient().from('services').update(payload).eq('id', modal.id)
+        const {error} = await db.from('services').update(payload).eq('id', modal.id)
         if (error) throw error
       } else {
-        const {error} = await createClient().from('services').insert(payload)
+        const {error} = await db.from('services').insert(payload)
         if (error) throw error
       }
-      setModal(null); posData.refresh(); showToast(modal.id ? 'Storitev posodobljena' : 'Storitev dodana')
+      setModal(null); posData.refresh(); showToast(modal.id ? 'Storitev posodobljena (tudi v prodaji)' : 'Storitev dodana (tudi v prodaji)')
     } catch(e) { showToast(e.message,false) }
     setSaving(false)
   }
 
   async function remove(id, name) {
     if (!confirm(`Izbrišem storitev "${name}"?`)) return
-    await createClient().from('services').update({ active: false }).eq('id', id)
-    posData.refresh(); showToast('Storitev izbrisana')
+    const db = createClient()
+    const { data: svc } = await db.from('services').select('linked_item_id').eq('id', id).maybeSingle()
+    await db.from('services').update({ active: false }).eq('id', id)
+    if (svc?.linked_item_id) {
+      await db.from('items').update({ archived: true }).eq('id', svc.linked_item_id)
+    }
+    posData.refresh(); showToast('Storitev izbrisana (tudi iz prodaje)')
   }
 
   async function toggleActive(svc) {
