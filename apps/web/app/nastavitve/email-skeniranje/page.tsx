@@ -88,6 +88,8 @@ function EmailSkeniranjeContent() {
       category: d.category || 'Drugo',
       status: 'confirmed',
       is_deductible: true,
+      attachment_base64: item.pdf_base64 || null,
+      attachment_type: 'pdf',
     })
     await supabase.from('kpo_entries').insert({
       org_id: org.id,

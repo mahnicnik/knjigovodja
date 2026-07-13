@@ -190,6 +190,8 @@ export default function ScanPage() {
       category: form.category,
       status: 'confirmed',
       is_deductible: true,
+      attachment_base64: (window as any).__pdfBase64 || image || null,
+      attachment_type: (window as any).__pdfBase64 ? 'pdf' : (image ? 'image' : null),
     })
 
     await supabase.from('kpo_entries').insert({

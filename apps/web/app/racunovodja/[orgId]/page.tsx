@@ -27,13 +27,15 @@ interface Receipt {
   amount_total: number | null
   category: string | null
   status: string
-  pdf_base64: string | null
+  attachment_base64: string | null
+  attachment_type: string | null
 }
 
 
-function openReceiptPdf(pdfBase64: string | null) {
-  if (!pdfBase64) { alert('PDF ni na voljo za ta strosek') ; return }
-  const byteChars = atob(pdfBase64)
+function openReceiptPdf(attachmentBase64: string | null, attachmentType: string | null) {
+  if (!attachmentBase64) { alert('Dokument ni na voljo za ta strosek') ; return }
+  if (attachmentType === 'image') { window.open(attachmentBase64, '_blank'); return }
+  const byteChars = atob(attachmentBase64)
   const byteNumbers = new Array(byteChars.length)
   for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i)
   const byteArray = new Uint8Array(byteNumbers)
@@ -353,8 +355,8 @@ export default function RacunovodjaClientPage() {
                       <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 600, color: '#0D1F12' }}>{fmt(r.amount_total)}</td>
                       <td style={{ padding: '12px 16px' }}><StatusBadge status={r.status} /></td>
                       <td style={{ padding: '12px 16px', display: 'flex', gap: 10, alignItems: 'center' }}>
-                        {r.pdf_base64 && (
-                          <button onClick={() => openReceiptPdf(r.pdf_base64)} style={{ background: 'none', border: 0, color: '#0D1F12', cursor: 'pointer', fontSize: 12, fontWeight: 500 }}>
+                        {r.attachment_base64 && (
+                          <button onClick={() => openReceiptPdf(r.attachment_base64, r.attachment_type)} style={{ background: 'none', border: 0, color: '#0D1F12', cursor: 'pointer', fontSize: 12, fontWeight: 500 }}>
                             📄 PDF
                           </button>
                         )}
