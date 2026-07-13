@@ -27,6 +27,19 @@ interface Receipt {
   amount_total: number | null
   category: string | null
   status: string
+  pdf_base64: string | null
+}
+
+
+function openReceiptPdf(pdfBase64: string | null) {
+  if (!pdfBase64) { alert('PDF ni na voljo za ta strosek') ; return }
+  const byteChars = atob(pdfBase64)
+  const byteNumbers = new Array(byteChars.length)
+  for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i)
+  const byteArray = new Uint8Array(byteNumbers)
+  const blob = new Blob([byteArray], { type: 'application/pdf' })
+  const url = URL.createObjectURL(blob)
+  window.open(url, '_blank')
 }
 
 interface Comment {
@@ -339,7 +352,12 @@ export default function RacunovodjaClientPage() {
                       <td style={{ padding: '12px 16px', fontSize: 13, color: '#666' }}>{fmt(r.vat_amount)}</td>
                       <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 600, color: '#0D1F12' }}>{fmt(r.amount_total)}</td>
                       <td style={{ padding: '12px 16px' }}><StatusBadge status={r.status} /></td>
-                      <td style={{ padding: '12px 16px' }}>
+                      <td style={{ padding: '12px 16px', display: 'flex', gap: 10, alignItems: 'center' }}>
+                        {r.pdf_base64 && (
+                          <button onClick={() => openReceiptPdf(r.pdf_base64)} style={{ background: 'none', border: 0, color: '#0D1F12', cursor: 'pointer', fontSize: 12, fontWeight: 500 }}>
+                            📄 PDF
+                          </button>
+                        )}
                         <button onClick={() => { setTab('comments'); setCommentDocType('receipt'); setCommentDocId(r.id); setNewComment(`Strošek ${r.vendor ?? ''}: `) }} style={{ background: 'none', border: 0, color: '#1D9E75', cursor: 'pointer', fontSize: 12, fontWeight: 500 }}>
                           + Opomba
                         </button>
