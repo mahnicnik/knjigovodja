@@ -8232,9 +8232,19 @@ function StoritveCrudSection({ posData, modal, setModal }) {
     setSaving(true)
     try {
       const db = createClient()
+      // Poisci ali ustvari kategorijo "Storitve" - brez kategorije artikel ni viden v Prodaji
+      let svcCategoryId = posData.categories.find(c => c.name === 'Storitve')?.id
+      if (!svcCategoryId) {
+        const { data: newCat, error: catErr } = await db.from('categories').insert({
+          business_id: BUSINESS_ID, name: 'Storitve', icon: '💆', color: '#1f6b3a', sort_order: posData.categories.length,
+        }).select().single()
+        if (catErr) throw catErr
+        svcCategoryId = newCat.id
+      }
       // KLJUCNO: sinhroniziraj z items tabelo, da je storitev prodajljiva v kosarici
       const itemPayload = {
         business_id: BUSINESS_ID,
+        category_id: svcCategoryId,
         name: modal.name,
         price: Number(modal.price),
         unit: 'ura',
