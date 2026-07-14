@@ -7,6 +7,10 @@
     {
       "path": "/api/email-scan/cron",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/unfreeze-packages",
+      "schedule": "0 5 * * *"
     }
   ]
 }
