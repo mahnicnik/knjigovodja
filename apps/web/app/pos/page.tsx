@@ -9388,9 +9388,11 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
       const { data: newPkg, error: pkgErr } = await db.from('customer_packages').insert(pkgPayload).select().single()
       if (pkgErr) throw pkgErr
 
-      const totalAmount = Number(template.price)
+      // KLJUCNO: template.price je CENA NA EN OBROK (npr. mesecna karta 31.99 x 6 mesecev = 191.94 skupaj),
+      // NE skupna cena ki bi jo delili na count delov. Prejsnja logika je to napacno delila.
+      const perInstallment = Number(template.price)
       const count = Number(installmentCount)
-      const perInstallment = Math.round((totalAmount / count) * 100) / 100
+      const totalAmount = Math.round(perInstallment * count * 100) / 100
       const { data: plan, error: planErr } = await db.from('installment_plans').insert({
         business_id: BUSINESS_ID,
         customer_package_id: newPkg.id,
@@ -9565,7 +9567,7 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
                 <input type="date" value={firstDueDate} onChange={e=>setFirstDueDate(e.target.value)} style={inp}/>
               </Field>
               <div style={{ gridColumn:'1 / -1', fontSize:12, color:T.muted }}>
-                {installmentCount}x {eur(Math.round((Number(template.price)/Number(installmentCount))*100)/100)} — kartica se aktivira takoj, racun/opomnik se posilja avtomatsko pred vsakim obrokom
+                {installmentCount}x {eur(Number(template.price))} (skupaj {eur(Math.round(Number(template.price)*Number(installmentCount)*100)/100)}) — kartica se aktivira takoj, racun/opomnik se posilja avtomatsko pred vsakim obrokom
               </div>
             </div>
           )}
