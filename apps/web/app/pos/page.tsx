@@ -9295,6 +9295,10 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
+  const [payInInstallments, setPayInInstallments] = useState(false)
+  const [installmentCount, setInstallmentCount] = useState(6)
+  const [installmentFrequency, setInstallmentFrequency] = useState('monthly')
+  const [firstDueDate, setFirstDueDate] = useState(new Date().toISOString().split('T')[0])
   const tconf = TEMPLATE_TYPES[template.template_type||'visits'] || TEMPLATE_TYPES.visits
 
   function showToast(msg, ok=true) { setToast({msg,ok}); setTimeout(()=>setToast(null),3000) }
@@ -9314,7 +9318,75 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
     return null
   }
 
+  async function sellInInstallments() {
+    if (!customerId) { showToast('Izberi stranko',false); return }
+    setSaving(true)
+    try {
+      const db = createClient()
+      const now = new Date().toISOString()
+      const expiresAt = calcExpiry()
+      // Kartica se aktivira TAKOJ (kot pri starem sistemu) - placilo se spremlja loceno preko obrokov
+      const pkgPayload = {
+        customer_id: customerId,
+        template_id: template.id,
+        template_type: template.template_type||'visits',
+        activation_type: activationType,
+        name: template.name,
+        active: true,
+        remaining: template.visits||null,
+        total: template.visits||null,
+        monetary_balance: template.monetary_value||null,
+        expires: expiresAt,
+        activated_at: activationType === 'purchase' ? now : null,
+        valid_from: activationType === 'fixed_date' && fixedDate ? fixedDate : null,
+        purchase_price: template.price,
+        notes: notes||null,
+        sold_by_staff_id: auth?.user?.id||null,
+      }
+      const { data: newPkg, error: pkgErr } = await db.from('customer_packages').insert(pkgPayload).select().single()
+      if (pkgErr) throw pkgErr
+
+      const totalAmount = Number(template.price)
+      const count = Number(installmentCount)
+      const perInstallment = Math.round((totalAmount / count) * 100) / 100
+      const { data: plan, error: planErr } = await db.from('installment_plans').insert({
+        business_id: BUSINESS_ID,
+        customer_package_id: newPkg.id,
+        customer_id: customerId,
+        total_amount: totalAmount,
+        installment_count: count,
+        installment_amount: perInstallment,
+        first_due_date: firstDueDate,
+        frequency: installmentFrequency,
+        status: 'active',
+        created_by: auth?.user?.id || null,
+      }).select().single()
+      if (planErr) throw planErr
+
+      const installmentRows = []
+      for (let i = 0; i < count; i++) {
+        const due = new Date(firstDueDate)
+        if (installmentFrequency === 'monthly') due.setMonth(due.getMonth() + i)
+        else due.setDate(due.getDate() + i * 7)
+        installmentRows.push({
+          plan_id: plan.id,
+          installment_number: i + 1,
+          due_date: due.toISOString().split('T')[0],
+          amount: perInstallment,
+          vat_rate: 22,
+          status: 'pending',
+        })
+      }
+      const { error: instErr } = await db.from('installments').insert(installmentRows)
+      if (instErr) throw instErr
+
+      showToast(`✓ ${template.name} aktivirana, ${count} obrokov nacrtovanih`)
+      setTimeout(() => { posData.refresh(); onClose() }, 1500)
+    } catch(e) { showToast(e.message,false) }
+    setSaving(false)
+  }
   async function sell() {
+    if (payInInstallments) { return sellInInstallments() }
     if (!customerId) { showToast('Izberi stranko',false); return }
     setSaving(true)
     try {
@@ -9431,12 +9503,38 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
           <input value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Posebnosti, dogovor..." style={inp}/>
         </Field>
 
+        <div style={{ padding:14, borderRadius:10, background:T.surface3, border:'1px solid '+T.line }}>
+          <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', fontSize:13, fontWeight:600 }}>
+            <input type="checkbox" checked={payInInstallments} onChange={e=>setPayInInstallments(e.target.checked)} style={{ accentColor:T.accent }}/>
+            💳 Placilo v obrokih (odlozena placila)
+          </label>
+          {payInInstallments && (
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginTop:12 }}>
+              <Field label="Stevilo obrokov">
+                <input type="number" min={2} max={24} value={installmentCount} onChange={e=>setInstallmentCount(e.target.value)} style={inp}/>
+              </Field>
+              <Field label="Pogostost">
+                <select value={installmentFrequency} onChange={e=>setInstallmentFrequency(e.target.value)} style={inp}>
+                  <option value="monthly">Mesecno</option>
+                  <option value="weekly">Tedensko</option>
+                </select>
+              </Field>
+              <Field label="Prvi obrok">
+                <input type="date" value={firstDueDate} onChange={e=>setFirstDueDate(e.target.value)} style={inp}/>
+              </Field>
+              <div style={{ gridColumn:'1 / -1', fontSize:12, color:T.muted }}>
+                {installmentCount}x {eur(Math.round((Number(template.price)/Number(installmentCount))*100)/100)} — kartica se aktivira takoj, racun/opomnik se posilja avtomatsko pred vsakim obrokom
+              </div>
+            </div>
+          )}
+        </div>
+
         {toast && <div style={{ padding:'9px 12px', borderRadius:8, background:toast.ok?T.accentSoft:'rgba(168,50,50,0.10)', color:toast.ok?T.accent:T.danger, fontSize:12, fontWeight:600 }}>{toast.msg}</div>}
 
         <div style={{ display:'flex', gap:8, justifyContent:'flex-end', paddingTop:4 }}>
           <button onClick={onClose} style={btnS}>Prekliči</button>
           <button onClick={sell} disabled={saving||!customerId} style={{ ...btnP, background:tconf.color, opacity:(saving||!customerId)?0.5:1 }}>
-            {saving ? '⏳ Shranjujem...' : `✓ Prodaj ${eur(template.price)}`}
+            {saving ? '⏳ Shranjujem...' : payInInstallments ? `✓ Aktiviraj (${installmentCount}x obrok)` : `✓ Prodaj ${eur(template.price)}`}
           </button>
         </div>
       </div>
