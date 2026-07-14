@@ -3094,6 +3094,7 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
   const [manualAddModal, setManualAddModal] = useState(null)
   const [editPkgModal, setEditPkgModal] = useState(null)
   const [extendPkgModal, setExtendPkgModal] = useState(null)
+  const [freezeModal, setFreezeModal] = useState(null)
   const [toast, setToast] = useState(null)
   const [prepaidAmount, setPrepaidAmount] = useState('')
   const [addingPrepaid, setAddingPrepaid] = useState(false)
@@ -3228,7 +3229,7 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
                       {actionLoading===pkg.id+'_use'?'...':'✓ Uporabi obisk'}
                     </button>
                   )}
-                  <button onClick={()=>toggleFreeze(pkg)} disabled={!!actionLoading} style={{ ...btnS, padding:'7px 12px', fontSize:12 }}>
+                  <button onClick={()=>isFrozen?toggleFreeze(pkg):setFreezeModal(pkg)} disabled={!!actionLoading} style={{ ...btnS, padding:'7px 12px', fontSize:12 }}>
                     {isFrozen?'❄️ Odmrzni':'⏸ Zamrzni'}
                   </button>
                   <button onClick={()=>setEditPkgModal(pkg)} style={{ ...btnS, padding:'7px 12px', fontSize:12 }}>✏️ Popravi</button>
@@ -3286,6 +3287,7 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
                 {manualAddModal && <ManualAddCardModal customer={customer} posData={posData} onClose={()=>setManualAddModal(null)} onDone={()=>{ setManualAddModal(null); onRefresh() }}/>}
                 {editPkgModal && <EditPackageModal pkg={editPkgModal} onClose={()=>setEditPkgModal(null)} onDone={()=>{ setEditPkgModal(null); onRefresh() }}/>}
                 {extendPkgModal && <ExtendPackageModal pkg={extendPkgModal} onClose={()=>setExtendPkgModal(null)} onDone={()=>{ setExtendPkgModal(null); onRefresh() }}/>}
+                {freezeModal && <FreezePackageModal pkg={freezeModal} onClose={()=>setFreezeModal(null)} onDone={()=>{ setFreezeModal(null); onRefresh() }}/>}
       {toast && <Toast msg={toast.msg} ok={toast.ok}/>}
     </div>
   )
@@ -10153,6 +10155,46 @@ function ExtendPackageModal({ pkg, onClose, onDone }) {
         <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
           <button onClick={onClose} style={btnS}>Prekliči</button>
           <button onClick={save} disabled={saving} style={btnP}>{saving?'Podaljšujem...':'Podaljšaj'}</button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+
+// ─── Zamrznitev kartice - brez datuma ali do izbranega datuma ──
+function FreezePackageModal({ pkg, onClose, onDone }) {
+  const [mode, setMode] = useState('indefinite') // 'indefinite' | 'until'
+  const [untilDate, setUntilDate] = useState('')
+  const [saving, setSaving] = useState(false)
+  async function save() {
+    if (mode === 'until' && !untilDate) return
+    setSaving(true)
+    await createClient().from('customer_packages').update({
+      frozen_at: new Date().toISOString(),
+      frozen_until: mode === 'until' ? untilDate : null,
+    }).eq('id', pkg.id)
+    setSaving(false)
+    onDone()
+  }
+  return (
+    <Modal open onClose={onClose} width={380}>
+      <ModalHeader title={`Zamrzni: ${pkg.name}`} onClose={onClose}/>
+      <div style={{ padding:20, display:'flex', flexDirection:'column', gap:12 }}>
+        <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', fontSize:13 }}>
+          <input type="radio" checked={mode==='indefinite'} onChange={()=>setMode('indefinite')}/>
+          Zamrzni zdaj, odmrznem rocno kadarkoli
+        </label>
+        <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', fontSize:13 }}>
+          <input type="radio" checked={mode==='until'} onChange={()=>setMode('until')}/>
+          Zamrzni do dolocenega datuma (avtomatsko)
+        </label>
+        {mode === 'until' && (
+          <input type="date" value={untilDate} onChange={e=>setUntilDate(e.target.value)} min={new Date().toISOString().split('T')[0]} style={inp}/>
+        )}
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+          <button onClick={onClose} style={btnS}>Prekliči</button>
+          <button onClick={save} disabled={saving || (mode==='until' && !untilDate)} style={btnP}>{saving?'Zamrzujem...':'Zamrzni'}</button>
         </div>
       </div>
     </Modal>
