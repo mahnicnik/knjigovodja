@@ -3180,7 +3180,7 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
       {/* Prodaj paket / Nov racun sta ze na voljo zgoraj desno na profilu stranke - tukaj samo se manualni dodatek */}
       <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:20 }}>
         <button onClick={()=>setManualAddModal({})} style={{ ...btnS, display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
-          <KI name="edit" size={13}/> Dodaj kartico rocno (brez racuna)
+          <KI name="edit" size={13}/> Dodaj kartico rocno
         </button>
       </div>
 
@@ -3235,9 +3235,6 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
                   <button onClick={()=>deactivate(pkg)} style={{ ...btnS, padding:'7px 12px', fontSize:12, color:T.danger }}>Deaktiviraj</button>
                   <button onClick={()=>deletePkg(pkg)} style={{ ...btnS, padding:'7px 12px', fontSize:12, color:T.danger }}>🗑 Briši</button>
                 </div>
-                {manualAddModal && <ManualAddCardModal customer={customer} posData={posData} onClose={()=>setManualAddModal(null)} onDone={()=>{ setManualAddModal(null); onRefresh() }}/>}
-                {editPkgModal && <EditPackageModal pkg={editPkgModal} onClose={()=>setEditPkgModal(null)} onDone={()=>{ setEditPkgModal(null); onRefresh() }}/>}
-                {extendPkgModal && <ExtendPackageModal pkg={extendPkgModal} onClose={()=>setExtendPkgModal(null)} onDone={()=>{ setExtendPkgModal(null); onRefresh() }}/>}
               </div>
             )
           })}
@@ -3285,6 +3282,9 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
         </div>
       )}
 
+                {manualAddModal && <ManualAddCardModal customer={customer} posData={posData} onClose={()=>setManualAddModal(null)} onDone={()=>{ setManualAddModal(null); onRefresh() }}/>}
+                {editPkgModal && <EditPackageModal pkg={editPkgModal} onClose={()=>setEditPkgModal(null)} onDone={()=>{ setEditPkgModal(null); onRefresh() }}/>}
+                {extendPkgModal && <ExtendPackageModal pkg={extendPkgModal} onClose={()=>setExtendPkgModal(null)} onDone={()=>{ setExtendPkgModal(null); onRefresh() }}/>}
       {toast && <Toast msg={toast.msg} ok={toast.ok}/>}
     </div>
   )
@@ -10071,7 +10071,7 @@ function ManualAddCardModal({ customer, posData, onClose, onDone }) {
   }
   return (
     <Modal open onClose={onClose} width={440}>
-      <ModalHeader title="Dodaj kartico rocno (brez racuna)" onClose={onClose}/>
+      <ModalHeader title="Dodaj kartico rocno" onClose={onClose}/>
       <div style={{ padding:20, display:'flex', flexDirection:'column', gap:12 }}>
         <div style={{ padding:10, borderRadius:8, background:'rgba(230,160,40,0.1)', color:'#a86a00', fontSize:12 }}>
           ⚠️ Ta kartica se NE fiskalizira in NE gre skozi blagajno. Uporabi samo za migracije, darila ali popravke.
