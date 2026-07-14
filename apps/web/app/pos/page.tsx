@@ -3090,6 +3090,9 @@ function CustomerProfileEditTab({ customer, onSave }) {
 // ─── Customer Packages Tab ────────────────────────────────────
 function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, setSellPackageModal, setScreen, setActiveCustomer }) {
   const [actionLoading, setActionLoading] = useState(null)
+  const [manualAddModal, setManualAddModal] = useState(null)
+  const [editPkgModal, setEditPkgModal] = useState(null)
+  const [extendPkgModal, setExtendPkgModal] = useState(null)
   const [toast, setToast] = useState(null)
   const [prepaidAmount, setPrepaidAmount] = useState('')
   const [addingPrepaid, setAddingPrepaid] = useState(false)
@@ -3150,6 +3153,13 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
     showToast('Kartica deaktivirana')
     onRefresh()
   }
+  async function deletePkg(pkg) {
+    if (!confirm(`Trajno izbrisem kartico "${pkg.name}"? Tega ni mogoce razveljaviti.`)) return
+    const { error } = await createClient().from('customer_packages').delete().eq('id', pkg.id)
+    if (error) { showToast(error.message, false); return }
+    showToast('Kartica trajno izbrisana')
+    onRefresh()
+  }
 
   async function addPrepaid() {
     const amount = parseFloat(prepaidAmount)
@@ -3167,10 +3177,11 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
 
   return (
     <div>
-      {/* CTA gumbi */}
-      <div style={{ display:'flex', gap:8, marginBottom:20 }}>
-        <button onClick={()=>{setActiveCustomer(customer);setScreen('packages')}} style={{ ...btnP, display:'flex', alignItems:'center', gap:6 }}>🎫 Kupi kartico / paket</button>
-        <button onClick={()=>{setActiveCustomer(customer);setScreen('sale')}} style={{ ...btnS, display:'flex', alignItems:'center', gap:6 }}><KI name="receipt" size={13}/> Nova prodaja</button>
+      {/* Prodaj paket / Nov racun sta ze na voljo zgoraj desno na profilu stranke - tukaj samo se manualni dodatek */}
+      <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:20 }}>
+        <button onClick={()=>setManualAddModal({})} style={{ ...btnS, display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
+          <KI name="edit" size={13}/> Dodaj kartico rocno (brez racuna)
+        </button>
       </div>
 
       {/* Aktivne kartice */}
@@ -3219,8 +3230,14 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
                   <button onClick={()=>toggleFreeze(pkg)} disabled={!!actionLoading} style={{ ...btnS, padding:'7px 12px', fontSize:12 }}>
                     {isFrozen?'❄️ Odmrzni':'⏸ Zamrzni'}
                   </button>
+                  <button onClick={()=>setEditPkgModal(pkg)} style={{ ...btnS, padding:'7px 12px', fontSize:12 }}>✏️ Popravi</button>
+                  <button onClick={()=>setExtendPkgModal(pkg)} style={{ ...btnS, padding:'7px 12px', fontSize:12 }}>➕ Podaljšaj</button>
                   <button onClick={()=>deactivate(pkg)} style={{ ...btnS, padding:'7px 12px', fontSize:12, color:T.danger }}>Deaktiviraj</button>
+                  <button onClick={()=>deletePkg(pkg)} style={{ ...btnS, padding:'7px 12px', fontSize:12, color:T.danger }}>🗑 Briši</button>
                 </div>
+                {manualAddModal && <ManualAddCardModal customer={customer} posData={posData} onClose={()=>setManualAddModal(null)} onDone={()=>{ setManualAddModal(null); onRefresh() }}/>}
+                {editPkgModal && <EditPackageModal pkg={editPkgModal} onClose={()=>setEditPkgModal(null)} onDone={()=>{ setEditPkgModal(null); onRefresh() }}/>}
+                {extendPkgModal && <ExtendPackageModal pkg={extendPkgModal} onClose={()=>setExtendPkgModal(null)} onDone={()=>{ setExtendPkgModal(null); onRefresh() }}/>}
               </div>
             )
           })}
@@ -10011,3 +10028,132 @@ export default function PosPage() {
 }
 
 // Mon May 25 19:33:01 CEST 2026
+
+
+// ─── Rocno dodajanje kartice (brez placila/racuna) ────────────
+function ManualAddCardModal({ customer, posData, onClose, onDone }) {
+  const [templateId, setTemplateId] = useState('')
+  const [reason, setReason] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const tpl = posData.packageTemplates.find(t => t.id === templateId)
+  async function save() {
+    if (!templateId) { setError('Izberi paket/kartico'); return }
+    if (!reason.trim()) { setError('Razlog je obvezen (za sledljivost, ker gre brez racuna)'); return }
+    setSaving(true)
+    try {
+      const now = new Date().toISOString()
+      let expires = null
+      if (tpl.validity_days) {
+        const d = new Date()
+        d.setDate(d.getDate() + Number(tpl.validity_days))
+        expires = d.toISOString().split('T')[0]
+      }
+      const { error: err } = await createClient().from('customer_packages').insert({
+        customer_id: customer.id,
+        template_id: tpl.id,
+        template_type: tpl.template_type || 'visits',
+        activation_type: 'purchase',
+        name: tpl.name,
+        active: true,
+        remaining: tpl.visits || null,
+        total: tpl.visits || null,
+        monetary_balance: tpl.monetary_value || null,
+        expires,
+        activated_at: now,
+        purchase_price: 0,
+        notes: `[ROCNO BREZ RACUNA] ${reason}`,
+      })
+      if (err) throw err
+      onDone()
+    } catch (e) { setError(e.message) }
+    setSaving(false)
+  }
+  return (
+    <Modal open onClose={onClose} width={440}>
+      <ModalHeader title="Dodaj kartico rocno (brez racuna)" onClose={onClose}/>
+      <div style={{ padding:20, display:'flex', flexDirection:'column', gap:12 }}>
+        <div style={{ padding:10, borderRadius:8, background:'rgba(230,160,40,0.1)', color:'#a86a00', fontSize:12 }}>
+          ⚠️ Ta kartica se NE fiskalizira in NE gre skozi blagajno. Uporabi samo za migracije, darila ali popravke.
+        </div>
+        <Field label="Paket / kartica">
+          <select value={templateId} onChange={e=>setTemplateId(e.target.value)} style={inp}>
+            <option value="">-- Izberi --</option>
+            {posData.packageTemplates.filter(t=>!t.archived).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Razlog (obvezno)">
+          <input value={reason} onChange={e=>setReason(e.target.value)} placeholder="npr. migracija iz starega sistema" style={inp}/>
+        </Field>
+        {error && <div style={{ color:'#a83232', fontSize:12 }}>{error}</div>}
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+          <button onClick={onClose} style={btnS}>Prekliči</button>
+          <button onClick={save} disabled={saving} style={btnP}>{saving?'Shranjujem...':'Dodaj kartico'}</button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+// ─── Rocno urejanje kartice (Velja od/do, preostali obiski) ────
+function EditPackageModal({ pkg, onClose, onDone }) {
+  const [expires, setExpires] = useState(pkg.expires || '')
+  const [remaining, setRemaining] = useState(pkg.remaining ?? '')
+  const [saving, setSaving] = useState(false)
+  async function save() {
+    setSaving(true)
+    const updates = { expires: expires || null }
+    if (pkg.remaining !== null) updates.remaining = remaining === '' ? null : Number(remaining)
+    await createClient().from('customer_packages').update(updates).eq('id', pkg.id)
+    setSaving(false)
+    onDone()
+  }
+  return (
+    <Modal open onClose={onClose} width={400}>
+      <ModalHeader title={`Popravi: ${pkg.name}`} onClose={onClose}/>
+      <div style={{ padding:20, display:'flex', flexDirection:'column', gap:12 }}>
+        <Field label="Velja do">
+          <input type="date" value={expires} onChange={e=>setExpires(e.target.value)} style={inp}/>
+        </Field>
+        {pkg.remaining !== null && (
+          <Field label="Preostali obiski">
+            <input type="number" min={0} value={remaining} onChange={e=>setRemaining(e.target.value)} style={inp}/>
+          </Field>
+        )}
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+          <button onClick={onClose} style={btnS}>Prekliči</button>
+          <button onClick={save} disabled={saving} style={btnP}>{saving?'Shranjujem...':'Shrani'}</button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+// ─── Podaljsanje veljavnosti kartice ────────────────────────────
+function ExtendPackageModal({ pkg, onClose, onDone }) {
+  const [days, setDays] = useState(30)
+  const [saving, setSaving] = useState(false)
+  async function save() {
+    setSaving(true)
+    const base = pkg.expires ? new Date(pkg.expires) : new Date()
+    base.setDate(base.getDate() + Number(days))
+    await createClient().from('customer_packages').update({ expires: base.toISOString().split('T')[0] }).eq('id', pkg.id)
+    setSaving(false)
+    onDone()
+  }
+  return (
+    <Modal open onClose={onClose} width={380}>
+      <ModalHeader title={`Podaljšaj: ${pkg.name}`} onClose={onClose}/>
+      <div style={{ padding:20, display:'flex', flexDirection:'column', gap:12 }}>
+        <div style={{ fontSize:12, color:T.muted }}>Trenutno poteče: {pkg.expires ? new Date(pkg.expires).toLocaleDateString('sl-SI') : 'brez omejitve'}</div>
+        <Field label="Podaljšaj za (dni)">
+          <input type="number" min={1} value={days} onChange={e=>setDays(e.target.value)} style={inp}/>
+        </Field>
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+          <button onClick={onClose} style={btnS}>Prekliči</button>
+          <button onClick={save} disabled={saving} style={btnP}>{saving?'Podaljšujem...':'Podaljšaj'}</button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
