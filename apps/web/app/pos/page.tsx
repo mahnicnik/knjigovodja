@@ -9358,6 +9358,10 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
 
   async function sellInInstallments() {
     if (!customerId) { showToast('Izberi stranko',false); return }
+    if (!selCust?.email) {
+      showToast('Stranka nima vnesenega e-maila - obroki se ne morejo avtomatsko poslati. Dodaj e-mail na profilu stranke.', false)
+      return
+    }
     setSaving(true)
     try {
       const db = createClient()
