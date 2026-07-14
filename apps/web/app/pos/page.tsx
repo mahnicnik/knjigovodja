@@ -2643,7 +2643,7 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
       setLoadingDetail(false)
     }
     load()
-  }, [selectedId, customerDetailRefreshKey])
+  }, [selectedId, customerDetailRefreshKey, posData.customers])
 
   const pkgStatusDot = (c) => {
     const pkgs = (c.customer_packages||[]).filter(p=>p.active)
