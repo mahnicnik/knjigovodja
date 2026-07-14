@@ -9287,7 +9287,7 @@ function CustomerEditButton({ customer, onSave }) {
 // ================================================================
 // SELL PACKAGE MODAL — prodaja paketa stranki
 // ================================================================
-function SellPackageModal({ template, posData, onClose, auth }) {
+function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) {
   const [customerId, setCustomerId] = useState(template?._preselectedCustomer?.id || '')
   const [custSearch, setCustSearch] = useState('')
   const [activationType, setActivationType] = useState(template.activation_type||'purchase')
@@ -9318,32 +9318,48 @@ function SellPackageModal({ template, posData, onClose, auth }) {
     if (!customerId) { showToast('Izberi stranko',false); return }
     setSaving(true)
     try {
-      const now = new Date().toISOString()
-      const expiresAt = calcExpiry()
-      const payload = {
-        customer_id: customerId,
-        template_id: template.id,
-        template_type: template.template_type||'visits',
-        activation_type: activationType,
+      // KLJUCNO: paket se placa preko pravega placilnega toka (gotovina/kartica + FURS fiskalizacija),
+      // kartica (customer_packages) se aktivira SELE po uspesnem placilu (onSplitPaid callback spodaj).
+      const pkgLine = {
+        lineId: 'pkg-' + Date.now(),
         name: template.name,
-        active: true,
-        remaining: template.visits||null,
-        total: template.visits||null,
-        monetary_balance: template.monetary_value||null,
-        expires: expiresAt,
-        activated_at: activationType === 'purchase' ? now : null,
-        valid_from: activationType === 'fixed_date' && fixedDate ? fixedDate : null,
-        purchase_price: template.price,
-        notes: notes||null,
-        sold_by_staff_id: auth?.user?.id||null,
+        price: Number(template.price || 0),
+        qty: 1,
+        vat_rate: 22,
       }
-      const {error} = await createClient().from('customer_packages').insert(payload)
-      if (error) throw error
-
-      // Ustvari naročilo + plačilo
-      const orderId = await posData.refresh ? null : null
-      showToast(`✓ ${template.name} prodana stranki ${selCust?.name}`)
-      setTimeout(() => { posData.refresh(); onClose() }, 1500)
+      setPaymentOpen({
+        discount: 0,
+        splitLines: [pkgLine],
+        onSplitPaid: async () => {
+          try {
+            const now = new Date().toISOString()
+            const expiresAt = calcExpiry()
+            const payload = {
+              customer_id: customerId,
+              template_id: template.id,
+              template_type: template.template_type||'visits',
+              activation_type: activationType,
+              name: template.name,
+              active: true,
+              remaining: template.visits||null,
+              total: template.visits||null,
+              monetary_balance: template.monetary_value||null,
+              expires: expiresAt,
+              activated_at: activationType === 'purchase' ? now : null,
+              valid_from: activationType === 'fixed_date' && fixedDate ? fixedDate : null,
+              purchase_price: template.price,
+              notes: notes||null,
+              sold_by_staff_id: auth?.user?.id||null,
+            }
+            const {error} = await createClient().from('customer_packages').insert(payload)
+            if (error) throw error
+            posData.refresh()
+          } catch (e) {
+            alert('Napaka pri aktivaciji kartice po placilu: ' + e.message)
+          }
+          onClose()
+        }
+      })
     } catch(e) { showToast(e.message,false) }
     setSaving(false)
   }
@@ -9838,7 +9854,7 @@ function KlasikApp() {
           posData.refresh()
         }}/>
       <ReceiptToast data={receipt} onClose={() => setReceipt(null)}/>
-      {sellPackageModal && <SellPackageModal template={sellPackageModal} posData={posData} onClose={()=>setSellPackageModal(null)} auth={auth}/>}
+      {sellPackageModal && <SellPackageModal template={sellPackageModal} posData={posData} onClose={()=>setSellPackageModal(null)} auth={auth} setPaymentOpen={setPaymentOpen}/>}
       {showClockIn && <ClockInModal posData={posData} onClose={()=>setShowClockIn(false)} onClockedIn={()=>{ setShowClockIn(false); setWsRefreshKey(k=>k+1) }}/>}
       {showOpenCash && <OpenCashModal posData={posData} auth={auth} onClose={()=>setShowOpenCash(false)} onOpened={(s)=>{ setCashSession(s); setShowOpenCash(false) }}/>}
       {showVmesnoStanje && cashSession && <VmesnoStanjeModal session={cashSession} posData={posData} auth={auth} onClose={()=>setShowVmesnoStanje(false)}/>}
