@@ -9421,8 +9421,21 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
           status: 'pending',
         })
       }
-      const { error: instErr } = await db.from('installments').insert(installmentRows)
+      const { data: insertedInstallments, error: instErr } = await db.from('installments').insert(installmentRows).select()
       if (instErr) throw instErr
+
+      // Ce prvi obrok zapade danes ali je ze v preteklosti, dnevni cron (ki tece
+      // ob 6:00 in sicer tudi ujame zapadle/danasnje obroke) ga ne bi poslal
+      // pravocasno - poslji racun/opomnik TAKOJ, ne caka se na jutrisnji run.
+      const todayStr = new Date().toISOString().split('T')[0]
+      const firstInst = insertedInstallments?.find((r: any) => r.installment_number === 1)
+      if (firstInst && firstInst.due_date <= todayStr) {
+        fetch('/api/installments/send-now', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ installmentId: firstInst.id }),
+        }).catch((e) => console.error('Takojsnje posiljanje prvega obroka ni uspelo', e))
+      }
 
       showToast(`✓ ${template.name} aktivirana, ${count} obrokov nacrtovanih`)
       setTimeout(() => { posData.refresh(); onClose() }, 1500)
