@@ -2595,6 +2595,7 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
   const [addModal, setAddModal] = useState(false)
   const [bulkEmailModal, setBulkEmailModal] = useState(false)
   const [customerPackages, setCustomerPackages] = useState([])
+  const [customerDetailRefreshKey, setCustomerDetailRefreshKey] = useState(0)
   const [customerOrders, setCustomerOrders] = useState([])
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [activeTab, setActiveTab] = useState('pregled')
@@ -2642,7 +2643,7 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
       setLoadingDetail(false)
     }
     load()
-  }, [selectedId])
+  }, [selectedId, customerDetailRefreshKey])
 
   const pkgStatusDot = (c) => {
     const pkgs = (c.customer_packages||[]).filter(p=>p.active)
@@ -2793,7 +2794,7 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
             )}
             {activeTab === 'kartice' && (
               <CustomerPackagesTab customer={selected} packages={customerPackages} posData={posData} loading={loadingDetail}
-                onRefresh={()=>setSelectedId(s=>s)} setSellPackageModal={setSellPackageModal} setScreen={setScreen} setActiveCustomer={setActiveCustomer}/>
+                onRefresh={()=>setCustomerDetailRefreshKey(k=>k+1)} setSellPackageModal={setSellPackageModal} setScreen={setScreen} setActiveCustomer={setActiveCustomer}/>
             )}
             {activeTab === 'zgodovina' && (
               <CustomerHistoryTab orders={customerOrders} loading={loadingDetail}/>
