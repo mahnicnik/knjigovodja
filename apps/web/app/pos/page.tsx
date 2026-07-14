@@ -84,7 +84,17 @@ const H = {
   },
   orderTotals: (cart) => {
     const sub = cart.reduce((s, l) => s + H.lineTotal(l), 0)
-    return { sub, ddv: sub - sub / 1.22, total: sub }
+    // KLJUCNO: DDV se izracuna PO POSAMEZNI VRSTICI glede na njeno dejansko vat_rate,
+    // ne pavsalno za celotno kosarico po 22% (prejsnja koda je bila napacna za artikle z 9.5% DDV)
+    const vatByRate = {}
+    for (const l of cart) {
+      const rate = Number(l.vat_rate || 22)
+      const lineGross = H.lineTotal(l)
+      const lineVat = lineGross - lineGross / (1 + rate / 100)
+      vatByRate[rate] = (vatByRate[rate] || 0) + lineVat
+    }
+    const ddv = Object.values(vatByRate).reduce((s, v) => s + v, 0)
+    return { sub, ddv, total: sub, vatByRate }
   },
   isHappyHourEligible: (itemName) => {
     const n = (itemName || '').toLowerCase()
@@ -1641,7 +1651,15 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
           <span>Vmesna</span><span>{eur(totals.sub)}</span>
         </div>
         <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:10, color:T.muted }}>
-          <span>DDV 22%</span><span>{eur(totals.ddv)}</span>
+          {totals.vatByRate && Object.keys(totals.vatByRate).length > 0 ? (
+            Object.entries(totals.vatByRate).map(([rate, amt]) => (
+              <React.Fragment key={rate}>
+                <span>DDV {rate}%</span><span>{eur(amt)}</span>
+              </React.Fragment>
+            ))
+          ) : (
+            <><span>DDV</span><span>{eur(totals.ddv)}</span></>
+          )}
         </div>
         {cartDiscount>0 && (
           <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:4, color:T.accent }}>
