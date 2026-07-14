@@ -9334,6 +9334,7 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
   const [payInInstallments, setPayInInstallments] = useState(false)
+  const [firstInstallmentPayNow, setFirstInstallmentPayNow] = useState(false)
   const [installmentCount, setInstallmentCount] = useState(6)
   const [installmentFrequency, setInstallmentFrequency] = useState('monthly')
   const [firstDueDate, setFirstDueDate] = useState(new Date().toISOString().split('T')[0])
@@ -9356,79 +9357,73 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
     return null
   }
 
-  async function sellInInstallments() {
-    if (!customerId) { showToast('Izberi stranko',false); return }
-    if (!selCust?.email) {
-      showToast('Stranka nima vnesenega e-maila - obroki se ne morejo avtomatsko poslati. Dodaj e-mail na profilu stranke.', false)
-      return
+  async function createInstallmentPlanAfterPayment(firstAlreadyPaid) {
+    const db = createClient()
+    const now = new Date().toISOString()
+    const expiresAt = calcExpiry()
+    // Kartica se aktivira TAKOJ (kot pri starem sistemu) - placilo se spremlja loceno preko obrokov
+    const pkgPayload = {
+      customer_id: customerId,
+      template_id: template.id,
+      template_type: template.template_type||'visits',
+      activation_type: activationType,
+      name: template.name,
+      active: true,
+      remaining: template.visits||null,
+      total: template.visits||null,
+      monetary_balance: template.monetary_value||null,
+      expires: expiresAt,
+      activated_at: activationType === 'purchase' ? now : null,
+      valid_from: activationType === 'fixed_date' && fixedDate ? fixedDate : null,
+      purchase_price: template.price,
+      notes: notes||null,
+      sold_by_staff_id: auth?.user?.id||null,
     }
-    setSaving(true)
-    try {
-      const db = createClient()
-      const now = new Date().toISOString()
-      const expiresAt = calcExpiry()
-      // Kartica se aktivira TAKOJ (kot pri starem sistemu) - placilo se spremlja loceno preko obrokov
-      const pkgPayload = {
-        customer_id: customerId,
-        template_id: template.id,
-        template_type: template.template_type||'visits',
-        activation_type: activationType,
-        name: template.name,
-        active: true,
-        remaining: template.visits||null,
-        total: template.visits||null,
-        monetary_balance: template.monetary_value||null,
-        expires: expiresAt,
-        activated_at: activationType === 'purchase' ? now : null,
-        valid_from: activationType === 'fixed_date' && fixedDate ? fixedDate : null,
-        purchase_price: template.price,
-        notes: notes||null,
-        sold_by_staff_id: auth?.user?.id||null,
-      }
-      const { data: newPkg, error: pkgErr } = await db.from('customer_packages').insert(pkgPayload).select().single()
-      if (pkgErr) throw pkgErr
+    const { data: newPkg, error: pkgErr } = await db.from('customer_packages').insert(pkgPayload).select().single()
+    if (pkgErr) throw pkgErr
+    // KLJUCNO: template.price je CENA NA EN OBROK (npr. mesecna karta 31.99 x 6 mesecev = 191.94 skupaj),
+    // NE skupna cena ki bi jo delili na count delov. Prejsnja logika je to napacno delila.
+    const perInstallment = Number(template.price)
+    const count = Number(installmentCount)
+    const totalAmount = Math.round(perInstallment * count * 100) / 100
+    const { data: plan, error: planErr } = await db.from('installment_plans').insert({
+      business_id: BUSINESS_ID,
+      customer_package_id: newPkg.id,
+      customer_id: customerId,
+      total_amount: totalAmount,
+      installment_count: count,
+      installment_amount: perInstallment,
+      first_due_date: firstDueDate,
+      frequency: installmentFrequency,
+      status: 'active',
+      created_by: auth?.user?.id || null,
+    }).select().single()
+    if (planErr) throw planErr
+    const installmentRows = []
+    for (let i = 0; i < count; i++) {
+      const due = new Date(firstDueDate)
+      if (installmentFrequency === 'monthly') due.setMonth(due.getMonth() + i)
+      else due.setDate(due.getDate() + i * 7)
+      installmentRows.push({
+        plan_id: plan.id,
+        installment_number: i + 1,
+        due_date: due.toISOString().split('T')[0],
+        amount: perInstallment,
+        vat_rate: 22,
+        // Ce je prvi obrok ze placan na blagajni (firstAlreadyPaid), ga oznacimo
+        // kot 'paid' takoj - e-mail/cron sistem ga preskoci, ker filtrira po status='pending'.
+        status: (firstAlreadyPaid && i === 0) ? 'paid' : 'pending',
+      })
+    }
+    const { data: insertedInstallments, error: instErr } = await db.from('installments').insert(installmentRows).select()
+    if (instErr) throw instErr
 
-      // KLJUCNO: template.price je CENA NA EN OBROK (npr. mesecna karta 31.99 x 6 mesecev = 191.94 skupaj),
-      // NE skupna cena ki bi jo delili na count delov. Prejsnja logika je to napacno delila.
-      const perInstallment = Number(template.price)
-      const count = Number(installmentCount)
-      const totalAmount = Math.round(perInstallment * count * 100) / 100
-      const { data: plan, error: planErr } = await db.from('installment_plans').insert({
-        business_id: BUSINESS_ID,
-        customer_package_id: newPkg.id,
-        customer_id: customerId,
-        total_amount: totalAmount,
-        installment_count: count,
-        installment_amount: perInstallment,
-        first_due_date: firstDueDate,
-        frequency: installmentFrequency,
-        status: 'active',
-        created_by: auth?.user?.id || null,
-      }).select().single()
-      if (planErr) throw planErr
-
-      const installmentRows = []
-      for (let i = 0; i < count; i++) {
-        const due = new Date(firstDueDate)
-        if (installmentFrequency === 'monthly') due.setMonth(due.getMonth() + i)
-        else due.setDate(due.getDate() + i * 7)
-        installmentRows.push({
-          plan_id: plan.id,
-          installment_number: i + 1,
-          due_date: due.toISOString().split('T')[0],
-          amount: perInstallment,
-          vat_rate: 22,
-          status: 'pending',
-        })
-      }
-      const { data: insertedInstallments, error: instErr } = await db.from('installments').insert(installmentRows).select()
-      if (instErr) throw instErr
-
+    if (!firstAlreadyPaid) {
       // Ce prvi obrok zapade danes ali je ze v preteklosti, dnevni cron (ki tece
       // ob 6:00 in sicer tudi ujame zapadle/danasnje obroke) ga ne bi poslal
       // pravocasno - poslji racun/opomnik TAKOJ, ne caka se na jutrisnji run.
       const todayStr = new Date().toISOString().split('T')[0]
-      const firstInst = insertedInstallments?.find((r: any) => r.installment_number === 1)
+      const firstInst = insertedInstallments?.find((r) => r.installment_number === 1)
       if (firstInst && firstInst.due_date <= todayStr) {
         fetch('/api/installments/send-now', {
           method: 'POST',
@@ -9436,8 +9431,47 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
           body: JSON.stringify({ installmentId: firstInst.id }),
         }).catch((e) => console.error('Takojsnje posiljanje prvega obroka ni uspelo', e))
       }
+    }
 
-      showToast(`✓ ${template.name} aktivirana, ${count} obrokov nacrtovanih`)
+    showToast(`✓ ${template.name} aktivirana, ${count} obrokov nacrtovanih${firstAlreadyPaid ? ' (1. obrok placan na blagajni)' : ''}`)
+    posData.refresh()
+  }
+  async function sellInInstallments() {
+    if (!customerId) { showToast('Izberi stranko',false); return }
+    if (!selCust?.email) {
+      showToast('Stranka nima vnesenega e-maila - obroki se ne morejo avtomatsko poslati. Dodaj e-mail na profilu stranke.', false)
+      return
+    }
+    if (firstInstallmentPayNow) {
+      // Prvi obrok se placa TAKOJ na blagajni (gotovina/kartica), skozi ISTI
+      // preverjeni FURS placilni tok kot vsaka druga prodaja (PaymentModal + submitPayment).
+      // Kartica in plan obrokov se ustvarita SELE po uspesnem placilu (onSplitPaid callback),
+      // enako kot pri navadni (ne-obrocni) prodaji paketa v sell().
+      const perInstallment = Number(template.price)
+      const firstLine = {
+        lineId: 'installment-first-' + Date.now(),
+        name: `${template.name} - 1. obrok`,
+        price: perInstallment,
+        qty: 1,
+        vat_rate: 22,
+      }
+      setPaymentOpen({
+        discount: 0,
+        splitLines: [firstLine],
+        onSplitPaid: async () => {
+          try {
+            await createInstallmentPlanAfterPayment(true)
+          } catch (e) {
+            alert('Napaka pri aktivaciji obrokov po placilu: ' + e.message)
+          }
+          onClose()
+        }
+      })
+      return
+    }
+    setSaving(true)
+    try {
+      await createInstallmentPlanAfterPayment(false)
       setTimeout(() => { posData.refresh(); onClose() }, 1500)
     } catch(e) { showToast(e.message,false) }
     setSaving(false)
@@ -9581,6 +9615,10 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
               </Field>
               <div style={{ gridColumn:'1 / -1', fontSize:12, color:T.muted }}>
                 {installmentCount}x {eur(Number(template.price))} (skupaj {eur(Math.round(Number(template.price)*Number(installmentCount)*100)/100)}) — kartica se aktivira takoj, racun/opomnik se posilja avtomatsko pred vsakim obrokom
+              </div>
+              <div style={{ gridColumn:'1 / -1', display:'flex', gap:8, marginTop:4 }}>
+                <button type="button" onClick={()=>setFirstInstallmentPayNow(false)} style={{ flex:1, padding:'8px 6px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:11, background:!firstInstallmentPayNow?T.accent:T.surface2, color:!firstInstallmentPayNow?'#fff':T.muted }}>📧 1. obrok: pošlji na e-mail</button>
+                <button type="button" onClick={()=>setFirstInstallmentPayNow(true)} style={{ flex:1, padding:'8px 6px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:11, background:firstInstallmentPayNow?T.accent:T.surface2, color:firstInstallmentPayNow?'#fff':T.muted }}>💳 1. obrok: plačaj zdaj (blagajna)</button>
               </div>
             </div>
           )}
