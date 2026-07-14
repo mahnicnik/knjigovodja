@@ -2622,7 +2622,7 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
           .select('*, package_templates(name, template_type, color, validity_days, visits)')
           .eq('customer_id', selectedId)
           .order('active', { ascending: false })
-          .order('created_at', { ascending: false }),
+          .order('purchased_at', { ascending: false }),
         createClient().from('orders')
           .select('id, created_at, payments(amount, method), order_lines(name, qty, unit_price)')
           .eq('customer_id', selectedId)
