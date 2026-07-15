@@ -105,6 +105,9 @@ export default function BlagajnaPage() {
             address: p.address || '',
             postalCode: p.postal_code || '',
             city: p.city || '',
+            cadastralNumber: p.cadastral_number || '',
+            buildingNumber: p.building_number || '',
+            buildingSectionNumber: p.building_section_number || '',
           })),
           devices: (devices || []).map(d => ({
             id: d.id,
@@ -204,6 +207,9 @@ export default function BlagajnaPage() {
           address: premiseModal.address,
           postal_code: premiseModal.postalCode || '',
           city: premiseModal.city || '',
+          cadastral_number: premiseModal.cadastralNumber || null,
+          building_number: premiseModal.buildingNumber || null,
+          building_section_number: premiseModal.buildingSectionNumber || null,
         }).eq('id', premiseModal.id)
       } else {
         // Vstavi novega
@@ -214,6 +220,9 @@ export default function BlagajnaPage() {
           address: premiseModal.address,
           postal_code: premiseModal.postalCode || '',
           city: premiseModal.city || '',
+          cadastral_number: premiseModal.cadastralNumber || null,
+          building_number: premiseModal.buildingNumber || null,
+          building_section_number: premiseModal.buildingSectionNumber || null,
           is_active: true,
         })
       }
