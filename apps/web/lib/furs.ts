@@ -220,6 +220,7 @@ export async function confirmWithFurs(
 
     // 2. Zgradi XML zahtevo
     const xmlRequest = buildFursRequest(config, data, zoi)
+    console.log('FURS outgoing XML request:', xmlRequest)
 
     // 3. FURS endpoint — prek Supabase Edge Function proxy (Vercel blokira port 9002)
     const VPS_URL = 'http://152.89.232.145:8787'
