@@ -557,7 +557,7 @@ export async function confirmBusinessPremiseWithFurs(
         isTest: config.isTest,
         clientCert: config.certificatePem,
         clientKey: config.privateKeyPem,
-        soapAction: '/premises',
+        soapAction: '/invoices/register', // pravilna vrednost iz uradnega FURS WSDL (FiscalVerification.wsdl)
       }),
       signal: AbortSignal.timeout(15000),
     })
@@ -572,6 +572,19 @@ export async function confirmBusinessPremiseWithFurs(
         zoi: null,
         eor: null,
         errorMessage: 'Proxy napaka: ' + proxyData.error,
+        responseTime: new Date(),
+      }
+    }
+    // KLJUCNO (popravljeno po napacni "lazno pozitivni" prijavi prostora): preveri
+    // ok/status PREDEN sklepamo o uspehu - proxy lahko vrne HTTP napako (npr. 404
+    // "Napacni parametri vnosa") ki ni FURS <fu:Error>, ampak pomeni da sporocilo
+    // sploh ni doseglo FURS.
+    if (proxyData.ok === false || (proxyData.status && (proxyData.status < 200 || proxyData.status >= 300))) {
+      return {
+        success: false,
+        zoi: null,
+        eor: null,
+        errorMessage: `Proxy je zavrnil zahtevo (status ${proxyData.status}): ${proxyData.body}`,
         responseTime: new Date(),
       }
     }
