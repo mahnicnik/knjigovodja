@@ -24,6 +24,8 @@ export default function KarticeePage() {
   const [saving, setSaving] = useState(false)
   const [processor, setProcessor] = useState('sumup')
   const [customFee, setCustomFee] = useState('')
+  const [scanning, setScanning] = useState(false)
+  const [scanError, setScanError] = useState('')
   const [form, setForm] = useState({
     period_from: '',
     period_to: '',
@@ -128,6 +130,44 @@ export default function KarticeePage() {
     setSaving(false)
   }
 
+  async function handleFileScan(file: File) {
+    setScanning(true)
+    setScanError('')
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve((reader.result as string).split(',')[1])
+        reader.onerror = () => reject(new Error('Napaka pri branju datoteke'))
+        reader.readAsDataURL(file)
+      })
+      const res = await fetch('/api/kartice/parse-statement', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileBase64: base64, mediaType: file.type }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setScanError(data.error || 'Napaka pri skeniranju'); setScanning(false); return }
+      const s = data.settlement
+      if (s.processor_guess && PROCESSORS.some(p => p.value === s.processor_guess)) {
+        setProcessor(s.processor_guess)
+      }
+      if (s.fee_pct != null) setCustomFee(String(s.fee_pct))
+      setForm({
+        period_from: s.period_from || '',
+        period_to: s.period_to || s.period_from || '',
+        gross_sales: s.gross_sales != null ? String(s.gross_sales) : '',
+        fee_amount: s.fee_amount != null ? String(s.fee_amount) : '',
+        fee_pct: s.fee_pct != null ? String(s.fee_pct) : '',
+        net_payout: s.net_payout != null ? String(s.net_payout) : '',
+        transactions: s.transactions != null ? String(s.transactions) : '',
+        notes: '',
+      })
+      setShowForm(true)
+    } catch (e: any) {
+      setScanError(e.message || 'Napaka pri skeniranju')
+    }
+    setScanning(false)
+  }
   const totalGross = settlements.reduce((s, r) => s + r.gross_sales, 0)
   const totalFees = settlements.reduce((s, r) => s + r.fee_amount, 0)
   const totalNet = settlements.reduce((s, r) => s + r.net_payout, 0)
@@ -145,10 +185,17 @@ export default function KarticeePage() {
           <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900">← Domov</Link>
           <h1 className="font-semibold text-gray-900 mt-0.5">Kartično poslovanje</h1>
         </div>
-        <button onClick={() => setShowForm(!showForm)}
-          className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium">
-          + Nov obračun
-        </button>
+        <div className="flex gap-2">
+          <label className="bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium cursor-pointer hover:border-gray-400">
+            {scanning ? '⏳ Skeniram...' : '📄 Uvozi iz PDF/slike'}
+            <input type="file" accept="application/pdf,image/*" className="hidden" disabled={scanning}
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleFileScan(f); e.target.value = '' }} />
+          </label>
+          <button onClick={() => setShowForm(!showForm)}
+            className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium">
+            + Nov obračun
+          </button>
+        </div>
       </div>
 
       <div className="max-w-4xl mx-auto px-6 py-8">
@@ -187,6 +234,11 @@ export default function KarticeePage() {
         {showForm && (
           <div className="bg-white rounded-2xl border border-gray-900 p-6 mb-6">
             <h3 className="font-medium text-gray-900 mb-4">Vnesi kartični obračun</h3>
+            {scanError && (
+              <div className="bg-red-50 border border-red-100 text-red-700 text-xs rounded-xl p-3 mb-4">
+                {scanError}
+              </div>
+            )}
 
             {/* Procesor */}
             <div className="mb-4">
