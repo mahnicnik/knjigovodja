@@ -19,6 +19,7 @@
  */
 
 import crypto from 'crypto'
+import { SignedXml } from 'xml-crypto'
 
 // ===== TIPI =====
 
@@ -132,68 +133,75 @@ function buildFursRequest(
   data: FursInvoiceData,
   zoi: string,
 ): string {
-  const { taxNumber, premiseId, deviceId, certificatePem } = config
-
-  // Format za FURS: ISO 8601 z lokalno cono
+  const { taxNumber, premiseId, deviceId, privateKeyPem, certificatePem } = config
   const dt = data.issueDateTime
   const pad = (n: number) => String(n).padStart(2, '0')
   const isoDate = `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}`
+  const sendIso = new Date().toISOString().split('.')[0]
 
-  // Tip plačila → FURS koda
-  const paymentTypeCode: Record<string, string> = {
-    cash: 'G',     // Gotovina
-    card: 'KC',    // Kartica
-    voucher: 'B',  // Bon
-    other: 'DR',   // Drugo
-  }
-  const paymentCode = paymentTypeCode[data.paymentType] ?? 'DR'
+  // KLJUCNO (popravljeno 15.7.2026 po FURS kontroli, ErrorCode S001 "Sporocilo ni
+  // v skladu s shemo XML"): elementi morajo biti tocno PascalCase (InvoiceRequest,
+  // Header, Invoice - NE invoiceRequest/header/invoice), TaxesPerSeller ne sme biti
+  // podvojeno gnezden in MORA vsebovati VAT razclenitev (obvezno, ce obstaja DDV),
+  // in ne obstajata elementa PaymentType niti SignatureInfo/Certificate - to so bili
+  // izmisljeni tagi, ki jih uradna shema (TehnicnaDokumentacijaVer3.1.pdf) ne pozna.
+  // Davcna stevilka MORA biti samo 8 mest, brez "SI" predpone.
+  const cleanTaxNumber = taxNumber.replace(/^SI/i, '').trim()
+  const netAmount = Math.round((data.amountTotal / 1.22) * 100) / 100
+  const vatAmount = Math.round((data.amountTotal - netAmount) * 100) / 100
 
-  // Certifikat brez headers za vstavitev v XML
-  const certBase64 = certificatePem
-    .replace(/-----BEGIN CERTIFICATE-----/g, '')
-    .replace(/-----END CERTIFICATE-----/g, '')
-    .replace(/\n/g, '')
-    .trim()
+  const invoiceXml = `<fu:InvoiceRequest xmlns:fu="http://www.fu.gov.si/" Id="data">
+    <fu:Header>
+      <fu:MessageID>${crypto.randomUUID()}</fu:MessageID>
+      <fu:DateTime>${sendIso}</fu:DateTime>
+    </fu:Header>
+    <fu:Invoice>
+      <fu:TaxNumber>${cleanTaxNumber}</fu:TaxNumber>
+      <fu:IssueDateTime>${isoDate}</fu:IssueDateTime>
+      <fu:NumberingStructure>B</fu:NumberingStructure>
+      <fu:InvoiceIdentifier>
+        <fu:BusinessPremiseID>${premiseId}</fu:BusinessPremiseID>
+        <fu:ElectronicDeviceID>${deviceId}</fu:ElectronicDeviceID>
+        <fu:InvoiceNumber>${data.invoiceNumber}</fu:InvoiceNumber>
+      </fu:InvoiceIdentifier>
+      <fu:InvoiceAmount>${data.amountTotal.toFixed(2)}</fu:InvoiceAmount>
+      <fu:PaymentAmount>${data.amountTotal.toFixed(2)}</fu:PaymentAmount>
+      <fu:TaxesPerSeller>
+        <fu:VAT>
+          <fu:TaxRate>22.00</fu:TaxRate>
+          <fu:TaxableAmount>${netAmount.toFixed(2)}</fu:TaxableAmount>
+          <fu:TaxAmount>${vatAmount.toFixed(2)}</fu:TaxAmount>
+        </fu:VAT>
+      </fu:TaxesPerSeller>
+      <fu:OperatorTaxNumber>${cleanTaxNumber}</fu:OperatorTaxNumber>
+      <fu:ProtectedID>${zoi}</fu:ProtectedID>
+    </fu:Invoice>
+  </fu:InvoiceRequest>`
 
-  // Timestamp za podpis
-  const timestamp = new Date().toISOString()
+  // Pravo XML-DSig podpisovanje (enveloped signature) - algoritmi so razvidni
+  // iz PRAVEGA FURS odgovora (isti CanonicalizationMethod/SignatureMethod/DigestMethod,
+  // ki jih FURS uporablja za podpis svojih odgovorov).
+  const sig = new SignedXml({
+    privateKey: privateKeyPem,
+    publicCert: certificatePem,
+    canonicalizationAlgorithm: 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315',
+    signatureAlgorithm: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
+  })
+  sig.addReference({
+    xpath: "//*[@Id='data']",
+    digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
+    transforms: ['http://www.w3.org/2000/09/xmldsig#enveloped-signature'],
+  })
+  sig.computeSignature(invoiceXml, {
+    location: { reference: "//*[local-name(.)='Invoice']", action: 'after' },
+  })
+  const signedInvoiceXml = sig.getSignedXml()
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:fu="http://www.fu.gov.si/">
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
   <soapenv:Header/>
   <soapenv:Body>
-    <fu:invoiceRequest>
-      <fu:header>
-        <fu:MessageID>${crypto.randomUUID()}</fu:MessageID>
-        <fu:DateTime>${timestamp}</fu:DateTime>
-      </fu:header>
-      <fu:invoice>
-        <fu:TaxNumber>${taxNumber}</fu:TaxNumber>
-        <fu:IssueDateTime>${isoDate}</fu:IssueDateTime>
-        <fu:NumberingStructure>B</fu:NumberingStructure>
-        <fu:InvoiceIdentifier>
-          <fu:BusinessPremiseID>${premiseId}</fu:BusinessPremiseID>
-          <fu:ElectronicDeviceID>${deviceId}</fu:ElectronicDeviceID>
-          <fu:InvoiceNumber>${data.invoiceNumber}</fu:InvoiceNumber>
-        </fu:InvoiceIdentifier>
-        <fu:InvoiceAmount>${data.amountTotal.toFixed(2)}</fu:InvoiceAmount>
-        <fu:PaymentAmount>${data.amountTotal.toFixed(2)}</fu:PaymentAmount>
-        <fu:TaxesPerSeller>
-          <fu:TaxesPerSeller>
-            <fu:SellerTaxNumber>${taxNumber}</fu:SellerTaxNumber>
-          </fu:TaxesPerSeller>
-        </fu:TaxesPerSeller>
-        <fu:OperatorTaxNumber>${taxNumber}</fu:OperatorTaxNumber>
-        <fu:ProtectedID>${zoi}</fu:ProtectedID>
-        <fu:SignatureInfo>
-          <fu:Certificate>${certBase64}</fu:Certificate>
-          <fu:ProvidedSignatureInfo>
-            <fu:Created>${timestamp}</fu:Created>
-          </fu:ProvidedSignatureInfo>
-        </fu:SignatureInfo>
-        ${data.amountTotal > 0 ? `<fu:PaymentType>${paymentCode}</fu:PaymentType>` : ''}
-      </fu:invoice>
-    </fu:invoiceRequest>
+    ${signedInvoiceXml}
   </soapenv:Body>
 </soapenv:Envelope>`
 }
