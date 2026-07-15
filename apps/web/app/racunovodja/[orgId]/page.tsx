@@ -43,6 +43,21 @@ function openReceiptPdf(attachmentBase64: string | null, attachmentType: string 
   const url = URL.createObjectURL(blob)
   window.open(url, '_blank')
 }
+async function openInvoicePdf(invoiceId: string) {
+  try {
+    const res = await fetch(`/api/racunovodja/invoice-pdf?id=${invoiceId}`)
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      alert(data.error || 'Napaka pri nalaganju racuna')
+      return
+    }
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank')
+  } catch (e: any) {
+    alert('Napaka pri nalaganju racuna: ' + e.message)
+  }
+}
 
 interface Comment {
   id: string
@@ -317,7 +332,10 @@ export default function RacunovodjaClientPage() {
                       <td style={{ padding: '12px 16px', fontSize: 13, color: inv.due_date && inv.due_date < new Date().toISOString().split('T')[0] && inv.status === 'sent' ? '#DC2626' : '#666' }}>{fmtDate(inv.due_date)}</td>
                       <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 600, color: '#0D1F12' }}>{fmt(inv.amount_total)}</td>
                       <td style={{ padding: '12px 16px' }}><StatusBadge status={inv.status} /></td>
-                      <td style={{ padding: '12px 16px' }}>
+                      <td style={{ padding: '12px 16px', display: 'flex', gap: 10, alignItems: 'center' }}>
+                        <button onClick={() => openInvoicePdf(inv.id)} style={{ background: 'none', border: 0, color: '#0D1F12', cursor: 'pointer', fontSize: 12, fontWeight: 500 }}>
+                          📄 PDF
+                        </button>
                         <button onClick={() => { setTab('comments'); setCommentDocType('invoice'); setCommentDocId(inv.id); setNewComment(`Račun ${inv.invoice_number}: `) }} style={{ background: 'none', border: 0, color: '#1D9E75', cursor: 'pointer', fontSize: 12, fontWeight: 500 }}>
                           + Opomba
                         </button>
