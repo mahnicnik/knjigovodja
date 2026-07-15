@@ -131,146 +131,25 @@ export default function InvoicesPage() {
   }
 
   async function downloadPDF(inv: any) {
-    const QRCode = await import('qrcode')
-    const amount = String(Math.round(inv.amount_total * 100)).padStart(11, '0')
-
-    function upnDate(dateStr: string): string {
-      const d = new Date(dateStr)
-      return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`
+    try {
+      const res = await fetch(`/api/racunovodja/invoice-pdf?id=${inv.id}`)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        alert(data.error || 'Napaka pri generiranju racuna')
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${inv.invoice_number}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (e: any) {
+      alert('Napaka pri prenosu racuna: ' + e.message)
     }
-
-    const namen = `Placilo racuna ${inv.invoice_number}`.slice(0, 42)
-    const ibanClean = (org.iban || '').replace(/\s/g, '')
-    const refClean = (inv.reference || `SI00 ${inv.invoice_number}`).replace(/\s/g, '')
-
-    const upnFields = [
-      'UPNQR','','','','',
-      inv.client_name.slice(0, 33),
-      '','',
-      amount,
-      '','','OTHR',
-      namen,
-      upnDate(inv.due_date),
-      ibanClean,
-      refClean,
-      org.name.slice(0, 33),
-      (org.address || '').slice(0, 33),
-      `${org.post_code || ''} ${org.city || ''}`.trim().slice(0, 33),
-    ]
-
-    const checksum = upnFields.reduce((s, f) => s + f.length + 1, 0)
-    const upnData = upnFields.join('\n') + '\n' + String(checksum).padStart(3, '0')
-    const qrDataUrl = await QRCode.toDataURL(upnData, { width: 200, margin: 2, errorCorrectionLevel: 'M' })
-
-    const isStorno = inv.amount_total < 0
-    const isDobropis = inv.invoice_number?.includes('-D')
-    const docType = isDobropis ? 'DOBROPIS' : isStorno ? 'STORNO' : 'RAČUN'
-
-    const html = `<!DOCTYPE html>
-<html lang="sl"><head><meta charset="UTF-8">
-<style>
-* { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:Arial,sans-serif; font-size:11px; color:#111; padding:30px 40px; }
-.header { display:flex; justify-content:space-between; margin-bottom:30px; }
-.company-name { font-size:20px; font-weight:bold; margin-bottom:6px; }
-.company-info { color:#666; font-size:10px; line-height:1.8; }
-.invoice-title { text-align:right; }
-.invoice-title h1 { font-size:28px; font-weight:bold; letter-spacing:2px; color:${isStorno || isDobropis ? '#c00' : '#111'}; }
-.invoice-title .meta { color:#666; font-size:10px; margin-top:6px; line-height:1.8; }
-hr { border:none; border-top:1px solid #e0e0e0; margin:20px 0; }
-.buyer { margin-bottom:25px; }
-.buyer-label { font-size:9px; color:#999; text-transform:uppercase; letter-spacing:1px; margin-bottom:5px; }
-.buyer-name { font-size:13px; font-weight:bold; }
-.buyer-sub { font-size:10px; color:#666; margin-top:3px; }
-table { width:100%; border-collapse:collapse; margin-bottom:20px; }
-thead tr { background:#f5f5f5; }
-th { padding:8px 10px; text-align:left; font-size:9px; color:#666; text-transform:uppercase; }
-th.r { text-align:right; }
-td { padding:9px 10px; border-bottom:1px solid #f0f0f0; font-size:11px; }
-td.r { text-align:right; }
-.totals { display:flex; justify-content:flex-end; margin-bottom:24px; }
-.totals-box { width:280px; }
-.total-row { display:flex; justify-content:space-between; padding:5px 0; color:#666; font-size:11px; }
-.total-final { display:flex; justify-content:space-between; background:#111; color:white; padding:10px 14px; border-radius:6px; font-size:13px; font-weight:bold; margin-top:10px; }
-.bottom { display:flex; justify-content:space-between; align-items:flex-start; margin-top:24px; padding-top:20px; border-top:1px solid #e0e0e0; }
-.pay-title { font-size:9px; color:#999; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }
-.pay-row { display:flex; gap:8px; margin-bottom:4px; font-size:10px; }
-.pay-lbl { color:#999; width:55px; }
-.pay-val { font-weight:bold; color:#111; }
-.footer { margin-top:30px; text-align:center; font-size:9px; color:#aaa; border-top:1px solid #f0f0f0; padding-top:15px; }
-.storno-badge { display:inline-block; background:#fff0f0; border:1px solid #fcc; color:#c00; padding:4px 10px; border-radius:4px; font-size:10px; font-weight:bold; margin-bottom:12px; }
-</style></head><body>
-<div class="header">
-  <div>
-    <div class="company-name">${org.name}</div>
-    <div class="company-info">
-      ${org.address || ''}<br>
-      ${org.post_code || ''} ${org.city || ''}<br>
-      Davčna številka: ${org.tax_number || ''}<br>
-      ${org.vat_registered ? `ID za DDV: SI${org.tax_number || ''}<br>` : ''}
-      ${org.iban ? `TRR: ${org.iban}` : ''}
-    </div>
-  </div>
-  <div class="invoice-title">
-    <h1>${docType}</h1>
-    <div class="meta">
-      Številka: ${inv.invoice_number}<br>
-      Datum: ${new Date(inv.issue_date).toLocaleDateString('sl-SI')}<br>
-      Rok plačila: ${new Date(inv.due_date).toLocaleDateString('sl-SI')}
-    </div>
-  </div>
-</div>
-${inv.notes ? `<div class="storno-badge">${inv.notes}</div>` : ''}
-<hr>
-<div class="buyer">
-  <div class="buyer-label">Kupec</div>
-  <div class="buyer-name">${inv.client_name}</div>
-  ${inv.client_tax_number ? `<div class="buyer-sub">ID za DDV: ${inv.client_tax_number}</div>` : ''}
-  ${inv.client_email ? `<div class="buyer-sub">${inv.client_email}</div>` : ''}
-</div>
-<table>
-  <thead><tr>
-    <th>Storitev / Blago</th><th class="r">Količina</th><th class="r">Cena (€)</th><th class="r">DDV</th><th class="r">Skupaj (€)</th>
-  </tr></thead>
-  <tbody>
-    ${(inv.line_items || []).map((item: any) => `
-      <tr>
-        <td>${item.description || ''}</td>
-        <td class="r">${item.quantity}</td>
-        <td class="r">€${Number(item.unit_price).toFixed(2)}</td>
-        <td class="r">${item.vat_rate}%</td>
-        <td class="r">€${(item.quantity * item.unit_price).toFixed(2)}</td>
-      </tr>`).join('')}
-  </tbody>
-</table>
-<div class="totals">
-  <div class="totals-box">
-    <div class="total-row"><span>Osnova za DDV:</span><span>€${Number(inv.amount_net).toFixed(2)}</span></div>
-    <div class="total-row"><span>DDV:</span><span>€${Number(inv.vat_amount).toFixed(2)}</span></div>
-    <div class="total-final"><span>${isStorno || isDobropis ? 'SKUPAJ ZA VRAČILO:' : 'SKUPAJ ZA PLAČILO:'}</span><span>€${Number(inv.amount_total).toFixed(2)}</span></div>
-  </div>
-</div>
-${!isStorno && !isDobropis ? `
-<div class="bottom">
-  <div>
-    <div class="pay-title">Plačilni podatki</div>
-    <div class="pay-row"><span class="pay-lbl">TRR:</span><span class="pay-val">${org.iban || ''}</span></div>
-    <div class="pay-row"><span class="pay-lbl">Sklic:</span><span class="pay-val">${inv.reference || `SI00 ${inv.invoice_number}`}</span></div>
-    <div class="pay-row"><span class="pay-lbl">Namen:</span><span class="pay-val">Plačilo računa ${inv.invoice_number}</span></div>
-    <div class="pay-row"><span class="pay-lbl">Znesek:</span><span class="pay-val">€${Number(inv.amount_total).toFixed(2)}</span></div>
-  </div>
-  <div>
-    <img src="${qrDataUrl}" width="110" height="110" alt="QR">
-    <div style="font-size:9px;color:#999;text-align:center;margin-top:4px">UPN QR</div>
-  </div>
-</div>` : ''}
-<div class="footer">Dokument je izdan elektronsko &middot; ${org.name} &middot; ${new Date().getFullYear()}</div>
-</body></html>`
-
-    const w = window.open('', '_blank')
-    if (!w) return
-    w.document.write(html)
-    w.document.close()
   }
 
   function statusLabel(status: string) {
