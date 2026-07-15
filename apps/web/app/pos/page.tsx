@@ -341,6 +341,12 @@ const KI = ({ name, size = 18, strokeWidth = 1.7 }) => {
     scale: <><path d="M12 3v18M5 7l7-4 7 4M3 12l2-5 2 5a2 2 0 1 1-4 0zM17 12l2-5 2 5a2 2 0 1 1-4 0zM7 21h10"/></>,
     card: <><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/></>,
     refund: <><path d="M3 9h13a5 5 0 0 1 0 10H6"/><path d="m7 5-4 4 4 4"/></>,
+    target: <><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></>,
+    gift: <><rect x="3" y="8" width="18" height="12" rx="1"/><path d="M3 8h18M12 8v12"/><path d="M12 8c-1.5-4-7-4-7-1 0 1.5 2 1.5 7 1zM12 8c1.5-4 7-4 7-1 0 1.5-2 1.5-7 1z"/></>,
+    clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></>,
+    flower: <><circle cx="12" cy="9" r="3"/><circle cx="9" cy="14" r="3"/><circle cx="15" cy="14" r="3"/><circle cx="12" cy="13" r="1.4" fill="currentColor"/></>,
+    money: <><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><circle cx="17" cy="14.5" r="1.3" fill="currentColor"/></>,
+    info: <><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="8" r="0.9" fill="currentColor"/></>,
   }
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
@@ -2511,13 +2517,13 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
 
 // ================================================================
 const TEMPLATE_TYPES = {
-  membership:   { label:'Claenarina',      icon:'inf',  color:'#1f6b3a' },
+  membership:   { label:'Claenarina',      icon:'info',  color:'#1f6b3a' },
   visits:       { label:'Karta obiskov',  icon:'target',  color:'#634896' },
   gift_voucher: { label:'Darilni bon',    icon:'gift',  color:'#b88c28' },
   service_bon:  { label:'Storitveni bon', icon:'bell',  color:'#0ea5e9' },
   seasonal:     { label:'Sezonska',       icon:'flower',  color:'#ec4899' },
   time_restrict:{ label:'Casovna',        icon:'clock',  color:'#f97316' },
-  group_class:  { label:'Skupinska',      icon:'group',  color:'#8b5cf6' },
+  group_class:  { label:'Skupinska',      icon:'users',  color:'#8b5cf6' },
   prepaid:      { label:'Predplacilo',    icon:'money',  color:'#14b8a6' },
 }
 const ACTIVATION_TYPES = {
@@ -2550,7 +2556,7 @@ function PackagesScreen({ posData, setSellPackageModal }) {
         </div>
         <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
           <button onClick={()=>setFilter('all')} style={{ padding:'5px 12px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:11, background:filter==='all'?T.header:T.face3, color:filter==='all'?T.headerInk:T.ink }}>Vsi</button>
-          {Object.entries(TEMPLATE_TYPES).map(([k,v])=>(<button key={k} onClick={()=>setFilter(k)} style={{ padding:'5px 12px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:11, background:filter===k?v.color:T.surface3, color:filter===k?'#fff':T.ink }}>{v.icon} {v.label}</button>))}
+          {Object.entries(TEMPLATE_TYPES).map(([k,v])=>(<button key={k} onClick={()=>setFilter(k)} style={{ padding:'5px 12px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:11, background:filter===k?v.color:T.surface3, color:filter===k?'#fff':T.ink, display:'inline-flex', alignItems:'center', gap:5 }}><KI name={v.icon} size={13}/> {v.label}</button>))}
         </div>
       </div>
       {posData.packageTemplates.length === 0 ? (
@@ -2566,7 +2572,7 @@ function PackagesScreen({ posData, setSellPackageModal }) {
             const tconf = TEMPLATE_TYPES[ttype] || TEMPLATE_TYPES.visits
             return (<div key={p.id} style={{ background:T.surface, borderRadius:13, border:'1px solid '+T.line, padding:18, display:'flex', flexDirection:'column' }}>
               <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
-                <div style={{ width:40, height:40, borderRadius:10, background:tconf.color+'18', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20 }}>{tconf.icon}</div>
+                <div style={{ width:40, height:40, borderRadius:10, background:tconf.color+'18', display:'flex', alignItems:'center', justifyContent:'center', color:tconf.color }}><KI name={tconf.icon} size={20}/></div>
                 <div style={{ flex:1 }}><div style={{ fontSize:14, fontWeight:800 }}>{p.name}</div><span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:5, background:tconf.color+'18', color:tconf.color }}>{tconf.label}</span></div>
               </div>
               <div style={{ fontSize:28, fontWeight:900, color:tconf.color }}>{eur(p.price)}</div>
@@ -3199,7 +3205,7 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
             return (
               <div key={pkg.id} style={{ padding:16, borderRadius:12, marginBottom:10, background:T.surface, border:'2px solid '+(isFrozen?'#94a3b8':isNear?T.warn:tc.color)+'40', opacity:isFrozen?0.75:1 }}>
                 <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
-                  <div style={{ width:36, height:36, borderRadius:9, background:tc.color+'18', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>{tc.icon}</div>
+                  <div style={{ width:36, height:36, borderRadius:9, background:tc.color+'18', display:'flex', alignItems:'center', justifyContent:'center', color:tc.color }}><KI name={tc.icon} size={18}/></div>
                   <div style={{ flex:1 }}>
                     <div style={{ fontWeight:700, fontSize:14 }}>{pkg.name}</div>
                     <div style={{ fontSize:11, color:T.muted }}>{tc.label}{pkg.purchase_price?` · Plačano: ${eur(pkg.purchase_price)}`:''}</div>
@@ -3273,7 +3279,7 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
           <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>PRETEKLE ({inactive.length})</div>
           {inactive.map(pkg => (
             <div key={pkg.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px', background:T.surface, borderRadius:9, marginBottom:5, opacity:0.55 }}>
-              <div style={{ fontSize:14 }}>{(TEMPLATE_TYPES[pkg.template_type||pkg.package_templates?.template_type]||TEMPLATE_TYPES.visits).icon}</div>
+              <div><KI name={(TEMPLATE_TYPES[pkg.template_type||pkg.package_templates?.template_type]||TEMPLATE_TYPES.visits).icon} size={14}/></div>
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:13, fontWeight:600 }}>{pkg.name}</div>
                 <div style={{ fontSize:11, color:T.muted }}>{pkg.expires?`Poteklo: ${new Date(pkg.expires).toLocaleDateString('sl-SI')}`:'Porabljeno'}</div>
@@ -7970,11 +7976,11 @@ function PackagesAdminSection({ posData, modal, setModal }) {
         return (
           <div key={typeKey} style={{ marginBottom:16 }}>
             <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, display:'flex', alignItems:'center', gap:6 }}>
-              <span style={{ fontSize:14 }}>{typeConf.icon}</span> {typeConf.label}
+              <span style={{ display:'inline-flex', alignItems:'center' }}><KI name={typeConf.icon} size={14}/></span> {typeConf.label}
             </div>
             {typePackages.map(p => (
               <div key={p.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', background:T.surface, borderRadius:10, marginBottom:6, border:'1px solid '+T.line }}>
-                <div style={{ width:36, height:36, borderRadius:8, background:typeConf.color+'18', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>{typeConf.icon}</div>
+                <div style={{ width:36, height:36, borderRadius:8, background:typeConf.color+'18', display:'flex', alignItems:'center', justifyContent:'center', color:typeConf.color }}><KI name={typeConf.icon} size={18}/></div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontWeight:700, fontSize:14 }}>{p.name}</div>
                   <div style={{ fontSize:11, color:T.muted, marginTop:2, display:'flex', gap:10, flexWrap:'wrap' }}>
@@ -8006,7 +8012,7 @@ function PackagesAdminSection({ posData, modal, setModal }) {
                 const sel = ttype === k
                 return (
                   <div key={k} onClick={()=>setModal(p=>({...p,template_type:k}))} style={{ padding:'8px 4px', borderRadius:9, border:'2px solid '+(sel?v.color:T.line), cursor:'pointer', textAlign:'center', background:sel?v.color+'18':T.surface }}>
-                    <div style={{ fontSize:18 }}>{v.icon}</div>
+                    <div><KI name={v.icon} size={18}/></div>
                     <div style={{ fontSize:10, fontWeight:700, color:sel?v.color:T.muted, marginTop:3, lineHeight:1.2 }}>{v.label}</div>
                   </div>
                 )
@@ -9534,7 +9540,7 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
 
         {/* Info kartica */}
         <div style={{ padding:14, borderRadius:10, background:tconf.color+'10', border:'1px solid '+tconf.color+'30', display:'flex', gap:12 }}>
-          <div style={{ fontSize:28 }}>{tconf.icon}</div>
+          <div style={{ color:tconf.color }}><KI name={tconf.icon} size={28}/></div>
           <div>
             <div style={{ fontWeight:700, fontSize:15 }}>{template.name}</div>
             <div style={{ fontSize:12, color:T.muted, marginTop:4, display:'flex', gap:10, flexWrap:'wrap' }}>
