@@ -52,6 +52,7 @@ export default function BlagajnaPage() {
   const [testResult, setTestResult] = useState<any>(null)
   const [testing, setTesting] = useState(false)
   const [openFaq, setOpenFaq] = useState<number | null>(null)
+  const [registeringPremiseId, setRegisteringPremiseId] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   function showToast(msg: string, ok = true) {
@@ -231,6 +232,38 @@ export default function BlagajnaPage() {
     await supabase.from('business_premises').update({ is_active: false }).eq('id', id)
     showToast('Poslovni prostor izbrisan')
     window.location.reload()
+  }
+
+  async function registerPremiseWithFurs(p: FursPremise) {
+    setRegisteringPremiseId(p.id)
+    try {
+      const match = (p.address || '').match(/^(.*?)\s+(\S+)$/)
+      const street = match ? match[1].trim() : (p.address || '')
+      const houseNumber = match ? match[2].trim() : ''
+      const res = await fetch('/api/furs/register-premise', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cadastralNumber: p.cadastralNumber,
+          buildingNumber: p.buildingNumber,
+          buildingSectionNumber: p.buildingSectionNumber,
+          street,
+          houseNumber,
+          community: p.city,
+          city: p.city,
+          postalCode: p.postalCode,
+        }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setToast({ msg: '✓ Poslovni prostor uspešno prijavljen pri FURS', ok: true })
+      } else {
+        setToast({ msg: data.error || 'Napaka pri prijavi poslovnega prostora', ok: false })
+      }
+    } catch (e: any) {
+      setToast({ msg: e.message, ok: false })
+    }
+    setRegisteringPremiseId(null)
   }
 
   async function addDevice() {
@@ -431,6 +464,11 @@ export default function BlagajnaPage() {
                   {p.cadastralNumber && <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>Kat. občina: {p.cadastralNumber}, stavba: {p.buildingNumber}</div>}
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={() => registerPremiseWithFurs(p)} disabled={registeringPremiseId === p.id || !p.cadastralNumber}
+                    title={!p.cadastralNumber ? 'Najprej vnesi katastrske podatke (uredi prostor)' : ''}
+                    style={{ padding: '6px 12px', borderRadius: 7, border: '1px solid #1f6b3a', background: registeringPremiseId === p.id ? '#e5e1d8' : 'rgba(31,107,58,0.08)', cursor: p.cadastralNumber ? 'pointer' : 'not-allowed', fontSize: 12, color: '#1f6b3a', fontWeight: 600, fontFamily: 'inherit', opacity: p.cadastralNumber ? 1 : 0.5 }}>
+                    {registeringPremiseId === p.id ? '⏳ Prijavljam...' : '📤 Prijavi pri FURS'}
+                  </button>
                   <button onClick={() => setPremiseModal(p)} style={{ padding: '6px 12px', borderRadius: 7, border: '1px solid #d0ccc5', background: 'transparent', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}>✏️ Uredi</button>
                   <button onClick={() => deletePremise(p.id)} style={{ padding: '6px 12px', borderRadius: 7, border: '1px solid rgba(168,50,50,0.3)', background: 'transparent', cursor: 'pointer', fontSize: 12, color: '#a83232', fontFamily: 'inherit' }}>Briši</button>
                 </div>

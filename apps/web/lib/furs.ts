@@ -440,3 +440,170 @@ export function getFursVerificationUrl(zoi: string, issueDate: Date): string {
 
   return `https://www.fu.gov.si/sklep/index.php?zoi=${zoi}&dat=${dateStr}`
 }
+
+
+// ===== PRIJAVA POSLOVNEGA PROSTORA (BusinessPremiseRequest) =====
+// Dodano 15.7.2026 po FURS kontroli - ErrorCode S006 "Podatki o poslovnem
+// prostoru niso posredovani". Poslovni prostor MORA biti prijavljen prek tega
+// sporocila PREDEN se lahko zanj potrjujejo racuni (locen korak od InvoiceRequest).
+// Struktura po uradni FURS specifikaciji (TehnicnaDokumentacijaVer1.0.pdf, 3.2.1-3.2.3).
+
+export interface FursPremiseData {
+  businessPremiseId: string
+  cadastralNumber: string
+  buildingNumber: string
+  buildingSectionNumber: string
+  street: string
+  houseNumber: string
+  houseNumberAdditional?: string
+  community: string
+  city: string
+  postalCode: string
+  validityDate: string // YYYY-MM-DD
+  softwareSupplierTaxNumber: string
+  specialNotes?: string
+}
+
+function buildBusinessPremiseRequest(
+  config: FursConfig,
+  premise: FursPremiseData,
+): string {
+  const cleanTaxNumber = config.taxNumber.replace(/^SI/i, '').trim()
+
+  const premiseXml = `<fu:BusinessPremiseRequest xmlns:fu="http://www.fu.gov.si/" Id="data">
+    <fu:Header>
+      <fu:MessageID>${crypto.randomUUID()}</fu:MessageID>
+      <fu:DateTime>${new Date().toISOString().split('.')[0]}</fu:DateTime>
+    </fu:Header>
+    <fu:BusinessPremise>
+      <fu:TaxNumber>${cleanTaxNumber}</fu:TaxNumber>
+      <fu:BusinessPremiseID>${premise.businessPremiseId}</fu:BusinessPremiseID>
+      <fu:BPIdentifier>
+        <fu:RealEstateBP>
+          <fu:PropertyID>
+            <fu:CadastralNumber>${premise.cadastralNumber}</fu:CadastralNumber>
+            <fu:BuildingNumber>${premise.buildingNumber}</fu:BuildingNumber>
+            <fu:BuildingSectionNumber>${premise.buildingSectionNumber}</fu:BuildingSectionNumber>
+          </fu:PropertyID>
+          <fu:Address>
+            <fu:Street>${premise.street}</fu:Street>
+            <fu:HouseNumber>${premise.houseNumber}</fu:HouseNumber>
+            ${premise.houseNumberAdditional ? `<fu:HouseNumberAdditional>${premise.houseNumberAdditional}</fu:HouseNumberAdditional>` : ''}
+            <fu:Community>${premise.community}</fu:Community>
+            <fu:City>${premise.city}</fu:City>
+            <fu:PostalCode>${premise.postalCode}</fu:PostalCode>
+          </fu:Address>
+        </fu:RealEstateBP>
+      </fu:BPIdentifier>
+      <fu:ValidityDate>${premise.validityDate}</fu:ValidityDate>
+      <fu:SoftwareSupplier>
+        <fu:TaxNumber>${premise.softwareSupplierTaxNumber.replace(/^SI/i, '').trim()}</fu:TaxNumber>
+      </fu:SoftwareSupplier>
+      ${premise.specialNotes ? `<fu:SpecialNotes>${premise.specialNotes}</fu:SpecialNotes>` : ''}
+    </fu:BusinessPremise>
+  </fu:BusinessPremiseRequest>`
+
+  const sig = new SignedXml({
+    privateKey: config.privateKeyPem,
+    publicCert: config.certificatePem,
+    canonicalizationAlgorithm: 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315',
+    signatureAlgorithm: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
+  })
+  sig.addReference({
+    xpath: "//*[@Id='data']",
+    digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
+    transforms: ['http://www.w3.org/2000/09/xmldsig#enveloped-signature'],
+  })
+  sig.computeSignature(premiseXml, {
+    location: { reference: "//*[local-name(.)='BusinessPremise']", action: 'after' },
+  })
+  const signedPremiseXml = sig.getSignedXml()
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+  <soapenv:Header/>
+  <soapenv:Body>
+    ${signedPremiseXml}
+  </soapenv:Body>
+</soapenv:Envelope>`
+}
+
+/**
+ * Prijavi poslovni prostor pri FURS. Klice se ENKRAT (ali ob spremembi podatkov
+ * o prostoru) - ne ob vsakem racunu. Uporablja isti proxy in isti nacin podpisovanja
+ * kot confirmWithFurs.
+ *
+ * OPOMBA: soapAction '/premises' je najboljsa ocena poti na proxy strezniku
+ * (po analogiji z '/invoices') - ce proxy uporablja drugacno pot za prijavo
+ * poslovnega prostora, jo bo treba preveriti/prilagoditi neposredno na VPS-u.
+ */
+export async function confirmBusinessPremiseWithFurs(
+  config: FursConfig,
+  premise: FursPremiseData,
+): Promise<FursResult> {
+  try {
+    const xmlRequest = buildBusinessPremiseRequest(config, premise)
+    console.log('FURS outgoing BusinessPremiseRequest XML:', xmlRequest)
+
+    const VPS_URL = 'http://152.89.232.145:8787'
+    const proxyResp = await fetch(VPS_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': 'racunko-furs-2026',
+      },
+      body: JSON.stringify({
+        soapBody: xmlRequest,
+        isTest: config.isTest,
+        clientCert: config.certificatePem,
+        clientKey: config.privateKeyPem,
+        soapAction: '/premises',
+      }),
+      signal: AbortSignal.timeout(15000),
+    })
+    const proxyRaw = await proxyResp.text()
+    console.log('FURS proxy raw (premise):', proxyRaw)
+    let proxyData: any = {}
+    try { proxyData = JSON.parse(proxyRaw) } catch { proxyData = { error: proxyRaw } }
+
+    if (proxyData.error) {
+      return {
+        success: false,
+        zoi: null,
+        eor: null,
+        errorMessage: 'Proxy napaka: ' + proxyData.error,
+        responseTime: new Date(),
+      }
+    }
+
+    const responseText: string = proxyData.body ?? ''
+    const fursError = extractFursError(responseText)
+    if (fursError) {
+      return {
+        success: false,
+        zoi: null,
+        eor: null,
+        errorMessage: `FURS je zavrnil prijavo prostora [${fursError.code}]: ${fursError.message}`,
+        responseTime: new Date(),
+      }
+    }
+
+    // Uspesen odgovor na BusinessPremiseRequest nima EOR/ZOI - samo potrditev brez napake.
+    return {
+      success: true,
+      zoi: null,
+      eor: null,
+      errorMessage: null,
+      responseTime: new Date(),
+    }
+  } catch (err: any) {
+    const isTimeout = err.name === 'TimeoutError' || err.name === 'AbortError'
+    return {
+      success: false,
+      zoi: null,
+      eor: null,
+      errorMessage: isTimeout ? 'FURS: Timeout (15s)' : `Napaka: ${err.message}`,
+      responseTime: new Date(),
+    }
+  }
+}
