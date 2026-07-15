@@ -2527,9 +2527,9 @@ const TEMPLATE_TYPES = {
   prepaid:      { label:'Predplacilo',    icon:'money',  color:'#14b8a6' },
 }
 const ACTIVATION_TYPES = {
-  purchase:  'Ob nakupu',
-  first_use: 'Ob prvem obisku',
-  date:      'Na datum',
+  purchase:   'Ob nakupu',
+  first_use:  'Ob prvem obisku',
+  fixed_date: 'Na datum',
 }
 // PS SCREEN
 // ================================================================
