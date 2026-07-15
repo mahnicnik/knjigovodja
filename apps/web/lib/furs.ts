@@ -263,6 +263,16 @@ export async function confirmWithFurs(
 
     // 5. Razčleni odgovor
     const responseText = await response.text()
+    const fursError = extractFursError(responseText)
+    if (fursError) {
+      return {
+        success: false,
+        zoi,
+        eor: null,
+        errorMessage: `FURS je zavrnil racun [${fursError.code}]: ${fursError.message}`,
+        responseTime: new Date(),
+      }
+    }
     const eor = extractEorFromResponse(responseText)
 
     if (!eor) {
@@ -304,23 +314,38 @@ export async function confirmWithFurs(
  */
 function extractEorFromResponse(xml: string): string | null {
   // FURS vrne EOR v tagu <UniqueInvoiceID> ali <EOR>
+  // KLJUCNO (popravljeno 15.7.2026 po FURS kontroli): NIKOLI ne padati nazaj na
+  // "katerikoli GUID v odgovoru" - to je prej napacno zajelo <fu:MessageID> iz
+  // fu:Error odgovora in ga zamenjalo za pravi EOR, s cimer je aplikacija racune,
+  // ki jih je FURS DEJANSKO ZAVRNIL (npr. ErrorCode S001), oznacila kot uspesno
+  // potrjene. Ce pravega EOR taga ni v odgovoru, VRNI null - klicatelj (confirmWithFurs)
+  // mora to obravnavati kot neuspeh, ne uganjevati.
   const patterns = [
     /<UniqueInvoiceID>([^<]+)<\/UniqueInvoiceID>/,
     /<EOR>([^<]+)<\/EOR>/,
     /<fu:UniqueInvoiceID>([^<]+)<\/fu:UniqueInvoiceID>/,
   ]
-
   for (const pattern of patterns) {
     const match = xml.match(pattern)
     if (match?.[1]?.trim()) {
       return match[1].trim()
     }
   }
+  return null
+}
 
-  // Fallback: poiščemo GUID pattern
-  const guidPattern = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
-  const guidMatch = xml.match(guidPattern)
-  return guidMatch?.[0] ?? null
+/**
+ * Izvleci FURS napako (fu:Error/ErrorCode/ErrorMessage) iz odgovora, ce obstaja.
+ * Dodano 15.7.2026 - prej je bila taka napaka tiho prezrta, kar je povzrocilo,
+ * da so bili zavrnjeni racuni napacno oznaceni kot potrjeni.
+ */
+function extractFursError(xml: string): { code: string; message: string } | null {
+  const codeMatch = xml.match(/<fu:ErrorCode>([^<]+)<\/fu:ErrorCode>/) || xml.match(/<ErrorCode>([^<]+)<\/ErrorCode>/)
+  const msgMatch = xml.match(/<fu:ErrorMessage>([^<]+)<\/fu:ErrorMessage>/) || xml.match(/<ErrorMessage>([^<]+)<\/ErrorMessage>/)
+  if (codeMatch?.[1]) {
+    return { code: codeMatch[1].trim(), message: msgMatch?.[1]?.trim() || 'Neznana FURS napaka' }
+  }
+  return null
 }
 
 // ===== CERTIFIKAT HANDLING =====
