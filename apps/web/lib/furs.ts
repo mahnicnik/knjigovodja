@@ -35,13 +35,15 @@ const forgeForKeyInfo = require('node-forge')
  */
 function buildX509KeyInfoXml(certificatePem: string): string {
   const cert = forgeForKeyInfo.pki.certificateFromPem(certificatePem)
-  // KLJUCNO (popravljeno 16.7.2026 - primerjava z URADNIM FURS primerom, prevzetim
-  // iz edavki.durs.si "Podpisano sporocilo za prijavo prostora/racuna"): FURS
-  // NIKOLI ne pricakuje <X509Certificate> - certifikat je ze registriran na njihovi
-  // strani (prek eDavki), zato pricakujejo samo <X509IssuerSerial> + <X509SubjectName>,
-  // s katerima identificirajo, KATERO ze registrirano potrdilo uporabljamo. Posiljanje
-  // <X509Certificate> namesto <X509SubjectName> je povzrocalo S003 "Digitalni podpis
-  // ni ustrezen".
+  // KLJUCNO (popravljeno 16.7.2026, 2x): prvotno smo poslali samo <X509Certificate>
+  // (S004). Dodali smo <X509IssuerSerial> - racuni so takoj presli S004 (dosegli
+  // veljavno preverjanje podpisa, S006). NATO smo POMOTOMA odstranili
+  // <X509Certificate> in ga nadomestili z <X509SubjectName>, ker je uradni FURS
+  // primer (edavki.durs.si) tako izgledal - to je POKVARILO racune nazaj na S003!
+  // Zakljucek: FURS DEJANSKO potrebuje pravi <X509Certificate> za preverjanje
+  // podpisa (verjetno je uradni primer za testno okolje/starejso verzijo sheme).
+  // Zato zdaj posljemo VSE TRI: IssuerSerial + Certificate (brez SubjectName, ki
+  // ni bil potreben za uspeh pri racunih).
   const ATTR_LABELS: Record<string, string> = {
     commonName: 'CN',
     serialNumber: 'SERIALNUMBER',
@@ -51,15 +53,15 @@ function buildX509KeyInfoXml(certificatePem: string): string {
   }
   const label = (a: any): string => ATTR_LABELS[a.name] || a.shortName || a.name
   const quote = (v: string): string => (v.includes(',') ? `"${v}"` : v)
-  // RFC2253-slog: najbolj specificen atribut (CN) najprej - obratno od
-  // vrstnega reda, kot ga forge privzeto prebere iz certifikata (ujema se z
-  // vrstnim redom v uradnem FURS primeru: CN, SERIALNUMBER, OU, OU, O, C).
   const dnString = (attrs: any[]): string =>
     [...attrs].reverse().map((a) => `${label(a)}=${quote(a.value)}`).join(', ')
   const issuerName = dnString(cert.issuer.attributes)
-  const subjectName = dnString(cert.subject.attributes)
   const serialDecimal = BigInt('0x' + cert.serialNumber).toString()
-  return `<X509Data><X509IssuerSerial><X509IssuerName>${issuerName}</X509IssuerName><X509SerialNumber>${serialDecimal}</X509SerialNumber></X509IssuerSerial><X509SubjectName>${subjectName}</X509SubjectName></X509Data>`
+  const certBase64 = certificatePem
+    .replace(/-----BEGIN CERTIFICATE-----/g, '')
+    .replace(/-----END CERTIFICATE-----/g, '')
+    .replace(/\s/g, '')
+  return `<X509Data><X509IssuerSerial><X509IssuerName>${issuerName}</X509IssuerName><X509SerialNumber>${serialDecimal}</X509SerialNumber></X509IssuerSerial><X509Certificate>${certBase64}</X509Certificate></X509Data>`
 }
 
 class FursKeyInfoProvider {
