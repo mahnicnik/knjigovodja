@@ -35,15 +35,11 @@ const forgeForKeyInfo = require('node-forge')
  */
 function buildX509KeyInfoXml(certificatePem: string): string {
   const cert = forgeForKeyInfo.pki.certificateFromPem(certificatePem)
-  // KLJUCNO (popravljeno 16.7.2026, 2x): prvotno smo poslali samo <X509Certificate>
-  // (S004). Dodali smo <X509IssuerSerial> - racuni so takoj presli S004 (dosegli
-  // veljavno preverjanje podpisa, S006). NATO smo POMOTOMA odstranili
-  // <X509Certificate> in ga nadomestili z <X509SubjectName>, ker je uradni FURS
-  // primer (edavki.durs.si) tako izgledal - to je POKVARILO racune nazaj na S003!
-  // Zakljucek: FURS DEJANSKO potrebuje pravi <X509Certificate> za preverjanje
-  // podpisa (verjetno je uradni primer za testno okolje/starejso verzijo sheme).
-  // Zato zdaj posljemo VSE TRI: IssuerSerial + Certificate (brez SubjectName, ki
-  // ni bil potreben za uspeh pri racunih).
+  // KLJUCNO (16.7.2026, dokoncna verzija): po pregledu URADNE C# referencne
+  // implementacije (XMLData.cs, BlagajneSample - primer objavljen na
+  // edavki.durs.si) je zdaj potrjeno: KeyInfo vsebuje SAMO X509IssuerSerial +
+  // X509SubjectName - NIKOLI X509Certificate. Prav tako se KeyInfo nastavi
+  // PRED klicem ComputeSignature(), ne naknadno.
   const ATTR_LABELS: Record<string, string> = {
     commonName: 'CN',
     serialNumber: 'SERIALNUMBER',
@@ -53,18 +49,20 @@ function buildX509KeyInfoXml(certificatePem: string): string {
   }
   const label = (a: any): string => ATTR_LABELS[a.name] || a.shortName || a.name
   const quote = (v: string): string => (v.includes(',') ? `"${v}"` : v)
-  // POMEMBNO: locilo je ',' BREZ presledka - to je natancna oblika, ki je
-  // dokazano delovala (racun je dosegel S006, ne S003). Dodajanje presledka
-  // (', ') je edina sprememba, ki je sovpadala s ponovnim pojavom S003.
+  // RFC2253/.NET-slog: najbolj specificen atribut (CN) najprej.
   const dnString = (attrs: any[]): string =>
-    [...attrs].reverse().map((a) => `${label(a)}=${quote(a.value)}`).join(',')
+    [...attrs].reverse().map((a) => `${label(a)}=${quote(a.value)}`).join(', ')
   const issuerName = dnString(cert.issuer.attributes)
+  const subjectName = dnString(cert.subject.attributes)
   const serialDecimal = BigInt('0x' + cert.serialNumber).toString()
-  const certBase64 = certificatePem
-    .replace(/-----BEGIN CERTIFICATE-----/g, '')
-    .replace(/-----END CERTIFICATE-----/g, '')
-    .replace(/\s/g, '')
-  return `<X509Data><X509IssuerSerial><X509IssuerName>${issuerName}</X509IssuerName><X509SerialNumber>${serialDecimal}</X509SerialNumber></X509IssuerSerial><X509Certificate>${certBase64}</X509Certificate></X509Data>`
+  return `<X509Data><X509IssuerSerial><X509IssuerName>${issuerName}</X509IssuerName><X509SerialNumber>${serialDecimal}</X509SerialNumber></X509IssuerSerial><X509SubjectName>${subjectName}</X509SubjectName></X509Data>`
+}
+
+class FursKeyInfoProvider {
+  certificatePem: string
+  constructor(certificatePem: string) { this.certificatePem = certificatePem }
+  getKeyInfo(): string { return buildX509KeyInfoXml(this.certificatePem) }
+  getKey(): never { throw new Error('getKey ni implementiran - uporablja se samo za podpisovanje') }
 }
 
 class FursKeyInfoProvider {
@@ -248,24 +246,7 @@ function buildFursRequest(
   sig.computeSignature(invoiceXml, {
     location: { reference: "//*[local-name(.)='Invoice']", action: 'after' },
   })
-  let signedInvoiceXml = sig.getSignedXml()
-  // KLJUCNO (popravljeno 16.7.2026): xml-crypto keyInfoProvider mehanizem se ni
-  // zanesljivo uveljavil, zato KeyInfo neposredno zamenjamo z nizovno zamenjavo PO
-  // podpisu. To je varno, ker enveloped-signature transformacija pri izracunu
-  // digesta izkljuci celoten <Signature> element (torej tudi <KeyInfo> znotraj
-  // njega) - sprememba KeyInfo po podpisu NE pokvari veljavnosti podpisa.
-  // FURS dosledno vraca S004 "Identifikator digitalnega potrdila ni ustrezen" z
-  // golim <X509Certificate>, medtem ko FURS SAM v svojih odgovorih vedno vkljuci
-  // <X509IssuerSerial> (izdajatelj+serijska) poleg certifikata.
-  {
-    const enrichedKeyInfo = buildX509KeyInfoXml(config.certificatePem)
-    const bareKeyInfoPattern = /<KeyInfo><X509Data><X509Certificate>[^<]*<\/X509Certificate><\/X509Data><\/KeyInfo>/
-    if (bareKeyInfoPattern.test(signedInvoiceXml)) {
-      signedInvoiceXml = signedInvoiceXml.replace(bareKeyInfoPattern, `<KeyInfo>${enrichedKeyInfo}</KeyInfo>`)
-    } else {
-      console.warn('OPOZORILO: bare KeyInfo vzorec ni najden za zamenjavo - preveri obliko podpisanega XML')
-    }
-  }
+  const signedInvoiceXml = sig.getSignedXml()
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
@@ -551,12 +532,16 @@ function buildBusinessPremiseRequest(
   // text-node med sosednjimi elementi (za primer, ce je to vplivalo na C14N/podpis).
   const premiseXml = `<fu:BusinessPremiseRequest xmlns:fu="http://www.fu.gov.si/" Id="data"><fu:Header><fu:MessageID>${crypto.randomUUID()}</fu:MessageID><fu:DateTime>${new Date().toISOString().split('.')[0]}</fu:DateTime></fu:Header><fu:BusinessPremise><fu:TaxNumber>${cleanTaxNumber}</fu:TaxNumber><fu:BusinessPremiseID>${premise.businessPremiseId}</fu:BusinessPremiseID><fu:BPIdentifier><fu:RealEstateBP><fu:PropertyID><fu:CadastralNumber>${premise.cadastralNumber}</fu:CadastralNumber><fu:BuildingNumber>${premise.buildingNumber}</fu:BuildingNumber><fu:BuildingSectionNumber>${premise.buildingSectionNumber}</fu:BuildingSectionNumber></fu:PropertyID><fu:Address><fu:Street>${premise.street}</fu:Street><fu:HouseNumber>${premise.houseNumber}</fu:HouseNumber>${houseNumberAdditionalXml}<fu:Community>${premise.community}</fu:Community><fu:City>${premise.city}</fu:City><fu:PostalCode>${premise.postalCode}</fu:PostalCode></fu:Address></fu:RealEstateBP></fu:BPIdentifier><fu:ValidityDate>${premise.validityDate}</fu:ValidityDate><fu:SoftwareSupplier><fu:TaxNumber>${premise.softwareSupplierTaxNumber.replace(/^SI/i, '').trim()}</fu:TaxNumber></fu:SoftwareSupplier>${specialNotesXml}</fu:BusinessPremise></fu:BusinessPremiseRequest>`
 
+  // KLJUCNO: BREZ publicCert opcije (ta bi vsilila privzet gol KeyInfo z golim
+  // certifikatom, ne glede na keyInfoProvider). keyInfoProvider nastavimo TAKOJ,
+  // PRED computeSignature - enako kot uradna C# referencna implementacija
+  // (signedXml.KeyInfo = keyInfo; ... signedXml.ComputeSignature();).
   const sig = new SignedXml({
     privateKey: config.privateKeyPem,
-    publicCert: config.certificatePem,
     canonicalizationAlgorithm: 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315',
     signatureAlgorithm: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
   })
+  sig.keyInfoProvider = new FursKeyInfoProvider(config.certificatePem)
   sig.addReference({
     xpath: "//*[@Id='data']",
     digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
@@ -565,17 +550,7 @@ function buildBusinessPremiseRequest(
   sig.computeSignature(premiseXml, {
     location: { reference: "//*[local-name(.)='BusinessPremise']", action: 'after' },
   })
-  let signedPremiseXml = sig.getSignedXml()
-  // Enak popravek kot pri buildFursRequest - glej obrazlozitev tam.
-  {
-    const enrichedKeyInfo = buildX509KeyInfoXml(config.certificatePem)
-    const bareKeyInfoPattern = /<KeyInfo><X509Data><X509Certificate>[^<]*<\/X509Certificate><\/X509Data><\/KeyInfo>/
-    if (bareKeyInfoPattern.test(signedPremiseXml)) {
-      signedPremiseXml = signedPremiseXml.replace(bareKeyInfoPattern, `<KeyInfo>${enrichedKeyInfo}</KeyInfo>`)
-    } else {
-      console.warn('OPOZORILO: bare KeyInfo vzorec ni najden v premise XML za zamenjavo')
-    }
-  }
+  const signedPremiseXml = sig.getSignedXml()
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
