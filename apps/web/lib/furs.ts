@@ -53,8 +53,11 @@ function buildX509KeyInfoXml(certificatePem: string): string {
   }
   const label = (a: any): string => ATTR_LABELS[a.name] || a.shortName || a.name
   const quote = (v: string): string => (v.includes(',') ? `"${v}"` : v)
+  // POMEMBNO: locilo je ',' BREZ presledka - to je natancna oblika, ki je
+  // dokazano delovala (racun je dosegel S006, ne S003). Dodajanje presledka
+  // (', ') je edina sprememba, ki je sovpadala s ponovnim pojavom S003.
   const dnString = (attrs: any[]): string =>
-    [...attrs].reverse().map((a) => `${label(a)}=${quote(a.value)}`).join(', ')
+    [...attrs].reverse().map((a) => `${label(a)}=${quote(a.value)}`).join(',')
   const issuerName = dnString(cert.issuer.attributes)
   const serialDecimal = BigInt('0x' + cert.serialNumber).toString()
   const certBase64 = certificatePem
