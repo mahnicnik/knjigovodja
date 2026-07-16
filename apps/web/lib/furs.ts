@@ -21,6 +21,41 @@
 import crypto from 'crypto'
 import { SignedXml } from 'xml-crypto'
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const forgeForKeyInfo = require('node-forge')
+
+/**
+ * Zgradi obogaten KeyInfo z X509IssuerSerial (izdajatelj + serijska stevilka),
+ * ne le golim X509Certificate. Dodano 16.7.2026 - FURS dosledno vraca S004
+ * "Identifikator digitalnega potrdila ni ustrezen" ne glede na uporabljen
+ * certifikat, kar kaze na strukturno manjkajoc del v KeyInfo, ne na napacen
+ * certifikat. FURS SAM v svojih (podpisanih) odgovorih vedno vkljuci
+ * X509IssuerSerial poleg X509Certificate - podpis nasih zahtevkov je prej
+ * vseboval samo golo X509Certificate (privzeto vedenje xml-crypto knjiznice).
+ */
+function buildX509KeyInfoXml(certificatePem: string): string {
+  const cert = forgeForKeyInfo.pki.certificateFromPem(certificatePem)
+  // RFC2253-slog: najbolj specificen atribut (CN) najprej - obratno od
+  // vrstnega reda, kot ga forge privzeto prebere iz certifikata.
+  const issuerName = [...cert.issuer.attributes]
+    .reverse()
+    .map((a: any) => `${a.shortName || a.name}=${a.value}`)
+    .join(',')
+  const serialDecimal = BigInt('0x' + cert.serialNumber).toString()
+  const certBase64 = certificatePem
+    .replace(/-----BEGIN CERTIFICATE-----/g, '')
+    .replace(/-----END CERTIFICATE-----/g, '')
+    .replace(/\s/g, '')
+  return `<X509Data><X509IssuerSerial><X509IssuerName>${issuerName}</X509IssuerName><X509SerialNumber>${serialDecimal}</X509SerialNumber></X509IssuerSerial><X509Certificate>${certBase64}</X509Certificate></X509Data>`
+}
+
+class FursKeyInfoProvider {
+  certificatePem: string
+  constructor(certificatePem: string) { this.certificatePem = certificatePem }
+  getKeyInfo(): string { return buildX509KeyInfoXml(this.certificatePem) }
+  getKey(): never { throw new Error('getKey ni implementiran - uporablja se samo za podpisovanje, ne preverjanje') }
+}
+
 // ===== TIPI =====
 
 export interface FursConfig {
@@ -509,6 +544,7 @@ function buildBusinessPremiseRequest(
     canonicalizationAlgorithm: 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315',
     signatureAlgorithm: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
   })
+  sig.keyInfoProvider = new FursKeyInfoProvider(config.certificatePem)
   sig.addReference({
     xpath: "//*[@Id='data']",
     digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
