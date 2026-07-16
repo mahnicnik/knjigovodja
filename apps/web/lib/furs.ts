@@ -189,7 +189,11 @@ function buildFursRequest(
   const netAmount = Math.round((data.amountTotal / 1.22) * 100) / 100
   const vatAmount = Math.round((data.amountTotal - netAmount) * 100) / 100
 
-  const invoiceXml = `<fu:InvoiceRequest xmlns:fu="http://www.fu.gov.si/" Id="data">
+  const fullEnvelopeXml = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <fu:InvoiceRequest xmlns:fu="http://www.fu.gov.si/" Id="data">
     <fu:Header>
       <fu:MessageID>${crypto.randomUUID()}</fu:MessageID>
       <fu:DateTime>${sendIso}</fu:DateTime>
@@ -215,7 +219,9 @@ function buildFursRequest(
       <fu:OperatorTaxNumber>${cleanTaxNumber}</fu:OperatorTaxNumber>
       <fu:ProtectedID>${zoi}</fu:ProtectedID>
     </fu:Invoice>
-  </fu:InvoiceRequest>`
+  </fu:InvoiceRequest>
+  </soapenv:Body>
+</soapenv:Envelope>`
 
   // Pravo XML-DSig podpisovanje (enveloped signature) - algoritmi so razvidni
   // iz PRAVEGA FURS odgovora (isti CanonicalizationMethod/SignatureMethod/DigestMethod,
@@ -231,18 +237,10 @@ function buildFursRequest(
     digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
     transforms: ['http://www.w3.org/2000/09/xmldsig#enveloped-signature'],
   })
-  sig.computeSignature(invoiceXml, {
+  sig.computeSignature(fullEnvelopeXml, {
     location: { reference: "//*[local-name(.)='Invoice']", action: 'after' },
   })
-  const signedInvoiceXml = sig.getSignedXml()
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
-  <soapenv:Header/>
-  <soapenv:Body>
-    ${signedInvoiceXml}
-  </soapenv:Body>
-</soapenv:Envelope>`
+  return sig.getSignedXml()
 }
 
 // ===== FURS API KLIC =====
@@ -518,7 +516,13 @@ function buildBusinessPremiseRequest(
   // KLJUCNO: brez presledkov/praznih vrstic na mestu izpuscenih neobveznih
   // elementov - predloga je sestavljena tako, da prazen niz ne pusti whitespace
   // text-node med sosednjimi elementi (za primer, ce je to vplivalo na C14N/podpis).
-  const premiseXml = `<fu:BusinessPremiseRequest xmlns:fu="http://www.fu.gov.si/" Id="data"><fu:Header><fu:MessageID>${crypto.randomUUID()}</fu:MessageID><fu:DateTime>${new Date().toISOString().split('.')[0]}</fu:DateTime></fu:Header><fu:BusinessPremise><fu:TaxNumber>${cleanTaxNumber}</fu:TaxNumber><fu:BusinessPremiseID>${premise.businessPremiseId}</fu:BusinessPremiseID><fu:BPIdentifier><fu:RealEstateBP><fu:PropertyID><fu:CadastralNumber>${premise.cadastralNumber}</fu:CadastralNumber><fu:BuildingNumber>${premise.buildingNumber}</fu:BuildingNumber><fu:BuildingSectionNumber>${premise.buildingSectionNumber}</fu:BuildingSectionNumber></fu:PropertyID><fu:Address><fu:Street>${premise.street}</fu:Street><fu:HouseNumber>${premise.houseNumber}</fu:HouseNumber>${houseNumberAdditionalXml}<fu:Community>${premise.community}</fu:Community><fu:City>${premise.city}</fu:City><fu:PostalCode>${premise.postalCode}</fu:PostalCode></fu:Address></fu:RealEstateBP></fu:BPIdentifier><fu:ValidityDate>${premise.validityDate}</fu:ValidityDate><fu:SoftwareSupplier><fu:TaxNumber>${premise.softwareSupplierTaxNumber.replace(/^SI/i, '').trim()}</fu:TaxNumber></fu:SoftwareSupplier>${specialNotesXml}</fu:BusinessPremise></fu:BusinessPremiseRequest>`
+  const fullEnvelopeXml = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <fu:BusinessPremiseRequest xmlns:fu="http://www.fu.gov.si/" Id="data"><fu:Header><fu:MessageID>${crypto.randomUUID()}</fu:MessageID><fu:DateTime>${new Date().toISOString().split('.')[0]}</fu:DateTime></fu:Header><fu:BusinessPremise><fu:TaxNumber>${cleanTaxNumber}</fu:TaxNumber><fu:BusinessPremiseID>${premise.businessPremiseId}</fu:BusinessPremiseID><fu:BPIdentifier><fu:RealEstateBP><fu:PropertyID><fu:CadastralNumber>${premise.cadastralNumber}</fu:CadastralNumber><fu:BuildingNumber>${premise.buildingNumber}</fu:BuildingNumber><fu:BuildingSectionNumber>${premise.buildingSectionNumber}</fu:BuildingSectionNumber></fu:PropertyID><fu:Address><fu:Street>${premise.street}</fu:Street><fu:HouseNumber>${premise.houseNumber}</fu:HouseNumber>${houseNumberAdditionalXml}<fu:Community>${premise.community}</fu:Community><fu:City>${premise.city}</fu:City><fu:PostalCode>${premise.postalCode}</fu:PostalCode></fu:Address></fu:RealEstateBP></fu:BPIdentifier><fu:ValidityDate>${premise.validityDate}</fu:ValidityDate><fu:SoftwareSupplier><fu:TaxNumber>${premise.softwareSupplierTaxNumber.replace(/^SI/i, '').trim()}</fu:TaxNumber></fu:SoftwareSupplier>${specialNotesXml}</fu:BusinessPremise></fu:BusinessPremiseRequest>
+  </soapenv:Body>
+</soapenv:Envelope>`
 
   // KLJUCNO: BREZ publicCert opcije (ta bi vsilila privzet gol KeyInfo z golim
   // certifikatom, ne glede na keyInfoProvider). keyInfoProvider nastavimo TAKOJ,
@@ -535,18 +539,10 @@ function buildBusinessPremiseRequest(
     digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
     transforms: ['http://www.w3.org/2000/09/xmldsig#enveloped-signature'],
   })
-  sig.computeSignature(premiseXml, {
+  sig.computeSignature(fullEnvelopeXml, {
     location: { reference: "//*[local-name(.)='BusinessPremise']", action: 'after' },
   })
-  const signedPremiseXml = sig.getSignedXml()
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
-  <soapenv:Header/>
-  <soapenv:Body>
-    ${signedPremiseXml}
-  </soapenv:Body>
-</soapenv:Envelope>`
+  return sig.getSignedXml()
 }
 
 /**
