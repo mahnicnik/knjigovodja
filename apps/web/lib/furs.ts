@@ -230,7 +230,24 @@ function buildFursRequest(
   sig.computeSignature(invoiceXml, {
     location: { reference: "//*[local-name(.)='Invoice']", action: 'after' },
   })
-  const signedInvoiceXml = sig.getSignedXml()
+  let signedInvoiceXml = sig.getSignedXml()
+  // KLJUCNO (popravljeno 16.7.2026): xml-crypto keyInfoProvider mehanizem se ni
+  // zanesljivo uveljavil, zato KeyInfo neposredno zamenjamo z nizovno zamenjavo PO
+  // podpisu. To je varno, ker enveloped-signature transformacija pri izracunu
+  // digesta izkljuci celoten <Signature> element (torej tudi <KeyInfo> znotraj
+  // njega) - sprememba KeyInfo po podpisu NE pokvari veljavnosti podpisa.
+  // FURS dosledno vraca S004 "Identifikator digitalnega potrdila ni ustrezen" z
+  // golim <X509Certificate>, medtem ko FURS SAM v svojih odgovorih vedno vkljuci
+  // <X509IssuerSerial> (izdajatelj+serijska) poleg certifikata.
+  {
+    const enrichedKeyInfo = buildX509KeyInfoXml(config.certificatePem)
+    const bareKeyInfoPattern = /<KeyInfo><X509Data><X509Certificate>[^<]*<\/X509Certificate><\/X509Data><\/KeyInfo>/
+    if (bareKeyInfoPattern.test(signedInvoiceXml)) {
+      signedInvoiceXml = signedInvoiceXml.replace(bareKeyInfoPattern, `<KeyInfo>${enrichedKeyInfo}</KeyInfo>`)
+    } else {
+      console.warn('OPOZORILO: bare KeyInfo vzorec ni najden za zamenjavo - preveri obliko podpisanega XML')
+    }
+  }
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
@@ -544,7 +561,6 @@ function buildBusinessPremiseRequest(
     canonicalizationAlgorithm: 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315',
     signatureAlgorithm: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
   })
-  sig.keyInfoProvider = new FursKeyInfoProvider(config.certificatePem)
   sig.addReference({
     xpath: "//*[@Id='data']",
     digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
