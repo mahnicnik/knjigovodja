@@ -569,7 +569,17 @@ function buildBusinessPremiseRequest(
   sig.computeSignature(premiseXml, {
     location: { reference: "//*[local-name(.)='BusinessPremise']", action: 'after' },
   })
-  const signedPremiseXml = sig.getSignedXml()
+  let signedPremiseXml = sig.getSignedXml()
+  // Enak popravek kot pri buildFursRequest - glej obrazlozitev tam.
+  {
+    const enrichedKeyInfo = buildX509KeyInfoXml(config.certificatePem)
+    const bareKeyInfoPattern = /<KeyInfo><X509Data><X509Certificate>[^<]*<\/X509Certificate><\/X509Data><\/KeyInfo>/
+    if (bareKeyInfoPattern.test(signedPremiseXml)) {
+      signedPremiseXml = signedPremiseXml.replace(bareKeyInfoPattern, `<KeyInfo>${enrichedKeyInfo}</KeyInfo>`)
+    } else {
+      console.warn('OPOZORILO: bare KeyInfo vzorec ni najden v premise XML za zamenjavo')
+    }
+  }
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
