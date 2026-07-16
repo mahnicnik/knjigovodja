@@ -58,19 +58,7 @@ function buildX509KeyInfoXml(certificatePem: string): string {
   return `<X509Data><X509IssuerSerial><X509IssuerName>${issuerName}</X509IssuerName><X509SerialNumber>${serialDecimal}</X509SerialNumber></X509IssuerSerial><X509SubjectName>${subjectName}</X509SubjectName></X509Data>`
 }
 
-class FursKeyInfoProvider {
-  certificatePem: string
-  constructor(certificatePem: string) { this.certificatePem = certificatePem }
-  getKeyInfo(): string { return buildX509KeyInfoXml(this.certificatePem) }
-  getKey(): never { throw new Error('getKey ni implementiran - uporablja se samo za podpisovanje') }
-}
 
-class FursKeyInfoProvider {
-  certificatePem: string
-  constructor(certificatePem: string) { this.certificatePem = certificatePem }
-  getKeyInfo(): string { return buildX509KeyInfoXml(this.certificatePem) }
-  getKey(): never { throw new Error('getKey ni implementiran - uporablja se samo za podpisovanje, ne preverjanje') }
-}
 
 // ===== TIPI =====
 
@@ -234,10 +222,10 @@ function buildFursRequest(
   // ki jih FURS uporablja za podpis svojih odgovorov).
   const sig = new SignedXml({
     privateKey: privateKeyPem,
-    publicCert: certificatePem,
     canonicalizationAlgorithm: 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315',
     signatureAlgorithm: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
   })
+  sig.getKeyInfoContent = () => buildX509KeyInfoXml(certificatePem)
   sig.addReference({
     xpath: "//*[@Id='data']",
     digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
@@ -541,7 +529,7 @@ function buildBusinessPremiseRequest(
     canonicalizationAlgorithm: 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315',
     signatureAlgorithm: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
   })
-  sig.keyInfoProvider = new FursKeyInfoProvider(config.certificatePem)
+  sig.getKeyInfoContent = () => buildX509KeyInfoXml(config.certificatePem)
   sig.addReference({
     xpath: "//*[@Id='data']",
     digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
