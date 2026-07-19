@@ -73,6 +73,10 @@ export interface FursConfig {
 }
 
 export interface FursInvoiceData {
+  /** Naknadna fiskalizacija: uporabi ta ZOI (z natisnjenega racuna) namesto novega izracuna */
+  presetZoi?: string
+  /** Naknadna fiskalizacija: doda <fu:SubsequentSubmit>true</fu:SubsequentSubmit> */
+  subsequentSubmit?: boolean
   /** Zaporedna številka računa pri napravi (integer, narašča) */
   invoiceNumber: number
   /** Datum in čas izdaje računa */
@@ -208,7 +212,7 @@ function buildFursRequest(
         </fu:VAT>
       </fu:TaxesPerSeller>
       <fu:OperatorTaxNumber>${cleanTaxNumber}</fu:OperatorTaxNumber>
-      <fu:ProtectedID>${zoi}</fu:ProtectedID>
+      <fu:ProtectedID>${zoi}</fu:ProtectedID>${data.subsequentSubmit ? '<fu:SubsequentSubmit>true</fu:SubsequentSubmit>' : ''}
     </fu:Invoice>
   </fu:InvoiceRequest>`
 
@@ -257,7 +261,7 @@ export async function confirmWithFurs(
 
   try {
     // 1. Izračunaj ZOI
-    const zoi = calculateZoi(config, data)
+    const zoi = data.presetZoi ?? calculateZoi(config, data)
 
     // 2. Zgradi XML zahtevo
     const xmlRequest = buildFursRequest(config, data, zoi)
