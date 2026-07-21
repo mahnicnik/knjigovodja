@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import crypto from 'crypto'
+import { confirmIssuedInvoiceWithFurs } from '@/lib/furs-invoice-confirm'
 
 /**
  * Stripe Webhook Handler — za uporabnikove lastne Stripe naročnine/plačila
@@ -205,6 +206,35 @@ export async function POST(req: NextRequest) {
       notes: `Avtomatski vnos iz Stripe`,
     })
 
+    // ────────────────────────────────────────────────────────────────
+    // FURS davcno potrjevanje (dodano 21.7.2026) - Stripe placilo se po
+    // ZDavPR steje kot gotovinsko poslovanje (placilo preko posrednika,
+    // ne neposredno nakazilo na TRR), zato MORA biti davcno potrjeno.
+    //
+    // KLJUCNO: ce FURS potrditev spodleti (timeout/napaka/ni certifikata/
+    // ni Pro paketa), webhook NE sme vrniti napake - Stripe bi ga potem
+    // agresivno retry-jal, kar bi le podvajalo neuspesne poskuse (racun
+    // ze obstaja zaradi external_reference dedup zgoraj, a FURS klic bi
+    // se vseeno ponavljal v neskoncnost). Napaka se namesto tega zabelezi
+    // v furs_log (znotraj confirmIssuedInvoiceWithFurs) za rocno/kasnejso
+    // dosaditev - enak vzorec kot POS zvoncek za nepotrjene racune.
+    //
+    // OPOMBA: fiskalizacija je trenutno vezana na Pro paket (isPro check
+    // v api/furs/confirm/route.ts) - TU te omejitve namenoma NI, ker gre
+    // za avtomatski webhook brez uporabniske seje. Ce org ni Pro in nima
+    // certifikata/prostora nastavljenega, confirmIssuedInvoiceWithFurs
+    // preprosto vrne { success:false, error:'...' } in se zabelezi v log,
+    // racun pa ostane neizpodbitno ustvarjen (pravilno stanje za placnika).
+    let fursResult: Awaited<ReturnType<typeof confirmIssuedInvoiceWithFurs>> | null = null
+    try {
+      fursResult = await confirmIssuedInvoiceWithFurs(supabase, orgId, invoice.id, 'card')
+      if (!fursResult.success) {
+        console.error('FURS fiskalizacija Stripe racuna ni uspela (zabelezeno v furs_log):', invoice.id, fursResult.error)
+      }
+    } catch (fursErr: any) {
+      console.error('FURS fiskalizacija Stripe racuna - nepricakovana napaka:', invoice.id, fursErr.message)
+    }
+
     await supabase.from('integration_logs').insert({
       org_id: orgId,
       integration_type: 'stripe',
@@ -219,6 +249,8 @@ export async function POST(req: NextRequest) {
       invoiceId: invoice.id,
       invoiceNumber,
       message: `Račun ${invoiceNumber} ustvarjen za Stripe plačilo ${obj.id}`,
+      fursConfirmed: fursResult?.success ?? false,
+      fursError: fursResult?.success ? undefined : fursResult?.error,
     })
 
   } catch (e: any) {
