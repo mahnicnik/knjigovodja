@@ -68,7 +68,12 @@ export async function POST(req: NextRequest) {
     const inv = String(o?.invoice_number || '')
     const m = inv.match(/^([A-Z0-9]+)-([A-Z0-9]+)-(\d+)$/i)
     if (m) return { premiseId: m[1], deviceId: m[2], invoiceNumber: parseInt(m[3], 10) }
-    return { premiseId: 'SIRBFB01', deviceId: 'RACUNKO01', invoiceNumber: Number(o?.number) }
+    // POPRAVLJENO 21.7.2026: NE pada vec na orders.number kot FURS zaporedno
+    // stevilko! orders.number je INTERNI stevec narocila, ne FURS zaporedje -
+    // uporaba tega je 19.7. povzrocila 40 racunov z napacnimi FURS stevilkami
+    // 288-329. Ce prave natisnjene stevilke ni, vrni null -> klicatelj tak
+    // racun PRESKOCI in oznaci za rocno obravnavo, ne ugane napacne.
+    return { premiseId: null, deviceId: null, invoiceNumber: null }
   }
 
   const preview = (rows || []).map((r: any) => {
@@ -104,6 +109,11 @@ export async function POST(req: NextRequest) {
 
   const results: any[] = []
   for (const inv of preview) {
+    // Preskoci racune brez prave FURS stevilke (glej parseInvoiceNumber popravek 21.7.2026)
+    if (inv.invoiceNumber == null || inv.premiseId == null) {
+      results.push({ ...inv, status: 'MANJKA_ST', napaka: 'Manjka prava FURS zaporedna stevilka (orders.invoice_number) - potreben rocni pregled, NE poslano' })
+      continue
+    }
     const config: FursConfig = {
       taxNumber: '91390419',
       premiseId: inv.premiseId,
