@@ -9128,6 +9128,46 @@ const btnS = { background:'#fff', color:'#666', border:'0.5px solid rgba(0,0,0,0
 // ================================================================
 function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, orderListOpen, setOrderListOpen }) {
   const unread = notifications.filter(n => !n.read && !n.dismissed)
+  const [unconfirmed, setUnconfirmed] = React.useState(0)
+  const [resending, setResending] = React.useState(false)
+  const loadUnconfirmed = React.useCallback(async () => {
+    try {
+      const { count } = await createClient()
+        .from('payments')
+        .select('id, orders!inner(business_id)', { count: 'exact', head: true })
+        .not('furs_zoi', 'is', null)
+        .is('furs_eor', null)
+        .eq('orders.business_id', BUSINESS_ID)
+      setUnconfirmed(count || 0)
+    } catch { /* tiho */ }
+  }, [])
+  React.useEffect(() => {
+    loadUnconfirmed()
+    const iv = setInterval(loadUnconfirmed, 30000) // osvezi vsakih 30s
+    return () => clearInterval(iv)
+  }, [loadUnconfirmed, notifOpen])
+  async function resendUnconfirmed() {
+    if (resending) return
+    setResending(true)
+    try {
+      const res = await fetch('/api/furs/resubmit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dryRun: false, onlyUnconfirmed: true }),
+      })
+      const d = await res.json()
+      if (res.ok) {
+        alert(`Poslano v potrditev.\nUspešnih: ${d.uspesnih ?? 0}, neuspešnih: ${d.neuspesnih ?? 0}`)
+      } else {
+        alert('Napaka: ' + (d.error || 'neznana'))
+      }
+    } catch (e) {
+      alert('Napaka pri pošiljanju: ' + e.message)
+    }
+    setResending(false)
+    loadUnconfirmed()
+    posData.refresh()
+  }
   const lowItems = posData.items.filter(i => i.stock !== null && i.low_stock > 0 && i.stock <= i.low_stock)
   const lowIngr = posData.ingredients.filter(i => i.stock_qty !== null && i.stock_qty <= (i.min_stock||0) && i.min_stock > 0)
   const sevColor = { danger:T.danger, warning:T.warn, info:T.accent }
@@ -9146,9 +9186,9 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
     <div style={{ position:'relative' }}>
       <button onClick={()=>setNotifOpen(o=>!o)} style={{ position:'relative', width:36, height:36, borderRadius:10, background:'rgba(255,255,255,0.08)', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:T.headerInk }}>
         <KI name="bell" size={18}/>
-        {unread.length > 0 && (
-          <span style={{ position:'absolute', top:-4, right:-4, width:18, height:18, borderRadius:'50%', background:T.danger, color:'#fff', fontSize:10, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', border:'2px solid '+T.header }}>
-            {unread.length > 9 ? '9+' : unread.length}
+        {(unread.length + unconfirmed) > 0 && (
+          <span style={{ position:'absolute', top:-4, right:-4, minWidth:18, height:18, padding:'0 4px', borderRadius:9, background:T.danger, color:'#fff', fontSize:10, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', border:'2px solid '+T.header }}>
+            {(unread.length + unconfirmed) > 9 ? '9+' : (unread.length + unconfirmed)}
           </span>
         )}
       </button>
@@ -9162,7 +9202,26 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
               {unread.length > 0 && <button onClick={markAllRead} style={{ fontSize:11, color:T.accent, background:'none', border:0, cursor:'pointer', fontWeight:600 }}>Označi vse kot prebrano</button>}
             </div>
             <div style={{ overflowY:'auto', flex:1 }}>
-              {notifications.length === 0 && (
+              {unconfirmed > 0 && (
+                <div style={{ padding:'14px 16px', borderBottom:'1px solid '+T.line, background:'rgba(220,38,38,0.06)' }}>
+                  <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
+                    <div style={{ fontSize:18, lineHeight:1, marginTop:1 }}>⚠️</div>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:13, fontWeight:700, color:T.danger, lineHeight:1.4 }}>
+                        {unconfirmed} {unconfirmed === 1 ? 'nepotrjen račun' : (unconfirmed < 5 ? 'nepotrjeni računi' : 'nepotrjenih računov')} pri FURS
+                      </div>
+                      <div style={{ fontSize:11, color:T.muted, marginTop:3, lineHeight:1.4 }}>
+                        Računi so izdani in shranjeni, a še nimajo EOR (npr. zaradi izpada povezave). Po zakonu jih je treba potrditi v 2 delovnih dneh.
+                      </div>
+                      <button onClick={resendUnconfirmed} disabled={resending}
+                        style={{ marginTop:8, width:'100%', padding:'8px', borderRadius:8, background:resending?T.surface2:T.danger, border:'none', cursor:resending?'default':'pointer', fontFamily:'inherit', fontWeight:700, fontSize:12, color:resending?T.muted:'#fff' }}>
+                        {resending ? 'Pošiljam…' : `📤 Pošlji ${unconfirmed} v potrditev`}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {notifications.length === 0 && unconfirmed === 0 && (
                 <div style={{ padding:32, textAlign:'center', color:T.muted, fontSize:13 }}>
                   <div style={{ fontSize:28, marginBottom:8 }}>🎉</div>
                   Ni aktivnih opozoril
@@ -10100,9 +10159,16 @@ export default function PosPage() {
 function ManualAddCardModal({ customer, posData, onClose, onDone }) {
   const [templateId, setTemplateId] = useState('')
   const [reason, setReason] = useState('')
+  const [customVisits, setCustomVisits] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const tpl = posData.packageTemplates.find(t => t.id === templateId)
+  // Ko izberes predlogo, privzeto predlagaj njeno stevilo obiskov - a ga je mozno prepisati
+  // (npr. stranka kupi 7x namesto standardnih 5x/10x paketov v ceniku).
+  useEffect(() => {
+    if (tpl && tpl.visits != null) setCustomVisits(String(tpl.visits))
+    else setCustomVisits('')
+  }, [templateId])
   async function save() {
     if (!templateId) { setError('Izberi paket/kartico'); return }
     if (!reason.trim()) { setError('Razlog je obvezen (za sledljivost, ker gre brez racuna)'); return }
@@ -10115,6 +10181,11 @@ function ManualAddCardModal({ customer, posData, onClose, onDone }) {
         d.setDate(d.getDate() + Number(tpl.validity_days))
         expires = d.toISOString().split('T')[0]
       }
+      // Ce ima predloga stevilcen obisk (visits), uporabi rocno vneseno stevilo (customVisits),
+      // sicer padi nazaj na privzeto iz predloge (za neomejene/casovne kartice ostane null).
+      const visitsToUse = tpl.visits != null
+        ? (customVisits === '' ? tpl.visits : Number(customVisits))
+        : null
       const { error: err } = await createClient().from('customer_packages').insert({
         customer_id: customer.id,
         template_id: tpl.id,
@@ -10122,8 +10193,8 @@ function ManualAddCardModal({ customer, posData, onClose, onDone }) {
         activation_type: 'purchase',
         name: tpl.name,
         active: true,
-        remaining: tpl.visits || null,
-        total: tpl.visits || null,
+        remaining: visitsToUse,
+        total: visitsToUse,
         monetary_balance: tpl.monetary_value || null,
         expires,
         activated_at: now,
@@ -10148,6 +10219,11 @@ function ManualAddCardModal({ customer, posData, onClose, onDone }) {
             {posData.packageTemplates.filter(t=>!t.archived).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         </Field>
+        {tpl && tpl.visits != null && (
+          <Field label="Število obiskov (spremeni, če se razlikuje od privzetega v ceniku)">
+            <input type="number" min={1} value={customVisits} onChange={e=>setCustomVisits(e.target.value)} style={inp}/>
+          </Field>
+        )}
         <Field label="Razlog (obvezno)">
           <input value={reason} onChange={e=>setReason(e.target.value)} placeholder="npr. migracija iz starega sistema" style={inp}/>
         </Field>

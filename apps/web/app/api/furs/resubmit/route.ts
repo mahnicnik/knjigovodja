@@ -42,16 +42,22 @@ export async function POST(req: NextRequest) {
   const from: string = body.from || '2026-07-01'
   const to: string = body.to || '2026-07-17'
   const limit: number = Math.min(Number(body.limit) || 500, 500)
+  const onlyUnconfirmed: boolean = body.onlyUnconfirmed === true
+  const toEffective = onlyUnconfirmed
+    ? new Date(Date.now() + 24 * 3600 * 1000).toISOString().slice(0, 10)
+    : to
 
   const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
   // Racuni z natisnjenim ZOI v obdobju (lazni ali manjkajoci EOR)
-  const { data: rows, error } = await admin
+  let query = admin
     .from('payments')
     .select('id, order_id, amount, furs_zoi, furs_eor, paid_at, orders!inner(id, number, invoice_number, total, vat_amount, business_id)')
     .not('furs_zoi', 'is', null)
     .gte('paid_at', from)
-    .lt('paid_at', to)
+    .lt('paid_at', toEffective)
+  if (onlyUnconfirmed) query = query.is('furs_eor', null)
+  const { data: rows, error } = await query
     .order('paid_at', { ascending: true })
     .limit(limit)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -81,7 +87,7 @@ export async function POST(req: NextRequest) {
   if (dryRun) {
     return NextResponse.json({
       dryRun: true,
-      obdobje: { from, to },
+      obdobje: { from, to: toEffective, onlyUnconfirmed },
       steviloRacunov: preview.length,
       skupajEur: preview.reduce((s, x) => s + x.amount, 0).toFixed(2),
       racuni: preview,
