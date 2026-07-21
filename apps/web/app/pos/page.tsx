@@ -533,7 +533,8 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
           const fursRes = await fetch('/api/furs/invoice', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ order_id: orderId, total: finalTotal }),
+            // premise_id eksplicitno iz uporabnikove izbire ob prijavi (21.7.2026 popravek)
+            body: JSON.stringify({ order_id: orderId, total: finalTotal, premise_id: activePremise?.id }),
           })
           // 200 = success, 503 = FURS napaka ampak še vedno imamo ZOI + tridelno
           const fursData = await fursRes.json().catch(() => ({}))
@@ -5947,7 +5948,7 @@ function OrdersScreen({ posData, auth }) {
             {selectedOrder.furs_required && !orderPayment?.furs_eor && (
               <button onClick={async()=>{
                 try {
-                  const res = await fetch('/api/furs/invoice', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ order_id: selectedOrder.id, total: selectedOrder.total }) })
+                  const res = await fetch('/api/furs/invoice', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ order_id: selectedOrder.id, total: selectedOrder.total, premise_id: activePremise?.id }) })
                   if (res.ok) { const d = await res.json(); alert('FURS potrjen! EOR: ' + d.eor); loadOrders() }
                   else alert('FURS napaka: ' + (await res.text()))
                 } catch(e) { alert('FURS napaka: ' + e.message) }

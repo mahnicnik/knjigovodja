@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { order_id, total } = body
+    const { order_id, total, premise_id: requestedPremiseId } = body
 
     if (!order_id) {
       return NextResponse.json({ error: 'order_id je obvezen' }, { status: 400 })
@@ -100,13 +100,21 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { data: premise } = await supabase
+    // POMEMBNO (popravljeno 21.7.2026 po incidentu SIRBFB01->PE01 16.7.):
+    // ce POS eksplicitno posreduje premise_id (iz uporabnikove izbire ob
+    // prijavi - selectedPremise/activePremise v pos/page.tsx), uporabi
+    // TOCNO TA prostor. Prej je koda vedno vzela "katerikoli aktiven" -
+    // varno samo ce obstaja tocno en, tiho napacno ce sta bila kratek cas
+    // aktivna dva hkrati (kar se je zgodilo 16.7. med S006 popravkom).
+    let premiseQuery = supabase
       .from('business_premises')
       .select('*')
       .eq('org_id', member.org_id)
       .eq('is_active', true)
-      .limit(1)
-      .maybeSingle()
+    if (requestedPremiseId) {
+      premiseQuery = premiseQuery.eq('id', requestedPremiseId)
+    }
+    const { data: premise } = await premiseQuery.limit(1).maybeSingle()
 
     if (!premise) {
       return NextResponse.json(
