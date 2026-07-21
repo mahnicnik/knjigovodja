@@ -79,12 +79,17 @@ export async function confirmIssuedInvoiceWithFurs(
     .maybeSingle()
   const deviceIdCode = device?.device_id ?? 'RACUNKO01'
 
-  const { count: confirmedCount } = await supabase
-    .from('issued_invoices')
-    .select('*', { count: 'exact', head: true })
-    .eq('org_id', orgId)
-    .not('eor', 'is', null)
-  const sequenceNumber = (confirmedCount ?? 0) + 1
+  // POPRAVLJENO 21.7.2026 (revizija): prejsnji izracun je stel potrjene
+  // issued_invoices (lastno zaporedje od 1) z neatomarnim count+1 vzorcem.
+  // Ker POS in issued_invoices posiljata pod ISTIM prostorom+napravo
+  // (SIRBFB01-RACUNKO01), bi to povzrocilo trcenje z ze zasedenimi POS
+  // stevilkami pri FURS. Po ZDavPR je zaporedje ENO na prostor+napravo -
+  // zato uporabimo isti atomaren RPC kot POS in storno.
+  const { data: seqData, error: seqError } = await supabase.rpc('get_next_pos_invoice_number')
+  if (seqError) {
+    return { success: false, error: 'Napaka pri generiranju stevilke racuna: ' + seqError.message }
+  }
+  const sequenceNumber = seqData as number
   const invoiceNumberFull = `${premise.premise_id}-${deviceIdCode}-${sequenceNumber}`
 
   const fursData: FursInvoiceData = {
