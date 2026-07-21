@@ -5591,11 +5591,16 @@ function OrdersScreen({ posData, auth }) {
       toDate = new Date()
     }
 
+    // POPRAVLJENO 21.7.2026: prej je bil filter striktno .eq('status','paid'),
+    // zaradi cesar so stornirani racuni (status='voided') po stornu popolnoma
+    // izginili iz seznama - podatki niso bili izbrisani, a jih ni bilo mozno
+    // videti brez rocnega poizvedovanja v bazo. Zdaj ostanejo vidni, obstojeca
+    // "Storniran" znacka (voided_at) jih jasno oznaci ob odprtju.
     let q = sb
       .from('orders')
       .select('*, payments(method, amount, furs_zoi, furs_eor, paid_at)')
       .eq('business_id', BUSINESS_ID)
-      .eq('status', 'paid')
+      .in('status', ['paid', 'voided'])
       .order('closed_at', { ascending: false })
       .limit(500)
 

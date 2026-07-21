@@ -95,12 +95,17 @@ export async function POST(req: NextRequest) {
     const deviceIdCode = device?.device_id ?? 'RACUNKO01'
 
     // Sequence za kredit noto (nova zaporedna številka)
-    const { count: confirmedCount } = await supabase
-      .from('orders')
-      .select('id, payments!inner(furs_eor)', { count: 'exact', head: true })
-      .not('payments.furs_eor', 'is', null)
-
-    const sequenceNumber = (confirmedCount ?? 0) + 1
+    // Sequence za kredit noto - POPRAVLJENO 21.7.2026 (bila je resna napaka:
+    // prejsnja verzija je stela potrjene racune CEZ VSE organizacije na
+    // platformi, brez org_id filtra, z neatomarnim "preberi-nato-poveca"
+    // vzorcem - enak razred napake, ki je povzrocil prvotni FURS incident.
+    // Po ZDavPR mora kredit nota deliti ISTO zaporedje kot navadni racuni
+    // znotraj istega prostora+naprave, zato uporabimo isti atomaren RPC.
+    const { data: seqData, error: seqError } = await supabase.rpc('get_next_pos_invoice_number')
+    if (seqError) {
+      return NextResponse.json({ error: 'Napaka pri generiranju številke kredit note: ' + seqError.message }, { status: 500 })
+    }
+    const sequenceNumber = seqData as number
     const invoiceNumberFull = `${premise.premise_id}-${deviceIdCode}-${sequenceNumber}`
 
     // Razpakiraj .p12 v PEM
