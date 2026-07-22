@@ -1,13 +1,15 @@
 import { Document, Page, Text, View, StyleSheet, Image, Font } from '@react-pdf/renderer'
 import QRCode from 'qrcode'
 
-// Poppins font from Google Fonts (latin-ext za šumnike)
+// Inter latin-ext (VSE tri utezi morajo biti latin-EXT, sicer manjkajo
+// sumniki - prejsnja verzija je imela navadni latin subset, ki NIMA "č",
+// zato je ta crka izginila iz vseh PDF racunov: Mahnič->Mahni, RAČUN->RAUN)
 Font.register({
   family: 'Inter',
   fonts: [
-    { src: 'https://fonts.bunny.net/inter/files/inter-latin-400-normal.woff', fontWeight: 400 },
-    { src: 'https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHufvQtMwCp50KnMa2JL7SUc.woff2', fontWeight: 600 },
-    { src: 'https://fonts.bunny.net/inter/files/inter-latin-700-normal.woff', fontWeight: 700 },
+    { src: 'https://fonts.bunny.net/inter/files/inter-latin-ext-400-normal.woff', fontWeight: 400 },
+    { src: 'https://fonts.bunny.net/inter/files/inter-latin-ext-600-normal.woff', fontWeight: 600 },
+    { src: 'https://fonts.bunny.net/inter/files/inter-latin-ext-700-normal.woff', fontWeight: 700 },
   ],
 })
 
@@ -129,7 +131,15 @@ export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
           </View>
         </View>
 
-        {!isStorno && !isDobropis && (
+        {!isStorno && !isDobropis && invoice.status === 'paid' && (
+          <View style={{ marginTop: 16, padding: 14, backgroundColor: '#e8f5ee', borderRadius: 6, borderWidth: 1, borderColor: '#1f6b3a', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={{ fontSize: 13, fontWeight: 700, color: '#1f6b3a' }}>PLAČANO</Text>
+            <Text style={{ fontSize: 9, color: '#1f6b3a' }}>
+              {invoice.paid_at ? `Plačano dne ${new Date(invoice.paid_at).toLocaleDateString('sl-SI')}` : 'Račun je poravnan'}
+            </Text>
+          </View>
+        )}
+        {!isStorno && !isDobropis && invoice.status !== 'paid' && (
           <View style={styles.bottomSection}>
             <View>
               <Text style={styles.payTitle}>Plačilni podatki</Text>
