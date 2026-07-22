@@ -27,12 +27,14 @@ interface FursPremise {
   cadastralNumber?: string
   buildingNumber?: string
   buildingSectionNumber?: string
+  channel?: 'pos' | 'web' | 'both'
 }
 
 interface FursDevice {
   id: string
   electronicDeviceId: string
   premiseId: string
+  channel?: 'pos' | 'web' | 'both'
 }
 
 // ================================================================
@@ -108,11 +110,13 @@ export default function BlagajnaPage() {
             cadastralNumber: p.cadastral_number || '',
             buildingNumber: p.building_number || '',
             buildingSectionNumber: p.building_section_number || '',
+            channel: p.channel || 'both',
           })),
           devices: (devices || []).map(d => ({
             id: d.id,
             electronicDeviceId: d.device_id,
             premiseId: d.premise_id,
+            channel: d.channel || 'both',
           })),
           certSubject: cert?.issuer,
           certPassword: cert?.certificate_password,
@@ -210,6 +214,7 @@ export default function BlagajnaPage() {
           cadastral_number: premiseModal.cadastralNumber || null,
           building_number: premiseModal.buildingNumber || null,
           building_section_number: premiseModal.buildingSectionNumber || null,
+          channel: premiseModal.channel || 'both',
         }).eq('id', premiseModal.id)
       } else {
         // Vstavi novega
@@ -224,6 +229,7 @@ export default function BlagajnaPage() {
           building_number: premiseModal.buildingNumber || null,
           building_section_number: premiseModal.buildingSectionNumber || null,
           is_active: true,
+          channel: premiseModal.channel || 'both',
         })
       }
 
@@ -292,6 +298,7 @@ export default function BlagajnaPage() {
         await supabase.from('electronic_devices').update({
           device_id: deviceModal.electronicDeviceId,
           premise_id: deviceModal.premiseId,
+          channel: deviceModal.channel || 'both',
         }).eq('id', deviceModal.id)
       } else {
         await supabase.from('electronic_devices').insert({
@@ -299,6 +306,7 @@ export default function BlagajnaPage() {
           premise_id: deviceModal.premiseId,
           device_id: deviceModal.electronicDeviceId,
           is_active: true,
+          channel: deviceModal.channel || 'both',
         })
       }
 
@@ -658,6 +666,13 @@ export default function BlagajnaPage() {
                     placeholder="1" style={inputStyle} />
                 </FormField>
               </div>
+              <FormField label="Namen (kanal)">
+                <select value={premiseModal.channel || 'both'} onChange={e => setPremiseModal(p => ({ ...p, channel: e.target.value as any }))} style={inputStyle}>
+                  <option value="both">Oboje (POS in Stripe/PDF) — privzeto</option>
+                  <option value="pos">Samo POS terminal</option>
+                  <option value="web">Samo Stripe/PDF računi</option>
+                </select>
+              </FormField>
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
               <button onClick={() => setPremiseModal(null)} style={{ padding: '9px 16px', borderRadius: 8, border: '1px solid #d0ccc5', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Prekliči</button>
@@ -686,6 +701,13 @@ export default function BlagajnaPage() {
                   {config.premises.map(p => (
                     <option key={p.id} value={p.id}>{p.businessPremiseId} · {p.address}</option>
                   ))}
+                </select>
+              </FormField>
+              <FormField label="Namen (kanal)">
+                <select value={deviceModal.channel || 'both'} onChange={e => setDeviceModal(p => ({ ...p, channel: e.target.value as any }))} style={inputStyle}>
+                  <option value="both">Oboje (POS in Stripe/PDF) — privzeto</option>
+                  <option value="pos">Samo POS terminal</option>
+                  <option value="web">Samo Stripe/PDF računi (locena zaporedna številčenja)</option>
                 </select>
               </FormField>
             </div>

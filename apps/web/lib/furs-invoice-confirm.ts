@@ -60,24 +60,36 @@ export async function confirmIssuedInvoiceWithFurs(
     .maybeSingle()
   if (!cert) return { success: false, error: 'FURS certifikat ni nalozen' }
 
-  let premiseQuery = supabase
-    .from('business_premises')
-    .select('*')
-    .eq('org_id', orgId)
-    .eq('is_active', true)
+  // POPRAVLJENO 21.7.2026: prednostno uporabi prostor/napravo oznaceno za
+  // 'web' kanal (locena od POS-a). Ce nic ni oznaceno kot 'web', pade nazaj
+  // na 'both' - IDENTICNO obnasanje kot prej (deli napravo s POS-om).
+  let premise: any = null
   if (requestedPremiseId) {
-    premiseQuery = premiseQuery.eq('id', requestedPremiseId)
+    const { data } = await supabase.from('business_premises').select('*')
+      .eq('org_id', orgId).eq('is_active', true).eq('id', requestedPremiseId).maybeSingle()
+    premise = data
+  } else {
+    const { data: webPremise } = await supabase.from('business_premises').select('*')
+      .eq('org_id', orgId).eq('is_active', true).eq('channel', 'web').limit(1).maybeSingle()
+    premise = webPremise
+    if (!premise) {
+      const { data: bothPremise } = await supabase.from('business_premises').select('*')
+        .eq('org_id', orgId).eq('is_active', true).eq('channel', 'both').limit(1).maybeSingle()
+      premise = bothPremise
+    }
   }
-  const { data: premise } = await premiseQuery.limit(1).maybeSingle()
   if (!premise) return { success: false, error: 'Poslovni prostor ni dodan' }
 
-  const { data: device } = await supabase
-    .from('electronic_devices')
-    .select('*')
-    .eq('premise_id', premise.id)
-    .eq('is_active', true)
-    .maybeSingle()
+  const { data: webDevice } = await supabase.from('electronic_devices').select('*')
+    .eq('premise_id', premise.id).eq('is_active', true).eq('channel', 'web').limit(1).maybeSingle()
+  let device: any = webDevice
+  if (!device) {
+    const { data: bothDevice } = await supabase.from('electronic_devices').select('*')
+      .eq('premise_id', premise.id).eq('is_active', true).eq('channel', 'both').limit(1).maybeSingle()
+    device = bothDevice
+  }
   const deviceIdCode = device?.device_id ?? 'RACUNKO01'
+  const usesWebSequence = device?.channel === 'web'
 
   // POPRAVLJENO 21.7.2026 (revizija): prejsnji izracun je stel potrjene
   // issued_invoices (lastno zaporedje od 1) z neatomarnim count+1 vzorcem.
@@ -85,7 +97,9 @@ export async function confirmIssuedInvoiceWithFurs(
   // (SIRBFB01-RACUNKO01), bi to povzrocilo trcenje z ze zasedenimi POS
   // stevilkami pri FURS. Po ZDavPR je zaporedje ENO na prostor+napravo -
   // zato uporabimo isti atomaren RPC kot POS in storno.
-  const { data: seqData, error: seqError } = await supabase.rpc('get_next_pos_invoice_number')
+  const { data: seqData, error: seqError } = usesWebSequence
+    ? await supabase.rpc('get_next_web_invoice_number')
+    : await supabase.rpc('get_next_pos_invoice_number')
   if (seqError) {
     return { success: false, error: 'Napaka pri generiranju stevilke racuna: ' + seqError.message }
   }
