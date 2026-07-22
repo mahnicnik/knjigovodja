@@ -45,6 +45,31 @@ export async function confirmIssuedInvoiceWithFurs(
     }
   }
 
+  // ATOMARNA KLJUCAVNICA (patch 2, 21.7.2026): Stripe zna webhook dostaviti
+  // veckrat HKRATI - dva vzporedna klica bi oba presla zgornjo preverbo,
+  // oba porabila zaporedno stevilko in oba poslala FURS-u (dvojna
+  // fiskalizacija iste transakcije). UPDATE spodaj uspe samo enemu:
+  // pogoj "eor is null AND (lock prost ALI starejsi od 2 min)" + .select()
+  // vrne posodobljene vrstice - prazno = drug klic ze obdeluje.
+  const lockCutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString()
+  const { data: lockRows } = await supabase
+    .from('issued_invoices')
+    .update({ furs_confirming_at: new Date().toISOString() })
+    .eq('id', invoiceId)
+    .is('eor', null)
+    .or(`furs_confirming_at.is.null,furs_confirming_at.lt.${lockCutoff}`)
+    .select('id')
+  if (!lockRows || lockRows.length === 0) {
+    // Bodisi vzporedna obdelava bodisi je racun medtem ze potrjen - preveri.
+    const { data: recheck } = await supabase
+      .from('issued_invoices').select('zoi, eor, invoice_number')
+      .eq('id', invoiceId).single()
+    if (recheck?.eor) {
+      return { success: true, zoi: recheck.zoi, eor: recheck.eor, invoiceNumber: recheck.invoice_number, alreadyConfirmed: true }
+    }
+    return { success: false, error: 'Fiskalizacija tega racuna ze poteka (vzporeden klic) - poskusite znova cez minuto' }
+  }
+
   const { data: org } = await supabase
     .from('organizations')
     .select('*')
@@ -169,6 +194,13 @@ export async function confirmIssuedInvoiceWithFurs(
       .eq('id', invoiceId)
     return { success: true, zoi: result.zoi, eor: result.eor, invoiceNumber: invoiceNumberFull }
   }
+
+  // Sprosti kljucavnico ob neuspehu, da je takojsnji rocni retry mozen
+  // (ob uspehu sproscanje ni potrebno - eor blokira ze na vrhu funkcije).
+  await supabase
+    .from('issued_invoices')
+    .update({ furs_confirming_at: null })
+    .eq('id', invoiceId)
 
   return {
     success: false,

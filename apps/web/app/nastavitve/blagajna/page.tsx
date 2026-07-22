@@ -294,6 +294,22 @@ export default function BlagajnaPage() {
         .from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
       if (!member) throw new Error('Org ni najdena')
 
+      // VAROVALKA (21.7.2026): naprave z obstojeco FURS zgodovino NE smejo
+      // preklopiti na 'web' kanal - web kanal uporablja LOCENO zaporedje
+      // (web_invoice_seq, zacne pri 1), zato bi naprava, ki je ze izdala
+      // racune pod pos_invoice_seq, FURS-u poslala ZE ZASEDENE stevilke.
+      // Za web kanal je treba ustvariti NOVO napravo z novim ID-jem.
+      if (deviceModal.channel === 'web' && deviceModal.electronicDeviceId) {
+        const { count: fursHistory } = await supabase
+          .from('orders')
+          .select('*', { count: 'exact', head: true })
+          .like('invoice_number', `%-${deviceModal.electronicDeviceId}-%`)
+        if ((fursHistory ?? 0) > 0) {
+          setToast({ msg: `Naprava ${deviceModal.electronicDeviceId} ima ze ${fursHistory} FURS-potrjenih racunov in NE more preklopiti na "Samo Stripe/PDF" kanal (locena stevilcenja bi trcila z obstojecimi). Ustvarite NOVO napravo z novim ID-jem (npr. WEB01).`, ok: false })
+          setSaving(false)
+          return
+        }
+      }
       if (deviceModal.id) {
         await supabase.from('electronic_devices').update({
           device_id: deviceModal.electronicDeviceId,
@@ -710,6 +726,11 @@ export default function BlagajnaPage() {
                   <option value="web">Samo Stripe/PDF računi (locena zaporedna številčenja)</option>
                 </select>
               </FormField>
+              {deviceModal.channel === 'web' && (
+                <div style={{ fontSize: 12, color: '#a83232', background: 'rgba(168,50,50,0.07)', border: '1px solid rgba(168,50,50,0.2)', borderRadius: 8, padding: '10px 12px', lineHeight: 1.5 }}>
+                  ⚠️ "Samo Stripe/PDF" kanal uporablja LOČENO zaporedje številk (začne pri 1). Uporabite ga SAMO za novo napravo, ki še nima izdanih računov — obstoječe naprave (npr. RACUNKO01) NE preklapljajte, ker bi številke trčile z že potrjenimi računi pri FURS.
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
               <button onClick={() => setDeviceModal(null)} style={{ padding: '9px 16px', borderRadius: 8, border: '1px solid #d0ccc5', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Prekliči</button>
