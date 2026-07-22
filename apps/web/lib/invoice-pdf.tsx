@@ -50,9 +50,10 @@ interface Props {
   invoice: any
   org: any
   qrDataUrl: string
+  fursQrDataUrl?: string
 }
 
-export function InvoicePDF({ invoice, org, qrDataUrl }: Props) {
+export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
   const isStorno = invoice.amount_total < 0
   const isDobropis = invoice.invoice_number?.includes('-D')
   const docType = isDobropis ? 'DOBROPIS' : isStorno ? 'STORNO' : 'RAČUN'
@@ -156,12 +157,37 @@ export function InvoicePDF({ invoice, org, qrDataUrl }: Props) {
           </View>
         )}
 
+        {(invoice.zoi || invoice.eor) && (
+          <View style={{ marginTop: 14, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#ddd', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 8, fontWeight: 700, marginBottom: 3, color: '#333' }}>Davčno potrjen račun (FURS)</Text>
+              {invoice.zoi && <Text style={{ fontSize: 7, color: '#555', marginBottom: 2 }}>ZOI: {invoice.zoi}</Text>}
+              {invoice.eor && <Text style={{ fontSize: 7, color: '#555', marginBottom: 2 }}>EOR: {invoice.eor}</Text>}
+              <Text style={{ fontSize: 6.5, color: '#888', marginTop: 2 }}>Račun lahko preverite na blagajne.fu.gov.si</Text>
+            </View>
+            {fursQrDataUrl && (
+              <View style={{ alignItems: 'center', marginLeft: 12 }}>
+                {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                <Image src={fursQrDataUrl} style={{ width: 60, height: 60 }} />
+                <Text style={{ fontSize: 6, color: '#888', marginTop: 2 }}>Preveri račun</Text>
+              </View>
+            )}
+          </View>
+        )}
         <Text style={styles.footer}>
           Dokument je izdan elektronsko · {org.name} · {new Date().getFullYear()}
         </Text>
       </Page>
     </Document>
   )
+}
+
+// Helper za FURS verifikacijski QR (server-side) - koda z URL-jem za
+// preverjanje davcno potrjenega racuna (obvezno po ZDavPR za potrjene racune)
+export async function generateFursQr(zoi: string, issueDate: Date): Promise<string> {
+  const { getFursVerificationUrl } = await import('./furs')
+  const url = getFursVerificationUrl(zoi, issueDate)
+  return await QRCode.toDataURL(url, { width: 150, margin: 1, errorCorrectionLevel: 'M' })
 }
 
 // Helper za UPN QR generation (server-side)

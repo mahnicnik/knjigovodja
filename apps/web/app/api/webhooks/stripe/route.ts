@@ -3,6 +3,10 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import crypto from 'crypto'
 import { confirmIssuedInvoiceWithFurs } from '@/lib/furs-invoice-confirm'
+import { renderToBuffer } from '@react-pdf/renderer'
+import { InvoicePDF, generateUpnQr, generateFursQr } from '@/lib/invoice-pdf'
+import { buildInvoiceEmailHtml } from '@/lib/invoice-email'
+import { resend, FROM_EMAIL } from '@/lib/resend'
 
 /**
  * Stripe Webhook Handler — za uporabnikove lastne Stripe naročnine/plačila
@@ -233,6 +237,72 @@ export async function POST(req: NextRequest) {
       }
     } catch (fursErr: any) {
       console.error('FURS fiskalizacija Stripe racuna - nepricakovana napaka:', invoice.id, fursErr.message)
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // PDF racun + e-mail stranki (dodano 21.7.2026), po vzoru obrokov
+    // (lib/installment-invoice.ts). Ovito v try/catch - napaka pri
+    // generiranju/posiljanju maila NIKOLI ne sme podreti webhooka, racun
+    // je ze ustvarjen in (poskusno) fiskaliziran ne glede na to.
+    const finalInvoiceNumber = (fursResult?.success && fursResult.invoiceNumber) ? fursResult.invoiceNumber : invoiceNumber
+    if (customerEmail) {
+      try {
+        const invoiceForPdf = {
+          invoice_number: finalInvoiceNumber,
+          invoice_type: 'invoice',
+          client_name: customerName,
+          client_email: customerEmail,
+          issue_date: issueDate,
+          due_date: issueDate,
+          line_items: lineItems,
+          amount_net: Math.round(amountNet * 100) / 100,
+          vat_amount: Math.round(vatAmount * 100) / 100,
+          amount_total: Math.round(amountTotal * 100) / 100,
+          status: 'paid',
+          paid_at: new Date().toISOString(),
+          zoi: fursResult?.zoi ?? null,
+          eor: fursResult?.eor ?? null,
+          organizations: org,
+        }
+        const qrDataUrl = await generateUpnQr(invoiceForPdf, org)
+        // FURS verifikacijski QR - samo ce je racun uspesno fiskaliziran
+        let fursQrDataUrl: string | undefined
+        if (fursResult?.success && fursResult.zoi) {
+          try {
+            fursQrDataUrl = await generateFursQr(fursResult.zoi, new Date(issueDate))
+          } catch (qrErr: any) {
+            console.error('FURS QR generiranje ni uspelo (racun bo poslan brez QR):', qrErr.message)
+          }
+        }
+        const pdfElement = InvoicePDF({ invoice: invoiceForPdf, org, qrDataUrl, fursQrDataUrl })
+        const pdfBuffer = await renderToBuffer(pdfElement as any)
+        const emailHtml = buildInvoiceEmailHtml({
+          orgName: org.name,
+          invoiceNumber: finalInvoiceNumber,
+          issueDate,
+          amount: Number(amountTotal),
+          dueDate: issueDate,
+          customMessage: `Vaše Stripe plačilo je bilo uspešno zaključeno. V prilogi je račun.`,
+          iban: org.iban ?? null,
+          reference: null,
+        })
+        const { error: resendError } = await resend.emails.send({
+          from: FROM_EMAIL,
+          to: [customerEmail],
+          subject: `Račun ${finalInvoiceNumber}`,
+          html: emailHtml,
+          attachments: [{ filename: `racun-${finalInvoiceNumber}.pdf`, content: pdfBuffer }],
+        } as any)
+        if (resendError) {
+          console.error('Napaka pri posiljanju e-maila za Stripe racun:', invoice.id, resendError.message)
+        } else {
+          await supabase.from('issued_invoices').update({ last_email_sent_at: new Date().toISOString() }).eq('id', invoice.id)
+        }
+      } catch (emailErr: any) {
+        console.error('Nepricakovana napaka pri PDF/e-mailu za Stripe racun:', invoice.id, emailErr.message)
+      }
+    } else {
+      console.warn('Stripe placilo brez e-maila stranke - racun ni bil poslan po posti:', invoice.id)
     }
 
     await supabase.from('integration_logs').insert({
