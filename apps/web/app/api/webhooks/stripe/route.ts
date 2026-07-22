@@ -112,7 +112,12 @@ export async function POST(req: NextRequest) {
     const event = JSON.parse(rawBody)
 
     // Obravnavamo samo dogodke uspešnega plačila
-    const handledEvents = ['checkout.session.completed', 'invoice.paid', 'payment_intent.succeeded']
+    // POPRAVLJENO 22.7.2026: payment_intent.succeeded ODSTRANJEN - en nakup
+    // sprozi tako checkout.session.completed kot payment_intent.succeeded
+    // (dva razlicna objekta z razlicnima ID-jema za isto placilo), kar je
+    // ustvarilo PODVOJENE racune. checkout.session.completed pokrije payment
+    // linke/checkout, invoice.paid pokrije narocnine.
+    const handledEvents = ['checkout.session.completed', 'invoice.paid']
     if (!handledEvents.includes(event.type)) {
       return NextResponse.json({ message: `Event ${event.type} ignoriran` }, { status: 200 })
     }
