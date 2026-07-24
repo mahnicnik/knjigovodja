@@ -1,7 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+
+// POPRAVLJENO (audit 23.7.2026): endpoint je bil ODPRT RELAY - poljuben
+// poslji {to, subject, html} brez avtorizacije. Zdaj zahteva ALI prijavljeno
+// uporabnisko sejo (klic iz pos/page.tsx) ALI pravilen CRON_SECRET
+// (interni klic iz cron/notifications/route.ts).
+async function isAuthorized(req: NextRequest): Promise<boolean> {
+  const authHeader = req.headers.get('authorization')
+  if (authHeader === `Bearer ${process.env.CRON_SECRET}`) return true
+
+  const cookieStore = await cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll: () => cookieStore.getAll() } }
+  )
+  const { data: { user } } = await supabase.auth.getUser()
+  return !!user
+}
 
 export async function POST(req: NextRequest) {
   try {
+    if (!(await isAuthorized(req))) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { to, subject, html, customerName, packageName, expiresAt, severity } = await req.json()
 
     if (!to || !subject) {

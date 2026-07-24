@@ -1,16 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 import { issueInstallmentInvoice } from '@/lib/installment-invoice'
-
-const BUSINESS_ID = '00000000-0000-0000-0000-000000000001'
 
 /**
  * Poslje racun/opomnik za EN konkreten obrok TAKOJ (ne caka na dnevni cron
  * ob 6:00). Klican iz POS-a ob aktivaciji placilnega nacrta, ko je prvi
  * obrok zapadel danes ali v preteklosti.
+ *
+ * POPRAVLJENO (audit 23.7.2026): prej trdo kodiran BUSINESS_ID (samo ena
+ * org, brez avtentikacije - kdorkoli na internetu bi lahko sprozil
+ * posiljanje). Zdaj: org se doloci iz SEJE prijavljenega uporabnika, obrok
+ * pa se dodatno preveri, da pripada TOCNO tej organizaciji.
  */
 export async function POST(request: NextRequest) {
   try {
+    const cookieStore = await cookies()
+    const authed = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { cookies: { getAll: () => cookieStore.getAll() } }
+    )
+    const { data: { user } } = await authed.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })
+    }
+    const { data: member } = await authed
+      .from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+    if (!member) {
+      return NextResponse.json({ error: 'Organizacija ni najdena za prijavljenega uporabnika' }, { status: 404 })
+    }
+
     const { installmentId } = await request.json()
     if (!installmentId) {
       return NextResponse.json({ error: 'installmentId manjka' }, { status: 400 })
@@ -24,20 +45,26 @@ export async function POST(request: NextRequest) {
     const { data: org } = await supabase
       .from('organizations')
       .select('*')
-      .eq('pos_business_id', BUSINESS_ID)
+      .eq('id', member.org_id)
       .maybeSingle()
     if (!org) {
       return NextResponse.json({ error: 'Organizacija ni najdena' }, { status: 404 })
     }
 
+    // Obrok MORA pripadati TEJ organizaciji. POMEMBNO: installment_plans
+    // uporablja business_id (POS stran), NE org_id (racunovodska stran) -
+    // povezava je organizations.pos_business_id. Preprecuje, da bi
+    // uporabnik ene org sprozil posiljanje obroka DRUGE org, ce bi uganil
+    // installmentId.
     const { data: inst } = await supabase
       .from('installments')
-      .select('*, installment_plans(customer_id, customer_package_id)')
+      .select('*, installment_plans!inner(customer_id, customer_package_id, business_id)')
       .eq('id', installmentId)
       .eq('status', 'pending')
+      .eq('installment_plans.business_id', org.pos_business_id)
       .maybeSingle()
     if (!inst) {
-      return NextResponse.json({ error: 'Obrok ni najden ali ni vec pending' }, { status: 404 })
+      return NextResponse.json({ error: 'Obrok ni najden, ni vec pending, ali ne pripada vasi organizaciji' }, { status: 404 })
     }
 
     const plan = inst.installment_plans as any

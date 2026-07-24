@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 
 function getServiceClient() {
   return createClient(
@@ -8,8 +10,38 @@ function getServiceClient() {
   )
 }
 
+// POPRAVLJENO (audit 23.7.2026): avtentikacija + org se dolocita iz SEJE
+// klicatelja, ne vec "vzemi prvo organizacijo v bazi" (kar je za vsako
+// organizacijo razen prve pisalo v NAPACNO org, in je bilo brez auth
+// odprto za kogarkoli na internetu).
+async function getSessionOrg() {
+  const cookieStore = await cookies()
+  const authed = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll: () => cookieStore.getAll() } }
+  )
+  const { data: { user } } = await authed.auth.getUser()
+  if (!user) return { user: null, orgId: null as string | null }
+
+  const { data: member } = await authed
+    .from('org_members')
+    .select('org_id')
+    .eq('user_id', user.id)
+    .maybeSingle()
+  return { user, orgId: member?.org_id ?? null }
+}
+
 export async function POST(req: NextRequest) {
   try {
+    const { user, orgId } = await getSessionOrg()
+    if (!user) {
+      return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })
+    }
+    if (!orgId) {
+      return NextResponse.json({ error: 'Organizacija ni najdena za prijavljenega uporabnika' }, { status: 404 })
+    }
+
     const { date, amount, refunds, description, z_report_id } = await req.json()
 
     if (!date || !amount) {
@@ -17,28 +49,7 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = getServiceClient()
-
-    // Poišči organizacijo za BUSINESS_ID
-    const { data: biz } = await supabase
-      .from('businesses')
-      .select('id, name')
-      .eq('id', '00000000-0000-0000-0000-000000000001')
-      .single()
-
-    if (!biz) {
-      return NextResponse.json({ error: 'Business ni najden' }, { status: 404 })
-    }
-
-    // Poišči org_id za ta business
-    const { data: org } = await supabase
-      .from('organizations')
-      .select('id')
-      .limit(1)
-      .single()
-
-    if (!org) {
-      return NextResponse.json({ error: 'Organizacija ni najdena' }, { status: 404 })
-    }
+    const org = { id: orgId }
 
     // Preveri ali zapis za ta dan že obstaja
     const { data: existing } = await supabase

@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
   const error = searchParams.get('error')
+  const returnedState = searchParams.get('state')
 
   if (error || !code) {
     return NextResponse.redirect(new URL('/nastavitve?email_error=1', appUrl))
@@ -18,6 +19,16 @@ export async function GET(request: NextRequest) {
 
   try {
     const cookieStore = await cookies()
+
+    // CSRF ZASCITA (audit 23.7.2026): primerjaj state proti piskotku,
+    // nastavljenem v connect/route.ts PRED preusmeritvijo na Google. Brez
+    // tega bi napadalec lahko zvabil prijavljeno zrtev na URL s SVOJO
+    // avtorizacijsko kodo in svoj Gmail racun povezal z zrtvino organizacijo.
+    const savedState = cookieStore.get('gmail_oauth_state')?.value
+    if (!savedState || savedState !== returnedState) {
+      console.error('Gmail OAuth: state se ne ujema (mozen CSRF poskus)')
+      return NextResponse.redirect(new URL('/nastavitve?email_error=1', appUrl))
+    }
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -76,7 +87,9 @@ export async function GET(request: NextRequest) {
       created_by: user.id,
     })
 
-    return NextResponse.redirect(new URL('/nastavitve?email_connected=1', appUrl))
+    const response = NextResponse.redirect(new URL('/nastavitve?email_connected=1', appUrl))
+    response.cookies.delete('gmail_oauth_state')
+    return response
   } catch (e: any) {
     console.error('Gmail callback error:', e)
     return NextResponse.redirect(new URL('/nastavitve?email_error=1', appUrl))

@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
         try {
           const emailRes = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/email/send`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.CRON_SECRET}` },
             body: JSON.stringify({
               to: customer.email,
               subject,
@@ -141,7 +141,7 @@ export async function GET(req: NextRequest) {
       try {
         const emailRes = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/email/send`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.CRON_SECRET}` },
           body: JSON.stringify({
             to: cust.email,
             subject: `Predračun za podaljšanje: ${pkg.name}`,
