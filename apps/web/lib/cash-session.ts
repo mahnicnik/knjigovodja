@@ -155,10 +155,11 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
   const from = session.opened_at
   const to = session.closed_at || new Date().toISOString()
 
-  // PROMET — payments joinanih z orders
+  // PROMET — payments joinanih z orders. tip_amount dodan (R8, 24.7.2026) -
+  // napitnine so na ORDERS, ne na payments (payments.tip ne obstaja).
   const { data: orders, error: ordersError } = await db
     .from('orders')
-    .select('id, payments(method, amount), order_lines(qty, unit_price, vat_rate, voided)')
+    .select('id, tip_amount, payments(method, amount), order_lines(qty, unit_price, vat_rate, voided)')
     .eq('business_id', BUSINESS_ID)
     .eq('status', 'paid')
     .gte('closed_at', from)
@@ -167,10 +168,11 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
     console.error('getSessionStats: napaka pri branju narocil', ordersError)
   }
 
-  // VRAČILA
+  // VRAČILA - method dodan (R10, 24.7.2026), da se od gotovine odstejejo
+  // SAMO gotovinska vracila, ne tudi kartcna.
   const { data: refunds } = await db
     .from('refunds')
-    .select('amount')
+    .select('amount, method')
     .eq('business_id', BUSINESS_ID)
     .gte('created_at', from)
     .lte('created_at', to)
@@ -181,10 +183,11 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
   let vatBase22 = 0, vat22 = 0, vatBase95 = 0, vat95 = 0
 
   for (const o of orders || []) {
+    // R8: napitnina je na orderu, ne na posameznem placilu
+    tips += Number((o as any).tip_amount || 0)
+
     for (const p of (o as any).payments || []) {
       const amt = Number(p.amount || 0)
-      const tip = Number(p.tip || 0)
-      tips += tip
 
       if (p.method === 'cash')      { cash += amt; cashCount++ }
       else if (p.method === 'card') { card += amt; cardCount++ }
@@ -213,9 +216,14 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
 
   const refundTotal = (refunds || []).reduce((s, r) => s + Number(r.amount || 0), 0)
   const refundCount = (refunds || []).length
+  // R10: od pricakovane gotovine odstejemo SAMO gotovinska vracila (metoda
+  // 'cash' ali NULL - obstojeci zapisi brez metode se varno obravnavajo kot
+  // gotovina, najbolj konservativna privzeta vrednost).
+  const refund_cash = refund => refund.method === 'cash' || !refund.method
+  const cashRefundTotal = (refunds || []).filter(refund_cash).reduce((s, r) => s + Number(r.amount || 0), 0)
 
   const totalRevenue = cash + card + bon + prep + other
-  const cashExpected = Number(session.cash_opening) + cash - refundTotal
+  const cashExpected = Number(session.cash_opening) + cash - cashRefundTotal
 
   return {
     cash, card, bon, prep, other, totalRevenue,
