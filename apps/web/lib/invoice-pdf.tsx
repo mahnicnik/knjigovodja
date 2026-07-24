@@ -71,7 +71,7 @@ export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
               <Text>{org.address || ''}</Text>
               <Text>{org.post_code || ''} {org.city || ''}</Text>
               <Text>Davčna številka: {org.tax_number || ''}</Text>
-              {org.vat_registered && <Text>ID za DDV: SI{org.tax_number || ''}</Text>}
+              {org.vat_registered && <Text>ID za DDV: SI{(org.tax_number || '').replace(/^SI/i, '')}</Text>}
               {org.iban && <Text>TRR: {org.iban}</Text>}
             </View>
           </View>

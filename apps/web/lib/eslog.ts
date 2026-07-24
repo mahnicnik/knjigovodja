@@ -499,7 +499,13 @@ export interface EslogOrg {
     const seller: EslogOrg = {
       name: org.name,
       taxNumber: org.tax_number ?? null,
-      vatNumber: org.vat_registered && org.tax_number ? `SI${org.tax_number}` : null,
+      // POPRAVLJENO (24.7.2026): org.tax_number je pogosto ZE shranjen s
+      // predpono "SI" (npr. "SI91390419") - brezpogojno dodajanje se ene je
+      // proizvedlo "SISI91390419" na UJP XML in PDF racunih. Zdaj odstrani
+      // morebitno obstojeco predpono pred dodajanjem ene same.
+      vatNumber: org.vat_registered && org.tax_number
+        ? `SI${org.tax_number.replace(/^SI/i, '')}`
+        : null,
       address: org.address ?? null,
       postalCode: org.postal_code ?? null,
       city: org.city ?? null,
