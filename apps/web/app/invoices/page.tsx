@@ -152,10 +152,16 @@ export default function InvoicesPage() {
     }
   }
 
-  function statusLabel(status: string) {
+  // POPRAVLJENO (24.7.2026): "sent" v bazi pomeni samo "izdan zapis" - e-mail
+  // je dejansko poslan sele, ko je last_email_sent_at izpolnjen (locen korak
+  // prek SendInvoiceModal). Prikaz zdaj loci ta dva primera, da ne zavaja.
+  function statusLabel(status: string, lastEmailSentAt?: string | null) {
     switch(status) {
       case 'paid': return { label: 'Plačano', color: '#27500A', bg: '#EAF3DE' }
-      case 'sent': return { label: 'Poslano', color: '#854F0B', bg: '#FAEEDA' }
+      case 'sent':
+        return lastEmailSentAt
+          ? { label: 'Poslano', color: '#854F0B', bg: '#FAEEDA' }
+          : { label: 'Izdano', color: '#1E4E8C', bg: '#E6EEF7' }
       case 'overdue': return { label: 'Zamuda', color: '#A32D2D', bg: '#FCEBEB' }
       case 'storno': return { label: 'Storno', color: '#555', bg: '#eee' }
       case 'draft': return { label: 'Osnutek', color: '#888', bg: '#F7F6F2' }
@@ -234,7 +240,7 @@ export default function InvoicesPage() {
         ) : (
           <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
             {invoices.map((inv, i) => {
-              const s = statusLabel(inv.status)
+              const s = statusLabel(inv.status, inv.last_email_sent_at)
               return (
                 <div key={inv.id} className={`flex items-center gap-4 px-6 py-4 ${i < invoices.length-1 ? 'border-b border-gray-50' : ''}`}>
                   <div className="flex-1 min-w-0">
