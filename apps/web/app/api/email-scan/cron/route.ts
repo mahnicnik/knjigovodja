@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { decryptToken, encryptToken } from '@/lib/token-crypto'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -70,16 +71,19 @@ export async function GET(request: NextRequest) {
     if (!due) continue
 
     try {
-      let accessToken = conn.access_token
+      // POPRAVLJENO (24.7.2026, audit R5): tokeni se desifrirajo pred uporabo,
+      // nov access_token se ponovno sifrira pred shranjevanjem.
+      let accessToken = decryptToken(conn.access_token)
+      const refreshToken = decryptToken(conn.refresh_token)
       if (conn.token_expires_at && new Date(conn.token_expires_at) <= now) {
-        if (!conn.refresh_token) continue
+        if (!refreshToken) continue
         const refreshRes = await fetch('https://oauth2.googleapis.com/token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams({
             client_id: process.env.GMAIL_CLIENT_ID!,
             client_secret: process.env.GMAIL_CLIENT_SECRET!,
-            refresh_token: conn.refresh_token,
+            refresh_token: refreshToken,
             grant_type: 'refresh_token',
           }),
         })
@@ -87,7 +91,7 @@ export async function GET(request: NextRequest) {
         if (!refreshRes.ok) continue
         accessToken = refreshData.access_token
         const newExpiresAt = new Date(Date.now() + (refreshData.expires_in || 3600) * 1000).toISOString()
-        await supabase.from('email_connections').update({ access_token: accessToken, token_expires_at: newExpiresAt }).eq('id', conn.id)
+        await supabase.from('email_connections').update({ access_token: encryptToken(accessToken), token_expires_at: newExpiresAt }).eq('id', conn.id)
       }
 
       const since = last || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)

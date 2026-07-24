@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { encryptToken } from '@/lib/token-crypto'
 
 /**
  * Google OAuth callback - sprejme kodo, zamenja za access/refresh token,
@@ -77,12 +78,13 @@ export async function GET(request: NextRequest) {
 
     const expiresAt = new Date(Date.now() + (tokenData.expires_in || 3600) * 1000).toISOString()
 
+    // POPRAVLJENO (24.7.2026, audit R5): tokeni sifrirani pred shranjevanjem
     await supabase.from('email_connections').insert({
       org_id: member.org_id,
       provider: 'gmail',
       email_address: profile.emailAddress || 'unknown',
-      access_token: tokenData.access_token,
-      refresh_token: tokenData.refresh_token || null,
+      access_token: encryptToken(tokenData.access_token),
+      refresh_token: tokenData.refresh_token ? encryptToken(tokenData.refresh_token) : null,
       token_expires_at: expiresAt,
       created_by: user.id,
     })
