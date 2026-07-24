@@ -143,7 +143,7 @@ export default function NewInvoicePage() {
   const vatAmount = items.reduce((s, item) => s + lineNet(item) * (item.vat_rate / 100), 0)
   const total = subtotal + vatAmount
 
-  async function handleSave(status: 'draft' | 'sent') {
+  async function handleSave(status: 'draft' | 'sent', overrideNumber?: string) {
     if (!org) return
     // Free plan limit: max 5 računov
     const isFree = !['pro', 'pro_pos'].includes(org.subscription_status)
@@ -153,27 +153,44 @@ export default function NewInvoicePage() {
       return
     }
     setLoading(true)
+    // overrideNumber uporabljen pri samodejnem retry (glej spodaj) - NE
+    // zanasamo se na React state (invoiceNumber), ker se ta znotraj istega
+    // zaprtja ne posodobi sinhrono po setInvoiceNumber() klicu.
+    const numberToUse = overrideNumber || invoiceNumber
     const { error } = await supabase.from('issued_invoices').insert({
-      org_id: org.id, invoice_number: invoiceNumber, invoice_type: 'invoice',
+      org_id: org.id, invoice_number: numberToUse, invoice_type: 'invoice',
       client_name: clientName, client_email: clientEmail, client_tax_number: clientTaxNumber,
       client_address: clientAddress, client_iban: clientIban,
       issue_date: issueDate, due_date: dueDate, line_items: items,
       amount_net: subtotal, vat_amount: vatAmount, amount_total: total,
-      status, notes, reference: reference || `SI00 ${invoiceNumber}`,
+      status, notes, reference: reference || `SI00 ${numberToUse}`,
       service_date: serviceDate || null,
       service_date_to: serviceDateTo || null,
       header_text: headerText || null,
     })
     if (error) {
-      if (error.message.includes('issued_invoices_org_id_invoice_number_key') || error.message.includes('duplicate key')) {
-        alert(`Račun s številko "${invoiceNumber}" že obstaja. Spremenite številko računa in poskusite znova.`)
+      const isDuplicate = error.message.includes('issued_invoices_org_id_invoice_number_key') || error.message.includes('duplicate key')
+      // Samodejni ponovni poskus ob trku stevilke - uporabi atomarno RPC
+      // (get_next_manual_invoice_number), ki vedno pravilno "zaceli" na
+      // dejansko najvisjo obstojeco stevilko, tudi ob vrzelih. Samo EN
+      // samodejen poskus (overrideNumber se ne sme se enkrat ponoviti).
+      if (isDuplicate && !overrideNumber) {
+        const { data: nextNum } = await supabase.rpc('get_next_manual_invoice_number', {
+          p_org_id: org.id, p_year: new Date().getFullYear(),
+        })
+        const freshNumber = nextNum || `${new Date().getFullYear()}-001`
+        setInvoiceNumber(freshNumber)
+        return handleSave(status, freshNumber)
+      }
+      if (isDuplicate) {
+        alert(`Račun s številko "${numberToUse}" že obstaja. Spremenite številko računa in poskusite znova.`)
       } else {
         alert('Napaka: ' + error.message)
       }
       setLoading(false)
       return
     }
-    posthog.capture(status === 'sent' ? 'invoice_created' : 'invoice_drafted', { invoice_number: invoiceNumber, amount_total: total })
+    posthog.capture(status === 'sent' ? 'invoice_created' : 'invoice_drafted', { invoice_number: numberToUse, amount_total: total })
     router.push('/invoices')
   }
 
