@@ -6,6 +6,23 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import posthog from 'posthog-js'
 
+// Varna base64 pretvorba za VELIKE datoteke (24.7.2026). btoa(String.
+// fromCharCode(...bytes)) je za vecje PDF-je (100KB+) povzrocalo "Maximum
+// call stack size exceeded", ker razsiritev (...) velikega polja kot
+// argumentov funkcije preseze JS-ovo omejitev stevila argumentov. Ta
+// verzija pretvarja po majhnih koscih (32KB), kar ostane varno pod vsemi
+// znanimi omejitvami brskalnikov.
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  const chunkSize = 0x8000 // 32768
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize)
+    binary += String.fromCharCode.apply(null, Array.from(chunk) as any)
+  }
+  return btoa(binary)
+}
+
 export default function ScanPage() {
   const [org, setOrg] = useState<any>(null)
   const [image, setImage] = useState<string | null>(null)
@@ -99,7 +116,7 @@ export default function ScanPage() {
           return
         }
         const arrayBuffer = await file.arrayBuffer()
-        const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
+        const base64 = arrayBufferToBase64(arrayBuffer)
         // Shranimo PDF base64 za API klic
         ;(window as any).__pdfBase64 = base64
         // Pokažemo placeholder
@@ -255,7 +272,7 @@ export default function ScanPage() {
       setBatchFiles(prev => prev.map((f, idx) => idx === i ? { ...f, status: 'scanning' } : f))
       try {
         const arrayBuffer = await item.file.arrayBuffer()
-        const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
+        const base64 = arrayBufferToBase64(arrayBuffer)
         const response = await fetch('/api/scan-receipt', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
