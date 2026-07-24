@@ -277,31 +277,12 @@ export default function InvoicesPage() {
                         </button>
                       )
                     )}
-                    {inv.client_tax_number && (
-                      <button
-                        onClick={async () => {
-                          const r = await fetch(`/api/invoices/${inv.id}/ujp`, { method: 'POST' })
-                          if (!r.ok) {
-                            // POPRAVLJENO (24.7.2026): prikazi PRAVO napako namesto fiksnega
-                            // genericnega teksta - prej je bil dejanski vzrok nevidno zavrzen.
-                            const errBody = await r.json().catch(() => null)
-                            const detail = errBody?.details ? '\n' + errBody.details.join('\n') : ''
-                            alert('Napaka pri generiranju UJP XML: ' + (errBody?.error || r.statusText) + detail)
-                            return
-                          }
-                          const blob = await r.blob()
-                          const url = URL.createObjectURL(blob)
-                          const a = document.createElement('a')
-                          a.href = url
-                          a.download = `${inv.invoice_number}.xml`
-                          a.click()
-                          URL.revokeObjectURL(url)
-                        }}
-                        className="border border-blue-600 text-blue-600 rounded-xl px-3 py-1.5 text-xs hover:bg-blue-50 transition-colors"
-                      >
-                        📄 UJP
-                      </button>
-                    )}
+                    {/* UJP gumb ODSTRANJEN (24.7.2026): po pregledu uradne UJP
+                        dokumentacije portal UJPeRacun ne sprejema nalozenih/generiranih
+                        XML datotek - edina pot je rocni vnos prek spletnega obrazca na
+                        eracuni.ujp.gov.si s pravim kvalificiranim potrdilom (TaxCA ni
+                        veljaven za prijavo). Koda v api/invoices/[id]/ujp ostaja kot
+                        referenca za morebitno kasnejso pravilno implementacijo. */}
                     <button
                       onClick={() => setActionInv(actionInv?.id === inv.id ? null : inv)}
                       className="border border-gray-200 rounded-xl px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
