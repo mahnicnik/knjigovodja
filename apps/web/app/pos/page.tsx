@@ -31,6 +31,32 @@ const T = {
 }
 
 // ================================================================
+// DDV PO DEJANSKIH STOPNJAH (24.7.2026, audit R3)
+// ================================================================
+// Prej so 3 mesta v tej datoteki racunala DDV pavsalno kot total/1.22,
+// cetudi vsak artikel v kosarici ze ima svoj vat_rate (9,5%/22%/...).
+// Ta funkcija racuna DDV PRAVILNO po dejanski stopnji vsake vrstice.
+// scale (0-1) omogoca sorazmerno prilagoditev za popust/napitnino,
+// uporabljeno na celotnem znesku (ne po posamezni vrstici).
+function vatBreakdownForCart(cart, scale = 1) {
+  let net = 0, vat = 0
+  const byRateMap = {}
+  for (const l of (cart || [])) {
+    const gross = Number(l.price || 0) * Number(l.qty || 0) * scale
+    const rate = Number(l.vat_rate || 22)
+    const lineNet = gross / (1 + rate / 100)
+    const lineVat = gross - lineNet
+    net += lineNet
+    vat += lineVat
+    if (!byRateMap[rate]) byRateMap[rate] = { rate, net: 0, vat: 0 }
+    byRateMap[rate].net += lineNet
+    byRateMap[rate].vat += lineVat
+  }
+  const byRate = Object.values(byRateMap).sort((a, b) => b.rate - a.rate)
+  return { net, vat, byRate }
+}
+
+// ================================================================
 // STATIČNA KONFIGURACIJA (ne gre v DB)
 // ================================================================
 const CFG = {
@@ -737,7 +763,7 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
           {discount > 0 && <SRow label={`Popust ${discount}%`} v={-total*discount/100}/>}
           {tipPct > 0 && <SRow label={`Napitnina ${tipPct}%`} v={total*tipPct/100}/>}
           <div style={{ marginTop:'auto', paddingTop:12, borderTop:'1px solid rgba(0,0,0,0.08)' }}>
-            <SRow label="DDV (22%)" v={finalTotal-finalTotal/1.22} muted/>
+            <SRow label="DDV" v={vatBreakdownForCart(cart, total > 0 ? finalTotal / total : 1).vat} muted/>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginTop:6 }}>
               <div style={{ fontWeight:700, fontSize:14 }}>Skupaj</div>
               <div style={{ fontWeight:800, fontSize:26, fontVariantNumeric:'tabular-nums' }}>{eur(finalTotal)}</div>
@@ -1222,7 +1248,7 @@ function WriteoffModal({ cart, auth, onClose, onDone }) {
   const [saving, setSaving] = React.useState(false)
   const [error, setError] = React.useState('')
   const totalCost = cart.reduce((s, l) => s + Number(l.price || 0) * Number(l.qty || 0), 0)
-  const vatOnCost = totalCost - totalCost / 1.22
+  const vatOnCost = vatBreakdownForCart(cart).vat
   const reasons = [
     { id: 'odpis', label: 'Odpis', desc: 'Pokvarjeno, poteklo, zlomljeno blago' },
     { id: 'lastna_poraba', label: 'Lastna poraba', desc: 'Lastnik/zaposleni vzame za osebno rabo (DDV samoobdavčitev)' },
@@ -1540,8 +1566,8 @@ ${recipientHtml}
 <div style="display:flex;justify-content:flex-end">
   <div style="min-width:280px">
     ${cartDiscount > 0 ? `<div style="display:flex;justify-content:space-between;color:#666;padding:4px 0"><span>Popust ${cartDiscount}%:</span><span>-${eur2(totals.total-total)}</span></div>` : ''}
-    <div style="display:flex;justify-content:space-between;color:#666;padding:4px 0;border-top:1px solid #ddd;margin-top:4px"><span>Osnova (brez DDV):</span><span>${eur2(total/1.22)}</span></div>
-    <div style="display:flex;justify-content:space-between;color:#666;padding:4px 0"><span>DDV 22%:</span><span>${eur2(total-total/1.22)}</span></div>
+    <div style="display:flex;justify-content:space-between;color:#666;padding:4px 0;border-top:1px solid #ddd;margin-top:4px"><span>Osnova (brez DDV):</span><span>${eur2(vatBreakdownForCart(cart, totals.total > 0 ? total / totals.total : 1).net)}</span></div>
+    ${vatBreakdownForCart(cart, totals.total > 0 ? total / totals.total : 1).byRate.map(r => `<div style="display:flex;justify-content:space-between;color:#666;padding:4px 0"><span>DDV ${r.rate}%:</span><span>${eur2(r.vat)}</span></div>`).join('')}
     <div style="display:flex;justify-content:space-between;font-size:18px;font-weight:bold;border-top:2px solid #000;padding-top:8px;margin-top:4px"><span>SKUPAJ:</span><span>${eur2(total)}</span></div>
   </div>
 </div>
