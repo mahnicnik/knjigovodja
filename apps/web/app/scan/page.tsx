@@ -25,6 +25,18 @@ export default function ScanPage() {
   const router = useRouter()
   const supabase = createClient()
 
+  // ── Paketni uvoz vec PDF racunov naenkrat (24.7.2026) ──
+  const [batchMode, setBatchMode] = useState(false)
+  const [batchFiles, setBatchFiles] = useState<Array<{
+    file: File
+    status: 'pending' | 'scanning' | 'saved' | 'error'
+    error?: string
+    vendor?: string
+    amount?: number
+  }>>([])
+  const [batchProcessing, setBatchProcessing] = useState(false)
+  const batchFileRef = useRef<HTMLInputElement>(null)
+
   const categories = [
     'Pisarniški material', 'Komunikacije', 'Programska oprema',
     'Transport', 'Prehrana', 'Izobraževanje', 'Marketing',
@@ -217,6 +229,85 @@ export default function ScanPage() {
     router.push('/expenses')
   }
 
+  // Izbira vec datotek za paketni uvoz - filtrira samo PDF, opozori na ostalo
+  function handleBatchFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []) as File[]
+    const pdfFiles = files.filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'))
+    if (pdfFiles.length !== files.length) {
+      alert(`Paketni uvoz trenutno podpira samo PDF. Preskočenih ${files.length - pdfFiles.length} datotek, ki niso PDF.`)
+    }
+    setBatchFiles(pdfFiles.map(file => ({ file, status: 'pending' as const })))
+  }
+
+  // Zaporedno (NE vzporedno - da ne preobremeni AI klicev) obdela vse
+  // datoteke v paketu: skeniraj -> ce uspesno prepoznano, SAMODEJNO shrani.
+  async function processBatch() {
+    if (!org) return
+    setBatchProcessing(true)
+    const maxPdfBytes = 4 * 1024 * 1024 // isti limit kot pri enojnem nalaganju
+
+    for (let i = 0; i < batchFiles.length; i++) {
+      const item = batchFiles[i]
+      if (item.file.size > maxPdfBytes) {
+        setBatchFiles(prev => prev.map((f, idx) => idx === i ? { ...f, status: 'error', error: `Prevelik (${(item.file.size / 1024 / 1024).toFixed(1)}MB, max 4MB)` } : f))
+        continue
+      }
+      setBatchFiles(prev => prev.map((f, idx) => idx === i ? { ...f, status: 'scanning' } : f))
+      try {
+        const arrayBuffer = await item.file.arrayBuffer()
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
+        const response = await fetch('/api/scan-receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pdfBase64: base64 }),
+        })
+        const data = await response.json()
+        if (data.error || !data.vendor || !data.amount_net) {
+          setBatchFiles(prev => prev.map((f, idx) => idx === i ? { ...f, status: 'error', error: data.error || 'AI ni prepoznal podatkov na računu' } : f))
+          continue
+        }
+        const amountNet = parseFloat(data.amount_net)
+        const vatRate = parseFloat(data.vat_rate ?? '0')
+        const vatAmount = amountNet * (vatRate / 100)
+        const amountTotal = amountNet + vatAmount
+        const receiptDate = data.date || new Date().toISOString().split('T')[0]
+        const category = data.category || 'Drugo'
+
+        await supabase.from('receipts').insert({
+          org_id: org.id,
+          vendor: data.vendor,
+          receipt_date: receiptDate,
+          amount_net: amountNet,
+          vat_rate: vatRate,
+          vat_amount: vatAmount,
+          amount_total: amountTotal,
+          description: data.description || '',
+          category,
+          status: 'confirmed',
+          is_deductible: true,
+          attachment_base64: base64,
+          attachment_type: 'pdf',
+        })
+        await supabase.from('kpo_entries').insert({
+          org_id: org.id,
+          entry_date: receiptDate,
+          description: `${data.vendor} — ${category}`,
+          entry_type: 'expense',
+          income: 0,
+          expense: amountNet,
+          vat_in: vatAmount,
+          vat_out: 0,
+          category,
+        })
+        posthog.capture('receipt_saved', { category, amount_net: amountNet, amount_total: amountTotal, vat_rate: vatRate, ai_scanned: true, batch: true })
+        setBatchFiles(prev => prev.map((f, idx) => idx === i ? { ...f, status: 'saved', vendor: data.vendor, amount: amountTotal } : f))
+      } catch (err: any) {
+        setBatchFiles(prev => prev.map((f, idx) => idx === i ? { ...f, status: 'error', error: err.message || 'Neznana napaka' } : f))
+      }
+    }
+    setBatchProcessing(false)
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
@@ -227,7 +318,65 @@ export default function ScanPage() {
       </div>
 
       <div className="max-w-2xl mx-auto px-6 py-8">
-        {!image ? (
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={() => { setBatchMode(!batchMode); setBatchFiles([]) }}
+            className="text-xs text-gray-500 hover:text-gray-900 underline"
+          >
+            {batchMode ? '← Nazaj na en račun' : 'Naložiti želim več računov naenkrat →'}
+          </button>
+        </div>
+
+        {batchMode ? (
+          <div className="bg-white rounded-2xl border border-gray-100 p-6">
+            <h3 className="font-semibold text-gray-900 mb-2">Paketni uvoz več PDF računov</h3>
+            <p className="text-gray-500 text-sm mb-4">Izberite več PDF datotek hkrati - AI bo vsako prebral in samodejno dodal med stroške.</p>
+            {batchFiles.length === 0 ? (
+              <div
+                onClick={() => batchFileRef.current?.click()}
+                className="border-2 border-dashed border-gray-200 rounded-xl p-10 text-center cursor-pointer hover:border-gray-300"
+              >
+                <div className="text-4xl mb-3">📚</div>
+                <div className="bg-gray-900 text-white px-6 py-2.5 rounded-xl text-sm font-medium inline-block">Izberi PDF datoteke</div>
+                <input ref={batchFileRef} type="file" accept=".pdf,application/pdf" multiple onChange={handleBatchFileSelect} className="hidden" />
+              </div>
+            ) : (
+              <div>
+                <div className="space-y-2 mb-4 max-h-96 overflow-y-auto">
+                  {batchFiles.map((f, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm bg-gray-50 rounded-lg px-3 py-2">
+                      <span className="truncate flex-1">{f.file.name}</span>
+                      {f.status === 'pending' && <span className="text-gray-400 text-xs">čaka</span>}
+                      {f.status === 'scanning' && <span className="text-blue-600 text-xs">⟳ skenira...</span>}
+                      {f.status === 'saved' && <span className="text-green-600 text-xs">✓ {f.vendor} · €{f.amount?.toFixed(2)}</span>}
+                      {f.status === 'error' && <span className="text-red-600 text-xs" title={f.error}>✗ {f.error}</span>}
+                    </div>
+                  ))}
+                </div>
+                {!batchProcessing && batchFiles.every(f => f.status === 'pending') && (
+                  <button onClick={processBatch} className="w-full bg-gray-900 text-white rounded-xl py-3 text-sm font-medium">
+                    Obdelaj {batchFiles.length} {batchFiles.length === 1 ? 'datoteko' : 'datotek'}
+                  </button>
+                )}
+                {batchProcessing && (
+                  <div className="text-center text-sm text-gray-500">⟳ Obdelujem...</div>
+                )}
+                {!batchProcessing && batchFiles.some(f => f.status === 'saved' || f.status === 'error') && batchFiles.every(f => f.status !== 'pending' && f.status !== 'scanning') && (
+                  <div className="space-y-2">
+                    <div className="text-sm text-gray-600 text-center">
+                      Shranjeno: {batchFiles.filter(f => f.status === 'saved').length} / {batchFiles.length}
+                      {batchFiles.some(f => f.status === 'error') && ` · Napak: ${batchFiles.filter(f => f.status === 'error').length}`}
+                    </div>
+                    <button onClick={() => router.push('/expenses')} className="w-full bg-gray-900 text-white rounded-xl py-3 text-sm font-medium">
+                      Prikaži stroške
+                    </button>
+                    <button onClick={() => setBatchFiles([])} className="w-full text-gray-500 text-sm py-2">Naloži še</button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : !image ? (
           <div
             onClick={() => !processing && fileRef.current?.click()}
             className="bg-white border-2 border-dashed border-gray-200 rounded-2xl p-16 text-center cursor-pointer hover:border-gray-400 transition-colors mb-6"
