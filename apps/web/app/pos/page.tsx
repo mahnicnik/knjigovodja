@@ -42,7 +42,10 @@ const CFG = {
     { id: 'prep', name: 'Predplačilo', icon: '💰' },
   ],
   tips: [0, 5, 10, 15],
-  masterPin: '9999',
+  // masterPin ODSTRANJEN (24.7.2026, audit K4): trdo kodiran '9999',
+  // primerjan client-side - za multi-tenant SaaS univerzalni upraviteljski
+  // PIN, viden vsakomur v brskalniku. Prijava zdaj izkljucno prek
+  // DB-preverjenih PIN-ov osebja (pos.auth.pinLogin).
   rolePresets: {
     Lastnik:   { sale:true,  openCash:true,  refund:true,  voidReceipt:true,  manualDiscount:true,  dailyClose:true,  viewMembers:true,  editMembers:true,  manageBookings:true, viewSales:true,  viewRevenue:true,  viewReports:true,  exportData:true,  editPrices:true,  manageStaff:true,  editSpaces:true,  systemSettings:true  },
     Vodja:     { sale:true,  openCash:true,  refund:true,  voidReceipt:true,  manualDiscount:true,  dailyClose:true,  viewMembers:true,  editMembers:true,  manageBookings:true, viewSales:true,  viewRevenue:true,  viewReports:false, exportData:true,  editPrices:true,  manageStaff:false, editSpaces:true,  systemSettings:false },
@@ -272,14 +275,7 @@ function useAuthState(autoLockMs = 60000) {
 
   async function unlock(pin) {
     try {
-      // Master PIN
-      if (pin === CFG.masterPin) {
-        setUser({ id: null, name: 'Master', role: 'Lastnik', color: '#a83232', is_master: true })
-        setLocked(false)
-        lastActivity.current = Date.now()
-        return true
-      }
-      // DB PIN login
+      // DB PIN login (edina pot po odstranitvi master PIN - 24.7.2026, audit K4)
       const staff = await pos.auth.pinLogin(pin)
       if (staff) {
         setUser(staff)
