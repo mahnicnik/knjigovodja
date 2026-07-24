@@ -10,6 +10,7 @@
  */
 
 import { createClient } from '@/lib/supabase'
+import { BUSINESS_ID } from '@/lib/pos-client'
 
 // ===== TIPI =====
 
@@ -66,8 +67,9 @@ export interface SessionStats {
 }
 
 // ===== POMOŽNE FUNKCIJE =====
+// BUSINESS_ID uvozen iz pos-client.ts (24.7.2026, audit R1) - prej lokalna
+// trdo kodirana konstanta (samo Nikova org), zdaj deljena ziva spremenljivka.
 
-const BUSINESS_ID = '00000000-0000-0000-0000-000000000001'
 const MAX_OPEN_HOURS = 24 // če je odprto več kot 24h, pri otvoritvi avto-zapri
 
 /**

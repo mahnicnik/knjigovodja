@@ -40,7 +40,7 @@ export async function resolveBusinessId(orgId: string, orgName: string, ownerUse
       vat_rate: 22.00,
       currency: 'EUR',
       language: 'sl-SI',
-      master_pin: '9999',
+      master_pin: null, // master PIN koncept v celoti odstranjen (audit K4, 24.7.2026)
       auto_lock_ms: 60000,
       furs_enabled: false,
       pos_settings: {},

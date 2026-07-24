@@ -14,6 +14,7 @@
 
 import React from 'react'
 import { createClient } from '@/lib/supabase'
+import { BUSINESS_ID } from '@/lib/pos-client'
 
 // ===== TIPI =====
 
@@ -42,8 +43,8 @@ export interface StaffMember {
 }
 
 // ===== HELPERS =====
-
-const BUSINESS_ID = '00000000-0000-0000-0000-000000000001'
+// BUSINESS_ID uvozen iz pos-client.ts (24.7.2026, audit R1) - prej lokalna
+// trdo kodirana konstanta (samo Nikova org), zdaj deljena ziva spremenljivka.
 
 function formatDuration(clockIn: string, breakMin = 0): string {
   const ms = Date.now() - new Date(clockIn).getTime() - breakMin * 60000

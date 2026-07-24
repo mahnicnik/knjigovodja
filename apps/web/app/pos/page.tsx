@@ -1236,7 +1236,7 @@ function WriteoffModal({ cart, auth, onClose, onDone }) {
       if (!user) throw new Error('Niste prijavljeni')
       const { data: member } = await createClient().from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
       const { error: err } = await createClient().from('stock_writeoffs').insert({
-        business_id: '00000000-0000-0000-0000-000000000001',
+        business_id: BUSINESS_ID,
         org_id: member?.org_id || null,
         reason,
         items: cart.map(l => ({ item_id: l.id, name: l.name, qty: l.qty, unit_price: l.price, vat_rate: l.vat_rate || 22 })),
@@ -4388,7 +4388,7 @@ function OpenCashModal({ posData, auth, onClose, onOpened }) {
       const { data: allSessions } = await db
         .from('cash_sessions')
         .select('id')
-        .eq('business_id', '00000000-0000-0000-0000-000000000001')
+        .eq('business_id', BUSINESS_ID)
         .order('created_at', { ascending: true })
       const sessionNumber = (allSessions || []).findIndex(s => s.id === session!.id) + 1
 
@@ -4481,7 +4481,7 @@ function VmesnoStanjeModal({ session, posData, auth, onClose }) {
       const { data: { user } } = await createClient().auth.getUser()
       const { data: member } = user ? await createClient().from('org_members').select('org_id').eq('user_id', user.id).maybeSingle() : { data: null }
       const { data: org } = member ? await createClient().from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
-      const { data: allSessions } = await createClient().from('cash_sessions').select('id').eq('business_id', '00000000-0000-0000-0000-000000000001').order('created_at', { ascending: true })
+      const { data: allSessions } = await createClient().from('cash_sessions').select('id').eq('business_id', BUSINESS_ID).order('created_at', { ascending: true })
       const sessionNumber = (allSessions || []).findIndex(s => s.id === session.id) + 1
       const cashierName = user?.email?.split('@')[0] || ''
 
@@ -4597,7 +4597,7 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
           console.warn('KPO sinhronizacija ni uspela:', kpoErr)
         }
       }
-      const { data: allSessions } = await createClient().from('cash_sessions').select('id').eq('business_id', '00000000-0000-0000-0000-000000000001').order('created_at', { ascending: true })
+      const { data: allSessions } = await createClient().from('cash_sessions').select('id').eq('business_id', BUSINESS_ID).order('created_at', { ascending: true })
       const sessionNumber = (allSessions || []).findIndex(s => s.id === session.id) + 1
       const cashierName = user.email?.split('@')[0] || ''
 
@@ -5347,7 +5347,7 @@ function RefundModal({ order, lines, payment, auth, onClose, onRefunded }) {
       if (!user) throw new Error('Niste prijavljeni')
 
       await createClient().from('refunds').insert({
-        business_id: '00000000-0000-0000-0000-000000000001',
+        business_id: BUSINESS_ID,
         original_order_id: order.id,
         amount: refundAmount,
         reason: reason || 'Delno vračilo',
