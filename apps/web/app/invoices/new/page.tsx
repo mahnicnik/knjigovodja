@@ -68,8 +68,13 @@ export default function NewInvoicePage() {
         }
         const { count } = await supabase.from('issued_invoices').select('*', { count: 'exact', head: true }).eq('org_id', o.id)
         setInvoiceCount(count || 0)
-        const num = String((count || 0) + 1).padStart(3, '0')
-        setInvoiceNumber(`${new Date().getFullYear()}-${num}`)
+        // POPRAVLJENO (24.7.2026): atomarna RPC namesto count(*)+1, ki se
+        // je pokvaril ob vrzelih v obstojecih stevilkah (samodejno se
+        // "zaceli" na dejansko najvisjo obstojeco stevilko).
+        const { data: nextNum } = await supabase.rpc('get_next_manual_invoice_number', {
+          p_org_id: o.id, p_year: new Date().getFullYear(),
+        })
+        setInvoiceNumber(nextNum || `${new Date().getFullYear()}-001`)
         const { data: pts } = await supabase.from('invoice_partners').select('*').eq('org_id', o.id).order('name')
         setPartners(pts || [])
       }
