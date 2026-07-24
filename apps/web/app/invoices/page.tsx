@@ -281,7 +281,14 @@ export default function InvoicesPage() {
                       <button
                         onClick={async () => {
                           const r = await fetch(`/api/invoices/${inv.id}/ujp`, { method: 'POST' })
-                          if (!r.ok) { alert('Napaka pri generiranju UJP XML'); return }
+                          if (!r.ok) {
+                            // POPRAVLJENO (24.7.2026): prikazi PRAVO napako namesto fiksnega
+                            // genericnega teksta - prej je bil dejanski vzrok nevidno zavrzen.
+                            const errBody = await r.json().catch(() => null)
+                            const detail = errBody?.details ? '\n' + errBody.details.join('\n') : ''
+                            alert('Napaka pri generiranju UJP XML: ' + (errBody?.error || r.statusText) + detail)
+                            return
+                          }
                           const blob = await r.blob()
                           const url = URL.createObjectURL(blob)
                           const a = document.createElement('a')
