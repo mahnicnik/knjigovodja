@@ -143,12 +143,20 @@ export default function ExpensesPage() {
           <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900">← Domov</Link>
           <h1 className="font-semibold text-gray-900 mt-0.5">Stroški in prejeti računi</h1>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium"
-        >
-          + Dodaj strošek
-        </button>
+        <div className="flex gap-2">
+          <Link
+            href="/scan"
+            className="border border-gray-300 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 inline-flex items-center gap-1.5"
+          >
+            📷 Skeniraj z AI
+          </Link>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium"
+          >
+            + Dodaj strošek
+          </button>
+        </div>
       </div>
 
       <div className="max-w-4xl mx-auto px-6 py-8">
