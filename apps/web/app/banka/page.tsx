@@ -363,6 +363,9 @@ export default function BankaPage() {
       const matched = matchTransactions(parsed, invoices).map(t => ({
         ...t,
         isInternal: isInternalTransfer(t.description),
+        // Privzeta kategorija "Drugo" (25.7.2026) - Nik ne rabi klikati
+        // vsake vrstice posebej, ce mu privzeta kategorija ustreza.
+        bookCategory: t.matched_invoice ? undefined : 'Drugo',
       }))
       setTransactions(matched)
 
@@ -470,6 +473,11 @@ export default function BankaPage() {
   }
 
   if (loading) return <div style={{ padding: 48, textAlign: 'center', color: '#888' }}>Nalagam...</div>
+
+  // POPRAVLJENO (25.7.2026): prej je gumb spodaj stel SAMO ujete racune -
+  // ce ni bilo ujemanj, je bil "0" in onemogocen, kljub temu da
+  // applyImport() zdaj knjizi TUDI kategorizirane vrstice.
+  const willBookCount = transactions.filter(t => t.selected && !t.isInternal && (t.matched_invoice || t.bookCategory)).length
 
   return (
     <div style={{ minHeight: '100vh', background: '#F7F6F2' }}>
@@ -635,8 +643,8 @@ export default function BankaPage() {
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button onClick={reset} style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: 8, padding: '11px 20px', fontSize: 13, cursor: 'pointer' }}>← Naloži drug izpisek</button>
-              <button onClick={applyImport} disabled={importing || transactions.filter(t => t.selected && t.matched_invoice).length === 0} style={{ background: '#0D1F12', color: '#fff', border: 0, borderRadius: 8, padding: '11px 24px', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: (importing || transactions.filter(t => t.selected && t.matched_invoice).length === 0) ? 0.5 : 1 }}>
-                {importing ? 'Označujem...' : `✓ Označi ${transactions.filter(t => t.selected && t.matched_invoice).length} računov kot plačanih`}
+              <button onClick={applyImport} disabled={importing || willBookCount === 0} style={{ background: '#0D1F12', color: '#fff', border: 0, borderRadius: 8, padding: '11px 24px', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: (importing || willBookCount === 0) ? 0.5 : 1 }}>
+                {importing ? 'Knjižim...' : `✓ Poknjiži ${willBookCount} ${willBookCount === 1 ? 'transakcijo' : 'transakcij'}`}
               </button>
             </div>
           </>
