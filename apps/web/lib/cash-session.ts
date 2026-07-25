@@ -61,6 +61,8 @@ export interface SessionStats {
   vat22: number
   vatBase95: number
   vat95: number
+  vatBase0: number
+  vatBaseOther: number
 
   // GOTOVINA IZRAČUN
   cashExpected: number  // opening + cash - refunds (gotovinski del)
@@ -181,6 +183,9 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
   let cash = 0, card = 0, bon = 0, prep = 0, other = 0, tips = 0
   let cashCount = 0, cardCount = 0, bonCount = 0, prepCount = 0, otherCount = 0
   let vatBase22 = 0, vat22 = 0, vatBase95 = 0, vat95 = 0
+  // R9 (24.7.2026): 0% za nedavcne zavezance + varovalka za nepricakovane
+  // stopnje (namesto tihega izginotja iz DDV osnove).
+  let vatBase0 = 0, vatBaseOther = 0
 
   for (const o of orders || []) {
     // R8: napitnina je na orderu, ne na posameznem placilu
@@ -210,6 +215,13 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
         const base = lineTotal / 1.095
         vatBase95 += base
         vat95 += lineTotal - base
+      } else if (rate === 0) {
+        // Nedavcni zavezanec - cela vrednost je osnova, DDV je 0
+        vatBase0 += lineTotal
+      } else {
+        // VAROVALKA (24.7.2026): nepricakovana stopnja - namesto tihega
+        // izginotja pristane tukaj kot znak za rocni pregled.
+        vatBaseOther += lineTotal
       }
     }
   }
@@ -231,7 +243,7 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
     orderCount: (orders || []).length,
     tips,
     refundCount, refundTotal,
-    vatBase22, vat22, vatBase95, vat95,
+    vatBase22, vat22, vatBase95, vat95, vatBase0, vatBaseOther,
     cashExpected,
   }
 }
@@ -286,6 +298,8 @@ export async function closeSession(params: {
       total_refunds: stats.refundTotal,
       total_vat_22: stats.vat22,
       total_vat_95: stats.vat95,
+      total_vat_base_0: stats.vatBase0,
+      total_vat_base_other: stats.vatBaseOther,
       order_count: stats.orderCount,
       staff_id: params.closedBy,
       cash_session_id: params.session.id,
