@@ -3,30 +3,63 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
-// AI branje plačilnih list (25.7.2026, posodobljeno za GESLOM ZASCITENE PDF-je)
+// AI branje plačilnih list (25.7.2026, popravek v3 - DOMMatrix polyfill)
 //
-// Placilne liste od racunovodij so pogosto sifrirane z geslom (obicajno
-// EMSO/davcna stevilka zaposlenca). Anthropic API ne zna brati sifriranih
-// PDF-jev neposredno. RESITEV: uporabimo pdfjs-dist (ze nameščena
-// odvisnost - Mozillina PDF knjiznica), ki ZNA odpreti PDF z geslom in
-// izvleci BESEDILO - to besedilo nato posljemo AI-ju namesto same PDF
-// datoteke. To se izogne potrebi po "odklepanju in ponovnem shranjevanju"
-// PDF-ja (kar je tehnicno tezje in manj zanesljivo).
-//
-// Ce PDF NI zascitentx z geslom, se text-extraction vseeno uporabi (deluje
-// enako dobro za navadne PDF-je - ni potrebe po locenem "document" nacinu).
+// pdfjs-dist interno referencira brskalniske globalne objekte (DOMMatrix,
+// Path2D, ImageData) tudi za goli izvlecek besedila, ker nekateri notranji
+// moduli te objekte uvozijo na nivoju modula (ne samo ob risanju). V
+// Node.js streznikem okolju (Vercel) ti objekti ne obstajajo -> napaka
+// "DOMMatrix is not defined". POPRAVEK: minimalen polyfill (nadomestek)
+// PRED uvozom pdfjs-dist - dovolj, da uvoz uspe; za samo besedilo (ne
+// risanje na canvas) ne rabimo popolne funkcionalnosti teh razredov.
+if (typeof (globalThis as any).DOMMatrix === 'undefined') {
+  (globalThis as any).DOMMatrix = class DOMMatrix {
+    a = 1; b = 0; c = 0; d = 1; e = 0; f = 0
+    constructor(_init?: any) {}
+    multiply() { return new (globalThis as any).DOMMatrix() }
+    translate() { return new (globalThis as any).DOMMatrix() }
+    scale() { return new (globalThis as any).DOMMatrix() }
+    inverse() { return new (globalThis as any).DOMMatrix() }
+  }
+}
+if (typeof (globalThis as any).Path2D === 'undefined') {
+  (globalThis as any).Path2D = class Path2D {
+    constructor(_init?: any) {}
+    moveTo() {}
+    lineTo() {}
+    closePath() {}
+    rect() {}
+    bezierCurveTo() {}
+  }
+}
+if (typeof (globalThis as any).ImageData === 'undefined') {
+  (globalThis as any).ImageData = class ImageData {
+    data: Uint8ClampedArray
+    width: number
+    height: number
+    constructor(width: number, height: number) {
+      this.width = width
+      this.height = height
+      this.data = new Uint8ClampedArray(width * height * 4)
+    }
+  }
+}
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
 async function extractPdfText(pdfBuffer: Buffer, password?: string): Promise<string> {
-  // Node.js (legacy) build pdfjs-dist - brez potrebe po browser worker-ju
   const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
   const loadingTask = pdfjsLib.getDocument({
     data: new Uint8Array(pdfBuffer),
     password: password || undefined,
-  })
+    // Onemogoci font/worker funkcije, ki niso potrebne za golo besedilo in
+    // dodatno zmanjsajo tveganje za manjkajoce brskalniske API-je.
+    disableFontFace: true,
+    useWorkerFetch: false,
+    isEvalSupported: false,
+  } as any)
   const pdf = await loadingTask.promise
   let fullText = ''
   for (let i = 1; i <= pdf.numPages; i++) {
@@ -71,7 +104,6 @@ export async function POST(request: NextRequest) {
     try {
       pdfText = await extractPdfText(pdfBuffer, password)
     } catch (pdfErr: any) {
-      // pdfjs vrze specificno napako za geslo (PasswordException, code 1=potrebno, 2=napacno)
       if (pdfErr?.name === 'PasswordException') {
         if (pdfErr.code === 1) {
           return NextResponse.json({ error: 'PDF je zaščiten z geslom - prosim vnesite geslo.', needsPassword: true }, { status: 400 })
