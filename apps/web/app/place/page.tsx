@@ -90,6 +90,15 @@ export default function PlacePage() {
   const [calcDeps, setCalcDeps] = useState(0)
   const [calcExtras, setCalcExtras] = useState({ overtime: 0, nightBonus: 0, sundayBonus: 0, holidayBonus: 0, travelAllowance: 0, mealAllowance: 0 })
 
+  // ── Nalaganje plačilne liste od računovodje (25.7.2026) ──
+  const [showUpload, setShowUpload] = useState(false)
+  const [uploadScanning, setUploadScanning] = useState(false)
+  const [uploadSaving, setUploadSaving] = useState(false)
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [uploadBase64, setUploadBase64] = useState('')
+  const [uploadParsed, setUploadParsed] = useState<any>(null)
+  const [uploadEmployeeId, setUploadEmployeeId] = useState('')
+
   const [form, setForm] = useState({
     full_name: '', tax_number: '', iban: '', gross_salary: '',
     employment_type: 'full_time', start_date: new Date().toISOString().split('T')[0], dependents: 0,
@@ -97,6 +106,111 @@ export default function PlacePage() {
   })
 
   const supabase = createClient()
+
+  // Varna base64 pretvorba za vecje PDF-je (25.7.2026) - glej enak
+  // popravek na /scan in /banka strani (izogne se "Maximum call stack
+  // size exceeded" pri spread operatorju na velikih datotekah).
+  function arrayBufferToBase64(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer)
+    let binary = ''
+    const chunkSize = 0x8000
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunkSize)) as any)
+    }
+    return btoa(binary)
+  }
+
+  async function handleUploadFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadFile(file)
+    setUploadScanning(true)
+    setUploadParsed(null)
+    setUploadEmployeeId('')
+    try {
+      const arrayBuffer = await file.arrayBuffer()
+      const base64 = arrayBufferToBase64(arrayBuffer)
+      setUploadBase64(base64)
+      const res = await fetch('/api/place/parse-payslip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pdfBase64: base64 }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        alert(data.error || 'Napaka pri branju plačilne liste')
+        setUploadScanning(false)
+        return
+      }
+      setUploadParsed(data)
+      // Poskusi samodejno ujeti zaposlenega po imenu
+      const match = employees.find(emp =>
+        emp.full_name?.toLowerCase().trim() === (data.employee_name || '').toLowerCase().trim()
+      )
+      if (match) setUploadEmployeeId(match.id)
+    } catch (err: any) {
+      alert('Napaka: ' + err.message)
+    }
+    setUploadScanning(false)
+  }
+
+  async function savePayslipUpload() {
+    if (!org || !uploadParsed) return
+    setUploadSaving(true)
+    const p = uploadParsed
+    // KLJUCNO: employer_total_cost ("Skupaj strosek v breme podjetja") je
+    // DEJANSKI strosek - ce ga AI ni zaznal, opozorimo in uporabimo bruto
+    // kot skrajno rezervo (z opozorilom, da preveri rocno).
+    const bookAmount = p.employer_total_cost ?? p.gross_amount
+    const usedFallback = p.employer_total_cost == null
+
+    const { error } = await supabase.from('payslips').insert({
+      org_id: org.id,
+      employee_id: uploadEmployeeId || null,
+      employee_name_raw: p.employee_name || null,
+      type: 'monthly',
+      period_start: p.period_start,
+      period_end: p.period_end,
+      gross_amount: p.gross_amount,
+      net_amount: p.net_amount,
+      tax_amount: p.tax_amount,
+      employer_total_cost: p.employer_total_cost,
+      status: 'paid',
+      paid_at: new Date().toISOString(),
+      attachment_base64: uploadBase64,
+      attachment_type: 'pdf',
+    })
+    if (error) {
+      alert('Napaka pri shranjevanju: ' + error.message)
+      setUploadSaving(false)
+      return
+    }
+
+    // Poknjizi v KPO - uporabi employer_total_cost (DEJANSKI strosek), ne
+    // samo bruto placo.
+    await supabase.from('kpo_entries').insert({
+      org_id: org.id,
+      entry_date: p.period_end,
+      description: `Plača ${p.employee_name || ''} — ${p.period_start} do ${p.period_end}`,
+      entry_type: 'expense',
+      income: 0,
+      expense: bookAmount,
+      vat_in: 0,
+      vat_out: 0,
+      category: 'Plače',
+      notes: usedFallback
+        ? `Nalozena plac. lista - OPOZORILO: "Skupaj strosek v breme podjetja" ni bil zaznan, uporabljena bruto placa namesto tega - preveri rocno!`
+        : `Naložena plačilna lista (skupaj strošek v breme podjetja)`,
+    })
+
+    setUploadSaving(false)
+    setShowUpload(false)
+    setUploadFile(null)
+    setUploadBase64('')
+    setUploadParsed(null)
+    setUploadEmployeeId('')
+    load()
+  }
 
   useEffect(() => { load() }, [])
 
@@ -364,10 +478,88 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
             {[2024,2025,2026,2027].map(y => <option key={y}>{y}</option>)}
           </select>
           <button onClick={() => setShowCalc(!showCalc)} className="border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm">🧮 Kalkulator</button>
+          <button onClick={() => setShowUpload(true)} className="border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm">📄 Naloži plačilno listo</button>
           <Link href="/rek1" className="border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm">📋 REK-1</Link>
           <button onClick={() => setShowForm(!showForm)} className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium">+ Dodaj zaposlenega</button>
         </div>
       </div>
+
+      {showUpload && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <h3 className="font-medium text-gray-900 mb-1">Naloži plačilno listo</h3>
+            <p className="text-gray-500 text-sm mb-4">AI bo prebral PDF od računovodje in izluščil podatke — vključno s "Skupaj strošek v breme podjetja", ki se poknjiži v KPO.</p>
+
+            {!uploadParsed && (
+              <div
+                onClick={() => document.getElementById('payslip-file-input')?.click()}
+                className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center cursor-pointer hover:border-gray-300"
+              >
+                {uploadScanning ? (
+                  <div className="text-sm text-gray-500">⟳ Berem plačilno listo...</div>
+                ) : (
+                  <>
+                    <div className="text-3xl mb-2">📄</div>
+                    <div className="bg-gray-900 text-white px-5 py-2 rounded-xl text-sm font-medium inline-block">Izberi PDF</div>
+                  </>
+                )}
+                <input id="payslip-file-input" type="file" accept="application/pdf,.pdf" className="hidden" disabled={uploadScanning} onChange={handleUploadFile} />
+              </div>
+            )}
+
+            {uploadParsed && (
+              <div>
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Zaposleni (prebrano: {uploadParsed.employee_name || '?'})</label>
+                    <select value={uploadEmployeeId} onChange={e => setUploadEmployeeId(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm">
+                      <option value="">— ni povezano —</option>
+                      {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.full_name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Obdobje</label>
+                    <input type="text" readOnly value={`${uploadParsed.period_start || '?'} — ${uploadParsed.period_end || '?'}`} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-gray-50" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Bruto plača (€)</label>
+                    <input type="number" value={uploadParsed.gross_amount ?? ''} onChange={e => setUploadParsed({ ...uploadParsed, gross_amount: parseFloat(e.target.value) || 0 })} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Neto plača (€)</label>
+                    <input type="number" value={uploadParsed.net_amount ?? ''} onChange={e => setUploadParsed({ ...uploadParsed, net_amount: parseFloat(e.target.value) || 0 })} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm" />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-xs text-gray-500 block mb-1">
+                      Skupaj strošek v breme podjetja (€) — <strong>to se poknjiži v KPO</strong>
+                    </label>
+                    <input
+                      type="number"
+                      value={uploadParsed.employer_total_cost ?? ''}
+                      onChange={e => setUploadParsed({ ...uploadParsed, employer_total_cost: parseFloat(e.target.value) || null })}
+                      className="w-full border rounded-xl px-3 py-2 text-sm"
+                      style={{ borderColor: uploadParsed.employer_total_cost == null ? '#D97706' : '#e5e7eb' }}
+                    />
+                    {uploadParsed.employer_total_cost == null && (
+                      <p className="text-xs mt-1" style={{ color: '#D97706' }}>⚠️ Ni zaznano na dokumentu — prosim vnesite ročno (sicer bo uporabljena bruto plača).</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => { setUploadParsed(null); setUploadFile(null) }} className="flex-1 border border-gray-200 text-gray-700 rounded-xl py-2.5 text-sm">← Naloži drugo</button>
+                  <button onClick={savePayslipUpload} disabled={uploadSaving} className="flex-1 bg-gray-900 text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-40">
+                    {uploadSaving ? 'Shranjujem...' : 'Shrani in poknjiži'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!uploadScanning && (
+              <button onClick={() => { setShowUpload(false); setUploadParsed(null); setUploadFile(null) }} className="text-gray-400 text-xs mt-4 block mx-auto">Prekliči</button>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="max-w-4xl mx-auto px-6 py-8">
 
