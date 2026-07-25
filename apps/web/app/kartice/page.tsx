@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import posthog from 'posthog-js'
 
 const PROCESSORS = [
   { value: 'sumup', label: 'SumUp', fee: 1.69 },
@@ -26,6 +27,18 @@ export default function KarticeePage() {
   const [customFee, setCustomFee] = useState('')
   const [scanning, setScanning] = useState(false)
   const [scanError, setScanError] = useState('')
+
+  // ── Paketni uvoz vec izpiskov naenkrat (24.7.2026) ──
+  const [batchMode, setBatchMode] = useState(false)
+  const [batchFiles, setBatchFiles] = useState<Array<{
+    file: File
+    status: 'pending' | 'scanning' | 'saved' | 'error'
+    error?: string
+    processor?: string
+    gross?: number
+  }>>([])
+  const [batchProcessing, setBatchProcessing] = useState(false)
+  const batchFileRef = useRef<HTMLInputElement>(null)
   const [form, setForm] = useState({
     period_from: '',
     period_to: '',
@@ -168,6 +181,104 @@ export default function KarticeePage() {
     }
     setScanning(false)
   }
+
+  // Izbira vec datotek za paketni uvoz
+  function handleBatchFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []) as File[]
+    setBatchFiles(files.map(file => ({ file, status: 'pending' as const })))
+  }
+
+  // Zaporedno obdela vse izpiske v paketu: skeniraj -> ce uspesno
+  // prepoznano, SAMODEJNO knjizi (oba KPO vnosa) + doda v seznam obracunov.
+  async function processBatch() {
+    if (!org) return
+    setBatchProcessing(true)
+    const newSettlements: any[] = []
+
+    for (let i = 0; i < batchFiles.length; i++) {
+      const item = batchFiles[i]
+      setBatchFiles(prev => prev.map((f, idx) => idx === i ? { ...f, status: 'scanning' } : f))
+      try {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve((reader.result as string).split(',')[1])
+          reader.onerror = () => reject(new Error('Napaka pri branju datoteke'))
+          reader.readAsDataURL(item.file)
+        })
+        const res = await fetch('/api/kartice/parse-statement', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileBase64: base64, mediaType: item.file.type }),
+        })
+        const data = await res.json()
+        const s = data.settlement
+        if (!res.ok || !s || s.gross_sales == null || !s.period_from) {
+          setBatchFiles(prev => prev.map((f, idx) => idx === i ? { ...f, status: 'error', error: data.error || 'AI ni prepoznal podatkov na izpisku' } : f))
+          continue
+        }
+
+        const proc = PROCESSORS.find(p => p.value === s.processor_guess) || PROCESSORS.find(p => p.value === 'drugo')!
+        const feePct = s.fee_pct != null ? Number(s.fee_pct) : proc.fee
+        const grossAmt = Number(s.gross_sales)
+        const feeAmt = s.fee_amount != null ? Number(s.fee_amount) : Math.round(grossAmt * (feePct / 100) * 100) / 100
+        const netAmt = s.net_payout != null ? Number(s.net_payout) : Math.round((grossAmt - feeAmt) * 100) / 100
+        const dateFrom = s.period_from
+        const dateTo = s.period_to || s.period_from
+
+        await supabase.from('kpo_entries').insert({
+          org_id: org.id,
+          entry_date: dateTo,
+          description: `Kartično poslovanje ${proc.label} — ${dateFrom} do ${dateTo}`,
+          entry_type: 'income',
+          income: grossAmt,
+          expense: 0,
+          vat_in: 0,
+          vat_out: 0,
+          category: 'Kartično poslovanje',
+          notes: `${s.transactions ?? '?'} transakcij · provizija ${feePct}% · paketni uvoz`,
+        })
+        if (feeAmt > 0) {
+          await supabase.from('kpo_entries').insert({
+            org_id: org.id,
+            entry_date: dateTo,
+            description: `Provizija ${proc.label} — ${feePct}%`,
+            entry_type: 'expense',
+            income: 0,
+            expense: feeAmt,
+            vat_in: 0,
+            vat_out: 0,
+            category: 'Bančne provizije',
+            notes: `Provizija od €${grossAmt} kartičnih plačil · paketni uvoz`,
+          })
+        }
+
+        const settlement = {
+          id: Date.now().toString() + '_' + i,
+          date: new Date().toISOString(),
+          period_from: dateFrom,
+          period_to: dateTo,
+          processor: proc.label,
+          gross_sales: grossAmt,
+          fee_pct: feePct,
+          fee_amount: feeAmt,
+          net_payout: netAmt,
+          transactions: parseInt(s.transactions) || 0,
+          notes: 'Paketni uvoz',
+          booked: true,
+        }
+        newSettlements.push(settlement)
+        posthog.capture('settlement_saved', { processor: proc.value, gross_sales: grossAmt, batch: true })
+        setBatchFiles(prev => prev.map((f, idx) => idx === i ? { ...f, status: 'saved', processor: proc.label, gross: grossAmt } : f))
+      } catch (err: any) {
+        setBatchFiles(prev => prev.map((f, idx) => idx === i ? { ...f, status: 'error', error: err.message || 'Neznana napaka' } : f))
+      }
+    }
+
+    if (newSettlements.length > 0) {
+      saveSettlements([...newSettlements, ...settlements])
+    }
+    setBatchProcessing(false)
+  }
   const totalGross = settlements.reduce((s, r) => s + r.gross_sales, 0)
   const totalFees = settlements.reduce((s, r) => s + r.fee_amount, 0)
   const totalNet = settlements.reduce((s, r) => s + r.net_payout, 0)
@@ -191,12 +302,66 @@ export default function KarticeePage() {
             <input type="file" accept="application/pdf,image/*" className="hidden" disabled={scanning}
               onChange={e => { const f = e.target.files?.[0]; if (f) handleFileScan(f); e.target.value = '' }} />
           </label>
+          <button
+            onClick={() => { setBatchMode(!batchMode); setBatchFiles([]) }}
+            className="bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium hover:border-gray-400"
+          >
+            📚 Naloži več naenkrat
+          </button>
           <button onClick={() => setShowForm(!showForm)}
             className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium">
             + Nov obračun
           </button>
         </div>
       </div>
+
+      {batchMode && (
+        <div className="max-w-4xl mx-auto px-6 pt-8">
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
+            <h3 className="font-semibold text-gray-900 mb-2">Paketni uvoz več izpiskov</h3>
+            <p className="text-gray-500 text-sm mb-4">Izberite več PDF/slik hkrati - AI bo vsako prebral in samodejno knjižil.</p>
+            {batchFiles.length === 0 ? (
+              <div
+                onClick={() => batchFileRef.current?.click()}
+                className="border-2 border-dashed border-gray-200 rounded-xl p-10 text-center cursor-pointer hover:border-gray-300"
+              >
+                <div className="text-4xl mb-3">📚</div>
+                <div className="bg-gray-900 text-white px-6 py-2.5 rounded-xl text-sm font-medium inline-block">Izberi datoteke</div>
+                <input ref={batchFileRef} type="file" accept="application/pdf,image/*" multiple onChange={handleBatchFileSelect} className="hidden" />
+              </div>
+            ) : (
+              <div>
+                <div className="space-y-2 mb-4 max-h-96 overflow-y-auto">
+                  {batchFiles.map((f, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm bg-gray-50 rounded-lg px-3 py-2">
+                      <span className="truncate flex-1">{f.file.name}</span>
+                      {f.status === 'pending' && <span className="text-gray-400 text-xs">čaka</span>}
+                      {f.status === 'scanning' && <span className="text-blue-600 text-xs">⟳ skenira...</span>}
+                      {f.status === 'saved' && <span className="text-green-600 text-xs">✓ {f.processor} · €{f.gross?.toFixed(2)}</span>}
+                      {f.status === 'error' && <span className="text-red-600 text-xs" title={f.error}>✗ {f.error}</span>}
+                    </div>
+                  ))}
+                </div>
+                {!batchProcessing && batchFiles.every(f => f.status === 'pending') && (
+                  <button onClick={processBatch} className="w-full bg-gray-900 text-white rounded-xl py-3 text-sm font-medium">
+                    Obdelaj {batchFiles.length} {batchFiles.length === 1 ? 'datoteko' : 'datotek'}
+                  </button>
+                )}
+                {batchProcessing && <div className="text-center text-sm text-gray-500">⟳ Obdelujem...</div>}
+                {!batchProcessing && batchFiles.every(f => f.status !== 'pending' && f.status !== 'scanning') && batchFiles.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-sm text-gray-600 text-center">
+                      Shranjeno: {batchFiles.filter(f => f.status === 'saved').length} / {batchFiles.length}
+                      {batchFiles.some(f => f.status === 'error') && ` · Napak: ${batchFiles.filter(f => f.status === 'error').length}`}
+                    </div>
+                    <button onClick={() => setBatchFiles([])} className="w-full text-gray-500 text-sm py-2">Naloži še</button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="max-w-4xl mx-auto px-6 py-8">
 
