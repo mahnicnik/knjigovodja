@@ -90,6 +90,73 @@ interface BankTransaction {
   raw: string
 }
 
+// Varna base64 pretvorba za VELIKE datoteke (24.7.2026) - btoa(String.
+// fromCharCode(...bytes)) povzroci "Maximum call stack size exceeded" pri
+// vecjih PDF-jih, ker razsiritev (...) velikega polja preseze JS-ovo
+// omejitev stevila argumentov funkcije. Pretvarja po majhnih koscih (32KB).
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  const chunkSize = 0x8000
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize)
+    binary += String.fromCharCode.apply(null, Array.from(chunk) as any)
+  }
+  return btoa(binary)
+}
+
+// Parser za standarden ISO 20022 camt.053 XML bancni izpisek (24.7.2026).
+// Vecina slovenskih/EU bank to ponuja kot alternativo CSV izvozu. Uporabi
+// getElementsByTagName (brez namespace predpone), da deluje ne glede na
+// tocno razlicico namespace URI-ja, ki ga posamezna banka uporablja.
+function parseCamt053(xmlText: string): BankTransaction[] {
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(xmlText, 'application/xml')
+  if (doc.querySelector('parsererror')) return []
+
+  const entries = Array.from(doc.getElementsByTagName('Ntry'))
+  const out: BankTransaction[] = []
+
+  for (const entry of entries) {
+    const amtEl = entry.getElementsByTagName('Amt')[0]
+    const amount = amtEl ? parseFloat(amtEl.textContent || '0') : 0
+    if (!amount) continue
+
+    const indEl = entry.getElementsByTagName('CdtDbtInd')[0]
+    const type: 'credit' | 'debit' = indEl?.textContent === 'DBIT' ? 'debit' : 'credit'
+
+    // Datum: najprej BookgDt, ce ni potem ValDt
+    const bookgDt = entry.getElementsByTagName('BookgDt')[0]
+    const valDt = entry.getElementsByTagName('ValDt')[0]
+    const dateEl = (bookgDt || valDt)?.getElementsByTagName('Dt')[0]
+      || (bookgDt || valDt)?.getElementsByTagName('DtTm')[0]
+    const date = (dateEl?.textContent || '').slice(0, 10)
+    if (!date) continue
+
+    // Opis: RmtInf/Ustrd, ce ni potem AddtlNtryInf
+    const ustrd = entry.getElementsByTagName('Ustrd')[0]
+    const addtl = entry.getElementsByTagName('AddtlNtryInf')[0]
+    const description = (ustrd?.textContent || addtl?.textContent || '').trim()
+
+    // Referenca: EndToEndId, ce ni potem AcctSvcrRef
+    const e2e = entry.getElementsByTagName('EndToEndId')[0]
+    const acctRef = entry.getElementsByTagName('AcctSvcrRef')[0]
+    const reference = (e2e?.textContent || acctRef?.textContent || '').trim()
+
+    out.push({
+      date,
+      description,
+      amount,
+      type,
+      reference,
+      matched_invoice: null,
+      selected: true,
+      raw: entry.outerHTML || '',
+    })
+  }
+  return out
+}
+
 function parseDate(str: string, format: string): string {
   const clean = str.trim().replace(/"/g, '')
   if (format === 'dd.mm.yyyy') {
@@ -203,48 +270,69 @@ export default function BankaPage() {
     load()
   }, [router, supabase])
 
+  // Razclenjeno v locen helper (24.7.2026), da ga lahko klicemo vec-krat
+  // zaporedoma pri nalaganju vec datotek naenkrat.
+  async function parseOneFile(file: File): Promise<BankTransaction[]> {
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+    const isXml = file.type === 'application/xml' || file.type === 'text/xml' || file.name.toLowerCase().endsWith('.xml')
+
+    if (isPdf) {
+      const maxPdfBytes = 4 * 1024 * 1024
+      if (file.size > maxPdfBytes) {
+        showToast(`${file.name}: PDF je prevelik (${(file.size / 1024 / 1024).toFixed(1)}MB). Največja dovoljena velikost je 4MB.`)
+        return []
+      }
+      const arrayBuffer = await file.arrayBuffer()
+      const pdfBase64 = arrayBufferToBase64(arrayBuffer)
+      const res = await fetch('/api/banka/parse-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pdfBase64 }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        showToast(`${file.name}: ${data.error || 'Napaka pri branju PDF izpiska'}`)
+        return []
+      }
+      return (data.transactions || []).map((t: any) => ({
+        date: t.date,
+        description: t.description || '',
+        amount: Number(t.amount) || 0,
+        type: t.type === 'debit' ? 'debit' : 'credit',
+        reference: t.reference || '',
+        matched_invoice: null,
+        selected: true,
+        raw: JSON.stringify(t),
+      }))
+    }
+
+    if (isXml) {
+      const text = await file.text()
+      const parsed = parseCamt053(text)
+      if (parsed.length === 0) {
+        showToast(`${file.name}: XML ni prepoznan kot veljaven camt.053 izpisek.`)
+      }
+      return parsed
+    }
+
+    const text = await file.text()
+    return parseCSV(text, selectedBank)
+  }
+
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const files = Array.from(e.target.files || []) as File[]
+    if (files.length === 0) return
     setProcessing(true)
 
     try {
+      // Vec datotek naenkrat (24.7.2026): obstaja ROCNI pregled pred
+      // potrditvijo (applyImport spodaj), zato tu SAMO zdruzimo transakcije
+      // iz vseh datotek v EN seznam - ne knjizimo samodejno kot pri
+      // strosSkih/karticah (kjer takega pregleda ni).
       let parsed: BankTransaction[] = []
-      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
-
-      if (isPdf) {
-        const maxPdfBytes = 4 * 1024 * 1024
-        if (file.size > maxPdfBytes) {
-          showToast(`PDF je prevelik (${(file.size / 1024 / 1024).toFixed(1)}MB). Največja dovoljena velikost je 4MB.`)
-          setProcessing(false)
-          return
-        }
-        const arrayBuffer = await file.arrayBuffer()
-        const pdfBase64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
-        const res = await fetch('/api/banka/parse-pdf', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pdfBase64 }),
-        })
-        const data = await res.json()
-        if (!res.ok) {
-          showToast(data.error || 'Napaka pri branju PDF izpiska')
-          setProcessing(false)
-          return
-        }
-        parsed = (data.transactions || []).map((t: any) => ({
-          date: t.date,
-          description: t.description || '',
-          amount: Number(t.amount) || 0,
-          type: t.type === 'debit' ? 'debit' : 'credit',
-          reference: t.reference || '',
-          matched_invoice: null,
-          selected: true,
-          raw: JSON.stringify(t),
-        }))
-      } else {
-        const text = await file.text()
-        parsed = parseCSV(text, selectedBank)
+      for (const file of files) {
+        const fileTransactions = await parseOneFile(file)
+        parsed = parsed.concat(fileTransactions)
       }
 
       if (parsed.length === 0) {
@@ -334,7 +422,7 @@ export default function BankaPage() {
                 ))}
               </div>
 
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#0D1F12', marginBottom: 12 }}>2. Naložite izpisek (CSV ali PDF)</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#0D1F12', marginBottom: 12 }}>2. Naložite izpisek (CSV, XML ali PDF) - lahko več naenkrat</div>
               <div style={{ fontSize: 12, color: '#888', marginBottom: 12, lineHeight: 1.6 }}>
                 <strong>{BANK_FORMATS[selectedBank]?.name}</strong> → Spletna banka → Račun → Promet → Izvozi CSV
               </div>
@@ -351,10 +439,10 @@ export default function BankaPage() {
               >
                 <div style={{ fontSize: 32, marginBottom: 8 }}>📁</div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: '#0D1F12', marginBottom: 4 }}>
-                  {processing ? 'Analiziram...' : 'Kliknite ali povlecite CSV / PDF datoteko'}
+                  {processing ? 'Analiziram...' : 'Kliknite ali povlecite CSV / XML / PDF datoteke (lahko izberete več)'}
                 </div>
-                <div style={{ fontSize: 12, color: '#888' }}>Podprte: .csv, .txt, .pdf</div>
-                <input ref={fileRef} type="file" accept=".csv,.txt,.xls,.xlsx,.pdf" onChange={handleFile} style={{ display: 'none' }} />
+                <div style={{ fontSize: 12, color: '#888' }}>Podprte: .csv, .txt, .xml, .pdf</div>
+                <input ref={fileRef} type="file" accept=".csv,.txt,.xls,.xlsx,.xml,.pdf" multiple onChange={handleFile} style={{ display: 'none' }} />
               </div>
             </div>
 
