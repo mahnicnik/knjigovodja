@@ -88,7 +88,26 @@ interface BankTransaction {
   matched_invoice: any | null
   selected: boolean
   raw: string
+  isInternal?: boolean
+  bookCategory?: string
 }
+
+// Prepozna notranji promet (POS gotovinski polog/dvig, prenos med lastnimi
+// racuni) - ze steto prek POS Z-porocila ali ni nov prihodek/odhodek, zato
+// se NE knjizi v KPO. Uporabnik lahko oznako rocno popravi (glej toggle v UI).
+function isInternalTransfer(description: string): boolean {
+  const d = (description || '').toUpperCase()
+  return d.includes('POLOG GOTOVINE') || d.includes('DVIG GOTOVINE')
+    || d.includes('PRENOS MED') || d.includes('LASTNI PRENOS')
+    || d.includes('POLOG NA BLAGAJN') || d.includes('GOTOVINSKI POLOG')
+}
+
+const INCOME_CATEGORIES = ['Prodaja blaga/storitev', 'Obresti', 'Drugo']
+const EXPENSE_CATEGORIES = [
+  'Pisarniški material', 'Komunikacije', 'Programska oprema',
+  'Transport', 'Prehrana', 'Izobraževanje', 'Marketing',
+  'Oprema', 'Storitve', 'Bančne provizije', 'Drugo'
+]
 
 // Varna base64 pretvorba za VELIKE datoteke (24.7.2026) - btoa(String.
 // fromCharCode(...bytes)) povzroci "Maximum call stack size exceeded" pri
@@ -341,7 +360,10 @@ export default function BankaPage() {
         return
       }
 
-      const matched = matchTransactions(parsed, invoices)
+      const matched = matchTransactions(parsed, invoices).map(t => ({
+        ...t,
+        isInternal: isInternalTransfer(t.description),
+      }))
       setTransactions(matched)
 
       const credits = matched.filter(t => t.type === 'credit')
@@ -367,19 +389,78 @@ export default function BankaPage() {
     if (!orgId) return
     setImporting(true)
 
-    const selected = transactions.filter(t => t.selected && t.type === 'credit' && t.matched_invoice)
+    let bookedCount = 0
+    let skippedNoCategory = 0
 
-    for (const t of selected) {
-      await supabase.from('issued_invoices').update({
-        status: 'paid',
-        paid_at: new Date(t.date).toISOString(),
-        paid_amount: t.amount,
-      }).eq('id', t.matched_invoice.id)
+    for (const t of transactions) {
+      if (!t.selected) continue
+      if (t.isInternal) continue // notranji promet - ne knjizi
+
+      if (t.type === 'credit' && t.matched_invoice) {
+        // Predal 1: ujeto z racunom - samodejno knjizi s pravo DDV razclenitvijo
+        const inv = t.matched_invoice
+        const alreadyPaid = inv.status === 'paid'
+        await supabase.from('issued_invoices').update({
+          status: 'paid',
+          paid_at: new Date(t.date).toISOString(),
+          paid_amount: t.amount,
+        }).eq('id', inv.id)
+
+        // VAROVALKA: ce je racun ZE bil placan (npr. prekrivajoc uvoz), ne
+        // podvoji KPO vnosa.
+        if (!alreadyPaid) {
+          await supabase.from('kpo_entries').insert({
+            org_id: orgId,
+            entry_date: t.date,
+            description: `Plačilo računa ${inv.invoice_number} — ${inv.client_name || ''}`,
+            entry_type: 'income',
+            income: Number(inv.amount_net) || t.amount,
+            expense: 0,
+            vat_in: 0,
+            vat_out: Number(inv.vat_amount) || 0,
+            category: 'Prodaja blaga/storitev',
+            notes: `Bančni uvoz · ${t.reference || ''}`,
+          })
+          bookedCount++
+        }
+      } else if (t.bookCategory) {
+        // Predal 3: neujeto, rocno izbrana kategorija - knjizi celoten
+        // znesek (brez DDV razclenitve - iz bancnega podatka je ni mogoce
+        // zanesljivo izracunati).
+        await supabase.from('kpo_entries').insert({
+          org_id: orgId,
+          entry_date: t.date,
+          description: t.description || (t.type === 'credit' ? 'Bančni priliv' : 'Bančni odliv'),
+          entry_type: t.type === 'credit' ? 'income' : 'expense',
+          income: t.type === 'credit' ? t.amount : 0,
+          expense: t.type === 'debit' ? t.amount : 0,
+          vat_in: 0,
+          vat_out: 0,
+          category: t.bookCategory,
+          notes: `Bančni uvoz · ${t.reference || ''}`,
+        })
+        bookedCount++
+      } else {
+        // Neujeto, brez izbrane kategorije - PRESKOCI (varovalka pred
+        // napacno davcno osnovo)
+        skippedNoCategory++
+      }
     }
 
-    showToast(`${selected.length} računov označenih kot plačanih`)
+    const msg = skippedNoCategory > 0
+      ? `Poknjiženih ${bookedCount} transakcij. ${skippedNoCategory} preskočenih - izberite kategorijo za knjiženje.`
+      : `Poknjiženih ${bookedCount} transakcij.`
+    showToast(msg)
     setStep('done')
     setImporting(false)
+  }
+
+  function toggleInternal(i: number) {
+    setTransactions(prev => prev.map((t, idx) => idx === i ? { ...t, isInternal: !t.isInternal } : t))
+  }
+
+  function setBookCategory(i: number, category: string) {
+    setTransactions(prev => prev.map((t, idx) => idx === i ? { ...t, bookCategory: category } : t))
   }
 
   function reset() {
@@ -516,9 +597,7 @@ export default function BankaPage() {
                     {transactions.map((t, i) => (
                       <tr key={i} style={{ borderBottom: '0.5px solid rgba(0,0,0,0.04)', background: t.matched_invoice ? '#F0FDF4' : '#fff', opacity: t.type === 'debit' ? 0.6 : 1 }}>
                         <td style={{ padding: '10px 14px', width: 40 }}>
-                          {t.type === 'credit' && (
-                            <input type="checkbox" checked={t.selected} onChange={() => toggleTransaction(i)} style={{ cursor: 'pointer' }} />
-                          )}
+                          <input type="checkbox" checked={t.selected} onChange={() => toggleTransaction(i)} style={{ cursor: 'pointer' }} />
                         </td>
                         <td style={{ padding: '10px 14px', fontSize: 12, color: '#666', whiteSpace: 'nowrap' }}>{new Date(t.date).toLocaleDateString('sl-SI')}</td>
                         <td style={{ padding: '10px 14px', fontSize: 12, color: '#0D1F12', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.description}</td>
@@ -527,12 +606,24 @@ export default function BankaPage() {
                           {t.type === 'credit' ? '+' : '-'}€{t.amount.toFixed(2)}
                         </td>
                         <td style={{ padding: '10px 14px', fontSize: 12 }}>
-                          {t.matched_invoice ? (
+                          {t.isInternal ? (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ color: '#888' }}>Notranji promet (ne knjiži se)</span>
+                              <button onClick={() => toggleInternal(i)} style={{ fontSize: 10, color: '#888', textDecoration: 'underline', background: 'none', border: 0, cursor: 'pointer' }}>popravi</button>
+                            </span>
+                          ) : t.matched_invoice ? (
                             <span style={{ color: '#1D9E75', fontWeight: 600 }}>✓ {t.matched_invoice.invoice_number} — {t.matched_invoice.client_name}</span>
-                          ) : t.type === 'credit' ? (
-                            <span style={{ color: '#D97706' }}>Ni ujemanja</span>
                           ) : (
-                            <span style={{ color: '#aaa' }}>Odhodek</span>
+                            <select
+                              value={t.bookCategory || ''}
+                              onChange={e => setBookCategory(i, e.target.value)}
+                              style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.15)', color: t.bookCategory ? '#0D1F12' : '#D97706' }}
+                            >
+                              <option value="">Izberi kategorijo…</option>
+                              {(t.type === 'credit' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map(c => (
+                                <option key={c} value={c}>{c}</option>
+                              ))}
+                            </select>
                           )}
                         </td>
                       </tr>
