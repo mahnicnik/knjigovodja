@@ -6,11 +6,12 @@ import Link from 'next/link'
 
 const EE = { piz: 0.1550, zzzs: 0.0636, injury: 0.0014, unemployment: 0.0014 }
 const ER = { piz: 0.0885, zzzs: 0.0656, injury: 0.0053, unemployment: 0.0014, parental: 0.0010 }
-const GENERAL_RELIEF_MONTHLY = 5000 / 12
+const GENERAL_RELIEF_MONTHLY = 462.66 // uradna 2026 splosna olajsava/mesec (5.551,93 EUR/leto) - popravljeno 25.7.2026, prej zastarela 5000/12
 const MIN_WAGE = 1253.90
+// Uradni 2026 davcni razredi (letne meje) - popravljeno 25.7.2026, prej zastareli
 const BRACKETS = [
-  { upTo: 8755, rate: 0.16 }, { upTo: 18488, rate: 0.26 },
-  { upTo: 70907, rate: 0.33 }, { upTo: 250000, rate: 0.39 },
+  { upTo: 9721.43, rate: 0.16 }, { upTo: 28592.44, rate: 0.26 },
+  { upTo: 57184.88, rate: 0.33 }, { upTo: 82346.23, rate: 0.39 },
   { upTo: Infinity, rate: 0.50 },
 ]
 
@@ -197,21 +198,26 @@ export default function PlacePage() {
     const bookAmount = p.employer_total_cost ?? p.gross_amount
     const usedFallback = p.employer_total_cost == null
 
+    // POPRAVLJENO (25.7.2026): prava imena stolpcev (gross_salary/
+    // net_salary/income_tax, month+year namesto period_start/period_end)
+    const periodDate = p.period_end ? new Date(p.period_end) : new Date()
     const { error } = await supabase.from('payslips').insert({
       org_id: org.id,
       employee_id: uploadEmployeeId || null,
       employee_name_raw: p.employee_name || null,
       type: 'monthly',
-      period_start: p.period_start,
-      period_end: p.period_end,
-      gross_amount: p.gross_amount,
-      net_amount: p.net_amount,
-      tax_amount: p.tax_amount,
+      month: periodDate.getMonth() + 1,
+      year: periodDate.getFullYear(),
+      gross_salary: p.gross_amount,
+      net_salary: p.net_amount,
+      income_tax: p.tax_amount,
       employer_total_cost: p.employer_total_cost,
+      total_cost: p.employer_total_cost ?? p.gross_amount,
       status: 'paid',
       paid_at: new Date().toISOString(),
       attachment_base64: uploadBase64,
       attachment_type: uploadFile?.type?.startsWith('image/') ? 'image' : 'pdf',
+      notes: 'Naložena plačilna lista (AI branje)',
     })
     if (error) {
       alert('Napaka pri shranjevanju: ' + error.message)

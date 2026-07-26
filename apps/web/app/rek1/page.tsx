@@ -6,10 +6,11 @@ import Link from 'next/link'
 
 const EE = { piz: 0.1550, zzzs: 0.0636, injury: 0.0014, unemployment: 0.0014 }
 const ER = { piz: 0.0885, zzzs: 0.0656, injury: 0.0053, unemployment: 0.0014, parental: 0.0010 }
-const GENERAL_RELIEF_MONTHLY = 5000 / 12
+const GENERAL_RELIEF_MONTHLY = 462.66 // uradna 2026 splosna olajsava/mesec (5.551,93 EUR/leto) - popravljeno 25.7.2026, prej zastarela 5000/12
+// Uradni 2026 davcni razredi (letne meje) - popravljeno 25.7.2026, prej zastareli
 const BRACKETS = [
-  { upTo: 8755, rate: 0.16 }, { upTo: 18488, rate: 0.26 },
-  { upTo: 70907, rate: 0.33 }, { upTo: 250000, rate: 0.39 },
+  { upTo: 9721.43, rate: 0.16 }, { upTo: 28592.44, rate: 0.26 },
+  { upTo: 57184.88, rate: 0.33 }, { upTo: 82346.23, rate: 0.39 },
   { upTo: Infinity, rate: 0.50 },
 ]
 
