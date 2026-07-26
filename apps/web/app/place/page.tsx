@@ -294,22 +294,37 @@ export default function PlacePage() {
   async function handleAddEmployee() {
     if (!org || !form.full_name || !form.gross_salary) return
     setSaving(true)
-    const payload = {
-      full_name: form.full_name, tax_number: form.tax_number,
-      iban: form.iban, gross_salary: parseFloat(form.gross_salary),
-      employment_type: form.employment_type, start_date: form.start_date,
-      dependents: form.dependents, annual_leave_days: form.annual_leave_days,
+    // try/finally (26.7.2026): setSaving(false) se zdaj VEDNO izvede, tudi
+    // ob napaki - prej bi napaka pustila gumb trajno onemogocen do
+    // ponovnega nalaganja strani.
+    try {
+      const payload = {
+        full_name: form.full_name, tax_number: form.tax_number,
+        iban: form.iban, gross_salary: parseFloat(form.gross_salary),
+        employment_type: form.employment_type, start_date: form.start_date,
+        dependents: form.dependents, annual_leave_days: form.annual_leave_days,
+      }
+      let saveError
+      if (editingEmployeeId) {
+        const { error } = await supabase.from('employees').update(payload).eq('id', editingEmployeeId)
+        saveError = error
+      } else {
+        const { error } = await supabase.from('employees').insert({ org_id: org.id, ...payload, status: 'active' })
+        saveError = error
+      }
+      if (saveError) {
+        alert('Napaka pri shranjevanju: ' + saveError.message)
+        return
+      }
+      setForm(emptyForm())
+      setEditingEmployeeId(null)
+      setShowForm(false)
+      load()
+    } catch (err: any) {
+      alert('Napaka: ' + (err.message || 'Neznana napaka'))
+    } finally {
+      setSaving(false)
     }
-    if (editingEmployeeId) {
-      await supabase.from('employees').update(payload).eq('id', editingEmployeeId)
-    } else {
-      await supabase.from('employees').insert({ org_id: org.id, ...payload, status: 'active' })
-    }
-    setForm(emptyForm())
-    setEditingEmployeeId(null)
-    setShowForm(false)
-    setSaving(false)
-    load()
   }
 
   async function izplačajRegres(emp: any, amount: number) {
