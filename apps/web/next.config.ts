@@ -8,6 +8,12 @@ const nextConfig: NextConfig = {
   // njegov notranji "worker" mehanizem se ob bundlanju napacno prepise
   // (25.7.2026, popravek za citanje placilnih list).
   serverExternalPackages: ['pdfjs-dist'],
+  // pdf.worker.mjs se nalozi DINAMICNO znotraj pdfjs-dist - Vercel-ovo
+  // avtomatsko sledenje datotek ga zato ne zazna in izpusti iz deploya.
+  // Eksplicitno ga vkljucimo za route, ki uporablja pdfjs-dist.
+  outputFileTracingIncludes: {
+    '/api/place/parse-payslip': ['./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs'],
+  },
   async rewrites() {
     return [
       {
