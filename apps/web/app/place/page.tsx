@@ -4,8 +4,10 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 
-const EE = { piz: 0.1550, zzzs: 0.0636, injury: 0.0014, unemployment: 0.0014 }
-const ER = { piz: 0.0885, zzzs: 0.0656, injury: 0.0053, unemployment: 0.0014, parental: 0.0010 }
+// POPRAVLJENO (26.7.2026): glej rek1/page.tsx za razlago (isti popravek)
+const EE = { piz: 0.1550, zzzs: 0.0636, unemployment: 0.0014, parental: 0.0010, dolgotrajnaOskrba: 0.0100 }
+const ER = { piz: 0.0885, zzzs: 0.0656, injury: 0.0053, unemployment: 0.0014, parental: 0.0010, dolgotrajnaOskrba: 0.0100 }
+const OZP_MONTHLY = 39.36
 const GENERAL_RELIEF_MONTHLY = 462.66 // uradna 2026 splosna olajsava/mesec (5.551,93 EUR/leto) - popravljeno 25.7.2026, prej zastarela 5000/12
 const MIN_WAGE = 1253.90
 // Uradni 2026 davcni razredi (letne meje) - popravljeno 25.7.2026, prej zastareli
@@ -29,9 +31,12 @@ function calcPayroll(grossSalary: number, dependents: number = 0, extras: {
   const travelAmt = r((extras.travelAllowance || 0) * 21 * 0.21)
   const ee_piz = r(taxableGross * EE.piz)
   const ee_zzzs = r(taxableGross * EE.zzzs)
-  const ee_injury = r(taxableGross * EE.injury)
+  const ee_injury = 0 // zaposlenci ne placujejo poskodb pri delu - samo delodajalec
   const ee_unemployment = r(taxableGross * EE.unemployment)
-  const ee_total = r(ee_piz + ee_zzzs + ee_injury + ee_unemployment)
+  const ee_parental = r(taxableGross * EE.parental)
+  const ee_dolgotrajna = r(taxableGross * EE.dolgotrajnaOskrba)
+  const ee_ozp = OZP_MONTHLY
+  const ee_total = r(ee_piz + ee_zzzs + ee_injury + ee_unemployment + ee_parental + ee_dolgotrajna + ee_ozp)
   const base = taxableGross - ee_total
   const depRelief = dependents === 0 ? 0 : dependents === 1 ? 2697/12 : dependents === 2 ? 4120/12 : 7780/12
   const taxableBase = Math.max(0, base - GENERAL_RELIEF_MONTHLY - depRelief)
@@ -51,11 +56,12 @@ function calcPayroll(grossSalary: number, dependents: number = 0, extras: {
   const er_injury = r(taxableGross * ER.injury)
   const er_unemployment = r(taxableGross * ER.unemployment)
   const er_parental = r(taxableGross * ER.parental)
-  const er_total = r(er_piz + er_zzzs + er_injury + er_unemployment + er_parental)
+  const er_dolgotrajna = r(taxableGross * ER.dolgotrajnaOskrba)
+  const er_total = r(er_piz + er_zzzs + er_injury + er_unemployment + er_parental + er_dolgotrajna)
   return {
     baseSalary: grossSalary, overtimeAmt, nightAmt, sundayAmt, holidayAmt,
-    taxableGross, travelAmt, ee_piz, ee_zzzs, ee_injury, ee_unemployment, ee_total,
-    incomeTax, netSalary, er_piz, er_zzzs, er_injury, er_unemployment, er_parental, er_total,
+    taxableGross, travelAmt, ee_piz, ee_zzzs, ee_injury, ee_unemployment, ee_parental, ee_dolgotrajna, ee_ozp, ee_total,
+    incomeTax, netSalary, er_piz, er_zzzs, er_injury, er_unemployment, er_parental, er_dolgotrajna, er_total,
     totalCost: r(taxableGross + er_total), totalFurs: r(ee_total + incomeTax + er_total),
   }
 }
@@ -493,8 +499,10 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
     <tr class="total-row"><td>BRUTO PLAČA</td><td class="r">—</td><td class="r">€${p.taxableGross.toFixed(2)}</td></tr>
     <tr><td style="color:#666">− ZPIZ delavec (15.50%)</td><td class="r" style="color:#666">€${p.taxableGross.toFixed(2)}</td><td class="r" style="color:#dc2626">−€${p.ee_piz.toFixed(2)}</td></tr>
     <tr><td style="color:#666">− ZZZS delavec (6.36%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${p.ee_zzzs.toFixed(2)}</td></tr>
-    <tr><td style="color:#666">− Poškodbe (0.14%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${p.ee_injury.toFixed(2)}</td></tr>
     <tr><td style="color:#666">− Brezposelnost (0.14%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${p.ee_unemployment.toFixed(2)}</td></tr>
+    <tr><td style="color:#666">− Starševsko varstvo (0.10%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${p.ee_parental.toFixed(2)}</td></tr>
+    <tr><td style="color:#666">− Dolgotrajna oskrba (1.00%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${p.ee_dolgotrajna.toFixed(2)}</td></tr>
+    <tr><td style="color:#666">− Obvezni zdravstveni prispevek</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${p.ee_ozp.toFixed(2)}</td></tr>
     <tr><td style="color:#666">− Akontacija dohodnine</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${p.incomeTax.toFixed(2)}</td></tr>
     ${p.travelAmt > 0 ? `<tr><td style="color:#16a34a">+ Potni stroški</td><td class="r" style="color:#16a34a">—</td><td class="r" style="color:#16a34a">+€${p.travelAmt.toFixed(2)}</td></tr>` : ''}
   </tbody>

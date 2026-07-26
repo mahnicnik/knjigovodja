@@ -4,8 +4,14 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 
-const EE = { piz: 0.1550, zzzs: 0.0636, injury: 0.0014, unemployment: 0.0014 }
-const ER = { piz: 0.0885, zzzs: 0.0656, injury: 0.0053, unemployment: 0.0014, parental: 0.0010 }
+// POPRAVLJENO (26.7.2026): EE.injury ODSTRANJEN - zaposlenci NIKOLI ne
+// placujejo prispevka za poskodbe pri delu, to bremeni samo delodajalca.
+// Dodana EE.parental (manjkala) in EE/ER.dolgotrajnaOskrba (nov prispevek
+// od 1.7.2025) ter OZP_MONTHLY (nov fiksen prispevek od 2024, znesek
+// uskladen 1.3.2026 na 39,36 EUR - UL RS 16/2026).
+const EE = { piz: 0.1550, zzzs: 0.0636, unemployment: 0.0014, parental: 0.0010, dolgotrajnaOskrba: 0.0100 }
+const ER = { piz: 0.0885, zzzs: 0.0656, injury: 0.0053, unemployment: 0.0014, parental: 0.0010, dolgotrajnaOskrba: 0.0100 }
+const OZP_MONTHLY = 39.36
 const GENERAL_RELIEF_MONTHLY = 462.66 // uradna 2026 splosna olajsava/mesec (5.551,93 EUR/leto) - popravljeno 25.7.2026, prej zastarela 5000/12
 // Uradni 2026 davcni razredi (letne meje) - popravljeno 25.7.2026, prej zastareli
 const BRACKETS = [
@@ -17,9 +23,12 @@ const BRACKETS = [
 function calcPayroll(grossSalary: number, dependents: number = 0) {
   const ee_piz = r(grossSalary * EE.piz)
   const ee_zzzs = r(grossSalary * EE.zzzs)
-  const ee_injury = r(grossSalary * EE.injury)
+  const ee_injury = 0 // zaposlenci ne placujejo poskodb pri delu - samo delodajalec
   const ee_unemployment = r(grossSalary * EE.unemployment)
-  const ee_total = r(ee_piz + ee_zzzs + ee_injury + ee_unemployment)
+  const ee_parental = r(grossSalary * EE.parental)
+  const ee_dolgotrajna = r(grossSalary * EE.dolgotrajnaOskrba)
+  const ee_ozp = OZP_MONTHLY
+  const ee_total = r(ee_piz + ee_zzzs + ee_injury + ee_unemployment + ee_parental + ee_dolgotrajna + ee_ozp)
   const base = grossSalary - ee_total
   const depRelief = dependents === 0 ? 0 : dependents === 1 ? 2697/12 : dependents === 2 ? 4120/12 : 7780/12
   const taxableBase = Math.max(0, base - GENERAL_RELIEF_MONTHLY - depRelief)
@@ -39,8 +48,9 @@ function calcPayroll(grossSalary: number, dependents: number = 0) {
   const er_injury = r(grossSalary * ER.injury)
   const er_unemployment = r(grossSalary * ER.unemployment)
   const er_parental = r(grossSalary * ER.parental)
-  const er_total = r(er_piz + er_zzzs + er_injury + er_unemployment + er_parental)
-  return { ee_piz, ee_zzzs, ee_injury, ee_unemployment, ee_total, incomeTax, netSalary, er_piz, er_zzzs, er_injury, er_unemployment, er_parental, er_total, totalCost: r(grossSalary + er_total), totalFurs: r(ee_total + incomeTax + er_total) }
+  const er_dolgotrajna = r(grossSalary * ER.dolgotrajnaOskrba)
+  const er_total = r(er_piz + er_zzzs + er_injury + er_unemployment + er_parental + er_dolgotrajna)
+  return { ee_piz, ee_zzzs, ee_injury, ee_unemployment, ee_parental, ee_dolgotrajna, ee_ozp, ee_total, incomeTax, netSalary, er_piz, er_zzzs, er_injury, er_unemployment, er_parental, er_dolgotrajna, er_total, totalCost: r(grossSalary + er_total), totalFurs: r(ee_total + incomeTax + er_total) }
 }
 
 function r(v: number) { return Math.round(v * 100) / 100 }
