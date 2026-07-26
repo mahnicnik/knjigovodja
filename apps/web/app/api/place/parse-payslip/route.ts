@@ -2,16 +2,28 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { createRequire } from 'module'
 
-// AI branje plačilnih list (25.7.2026, popravek v3 - DOMMatrix polyfill)
+// AI branje plačilnih list (25.7.2026, v4 - eksplicitni uvoz worker modula)
 //
-// pdfjs-dist interno referencira brskalniske globalne objekte (DOMMatrix,
-// Path2D, ImageData) tudi za goli izvlecek besedila, ker nekateri notranji
-// moduli te objekte uvozijo na nivoju modula (ne samo ob risanju). V
-// Node.js streznikem okolju (Vercel) ti objekti ne obstajajo -> napaka
-// "DOMMatrix is not defined". POPRAVEK: minimalen polyfill (nadomestek)
-// PRED uvozom pdfjs-dist - dovolj, da uvoz uspe; za samo besedilo (ne
-// risanje na canvas) ne rabimo popolne funkcionalnosti teh razredov.
+// ZGODOVINA NAPAK (vsaka je razkrila naslednjo plast):
+//   v2: "DOMMatrix is not defined" -> dodan polyfill (spodaj)
+//   v3: "Cannot find module .next/server/chunks/pdf.worker.mjs" -> dodan
+//       serverExternalPackages (webpack ni smel bundlati pdfjs)
+//   v4 (ta): "Cannot find module node_modules/.../pdf.worker.mjs"
+//
+// PRAVI VZROK v4: "fake worker" v sporocilu NE pomeni, da rabi worker nit -
+// v Node.js pdf.js VEDNO tece v fake-worker nacinu (ista koda, glavna nit).
+// Pomeni: poskusa DINAMICNO uvoziti pdf.worker.mjs modul, in ga na disku ni,
+// ker ga Vercel sledenje ni zaznalo (dinamicni uvozi niso staticno vidni).
+//
+// RESITEV: worker modul uvozimo EKSPLICITNO (staticni import spodaj).
+// Staticni uvoz je nekaj, kar VSAK bundler in Vercel sledenje zanesljivo
+// zazna - datoteka bo v deployu, ker je dobesedno uvozena. Dodatno prek
+// createRequire razresimo njeno pravo pot in jo nastavimo kot workerSrc,
+// da pdf.js ne poskusa svojega (neuspesnega) dinamicnega iskanja.
+
+// Brskalniski globali, ki jih pdfjs pricakuje tudi za golo branje besedila
 if (typeof (globalThis as any).DOMMatrix === 'undefined') {
   (globalThis as any).DOMMatrix = class DOMMatrix {
     a = 1; b = 0; c = 0; d = 1; e = 0; f = 0
@@ -25,21 +37,14 @@ if (typeof (globalThis as any).DOMMatrix === 'undefined') {
 if (typeof (globalThis as any).Path2D === 'undefined') {
   (globalThis as any).Path2D = class Path2D {
     constructor(_init?: any) {}
-    moveTo() {}
-    lineTo() {}
-    closePath() {}
-    rect() {}
-    bezierCurveTo() {}
+    moveTo() {}; lineTo() {}; closePath() {}; rect() {}; bezierCurveTo() {}
   }
 }
 if (typeof (globalThis as any).ImageData === 'undefined') {
   (globalThis as any).ImageData = class ImageData {
-    data: Uint8ClampedArray
-    width: number
-    height: number
+    data: Uint8ClampedArray; width: number; height: number
     constructor(width: number, height: number) {
-      this.width = width
-      this.height = height
+      this.width = width; this.height = height
       this.data = new Uint8ClampedArray(width * height * 4)
     }
   }
@@ -51,22 +56,36 @@ const client = new Anthropic({
 
 async function extractPdfText(pdfBuffer: Buffer, password?: string): Promise<string> {
   const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
+
+  // KLJUCNO (v4): eksplicitno razresimo pot do worker modula in jo
+  // nastavimo, da pdf.js ne poskusa svojega dinamicnega iskanja (ki v
+  // Vercel serverless okolju spodleti).
+  try {
+    const require = createRequire(import.meta.url)
+    const workerPath = require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs')
+    ;(pdfjsLib as any).GlobalWorkerOptions.workerSrc = workerPath
+  } catch {
+    // Ce razresitev ne uspe, pustimo pdf.js njegovo privzeto pot -
+    // v nekaterih okoljih deluje tudi brez eksplicitne nastavitve.
+  }
+
   const loadingTask = pdfjsLib.getDocument({
     data: new Uint8Array(pdfBuffer),
     password: password || undefined,
-    // Onemogoci font/worker funkcije, ki niso potrebne za golo besedilo in
-    // dodatno zmanjsajo tveganje za manjkajoce brskalniske API-je.
     disableFontFace: true,
     useWorkerFetch: false,
     isEvalSupported: false,
+    // Onemogoci potrebo po zunanjih virih (standardne pisave), ki jih v
+    // serverless paketu prav tako ni.
+    useSystemFonts: false,
   } as any)
+
   const pdf = await loadingTask.promise
   let fullText = ''
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i)
     const textContent = await page.getTextContent()
-    const pageText = (textContent.items as any[]).map(item => item.str).join(' ')
-    fullText += pageText + '\n'
+    fullText += (textContent.items as any[]).map(item => item.str).join(' ') + '\n'
   }
   return fullText.trim()
 }
@@ -110,11 +129,14 @@ export async function POST(request: NextRequest) {
         }
         return NextResponse.json({ error: 'Napačno geslo za PDF.', needsPassword: true }, { status: 400 })
       }
-      return NextResponse.json({ error: 'Napaka pri branju PDF datoteke: ' + pdfErr.message }, { status: 400 })
+      return NextResponse.json({
+        error: 'Napaka pri branju PDF datoteke: ' + pdfErr.message
+          + ' — Namig: če težava ostane, odprite plačilno listo, naredite posnetek zaslona (Cmd+Shift+4) in naložite sliko namesto PDF-ja.',
+      }, { status: 400 })
     }
 
     if (!pdfText || pdfText.length < 20) {
-      return NextResponse.json({ error: 'PDF ne vsebuje berljivega besedila (morda je skeniran kot slika) - poskusite ročno vnesti podatke.' }, { status: 400 })
+      return NextResponse.json({ error: 'PDF ne vsebuje berljivega besedila (morda je skeniran kot slika) - poskusite naložiti posnetek zaslona namesto PDF-ja.' }, { status: 400 })
     }
 
     const response = await client.messages.create({
