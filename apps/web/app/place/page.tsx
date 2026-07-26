@@ -201,6 +201,8 @@ export default function PlacePage() {
     // POPRAVLJENO (25.7.2026): prava imena stolpcev (gross_salary/
     // net_salary/income_tax, month+year namesto period_start/period_end)
     const periodDate = p.period_end ? new Date(p.period_end) : new Date()
+    // Polna razclenitev (25.7.2026) - omogoca /rek1 strani uporabo RESNICNIH
+    // stevilk namesto ocene kalkulatorja.
     const { error } = await supabase.from('payslips').insert({
       org_id: org.id,
       employee_id: uploadEmployeeId || null,
@@ -211,6 +213,20 @@ export default function PlacePage() {
       gross_salary: p.gross_amount,
       net_salary: p.net_amount,
       income_tax: p.tax_amount,
+      income_tax_base: p.income_tax_base ?? null,
+      general_relief: p.general_relief ?? null,
+      dependent_relief: p.dependent_relief ?? 0,
+      ee_piz: p.ee_piz ?? 0,
+      ee_zzzs: p.ee_zzzs ?? 0,
+      ee_unemployment: p.ee_unemployment ?? 0,
+      ee_injury: p.ee_injury ?? 0,
+      ee_total: p.ee_total ?? 0,
+      er_piz: p.er_piz ?? 0,
+      er_zzzs: p.er_zzzs ?? 0,
+      er_unemployment: p.er_unemployment ?? 0,
+      er_injury: p.er_injury ?? 0,
+      er_parental: p.er_parental ?? 0,
+      er_total: p.er_total ?? 0,
       employer_total_cost: p.employer_total_cost,
       total_cost: p.employer_total_cost ?? p.gross_amount,
       status: 'paid',

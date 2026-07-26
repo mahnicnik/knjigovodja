@@ -3,34 +3,50 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
-// AI branje plačilnih list (25.7.2026, v5 - KONCNA, brez pdfjs-dist)
+// AI branje plačilnih list (25.7.2026, v6 - polna razčlenitev za REK-1)
 //
-// ODLOCITEV: pdfjs-dist pot OPUSCENA po 4 zaporednih serverless okoljskih
-// napakah (DOMMatrix -> webpack bundling -> file tracing -> worker modul).
-// Uvedena je bila SAMO zaradi gesla-zascitenih PDF-jev - ena zahteva, ki je
-// povzrocila nesorazmerno zapletenost.
-//
-// PREPROSTEJSA RESITEV: Claude API bere PDF-je IN slike NEPOSREDNO.
-//   - Odklenjen PDF -> poslji kot document (deluje, preverjen vzorec iz
-//     api/scan-receipt)
-//   - Zaklenjen PDF -> uporabnik naredi posnetek zaslona (Cmd+Shift+4) in
-//     naloi SLIKO - Claude jo prebere enako dobro
-// Nic pdfjs, nic worker-jev, nic okoljskih posebnosti.
+// Razsirjeno na POLNO razclenitev (ne le povzetek gross/net/tax), da lahko
+// /rek1 stran uporabi TOCNE, resnicne stevilke iz nalozene plac. liste za
+// XML izvoz, namesto ocene vgrajenega kalkulatorja.
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
-const PROMPT = `Analiziraj to plačilno listo (obračun plače) in vrni JSON z naslednjimi polji:
-- employee_name: polno ime zaposlenca
-- period_start: prvi dan obračunskega meseca v formatu YYYY-MM-DD
-- period_end: zadnji dan obračunskega meseca v formatu YYYY-MM-DD
-- gross_amount: BRUTO plača (samo število, brez €)
-- net_amount: NETO plača - znesek, ki ga zaposleni dejansko prejme (samo število)
-- tax_amount: skupni znesek davka in prispevkov zaposlenca (bruto - neto, samo število)
-- employer_total_cost: vrstica "Skupaj strošek v breme podjetja" ali "Skupaj strošek delodajalca" ali podobno poimenovana - CELOTEN znesek, ki bremeni delodajalca (bruto plača + prispevki delodajalca). To je NAJPOMEMBNEJŠE polje - poišči ga natančno, ker je to dejanski strošek podjetja, VEČJI od bruto plače. Če te vrstice na dokumentu ni, vrni null.
+const PROMPT = `Analiziraj to plačilno listo (obračun plače) in vrni JSON z naslednjimi polji (samo številke, brez € znaka, decimalno vejico pretvori v piko - torej 1.489,29 postane 1489.29):
 
-Vrni SAMO JSON brez dodatnega besedila.`
+OSNOVNO:
+- employee_name: polno ime zaposlenca
+- period_start: prvi dan obračunskega meseca (YYYY-MM-DD)
+- period_end: zadnji dan obračunskega meseca (YYYY-MM-DD)
+- gross_amount: BRUTO plača (SKUPAJ BRUTO)
+- net_amount: NETO plača (NETO IZPLAČILO, PRED dodatki kot prehrana/prevoz)
+- tax_amount: DAVEK (akontacija dohodnine)
+
+PRISPEVKI ZAPOSLENCA (iz bruto, "plača delavec"):
+- ee_piz: prispevek za pokojninsko in invalidsko zavarovanje
+- ee_zzzs: prispevek za zdravstveno zavarovanje
+- ee_unemployment: prispevek za zaposlovanje
+- ee_injury: prispevek za poškodbe pri delu (če obstaja pri zaposlencu, sicer 0)
+- ee_total: SKUPAJ PRISPEVKI zaposlenca
+
+PRISPEVKI DELODAJALCA (na bruto, "plača delodajalec"):
+- er_piz: prispevek za pokojninsko in invalidsko zavarovanje
+- er_zzzs: prispevek za zdravstveno zavarovanje
+- er_unemployment: prispevek za zaposlovanje
+- er_injury: prispevek za poškodbe pri delu
+- er_parental: prispevek za starševsko varstvo
+- er_total: SKUPAJ prispevki delodajalca
+
+DAVČNA OSNOVA IN OLAJŠAVE:
+- income_tax_base: OSNOVA ZA DAVEK
+- general_relief: splošna olajšava (če je posebej navedena, sicer null)
+- dependent_relief: olajšava za vzdrževane družinske člane (če obstaja, sicer 0)
+
+KLJUČNO POLJE:
+- employer_total_cost: vrstica "Skupaj strošek v breme podjetja" ali "Skupaj strošek delodajalca" - CELOTEN znesek, ki bremeni delodajalca. Če te vrstice ni, vrni null.
+
+Če katerega polja na dokumentu ni, vrni 0 (za zneske) ali null (za manjkajoča neobvezna polja kot general_relief). Vrni SAMO JSON brez dodatnega besedila.`
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,7 +71,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'AI branje plačilnih list je na voljo samo v Pro paketu.' }, { status: 403 })
     }
 
-    // fileBase64 + mediaType: podpira PDF IN slike (posnetki zaslona)
     const { pdfBase64, fileBase64, mediaType } = await request.json()
     const data = fileBase64 || pdfBase64
     const type = mediaType || 'application/pdf'
@@ -72,11 +87,10 @@ export async function POST(request: NextRequest) {
     try {
       response = await client.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1024,
+        max_tokens: 1536,
         messages: [{ role: 'user', content: [contentBlock, { type: 'text', text: PROMPT }] }],
       })
     } catch (apiErr: any) {
-      // Zaklenjen/sifriran PDF - Claude API ga ne more odpreti
       const msg = String(apiErr?.message || '')
       if (msg.includes('encrypted') || msg.includes('password') || msg.includes('Could not process') || msg.includes('invalid')) {
         return NextResponse.json({

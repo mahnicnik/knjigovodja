@@ -54,9 +54,50 @@ export default function REK1Page() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [grossOverrides, setGrossOverrides] = useState<Record<string, number>>({})
+  const [uploadedPayslips, setUploadedPayslips] = useState<Record<string, any>>({})
   const supabase = createClient()
 
   useEffect(() => { load() }, [])
+  // Ponovno nalozi placilne liste, ko se spremeni mesec/leto ali org
+  useEffect(() => { if (org) loadUploadedPayslips() }, [org, selectedMonth, selectedYear])
+
+  async function loadUploadedPayslips() {
+    const { data } = await supabase.from('payslips').select('*')
+      .eq('org_id', org.id).eq('month', selectedMonth + 1).eq('year', selectedYear)
+      .not('attachment_base64', 'is', null) // samo NALOZENE (ne kalkulator-ocene)
+    const map: Record<string, any> = {}
+    for (const p of data || []) {
+      if (p.employee_id) map[p.employee_id] = p
+    }
+    setUploadedPayslips(map)
+  }
+
+  // Vrne izracun IZ NALOZENE liste (ce obstaja za tega zaposlenega/obdobje),
+  // sicer oceno kalkulatorja - en sam vir resnice za prikaz IN XML.
+  function getPayrollFor(emp: any, grossSalaryOverride?: number) {
+    const uploaded = uploadedPayslips[emp.id]
+    if (uploaded) {
+      const ee_total = Number(uploaded.ee_total || 0)
+      const er_total = Number(uploaded.er_total || 0)
+      const incomeTax = Number(uploaded.income_tax || 0)
+      return {
+        fromUpload: true,
+        effectiveGross: Number(uploaded.gross_salary),
+        p: {
+          ee_piz: Number(uploaded.ee_piz || 0), ee_zzzs: Number(uploaded.ee_zzzs || 0),
+          ee_injury: Number(uploaded.ee_injury || 0), ee_unemployment: Number(uploaded.ee_unemployment || 0),
+          ee_total, incomeTax, netSalary: Number(uploaded.net_salary || 0),
+          er_piz: Number(uploaded.er_piz || 0), er_zzzs: Number(uploaded.er_zzzs || 0),
+          er_injury: Number(uploaded.er_injury || 0), er_unemployment: Number(uploaded.er_unemployment || 0),
+          er_parental: Number(uploaded.er_parental || 0), er_total,
+          totalCost: Number(uploaded.employer_total_cost || uploaded.total_cost || 0),
+          totalFurs: r(ee_total + incomeTax + er_total),
+        },
+      }
+    }
+    const effectiveGross = grossSalaryOverride !== undefined ? grossSalaryOverride : Number(emp.gross_salary)
+    return { fromUpload: false, effectiveGross, p: calcPayroll(effectiveGross, emp.dependents || 0) }
+  }
 
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -75,9 +116,8 @@ export default function REK1Page() {
   }
 
   function generateREK1(emp: any, grossSalaryOverride?: number) {
-    const effectiveGross = grossSalaryOverride !== undefined ? grossSalaryOverride : Number(emp.gross_salary)
+    const { effectiveGross, p } = getPayrollFor(emp, grossSalaryOverride)
     emp = { ...emp, gross_salary: effectiveGross }
-    const p = calcPayroll(Number(emp.gross_salary), emp.dependents || 0)
     const monthStr = String(selectedMonth + 1).padStart(2, '0')
     const dateFrom = `${selectedYear}-${monthStr}-01`
     const dateTo = new Date(selectedYear, selectedMonth + 1, 0).toISOString().split('T')[0]
@@ -191,8 +231,7 @@ export default function REK1Page() {
           <div className="space-y-4">
             {employees.map(emp => {
               const grossOverride = grossOverrides[emp.id]
-              const grossSalary = grossOverride !== undefined ? grossOverride : Number(emp.gross_salary)
-              const p = calcPayroll(grossSalary, emp.dependents || 0)
+              const { fromUpload, p } = getPayrollFor(emp, grossOverride)
               return (
                 <div key={emp.id} className="bg-white rounded-2xl border border-gray-100 p-6">
                   <div className="flex justify-between items-start mb-4">
@@ -200,6 +239,13 @@ export default function REK1Page() {
                       <div className="font-semibold text-gray-900">{emp.full_name}</div>
                       <div className="text-xs text-gray-500 mt-0.5">
                         {MONTHS[selectedMonth]} {selectedYear} · Davčna: {emp.tax_number}
+                      </div>
+                      <div className="mt-1.5">
+                        {fromUpload ? (
+                          <span style={{ fontSize: 11, fontWeight: 600, color: '#1D9E75', background: '#EAF3DE', padding: '2px 8px', borderRadius: 6 }}>📎 Iz naložene plačilne liste</span>
+                        ) : (
+                          <span style={{ fontSize: 11, fontWeight: 600, color: '#92400E', background: '#FFFBEB', padding: '2px 8px', borderRadius: 6 }}>≈ Ocena (kalkulator) — naložite plačilno listo za natančne podatke</span>
+                        )}
                       </div>
                     </div>
                     <button onClick={() => downloadREK1(emp)}
