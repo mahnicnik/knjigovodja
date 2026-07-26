@@ -107,6 +107,28 @@ export default function PlacePage() {
     employment_type: 'full_time', start_date: new Date().toISOString().split('T')[0], dependents: 0,
     annual_leave_days: 20,
   })
+  const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null)
+
+  function emptyForm() {
+    return { full_name: '', tax_number: '', iban: '', gross_salary: '', employment_type: 'full_time', start_date: new Date().toISOString().split('T')[0], dependents: 0, annual_leave_days: 20 }
+  }
+
+  function startEdit(emp: any) {
+    setEditingEmployeeId(emp.id)
+    setForm({
+      full_name: emp.full_name || '', tax_number: emp.tax_number || '', iban: emp.iban || '',
+      gross_salary: String(emp.gross_salary ?? ''), employment_type: emp.employment_type || 'full_time',
+      start_date: emp.start_date || new Date().toISOString().split('T')[0],
+      dependents: emp.dependents || 0, annual_leave_days: emp.annual_leave_days ?? 20,
+    })
+    setShowForm(true)
+  }
+
+  async function deleteEmployee(emp: any) {
+    if (!confirm(`Izbrišem zaposlenega "${emp.full_name}"? Zgodovina plač/regresa ostane ohranjena, a se oseba ne bo več prikazovala v seznamu.`)) return
+    await supabase.from('employees').update({ status: 'inactive' }).eq('id', emp.id)
+    load()
+  }
 
   const supabase = createClient()
 
@@ -250,13 +272,19 @@ export default function PlacePage() {
   async function handleAddEmployee() {
     if (!org || !form.full_name || !form.gross_salary) return
     setSaving(true)
-    await supabase.from('employees').insert({
-      org_id: org.id, full_name: form.full_name, tax_number: form.tax_number,
+    const payload = {
+      full_name: form.full_name, tax_number: form.tax_number,
       iban: form.iban, gross_salary: parseFloat(form.gross_salary),
       employment_type: form.employment_type, start_date: form.start_date,
-      dependents: form.dependents, annual_leave_days: form.annual_leave_days, status: 'active',
-    })
-    setForm({ full_name: '', tax_number: '', iban: '', gross_salary: '', employment_type: 'full_time', start_date: new Date().toISOString().split('T')[0], dependents: 0, annual_leave_days: 20 })
+      dependents: form.dependents, annual_leave_days: form.annual_leave_days,
+    }
+    if (editingEmployeeId) {
+      await supabase.from('employees').update(payload).eq('id', editingEmployeeId)
+    } else {
+      await supabase.from('employees').insert({ org_id: org.id, ...payload, status: 'active' })
+    }
+    setForm(emptyForm())
+    setEditingEmployeeId(null)
     setShowForm(false)
     setSaving(false)
     load()
@@ -638,7 +666,7 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
               <button onClick={handleAddEmployee} disabled={saving||!form.full_name||!form.gross_salary} className="flex-1 bg-gray-900 text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-40">
                 {saving ? 'Shranjujem...' : 'Dodaj zaposlenega'}
               </button>
-              <button onClick={() => setShowForm(false)} className="border border-gray-200 rounded-xl px-6 py-2.5 text-sm">Prekliči</button>
+              <button onClick={() => { setShowForm(false); setEditingEmployeeId(null); setForm(emptyForm()) }} className="border border-gray-200 rounded-xl px-6 py-2.5 text-sm">Prekliči</button>
             </div>
           </div>
         )}
@@ -707,6 +735,12 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
                       </button>
                       <button onClick={() => downloadPlacilnaLista(emp)} className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium">
                         📄 Plačilna lista
+                      </button>
+                      <button onClick={() => startEdit(emp)} className="border border-gray-200 text-gray-700 px-3 py-2 rounded-xl text-sm font-medium hover:bg-gray-50">
+                        ✏️ Uredi
+                      </button>
+                      <button onClick={() => deleteEmployee(emp)} className="border border-gray-200 text-red-600 px-3 py-2 rounded-xl text-sm font-medium hover:bg-red-50">
+                        🗑️
                       </button>
                     </div>
                   </div>
