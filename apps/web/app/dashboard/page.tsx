@@ -56,6 +56,7 @@ const RAIL_GROUPS = [
   {
     id: 'kadri', icon: 'users', label: 'Kadri & Plače',
     items: [
+      { href: '/place',         icon: 'users',    label: 'Zaposleni' },
       { href: '/rek1',          icon: 'pay',      label: 'Obračun plač' },
       { href: '/regres',         icon: 'pay',      label: 'Regres' },
       { href: '/dopust',        icon: 'calendar', label: 'Dopust & Bolniška' },
