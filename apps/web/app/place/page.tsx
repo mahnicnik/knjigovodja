@@ -136,7 +136,7 @@ export default function PlacePage() {
       const arrayBuffer = await file.arrayBuffer()
       const base64 = arrayBufferToBase64(arrayBuffer)
       setUploadBase64(base64)
-      await tryParsePayslip(base64, '')
+      await tryParsePayslip(base64, file.type || 'application/pdf')
     } catch (err: any) {
       setUploadError('Napaka: ' + err.message)
     }
@@ -145,23 +145,17 @@ export default function PlacePage() {
 
   // Locena funkcija (25.7.2026), da jo lahko poklicemo ponovno z geslom,
   // ne da bi uporabnik moral znova izbrati datoteko.
-  async function tryParsePayslip(base64: string, password: string) {
+  async function tryParsePayslip(base64: string, mediaType: string) {
     const res = await fetch('/api/place/parse-payslip', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pdfBase64: base64, password: password || undefined }),
+      body: JSON.stringify({ fileBase64: base64, mediaType }),
     })
     const data = await res.json()
     if (!res.ok || data.error) {
-      if (data.needsPassword) {
-        setUploadNeedsPassword(true)
-        setUploadError(data.error)
-      } else {
-        setUploadError(data.error || 'Napaka pri branju plačilne liste')
-      }
+      setUploadError(data.error || 'Napaka pri branju plačilne liste')
       return
     }
-    setUploadNeedsPassword(false)
     setUploadError('')
     setUploadParsed(data)
     const match = employees.find(emp =>
@@ -170,12 +164,6 @@ export default function PlacePage() {
     if (match) setUploadEmployeeId(match.id)
   }
 
-  async function retryWithPassword() {
-    if (!uploadPassword) return
-    setUploadScanning(true)
-    await tryParsePayslip(uploadBase64, uploadPassword)
-    setUploadScanning(false)
-  }
 
   async function savePayslipUpload() {
     if (!org || !uploadParsed) return
@@ -201,7 +189,7 @@ export default function PlacePage() {
       status: 'paid',
       paid_at: new Date().toISOString(),
       attachment_base64: uploadBase64,
-      attachment_type: 'pdf',
+      attachment_type: uploadFile?.type?.startsWith('image/') ? 'image' : 'pdf',
     })
     if (error) {
       alert('Napaka pri shranjevanju: ' + error.message)
@@ -513,7 +501,7 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
             <h3 className="font-medium text-gray-900 mb-1">Naloži plačilno listo</h3>
             <p className="text-gray-500 text-sm mb-4">AI bo prebral PDF od računovodje in izluščil podatke — vključno s "Skupaj strošek v breme podjetja", ki se poknjiži v KPO.</p>
 
-            {!uploadParsed && !uploadNeedsPassword && (
+            {!uploadParsed && (
               <div
                 onClick={() => document.getElementById('payslip-file-input')?.click()}
                 className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center cursor-pointer hover:border-gray-300"
@@ -523,35 +511,16 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
                 ) : (
                   <>
                     <div className="text-3xl mb-2">📄</div>
-                    <div className="bg-gray-900 text-white px-5 py-2 rounded-xl text-sm font-medium inline-block">Izberi PDF</div>
+                    <div className="bg-gray-900 text-white px-5 py-2 rounded-xl text-sm font-medium inline-block">Izberi PDF ali sliko</div>
+                    <p className="text-xs text-gray-400 mt-3">Če je PDF zaščiten z geslom, naredite posnetek zaslona (Cmd+Shift+4) in naložite sliko.</p>
                   </>
                 )}
-                <input id="payslip-file-input" type="file" accept="application/pdf,.pdf" className="hidden" disabled={uploadScanning} onChange={handleUploadFile} />
+                <input id="payslip-file-input" type="file" accept="application/pdf,.pdf,image/*" className="hidden" disabled={uploadScanning} onChange={handleUploadFile} />
               </div>
             )}
 
-            {uploadError && !uploadNeedsPassword && (
-              <p className="text-sm mb-3" style={{ color: '#DC2626' }}>{uploadError}</p>
-            )}
-
-            {uploadNeedsPassword && (
-              <div className="border border-gray-200 rounded-xl p-4">
-                <p className="text-sm text-gray-700 mb-3">🔒 PDF je zaščiten z geslom. Vnesite geslo, ki vam ga je posredoval računovodja (pogosto EMŠO ali davčna številka zaposlenca).</p>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={uploadPassword}
-                    onChange={e => setUploadPassword(e.target.value)}
-                    placeholder="Geslo"
-                    className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm"
-                    onKeyDown={e => e.key === 'Enter' && retryWithPassword()}
-                  />
-                  <button onClick={retryWithPassword} disabled={uploadScanning || !uploadPassword} className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-40">
-                    {uploadScanning ? '...' : 'Odkleni'}
-                  </button>
-                </div>
-                {uploadError && <p className="text-xs mt-2" style={{ color: '#DC2626' }}>{uploadError}</p>}
-              </div>
+            {uploadError && (
+              <p className="text-sm mt-3 mb-1" style={{ color: '#DC2626' }}>{uploadError}</p>
             )}
 
             {uploadParsed && (
