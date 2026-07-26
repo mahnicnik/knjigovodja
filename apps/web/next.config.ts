@@ -4,6 +4,10 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
+  // pdfjs-dist ne sme biti bundlan z webpack-om v serverless funkcijah -
+  // njegov notranji "worker" mehanizem se ob bundlanju napacno prepise
+  // (25.7.2026, popravek za citanje placilnih list).
+  serverExternalPackages: ['pdfjs-dist'],
   async rewrites() {
     return [
       {
