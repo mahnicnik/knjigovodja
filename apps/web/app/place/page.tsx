@@ -278,10 +278,12 @@ export default function PlacePage() {
       setOrg(o)
       const { data } = await supabase.from('employees').select('*').eq('org_id', o.id).eq('status', 'active')
       setEmployees(data || [])
-      // Naloži regres izplačila za ta leto
+      // Naloži regres izplačila za ta leto (POPRAVLJENO 26.7.2026: prej
+      // gte('period_start', ...) - stolpec ne obstaja, poizvedba je vracala
+      // 400 in nikoli ni najsla obstojecih izplacil)
       const { data: regres } = await supabase.from('payslips')
         .select('*').eq('org_id', o.id).eq('type', 'regres')
-        .gte('period_start', `${new Date().getFullYear()}-01-01`)
+        .eq('year', new Date().getFullYear())
       const regresMap: Record<string, any> = {}
       for (const r of regres || []) {
         regresMap[r.employee_id] = r
@@ -330,15 +332,16 @@ export default function PlacePage() {
   async function izplačajRegres(emp: any, amount: number) {
     if (!org) return
     const regres = calcRegres(Number(emp.gross_salary))
+    // POPRAVLJENO 26.7.2026: prava imena stolpcev
     await supabase.from('payslips').insert({
       org_id: org.id,
       employee_id: emp.id,
       type: 'regres',
-      period_start: `${new Date().getFullYear()}-01-01`,
-      period_end: `${new Date().getFullYear()}-07-01`,
-      gross_amount: regres.amount,
-      net_amount: regres.netAmount,
-      tax_amount: r(regres.amount - regres.netAmount),
+      month: 7,
+      year: new Date().getFullYear(),
+      gross_salary: regres.amount,
+      net_salary: regres.netAmount,
+      income_tax: r(regres.amount - regres.netAmount),
       status: 'paid',
       paid_at: new Date().toISOString(),
     })
