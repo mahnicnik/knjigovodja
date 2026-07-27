@@ -192,7 +192,7 @@ export default function DashboardPage() {
   const [emailPendingCount, setEmailPendingCount] = useState(0)
   const [emailConnectionsCount, setEmailConnectionsCount] = useState(0)
   const [data, setData] = useState({
-    revenue: 0, expenses: 0, vatDue: 0,
+    revenue: 0, expenses: 0, vatDue: 0, kpoReceivedMonth: 0,
     unpaidCount: 0, unpaidAmount: 0,
     overdueAmount: 0, overdueCount: 0,
     yearRevenue: 0,
@@ -301,7 +301,7 @@ export default function DashboardPage() {
       }
 
       // Load all data in parallel
-      const [invRes, expRes, empRes, cliRes, prefsRes2, emailPendRes, emailConnRes] = await Promise.all([
+      const [invRes, expRes, empRes, cliRes, prefsRes2, emailPendRes, emailConnRes, kpoRes] = await Promise.all([
         supabase.from('issued_invoices').select('*').eq('org_id', o.id).neq('status','draft'),
         supabase.from('receipts').select('*').eq('org_id', o.id),
         supabase.from('employees').select('id').eq('org_id', o.id).eq('status','active'),
@@ -309,12 +309,19 @@ export default function DashboardPage() {
         supabase.from('user_preferences').select('onboarding_answers').eq('user_id', user.id).maybeSingle(),
         supabase.from('email_scan_pending').select('id', { count: 'exact', head: true }).eq('org_id', o.id).eq('status', 'pending'),
         supabase.from('email_connections').select('id', { count: 'exact', head: true }).eq('org_id', o.id).eq('is_active', true),
+        // DODANO 26.7.2026 (audit K3): dejanski denarni tok iz KPO (banka,
+        // kartice, POS, place, stroski...) - locen prikaz od fakturiranega
+        // prometa, da se izogne dvojnemu stetju.
+        supabase.from('kpo_entries').select('income, entry_date').eq('org_id', o.id).eq('entry_type', 'income').gte('entry_date', monthStart).lte('entry_date', monthEnd),
       ])
       setEmailPendingCount(emailPendRes.count || 0)
       setEmailConnectionsCount(emailConnRes.count || 0)
 
       const invoices = invRes.data || []
       const receipts = expRes.data || []
+      // DODANO 26.7.2026 (audit K3): dejansko prejeto na racun ta mesec
+      // (KPO, denarno nacelo) - locen prikaz od fakturiranega prometa.
+      const kpoReceivedMonth = (kpoRes.data || []).reduce((s: number, e: any) => s + Number(e.income || 0), 0)
       const monthInv = invoices.filter((i:any) => i.issue_date >= monthStart && i.issue_date <= monthEnd)
       const yearInv = invoices.filter((i:any) => i.issue_date >= yearStart)
       const revenue = monthInv.reduce((s:number,i:any) => s + Number(i.amount_net), 0)
@@ -342,7 +349,7 @@ export default function DashboardPage() {
         : null
 
       setData({
-        revenue, expenses,
+        revenue, expenses, kpoReceivedMonth,
         vatDue: Math.max(0, vatOut - vatIn),
         unpaidCount: unpaid.length,
         unpaidAmount: unpaid.reduce((s:number,i:any) => s + Number(i.amount_total), 0),
@@ -835,6 +842,11 @@ export default function DashboardPage() {
             <div className="rk-stat-lbl"><span>Prihodki {MONTHS_SHORT[month]}</span><span className="rk-arr">→</span></div>
             <div className="rk-stat-val">€{Math.round(data.revenue)}</div>
             <div className="rk-stat-meta">Brez DDV</div>
+            {data.kpoReceivedMonth > 0 && (
+              <div className="rk-stat-meta" style={{ marginTop: 2, opacity: 0.75 }}>
+                💰 Prejeto na račun: €{Math.round(data.kpoReceivedMonth)} <span title="Dejanski denarni tok iz KPO evidence (banka, kartice, POS, plače...) - ločeno od fakturiranega zneska zgoraj.">ⓘ</span>
+              </div>
+            )}
           </Link>
           <Link href="/expenses" className="rk-stat">
             <div className="rk-stat-lbl"><span>Odhodki {MONTHS_SHORT[month]}</span><span className="rk-arr">→</span></div>
