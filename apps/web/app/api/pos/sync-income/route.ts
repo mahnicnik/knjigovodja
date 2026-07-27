@@ -10,10 +10,17 @@ function getServiceClient() {
   )
 }
 
-// POPRAVLJENO (audit 23.7.2026): avtentikacija + org se dolocita iz SEJE
-// klicatelja, ne vec "vzemi prvo organizacijo v bazi" (kar je za vsako
-// organizacijo razen prve pisalo v NAPACNO org, in je bilo brez auth
-// odprto za kogarkoli na internetu).
+// POPRAVLJENO (26.7.2026, audit portala K1): prej je ta endpoint pisal v
+// tabelo 'invoices', ki v bazi NE OBSTAJA (prava racunovodska tabela je
+// kpo_entries, kamor pisejo tudi vsi drugi viri prihodkov: banka, kartice,
+// Stripe/Woo/Shopify webhooki). Posledica: ves dnevni POS promet se je ob
+// zakljucku blagajne TIHO IZGUBIL - nikoli ni prisel v KPO, na Dashboard,
+// v Statistiko ali davcne obracune.
+//
+// Zdaj: dnevni promet se knjizi kot prihodek v kpo_entries, z DDV
+// razclenitvijo iz Z-porocila (ce je z_report_id podan), in z varovalko
+// proti podvojitvi, ce se isti dan sinhronizira veckrat.
+
 async function getSessionOrg() {
   const cookieStore = await cookies()
   const authed = createServerClient(
@@ -49,77 +56,81 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = getServiceClient()
-    const org = { id: orgId }
+    const grossAmount = Number(amount)
 
-    // Preveri ali zapis za ta dan že obstaja
+    // DDV razclenitev iz Z-porocila (ce je na voljo) - da KPO vnos vsebuje
+    // pravilno locen DDV, ne le bruto znesek.
+    let vatOut = 0
+    let netIncome = grossAmount
+    if (z_report_id) {
+      const { data: zr } = await supabase
+        .from('z_reports')
+        .select('total_vat_22, total_vat_95')
+        .eq('id', z_report_id)
+        .maybeSingle()
+      if (zr) {
+        vatOut = Number(zr.total_vat_22 || 0) + Number(zr.total_vat_95 || 0)
+        netIncome = Math.round((grossAmount - vatOut) * 100) / 100
+      }
+    }
+
+    const entryDescription = description || `POS dnevni promet — ${date}`
+    const entryNotes = `Bruto promet: €${grossAmount.toFixed(2)} | Vračila: €${Number(refunds || 0).toFixed(2)}${z_report_id ? ` | Z-poročilo: ${z_report_id}` : ''}`
+
+    // VAROVALKA proti podvojitvi: ce za ta dan in to organizacijo ze obstaja
+    // POS vnos, ga POSODOBI namesto ustvarjanja novega (blagajna se lahko
+    // zapre veckrat na dan, ali se sinhronizacija ponovi).
     const { data: existing } = await supabase
-      .from('invoices')
+      .from('kpo_entries')
       .select('id')
-      .eq('org_id', org.id)
-      .eq('issue_date', date)
-      .eq('source', 'pos')
+      .eq('org_id', orgId)
+      .eq('entry_date', date)
+      .eq('category', 'POS promet')
       .maybeSingle()
 
     if (existing) {
-      // Posodobi obstoječi zapis
-      await supabase
-        .from('invoices')
+      const { error: updErr } = await supabase
+        .from('kpo_entries')
         .update({
-          amount: Number(amount),
-          description,
-          updated_at: new Date().toISOString(),
+          description: entryDescription,
+          income: netIncome,
+          vat_out: vatOut,
+          notes: entryNotes,
         })
         .eq('id', existing.id)
 
+      if (updErr) {
+        console.error('sync-income: napaka pri posodobitvi KPO vnosa:', updErr)
+        return NextResponse.json({ error: 'Napaka pri posodobitvi: ' + updErr.message }, { status: 500 })
+      }
       return NextResponse.json({ success: true, action: 'updated', id: existing.id })
     }
 
-    // Ustvari nov prihodkovni zapis
-    const invoiceNum = 'POS-' + date.replace(/-/g, '') + '-' + Date.now().toString().slice(-4)
-
-    const { data: newInvoice, error } = await supabase
-      .from('invoices')
+    const { data: newEntry, error } = await supabase
+      .from('kpo_entries')
       .insert({
-        org_id: org.id,
-        invoice_number: invoiceNum,
-        issue_date: date,
-        due_date: date,
-        amount: Number(amount),
-        status: 'paid',
-        description,
-        source: 'pos',
-        z_report_id,
-        client_name: 'ŠIRM fitness&bar — POS promet',
-        vat_rate: 0,
-        notes: `Bruto promet: €${Number(amount).toFixed(2)} | Vračila: €${Number(refunds||0).toFixed(2)}`,
+        org_id: orgId,
+        entry_date: date,
+        description: entryDescription,
+        entry_type: 'income',
+        income: netIncome,
+        expense: 0,
+        vat_in: 0,
+        vat_out: vatOut,
+        category: 'POS promet',
+        notes: entryNotes,
       })
-      .select()
+      .select('id')
       .single()
 
     if (error) {
-      // Tabela morda nima source/z_report_id stolpca — poskusi brez
-      const { data: fallback, error: err2 } = await supabase
-        .from('invoices')
-        .insert({
-          org_id: org.id,
-          invoice_number: invoiceNum,
-          issue_date: date,
-          due_date: date,
-          amount: Number(amount),
-          status: 'paid',
-          description,
-          client_name: 'ŠIRM fitness&bar — POS promet',
-          vat_rate: 0,
-          notes: `Bruto promet: €${Number(amount).toFixed(2)} | Vračila: €${Number(refunds||0).toFixed(2)}`,
-        })
-        .select()
-        .single()
-
-      if (err2) throw err2
-      return NextResponse.json({ success: true, action: 'created', id: fallback.id })
+      // POPRAVLJENO: prej je koda ob napaki TIHO nadaljevala (fallback brez
+      // preverjanja) - zdaj napako vrnemo, da se ne izgubi neopazno.
+      console.error('sync-income: napaka pri vpisu KPO vnosa:', error)
+      return NextResponse.json({ error: 'Napaka pri knjiženju: ' + error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true, action: 'created', id: newInvoice.id })
+    return NextResponse.json({ success: true, action: 'created', id: newEntry?.id })
 
   } catch (e: any) {
     console.error('sync-income error:', e)

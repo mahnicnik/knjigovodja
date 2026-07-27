@@ -305,7 +305,7 @@ export default function DashboardPage() {
         supabase.from('issued_invoices').select('*').eq('org_id', o.id).neq('status','draft'),
         supabase.from('receipts').select('*').eq('org_id', o.id),
         supabase.from('employees').select('id').eq('org_id', o.id).eq('status','active'),
-        supabase.from('clients').select('id').eq('org_id', o.id).limit(1),
+        supabase.from('invoice_partners').select('id').eq('org_id', o.id).limit(1), // POPRAVLJENO 26.7.2026: 'clients' tabela ne obstaja (404), prava je invoice_partners
         supabase.from('user_preferences').select('onboarding_answers').eq('user_id', user.id).maybeSingle(),
         supabase.from('email_scan_pending').select('id', { count: 'exact', head: true }).eq('org_id', o.id).eq('status', 'pending'),
         supabase.from('email_connections').select('id', { count: 'exact', head: true }).eq('org_id', o.id).eq('is_active', true),
