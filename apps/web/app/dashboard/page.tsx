@@ -101,7 +101,6 @@ const ALL_QUICK_ACTIONS = [
   { href:'/ddv',          icon:'percent',  label:'DDV obračun',     sub:'Mesečni DDV' },
   { href:'/invoices',     icon:'list',     label:'Vsi računi',      sub:'Pregled' },
   { href:'/rokovnik',     icon:'calendar', label:'Rokovnik',        sub:'Datumi' },
-  { href:'/zaloga',       icon:'box',      label:'Zaloga',          sub:'Upravljanje' },
 ]
 const DEFAULT_QA_HREFS = ['/invoices/new', '/scan', '/prispevki', '/expenses', '/ai', '/statistika']
 

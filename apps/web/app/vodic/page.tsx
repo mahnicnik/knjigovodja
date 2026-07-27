@@ -250,7 +250,7 @@ function getSteps(profile: Profile, org: any, month: number, year: number): Step
       subtitle: 'Popis in gibanje zaloge',
       why: 'Zaloga je sredstvo podjetja — njena vrednost vpliva na davčno osnovo.',
       required: false,
-      href: '/zaloga',
+      href: '/zaloge', // POPRAVLJENO 26.7.2026: /zaloga (localStorage) odstranjena, /zaloge je prava (baza)
       hrefLabel: 'Evidenca zaloge',
       checks: [
         'Preveriti stanje blaga',

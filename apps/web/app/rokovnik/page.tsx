@@ -104,7 +104,7 @@ function getDeadlines(year: number, month: number, isVatRegistered: boolean, has
       title: 'Popis zaloge',
       description: 'Letni popis zaloge na dan 31.12. — potrebno za DDD',
       category: 'porocilo',
-      link: '/zaloga',
+      link: '/zaloge', // POPRAVLJENO 26.7.2026: /zaloga (localStorage) odstranjena, /zaloge je prava (baza)
     })
   }
 
