@@ -36,6 +36,7 @@ export default function AmortizacijaPage() {
   const [org, setOrg] = useState<any>(null)
   const [assets, setAssets] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({
     name: '',
@@ -49,6 +50,9 @@ export default function AmortizacijaPage() {
 
   useEffect(() => { load() }, [])
 
+  // POPRAVLJENO (26.7.2026, audit K4): prej localStorage - zdaj baza
+  // (fixed_assets tabela). Razpored amortizacije se preracuna ob vsakem
+  // nalaganju (ni shranjen kot podatek, samo izpeljan iz nabavne cene/stopnje).
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
@@ -58,45 +62,80 @@ export default function AmortizacijaPage() {
     if (member) {
       const o = (member as any).organizations
       setOrg(o)
-      const stored = localStorage.getItem(`amortizacija_${o.id}`)
-      if (stored) setAssets(JSON.parse(stored))
+      const { data } = await supabase
+        .from('fixed_assets')
+        .select('*')
+        .eq('org_id', o.id)
+        .order('purchase_date', { ascending: false })
+      const withSchedule = (data || []).map((asset: any) => ({
+        ...asset,
+        categoryLabel: asset.category_label,
+        schedule: calcAmortization(
+          Number(asset.purchase_price),
+          Number(asset.rate),
+          new Date(asset.purchase_date).getFullYear(),
+          currentYear
+        ),
+      }))
+      setAssets(withSchedule)
     }
     setLoading(false)
   }
 
-  function saveAssets(newAssets: any[]) {
-    if (!org) return
-    setAssets(newAssets)
-    localStorage.setItem(`amortizacija_${org.id}`, JSON.stringify(newAssets))
-  }
-
-  function handleAdd() {
-    if (!form.name || !form.purchase_price) return
+  async function handleAdd() {
+    if (!org || !form.name || !form.purchase_price) return
+    setSaving(true)
     const cat = CATEGORIES.find(c => c.value === form.category)!
     const price = parseFloat(form.purchase_price)
     const purchaseYear = new Date(form.purchase_date).getFullYear()
     const schedule = calcAmortization(price, cat.rate, purchaseYear, currentYear)
 
-    const asset = {
-      id: Date.now().toString(),
+    const { error } = await supabase.from('fixed_assets').insert({
+      org_id: org.id,
       name: form.name,
       category: form.category,
-      categoryLabel: cat.label,
+      category_label: cat.label,
       rate: cat.rate,
       purchase_price: price,
       purchase_date: form.purchase_date,
       description: form.description,
-      schedule,
-      created_at: new Date().toISOString(),
+    })
+    if (error) {
+      alert('Napaka pri shranjevanju: ' + error.message)
+      setSaving(false)
+      return
     }
-    saveAssets([...assets, asset])
+
+    // DODANO (26.7.2026): poknjizi TEKOCE LETO amortizacije v KPO kot
+    // odhodek (prej se ni knjizilo NIKAMOR). Naslednja leta te iste
+    // amortizacije je treba poknjiziti rocno vsako naslednje leto posebej
+    // (samodejno letno obnavljanje ni del tega popravka).
+    const currentYearEntry = schedule.find(e => e.year === currentYear)
+    if (currentYearEntry && currentYearEntry.amount > 0) {
+      await supabase.from('kpo_entries').insert({
+        org_id: org.id,
+        entry_date: purchaseYear === currentYear ? form.purchase_date : `${currentYear}-01-01`,
+        description: `Amortizacija ${currentYear}: ${form.name}`,
+        entry_type: 'expense',
+        income: 0,
+        expense: currentYearEntry.amount,
+        vat_in: 0,
+        vat_out: 0,
+        category: 'Amortizacija',
+        notes: `${cat.label} · stopnja ${cat.rate}%/leto`,
+      })
+    }
+
     setForm({ name: '', category: 'racunalnik', purchase_price: '', purchase_date: new Date().toISOString().split('T')[0], description: '' })
     setShowForm(false)
+    setSaving(false)
+    load()
   }
 
-  function deleteAsset(id: string) {
-    if (!confirm('Izbrišete sredstvo?')) return
-    saveAssets(assets.filter(a => a.id !== id))
+  async function deleteAsset(id: string) {
+    if (!confirm('Izbrišete sredstvo? (Že poknjižen strošek amortizacije v KPO ostane, izbriše se samo evidenca sredstva.)')) return
+    await supabase.from('fixed_assets').delete().eq('id', id)
+    load()
   }
 
   // Strošek amortizacije za tekoče leto
@@ -221,9 +260,9 @@ export default function AmortizacijaPage() {
             )}
 
             <div className="flex gap-3">
-              <button onClick={handleAdd} disabled={!form.name || !form.purchase_price}
+              <button onClick={handleAdd} disabled={saving || !form.name || !form.purchase_price}
                 className="flex-1 bg-gray-900 text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-40">
-                Dodaj sredstvo
+                {saving ? 'Shranjujem...' : 'Dodaj sredstvo'}
               </button>
               <button onClick={() => setShowForm(false)}
                 className="border border-gray-200 rounded-xl px-6 py-2.5 text-sm">
@@ -259,7 +298,7 @@ export default function AmortizacijaPage() {
                     <div>
                       <div className="font-semibold text-gray-900">{asset.name}</div>
                       <div className="text-xs text-gray-500 mt-0.5">
-                        {asset.categoryLabel} · {asset.rate}%/leto · Nabava: €{asset.purchase_price.toFixed(2)}
+                        {asset.categoryLabel} · {asset.rate}%/leto · Nabava: €{Number(asset.purchase_price).toFixed(2)}
                       </div>
                       <div className="text-xs text-gray-400 mt-0.5">
                         {new Date(asset.purchase_date).toLocaleDateString('sl-SI')}

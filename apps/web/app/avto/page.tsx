@@ -9,6 +9,7 @@ const MONTHS = ['Januar','Februar','Marec','April','Maj','Junij','Julij','Avgust
 export default function AvtoPage() {
   const [org, setOrg] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [entries, setEntries] = useState<any[]>([])
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({
@@ -24,6 +25,11 @@ export default function AvtoPage() {
 
   useEffect(() => { load() }, [])
 
+  // POPRAVLJENO (26.7.2026, audit K4): prej localStorage - zdaj baza
+  // (vehicle_usage tabela). NAMENOMA se boniteta NE knjizi samodejno v
+  // KPO kot preprost strosek - boniteta je davcno dodatek k dohodku
+  // lastnika (porocati na REK-1 pod vrsto dohodka 1150), ne strosek
+  // podjetja - to zahteva locen, skrbnejsi pregled preden se avtomatizira.
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
@@ -33,16 +39,15 @@ export default function AvtoPage() {
     if (member) {
       const o = (member as any).organizations
       setOrg(o)
-      const stored = localStorage.getItem(`avto_${o.id}`)
-      if (stored) setEntries(JSON.parse(stored))
+      const { data } = await supabase
+        .from('vehicle_usage')
+        .select('*')
+        .eq('org_id', o.id)
+        .order('year', { ascending: false })
+        .order('month', { ascending: false })
+      setEntries(data || [])
     }
     setLoading(false)
-  }
-
-  function save(e: any[]) {
-    if (!org) return
-    setEntries(e)
-    localStorage.setItem(`avto_${org.id}`, JSON.stringify(e))
   }
 
   const totalKm = parseFloat(form.total_km) || 0
@@ -59,9 +64,11 @@ export default function AvtoPage() {
   // DDV odbitek: samo poslovni delež
   const vatDeductiblePct = businessPct
 
-  function handleSave() {
-    const entry = {
-      id: Date.now().toString(),
+  async function handleSave() {
+    if (!org || !form.total_km) return
+    setSaving(true)
+    const { error } = await supabase.from('vehicle_usage').insert({
+      org_id: org.id,
       month: form.month,
       year: form.year,
       total_km: totalKm,
@@ -70,10 +77,14 @@ export default function AvtoPage() {
       private_pct: privatePct,
       business_pct: businessPct,
       car_value: carValue,
-      boniteta: bonitetaMonthly,
+      boniteta_monthly: bonitetaMonthly,
       notes: form.notes,
+    })
+    if (error) {
+      alert('Napaka pri shranjevanju: ' + error.message)
+      setSaving(false)
+      return
     }
-    save([entry, ...entries])
     setShowForm(false)
     setForm({
       month: new Date().getMonth(),
@@ -81,11 +92,19 @@ export default function AvtoPage() {
       total_km: '', private_km: '', business_km: '',
       car_value: '', notes: '',
     })
+    setSaving(false)
+    load()
   }
 
-  const totalPrivateKm = entries.reduce((s, e) => s + e.private_km, 0)
-  const totalBusinessKm = entries.reduce((s, e) => s + e.business_km, 0)
-  const totalBoniteta = entries.reduce((s, e) => s + e.boniteta, 0)
+  async function deleteEntry(id: string) {
+    if (!confirm('Izbrišete ta mesečni vnos?')) return
+    await supabase.from('vehicle_usage').delete().eq('id', id)
+    load()
+  }
+
+  const totalPrivateKm = entries.reduce((s, e) => s + Number(e.private_km), 0)
+  const totalBusinessKm = entries.reduce((s, e) => s + Number(e.business_km), 0)
+  const totalBoniteta = entries.reduce((s, e) => s + Number(e.boniteta_monthly || 0), 0)
 
   if (loading) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -221,9 +240,9 @@ export default function AvtoPage() {
 
             <div className="flex gap-3">
               <button onClick={handleSave}
-                disabled={!form.total_km}
+                disabled={saving || !form.total_km}
                 className="flex-1 bg-gray-900 text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-40">
-                Shrani evidenco
+                {saving ? 'Shranjujem...' : 'Shrani evidenco'}
               </button>
               <button onClick={() => setShowForm(false)}
                 className="border border-gray-200 rounded-xl px-6 py-2.5 text-sm">
@@ -253,25 +272,30 @@ export default function AvtoPage() {
               <div className="col-span-2 text-xs font-medium text-gray-500 text-right">Skupaj km</div>
               <div className="col-span-2 text-xs font-medium text-gray-500 text-right">Poslovni</div>
               <div className="col-span-2 text-xs font-medium text-gray-500 text-right">Zasebni</div>
-              <div className="col-span-2 text-xs font-medium text-gray-500 text-right">% zasebno</div>
+              <div className="col-span-1 text-xs font-medium text-gray-500 text-right">% zasebno</div>
               <div className="col-span-2 text-xs font-medium text-gray-500 text-right">Boniteta</div>
+              <div className="col-span-1"></div>
             </div>
-            {entries.map((e, i) => (
-              <div key={e.id} className={`grid grid-cols-12 gap-2 px-6 py-3 items-center ${i < entries.length-1 ? 'border-b border-gray-50' : ''}`}>
+            {entries.map((e) => (
+              <div key={e.id} className="grid grid-cols-12 gap-2 px-6 py-3 items-center border-b border-gray-50">
                 <div className="col-span-2 text-xs font-medium text-gray-900">
                   {MONTHS[e.month]} {e.year}
                 </div>
                 <div className="col-span-2 text-xs text-right text-gray-600">{e.total_km} km</div>
                 <div className="col-span-2 text-xs text-right text-green-600">{e.business_km} km</div>
                 <div className="col-span-2 text-xs text-right text-orange-500">{e.private_km} km</div>
-                <div className="col-span-2 text-xs text-right text-gray-600">{e.private_pct}%</div>
-                <div className="col-span-2 text-xs text-right font-medium text-red-500">€{e.boniteta.toFixed(2)}</div>
+                <div className="col-span-1 text-xs text-right text-gray-600">{e.private_pct}%</div>
+                <div className="col-span-2 text-xs text-right font-medium text-red-500">€{Number(e.boniteta_monthly || 0).toFixed(2)}</div>
+                <div className="col-span-1 flex justify-end">
+                  <button onClick={() => deleteEntry(e.id)}
+                    className="text-xs text-red-400 hover:text-red-600">✕</button>
+                </div>
               </div>
             ))}
             <div className="grid grid-cols-12 gap-2 px-6 py-3 bg-gray-50 border-t border-gray-200">
               <div className="col-span-2 text-xs font-medium text-gray-700">SKUPAJ</div>
               <div className="col-span-2 text-xs text-right font-semibold">
-                {(entries.reduce((s,e) => s+e.total_km, 0)).toFixed(0)} km
+                {(entries.reduce((s,e) => s+Number(e.total_km), 0)).toFixed(0)} km
               </div>
               <div className="col-span-2 text-xs text-right font-semibold text-green-600">
                 {totalBusinessKm.toFixed(0)} km
@@ -279,10 +303,11 @@ export default function AvtoPage() {
               <div className="col-span-2 text-xs text-right font-semibold text-orange-500">
                 {totalPrivateKm.toFixed(0)} km
               </div>
-              <div className="col-span-2"></div>
+              <div className="col-span-1"></div>
               <div className="col-span-2 text-xs text-right font-semibold text-red-500">
                 €{totalBoniteta.toFixed(2)}
               </div>
+              <div className="col-span-1"></div>
             </div>
           </div>
         )}
