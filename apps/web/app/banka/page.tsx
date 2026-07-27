@@ -412,6 +412,8 @@ export default function BankaPage() {
         // VAROVALKA: ce je racun ZE bil placan (npr. prekrivajoc uvoz), ne
         // podvoji KPO vnosa.
         if (!alreadyPaid) {
+          // POPRAVLJENO (26.7.2026): invoice_id doda, da KPO stran lahko
+          // izloci podvojen prikaz (izdan racun + to placilo, ista transakcija).
           await supabase.from('kpo_entries').insert({
             org_id: orgId,
             entry_date: t.date,
@@ -423,6 +425,7 @@ export default function BankaPage() {
             vat_out: Number(inv.vat_amount) || 0,
             category: 'Prodaja blaga/storitev',
             notes: `Bančni uvoz · ${t.reference || ''}`,
+            invoice_id: inv.id,
           })
           bookedCount++
         }

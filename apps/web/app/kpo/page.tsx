@@ -64,7 +64,19 @@ export default function KPOPage() {
       .gte('issue_date', from)
       .lte('issue_date', to)
       .order('issue_date', { ascending: false })
-    const invEntries = (invoices || []).map((inv: any) => ({
+    // POPRAVLJENO (26.7.2026): preprecitev dvojnega stetja - racuni, ki
+    // so ze poknjizeni kot pravi KPO vnos (npr. prek bancnega uvoza,
+    // invoice_id povezava), se NE sintetizirajo se enkrat iz
+    // issued_invoices - prikaze se samo pravi vnos (z datumom placila).
+    const { data: linkedEntries } = await supabase
+      .from('kpo_entries')
+      .select('invoice_id')
+      .eq('org_id', org.id)
+      .not('invoice_id', 'is', null)
+    const linkedInvoiceIds = new Set((linkedEntries || []).map((e: any) => e.invoice_id))
+    const invEntries = (invoices || [])
+      .filter((inv: any) => !linkedInvoiceIds.has(inv.id))
+      .map((inv: any) => ({
       id: inv.id,
       entry_date: inv.issue_date,
       description: `Račun #${inv.invoice_number} — ${inv.client_name}`,
