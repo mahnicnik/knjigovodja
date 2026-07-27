@@ -4,14 +4,30 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 
+const MONTHS = ['Januar', 'Februar', 'Marec', 'April', 'Maj', 'Junij', 'Julij', 'Avgust', 'September', 'Oktober', 'November', 'December']
+
 export default function KPOPage() {
   const [entries, setEntries] = useState<any[]>([])
   const [org, setOrg] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
+  const now = new Date()
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth())
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear())
+  const [customRange, setCustomRange] = useState(false)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+
+  function getEffectiveRange() {
+    if (customRange && dateFrom && dateTo) return { from: dateFrom, to: dateTo }
+    const from = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-01`
+    const to = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${new Date(selectedYear, selectedMonth + 1, 0).getDate()}`
+    return { from, to }
+  }
+
   useEffect(() => {
-    async function load() {
+    async function loadOrg() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
       const { data: member } = await supabase
@@ -19,40 +35,52 @@ export default function KPOPage() {
         .select('organizations(*)')
         .eq('user_id', user.id)
         .single()
-      if (member) {
-        const o = (member as any).organizations
-        setOrg(o)
-        const { data } = await supabase
-          .from('kpo_entries')
-          .select('*')
-          .eq('org_id', o.id)
-          .order('entry_date', { ascending: false })
-        const { data: invoices } = await supabase
-          .from('issued_invoices')
-          .select('*')
-          .eq('org_id', o.id)
-          .neq('status', 'draft')
-          .order('issue_date', { ascending: false })
-        const invEntries = (invoices || []).map((inv: any) => ({
-          id: inv.id,
-          entry_date: inv.issue_date,
-          description: `Račun #${inv.invoice_number} — ${inv.client_name}`,
-          entry_type: 'income',
-          income: inv.amount_net,
-          expense: 0,
-          vat_out: inv.vat_amount,
-          vat_in: 0,
-          category: 'Storitev',
-        }))
-        const all = [...invEntries, ...(data || [])].sort((a, b) =>
-          new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime()
-        )
-        setEntries(all)
-      }
-      setLoading(false)
+      if (member) setOrg((member as any).organizations)
+      else setLoading(false)
     }
-    load()
+    loadOrg()
   }, [])
+
+  useEffect(() => {
+    if (!org) return
+    loadEntries()
+  }, [org, selectedMonth, selectedYear, customRange, dateFrom, dateTo])
+
+  async function loadEntries() {
+    setLoading(true)
+    const { from, to } = getEffectiveRange()
+    const { data } = await supabase
+      .from('kpo_entries')
+      .select('*')
+      .eq('org_id', org.id)
+      .gte('entry_date', from)
+      .lte('entry_date', to)
+      .order('entry_date', { ascending: false })
+    const { data: invoices } = await supabase
+      .from('issued_invoices')
+      .select('*')
+      .eq('org_id', org.id)
+      .neq('status', 'draft')
+      .gte('issue_date', from)
+      .lte('issue_date', to)
+      .order('issue_date', { ascending: false })
+    const invEntries = (invoices || []).map((inv: any) => ({
+      id: inv.id,
+      entry_date: inv.issue_date,
+      description: `Račun #${inv.invoice_number} — ${inv.client_name}`,
+      entry_type: 'income',
+      income: inv.amount_net,
+      expense: 0,
+      vat_out: inv.vat_amount,
+      vat_in: 0,
+      category: 'Storitev',
+    }))
+    const all = [...invEntries, ...(data || [])].sort((a, b) =>
+      new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime()
+    )
+    setEntries(all)
+    setLoading(false)
+  }
 
   const totalIncome = entries.reduce((s, e) => s + (e.income || 0), 0)
   const totalExpense = entries.reduce((s, e) => s + (e.expense || 0), 0)
@@ -60,7 +88,7 @@ export default function KPOPage() {
   const totalVatIn = entries.reduce((s, e) => s + (e.vat_in || 0), 0)
   const profit = totalIncome - totalExpense
 
-  if (loading) return (
+  if (loading && !org) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <p className="text-gray-500">Nalagam...</p>
     </div>
@@ -68,14 +96,38 @@ export default function KPOPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
+      <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center flex-wrap gap-3">
         <div>
           <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900">← Domov</Link>
           <h1 className="font-semibold text-gray-900 mt-0.5">KPO knjiga</h1>
         </div>
-        <button className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium">
-          Izvozi PDF
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {!customRange ? (
+            <>
+              <select value={selectedMonth} onChange={e => setSelectedMonth(Number(e.target.value))} className="border border-gray-200 rounded-xl px-3 py-2 text-sm">
+                {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
+              </select>
+              <select value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))} className="border border-gray-200 rounded-xl px-3 py-2 text-sm">
+                {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2].map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </>
+          ) : (
+            <>
+              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border border-gray-200 rounded-xl px-3 py-2 text-sm" />
+              <span className="text-gray-400 text-sm">–</span>
+              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border border-gray-200 rounded-xl px-3 py-2 text-sm" />
+            </>
+          )}
+          <button
+            onClick={() => setCustomRange(!customRange)}
+            className="text-xs text-gray-500 hover:text-gray-900 underline"
+          >
+            {customRange ? 'Nazaj na mesec/leto' : 'Izberi interval →'}
+          </button>
+          <button className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium">
+            Izvozi PDF
+          </button>
+        </div>
       </div>
 
       <div className="max-w-4xl mx-auto px-6 py-8">
@@ -111,11 +163,13 @@ export default function KPOPage() {
             <div className="col-span-2 text-xs font-medium text-gray-500 text-right">DDV</div>
           </div>
 
-          {entries.length === 0 ? (
+          {loading ? (
+            <div className="p-12 text-center text-gray-400 text-sm">Nalagam...</div>
+          ) : entries.length === 0 ? (
             <div className="p-12 text-center">
               <div className="text-4xl mb-4">📊</div>
-              <h3 className="font-semibold text-gray-900 mb-2">KPO knjiga je prazna</h3>
-              <p className="text-gray-500 text-sm">Izdajte račun ali dodajte strošek</p>
+              <h3 className="font-semibold text-gray-900 mb-2">Za izbrano obdobje ni zapisov</h3>
+              <p className="text-gray-500 text-sm">Izdajte račun, dodajte strošek, ali izberite drugo obdobje</p>
             </div>
           ) : (
             entries.map((entry, i) => (
