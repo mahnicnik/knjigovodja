@@ -176,11 +176,15 @@ export default function BlagajnaPage() {
       }
 
       const data = await res.json()
+      // POPRAVLJENO (29.7.2026): posodobi PRAVA polja (prodCert*/testCert*)
+      // glede na to, kateri tip je bil pravkar nalozen - prej se je
+      // kartica "osvezila" sele ob rocnem ponovnem nalaganju strani.
       const updated = {
         ...config,
         certPassword,
-        certExpiry: data.expiry,
-        certSubject: data.subject,
+        ...(uploadIsTest
+          ? { testCertSubject: data.subject, testCertExpiry: data.expiry }
+          : { prodCertSubject: data.subject, prodCertExpiry: data.expiry }),
       }
       await saveConfig(updated)
       setCertFile(null)
