@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
       continue
     }
     const config: FursConfig = {
-      taxNumber: '91390419',
+      taxNumber: cert.tax_number || '91390419', // POPRAVLJENO 29.7.2026
       premiseId: inv.premiseId,
       deviceId: inv.deviceId,
       privateKeyPem,

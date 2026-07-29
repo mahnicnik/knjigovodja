@@ -155,7 +155,7 @@ export async function POST(req: NextRequest) {
     )
 
     const config: FursConfig = {
-      taxNumber: org.tax_number,
+      taxNumber: cert.tax_number || org.tax_number, // POPRAVLJENO 29.7.2026: testni certifikat ima svojo (fiktivno) davcno stevilko
       premiseId: premise.premise_id,
       deviceId: deviceIdCode,
       privateKeyPem,

@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       city: body.city,
       postalCode: body.postalCode,
       validityDate: body.validityDate || new Date().toISOString().split('T')[0],
-      softwareSupplierTaxNumber: org?.tax_number ?? '91390419',
+      softwareSupplierTaxNumber: cert.tax_number || org?.tax_number || '91390419', // POPRAVLJENO 29.7.2026
     }
 
     const p12Buffer = Buffer.from(cert.certificate_data, 'base64')
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     }
 
     const config: FursConfig = {
-      taxNumber: org?.tax_number ?? '91390419',
+      taxNumber: cert.tax_number || org?.tax_number || '91390419', // POPRAVLJENO 29.7.2026
       premiseId: premiseRow.premise_id,
       deviceId: 'RACUNKO01',
       privateKeyPem,
