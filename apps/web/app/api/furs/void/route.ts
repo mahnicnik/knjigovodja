@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { confirmWithFurs, extractFromP12, type FursConfig, type FursInvoiceData } from '@/lib/furs'
+import { getFursCertificate } from '@/lib/furs-cert'
 
 async function getSupabase() {
   const cookieStore = await cookies()
@@ -62,15 +63,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Davčna številka ni nastavljena' }, { status: 400 })
     }
 
-    const { data: cert } = await supabase
-      .from('furs_certificates')
-      .select('*')
-      .eq('org_id', member.org_id)
-      .eq('is_active', true)
-      .maybeSingle()
+    const { cert, isTest } = await getFursCertificate(supabase, member.org_id)
 
     if (!cert) {
-      return NextResponse.json({ error: 'FURS certifikat ni naložen' }, { status: 400 })
+      return NextResponse.json({ error: `FURS ${isTest ? 'testni' : 'produkcijski'} certifikat ni naložen` }, { status: 400 })
     }
 
     const { data: premise } = await supabase

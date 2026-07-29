@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { confirmWithFurs, extractFromP12, type FursConfig, type FursInvoiceData } from '@/lib/furs'
+import { getFursCertificate } from '@/lib/furs-cert'
 
 export const maxDuration = 300 // dolg zaporeden postopek
 
@@ -100,10 +101,8 @@ export async function POST(req: NextRequest) {
   }
 
   // --- PRAVO POSILJANJE ---
-  const { data: cert } = await admin
-    .from('furs_certificates').select('*')
-    .eq('org_id', ORG_ID).eq('is_active', true).maybeSingle()
-  if (!cert) return NextResponse.json({ error: 'Certifikat ni nalozen' }, { status: 400 })
+  const { cert, isTest } = await getFursCertificate(admin, ORG_ID)
+  if (!cert) return NextResponse.json({ error: `${isTest ? 'Testni' : 'Produkcijski'} certifikat ni nalozen` }, { status: 400 })
   const p12Buffer = Buffer.from(cert.certificate_data, 'base64')
   const { privateKeyPem, certificatePem } = extractFromP12(p12Buffer, cert.certificate_password ?? '')
 

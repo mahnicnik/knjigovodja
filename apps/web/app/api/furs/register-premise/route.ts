@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { confirmBusinessPremiseWithFurs, extractFromP12, type FursConfig, type FursPremiseData } from '@/lib/furs'
+import { getFursCertificate } from '@/lib/furs-cert'
 
 async function getSupabase() {
   const cookieStore = await cookies()
@@ -32,13 +33,8 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
     if (!member) return NextResponse.json({ error: 'Org ni najdena' }, { status: 404 })
 
-    const { data: cert } = await supabase
-      .from('furs_certificates')
-      .select('*')
-      .eq('org_id', member.org_id)
-      .eq('is_active', true)
-      .maybeSingle()
-    if (!cert) return NextResponse.json({ error: 'Certifikat ni naložen' }, { status: 400 })
+    const { cert, isTest } = await getFursCertificate(supabase, member.org_id)
+    if (!cert) return NextResponse.json({ error: `${isTest ? 'Testni' : 'Produkcijski'} certifikat ni naložen` }, { status: 400 })
 
     const { data: premiseRow } = await supabase
       .from('business_premises')

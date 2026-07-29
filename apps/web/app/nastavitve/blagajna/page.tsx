@@ -13,6 +13,11 @@ interface FursConfig {
   certPassword?: string
   certExpiry?: string
   certSubject?: string
+  // DODANO (26.7.2026): loceno stanje za produkcijski IN testni certifikat
+  prodCertSubject?: string
+  prodCertExpiry?: string
+  testCertSubject?: string
+  testCertExpiry?: string
   testMode: boolean
   premises: FursPremise[]
   devices: FursDevice[]
@@ -48,6 +53,7 @@ export default function BlagajnaPage() {
   const [toast, setToast] = useState<{msg: string, ok: boolean} | null>(null)
   const [certFile, setCertFile] = useState<File | null>(null)
   const [certPassword, setCertPassword] = useState('')
+  const [uploadIsTest, setUploadIsTest] = useState(false)
   const [uploadingCert, setUploadingCert] = useState(false)
   const [premiseModal, setPremiseModal] = useState<Partial<FursPremise> | null>(null)
   const [deviceModal, setDeviceModal] = useState<Partial<FursDevice> | null>(null)
@@ -76,13 +82,16 @@ export default function BlagajnaPage() {
         .maybeSingle()
 
       if (member) {
-        // Naloži certifikat
-        const { data: cert } = await supabase
+        // Naloži OBA certifikata (produkcijski + testni), ne samo enega
+        // (26.7.2026: prej "katerikoli aktiven", zdaj loceno).
+        const { data: certs } = await supabase
           .from('furs_certificates')
-          .select('issuer, certificate_password, valid_to')
+          .select('issuer, certificate_password, valid_to, is_test')
           .eq('org_id', member.org_id)
           .eq('is_active', true)
-          .maybeSingle()
+        const cert = (certs || []).find(cc => !cc.is_test) // za obstojeco certPassword logiko spodaj
+        const prodCert = (certs || []).find(cc => !cc.is_test)
+        const testCert = (certs || []).find(cc => cc.is_test)
 
         // Naloži poslovne prostore
         const { data: premises } = await supabase
@@ -121,6 +130,10 @@ export default function BlagajnaPage() {
           certSubject: cert?.issuer,
           certPassword: cert?.certificate_password,
           certExpiry: cert?.valid_to,
+          prodCertSubject: prodCert?.issuer,
+          prodCertExpiry: prodCert?.valid_to,
+          testCertSubject: testCert?.issuer,
+          testCertExpiry: testCert?.valid_to,
         })
       }
       setLoading(false)
@@ -150,6 +163,7 @@ export default function BlagajnaPage() {
       const formData = new FormData()
       formData.append('cert', certFile)
       formData.append('password', certPassword)
+      formData.append('is_test', String(uploadIsTest))
 
       const res = await fetch('/api/furs/upload-cert', {
         method: 'POST',
@@ -387,19 +401,51 @@ export default function BlagajnaPage() {
       {/* ── CERTIFIKAT ── */}
       {tab === 'certifikat' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {config.certSubject && (
-            <div style={{ padding: 16, background: 'rgba(31,107,58,0.08)', borderRadius: 12, border: '1px solid rgba(31,107,58,0.2)' }}>
-              <div style={{ fontWeight: 700, fontSize: 13, color: '#1f6b3a', marginBottom: 8 }}>✅ Certifikat naložen</div>
-              <div style={{ fontSize: 12, color: '#444', lineHeight: 1.7 }}>
-                <div><b>Naziv:</b> {config.certSubject}</div>
-                {config.certExpiry && <div><b>Velja do:</b> {config.certExpiry}</div>}
+          {/* Loceno stanje produkcijskega IN testnega certifikata (26.7.2026) */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ padding: 16, borderRadius: 12, border: '1px solid ' + (config.prodCertSubject ? 'rgba(31,107,58,0.2)' : '#e5e1d8'), background: config.prodCertSubject ? 'rgba(31,107,58,0.08)' : '#fafaf7' }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: config.prodCertSubject ? '#1f6b3a' : '#999', marginBottom: 8 }}>
+                {config.prodCertSubject ? '✅ Produkcijski certifikat' : '⬜ Produkcijski certifikat ni naložen'}
               </div>
+              {config.prodCertSubject && (
+                <div style={{ fontSize: 12, color: '#444', lineHeight: 1.7 }}>
+                  <div><b>Naziv:</b> {config.prodCertSubject}</div>
+                  {config.prodCertExpiry && <div><b>Velja do:</b> {config.prodCertExpiry}</div>}
+                </div>
+              )}
             </div>
-          )}
+            <div style={{ padding: 16, borderRadius: 12, border: '1px solid ' + (config.testCertSubject ? 'rgba(184,134,11,0.3)' : '#e5e1d8'), background: config.testCertSubject ? 'rgba(184,134,11,0.08)' : '#fafaf7' }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: config.testCertSubject ? '#b8860b' : '#999', marginBottom: 8 }}>
+                {config.testCertSubject ? '🧪 Testni certifikat' : '⬜ Testni certifikat ni naložen'}
+              </div>
+              {config.testCertSubject && (
+                <div style={{ fontSize: 12, color: '#444', lineHeight: 1.7 }}>
+                  <div><b>Naziv:</b> {config.testCertSubject}</div>
+                  {config.testCertExpiry && <div><b>Velja do:</b> {config.testCertExpiry}</div>}
+                </div>
+              )}
+            </div>
+          </div>
 
           <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e1d8', padding: 20 }}>
             <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>
-              {config.certSubject ? 'Zamenjaj certifikat' : 'Naloži FURS certifikat (.p12)'}
+              Naloži FURS certifikat (.p12)
+            </div>
+
+            {/* Izbira: kateri tip certifikata nalagam (26.7.2026) */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              <button
+                onClick={() => setUploadIsTest(false)}
+                style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: `2px solid ${!uploadIsTest ? '#0d2818' : '#e5e1d8'}`, background: !uploadIsTest ? '#0d2818' : '#fff', color: !uploadIsTest ? '#fff' : '#666', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                Produkcijski
+              </button>
+              <button
+                onClick={() => setUploadIsTest(true)}
+                style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: `2px solid ${uploadIsTest ? '#b8860b' : '#e5e1d8'}`, background: uploadIsTest ? '#b8860b' : '#fff', color: uploadIsTest ? '#fff' : '#666', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                🧪 Testni
+              </button>
             </div>
 
             {/* File drop zone */}
