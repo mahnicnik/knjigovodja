@@ -5,6 +5,7 @@ import {
   generateAccountingXLSX,
   generateAccountingCSV_KIR,
   generateAccountingCSV_KPR,
+  type KPOEntryRow,
   type ExportInput,
   type IssuedInvoiceRow,
   type ReceiptRow,
@@ -119,6 +120,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Napaka pri branju stroškov: ${recErr.message}` }, { status: 500 })
     }
 
+    // ===== Pridobi KPO vnose (29.7.2026, audit K6) =====
+    // Prej izvoz sploh NI vkljuceval KPO evidence (banka, kartice, POS,
+    // place, amortizacija...) - racunovodja je dobival nepopolno sliko.
+    const { data: kpoEntriesData, error: kpoErr } = await supabase
+      .from('kpo_entries')
+      .select('*')
+      .eq('org_id', org.id)
+      .gte('entry_date', periodFrom)
+      .lte('entry_date', periodTo)
+      .order('entry_date', { ascending: true })
+
+    if (kpoErr) {
+      return NextResponse.json({ error: `Napaka pri branju KPO evidence: ${kpoErr.message}` }, { status: 500 })
+    }
+
     // ===== Pripravi podatke za export =====
     const issuedInvoices: IssuedInvoiceRow[] = (invoicesData ?? []).map((i: any) => ({
       invoice_number: i.invoice_number,
@@ -156,6 +172,19 @@ export async function POST(req: NextRequest) {
       has_image: !!r.image_url,
     }))
 
+    const kpoEntries: KPOEntryRow[] = (kpoEntriesData ?? []).map((e: any) => ({
+      entry_date: e.entry_date,
+      description: e.description,
+      entry_type: e.entry_type,
+      income: e.income ? Number(e.income) : null,
+      expense: e.expense ? Number(e.expense) : null,
+      vat_in: e.vat_in ? Number(e.vat_in) : null,
+      vat_out: e.vat_out ? Number(e.vat_out) : null,
+      category: e.category,
+      notes: e.notes,
+      invoice_id: e.invoice_id,
+    }))
+
     const exportInput: ExportInput = {
       orgName: org.name,
       orgTaxNumber: org.tax_number,
@@ -165,6 +194,7 @@ export async function POST(req: NextRequest) {
       periodTo,
       issuedInvoices,
       receipts,
+      kpoEntries,
     }
 
     // ===== Save accountant info =====
@@ -247,7 +277,7 @@ export async function POST(req: NextRequest) {
     </p>
     
     <ul style="font-size: 14px; line-height: 1.8;">
-      ${xlsxBuffer ? '<li><strong>XLSX</strong> — 3 sheet-i (Izdani računi, Prejeti računi, Rekapitulacija)</li>' : ''}
+      ${xlsxBuffer ? '<li><strong>XLSX</strong> — 4 sheet-i (Izdani računi, Prejeti računi, KPO evidenca, Rekapitulacija)</li>' : ''}
       ${csvKir ? '<li><strong>CSV izdani računi</strong> — semicolon separator za Vasco/Pantheon</li>' : ''}
       ${csvKpr ? '<li><strong>CSV prejeti računi</strong> — semicolon separator</li>' : ''}
     </ul>
