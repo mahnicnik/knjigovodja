@@ -166,6 +166,7 @@ export default function DashboardPage() {
   const supabase = createClient()
 
   const [org, setOrg] = useState<any>(null)
+  const [pendingRecurringCount, setPendingRecurringCount] = useState(0)
   const [userId, setUserId] = useState<string | null>(null)
   const [userEmail, setUserEmail] = useState<string>('')
   const [loading, setLoading] = useState(true)
@@ -300,7 +301,7 @@ export default function DashboardPage() {
       }
 
       // Load all data in parallel
-      const [invRes, expRes, empRes, cliRes, prefsRes2, emailPendRes, emailConnRes, kpoRes] = await Promise.all([
+      const [invRes, expRes, empRes, cliRes, prefsRes2, emailPendRes, emailConnRes, kpoRes, pendingRecurringRes] = await Promise.all([
         supabase.from('issued_invoices').select('*').eq('org_id', o.id).neq('status','draft'),
         supabase.from('receipts').select('*').eq('org_id', o.id),
         supabase.from('employees').select('id').eq('org_id', o.id).eq('status','active'),
@@ -312,6 +313,9 @@ export default function DashboardPage() {
         // kartice, POS, place, stroski...) - locen prikaz od fakturiranega
         // prometa, da se izogne dvojnemu stetju.
         supabase.from('kpo_entries').select('income, entry_date').eq('org_id', o.id).eq('entry_type', 'income').gte('entry_date', monthStart).lte('entry_date', monthEnd),
+        // DODANO 29.7.2026: stevilo samodejno pripravljenih osnutkov
+        // ponavljajocih racunov, ki cakajo na rocno potrditev.
+        supabase.from('issued_invoices').select('id', { count: 'exact', head: true }).eq('org_id', o.id).eq('status', 'draft').like('notes', 'Ponavljajoč račun%'),
       ])
       setEmailPendingCount(emailPendRes.count || 0)
       setEmailConnectionsCount(emailConnRes.count || 0)
@@ -321,6 +325,7 @@ export default function DashboardPage() {
       // DODANO 26.7.2026 (audit K3): dejansko prejeto na racun ta mesec
       // (KPO, denarno nacelo) - locen prikaz od fakturiranega prometa.
       const kpoReceivedMonth = (kpoRes.data || []).reduce((s: number, e: any) => s + Number(e.income || 0), 0)
+      setPendingRecurringCount(pendingRecurringRes.count || 0)
       const monthInv = invoices.filter((i:any) => i.issue_date >= monthStart && i.issue_date <= monthEnd)
       const yearInv = invoices.filter((i:any) => i.issue_date >= yearStart)
       const revenue = monthInv.reduce((s:number,i:any) => s + Number(i.amount_net), 0)
@@ -858,6 +863,16 @@ export default function DashboardPage() {
             <div className="rk-stat-meta">{data.overdueCount > 0 ? <>Od tega <b>€{Math.round(data.overdueAmount)} v zamudi</b> ({data.overdueCount} {data.overdueCount === 1 ? 'račun' : 'računov'})</> : <>{data.unpaidCount} {data.unpaidCount === 1 ? 'odprt račun' : 'odprtih računov'}</>}</div>
           </Link>
         </section>
+
+        {pendingRecurringCount > 0 && (
+          <Link href="/invoices" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.2)', borderRadius: 12, padding: '14px 18px', marginTop: 12, textDecoration: 'none' }}>
+            <div>
+              <span style={{ fontWeight: 700, fontSize: 13, color: '#B45309' }}>🔁 {pendingRecurringCount} {pendingRecurringCount === 1 ? 'ponavljajoč račun čaka' : 'ponavljajočih računov čaka'} na potrditev</span>
+              <div style={{ fontSize: 12, color: '#92601F', marginTop: 2 }}>Samodejno pripravljeni osnutki — preglejte in potrdite, preden se pošljejo</div>
+            </div>
+            <span style={{ color: '#B45309' }}>→</span>
+          </Link>
+        )}
 
         {/* CASH FLOW (real data) */}
         <section className="rk-cashflow">

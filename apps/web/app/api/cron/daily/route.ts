@@ -3,6 +3,7 @@ import { GET as notificationsGET } from '../notifications/route'
 import { GET as emailScanGET } from '@/app/api/email-scan/cron/route'
 import { GET as unfreezeGET } from '../unfreeze-packages/route'
 import { GET as installmentsGET } from '../installments/route'
+import { GET as recurringInvoicesGET } from '../recurring-invoices/route'
 
 /**
  * En sam dnevni cron, ki zaporedoma pokliCe vse stiri loceno testirane
@@ -40,6 +41,13 @@ export async function GET(request: NextRequest) {
     results.installments = await res.json()
   } catch (e: any) {
     results.installments = { error: e.message }
+  }
+
+  try {
+    const res = await recurringInvoicesGET(request)
+    results.recurringInvoices = await res.json()
+  } catch (e: any) {
+    results.recurringInvoices = { error: e.message }
   }
 
   return NextResponse.json({ success: true, results })
