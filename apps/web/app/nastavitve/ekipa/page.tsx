@@ -197,15 +197,37 @@ export default function EkipaPage() {
     }
   }
 
+  // POPRAVLJENO (30.7.2026, audit K8): prej neposreden Supabase klic iz
+  // brskalnika, brez preverjanja pravic - UI je gumbe skril za ne-lastnike,
+  // a to je bilo samo kozmeticno (konzola v brskalniku bi to zaobsla).
+  // Zdaj gre skozi API endpoint, ki na streznikuu preveri vlogo klicatelja.
   async function removeMember(memberId: string) {
     if (!confirm('Odstranite tega člana?')) return
-    await supabase.from('org_members').delete().eq('id', memberId)
+    const res = await fetch('/api/team/remove-member', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ memberId }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      showToast('error', data.error || 'Napaka pri odstranjevanju')
+      return
+    }
     setMembers(prev => prev.filter(m => m.id !== memberId))
     showToast('success', 'Član odstranjen')
   }
 
   async function changeRole(memberId: string, newRole: string) {
-    await supabase.from('org_members').update({ role: newRole }).eq('id', memberId)
+    const res = await fetch('/api/team/change-role', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ memberId, newRole }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      showToast('error', data.error || 'Napaka pri spreminjanju vloge')
+      return
+    }
     setMembers(prev => prev.map(m => m.id === memberId ? { ...m, role: newRole as Member['role'] } : m))
     showToast('success', 'Vloga spremenjena')
   }
