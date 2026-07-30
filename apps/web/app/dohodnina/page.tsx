@@ -5,15 +5,16 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 
 // DOHODNINSKA LESTVICA 2026
+// POPRAVLJENO (30.7.2026): uradne 2026 letne meje (prej zastarele).
 const BRACKETS = [
-  { upTo: 8755,    rate: 0.16, label: '16%' },
-  { upTo: 18488,   rate: 0.26, label: '26%' },
-  { upTo: 70907,   rate: 0.33, label: '33%' },
-  { upTo: 250000,  rate: 0.39, label: '39%' },
+  { upTo: 9721.43,  rate: 0.16, label: '16%' },
+  { upTo: 28592.44, rate: 0.26, label: '26%' },
+  { upTo: 57184.88, rate: 0.33, label: '33%' },
+  { upTo: 82346.23, rate: 0.39, label: '39%' },
   { upTo: Infinity, rate: 0.50, label: '50%' },
 ]
 
-const GENERAL_RELIEF = 5000
+const GENERAL_RELIEF = 5551.93 // POPRAVLJENO 30.7.2026: uradna 2026 vrednost (prej 5000)
 const SP_CONTRIBUTIONS: Record<number, number> = {
   1: 2584.92, 2: 3012.36, 3: 3439.20, 4: 3866.04, 5: 4293.00,
   6: 4719.84, 7: 5146.68, 8: 5399.76, 9: 6024.24, 10: 6451.08,

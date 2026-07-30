@@ -4,11 +4,13 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 
+// POPRAVLJENO (30.7.2026): uradne 2026 letne meje (prej zastarele
+// 8755/18488/70907/250000). Vir: FURS, preverjeno 26.7.2026.
 const BRACKETS = [
-  { upTo: 8755, rate: 0.16 },
-  { upTo: 18488, rate: 0.26 },
-  { upTo: 70907, rate: 0.33 },
-  { upTo: 250000, rate: 0.39 },
+  { upTo: 9721.43, rate: 0.16 },
+  { upTo: 28592.44, rate: 0.26 },
+  { upTo: 57184.88, rate: 0.33 },
+  { upTo: 82346.23, rate: 0.39 },
   { upTo: Infinity, rate: 0.50 },
 ]
 
@@ -22,7 +24,7 @@ function calcNormirani(revenue: number, contributionClass: number) {
   const normExpenses = revenue * 0.80 // 80% normiranih odhodkov
   const taxableBase = Math.max(0, revenue - normExpenses)
   const contributions = SP_CONTRIBUTIONS[contributionClass] || SP_CONTRIBUTIONS[8]
-  const adjustedBase = Math.max(0, taxableBase - contributions - 5000)
+  const adjustedBase = Math.max(0, taxableBase - contributions - 5551.93) // POPRAVLJENO 30.7.2026: uradna 2026 splosna olajsava (prej 5000)
   let tax = 0, prev = 0
   for (const b of BRACKETS) {
     if (adjustedBase <= prev) break
@@ -47,7 +49,7 @@ function calcNormirani(revenue: number, contributionClass: number) {
 function calcDejanskih(revenue: number, expenses: number, contributionClass: number) {
   const contributions = SP_CONTRIBUTIONS[contributionClass] || SP_CONTRIBUTIONS[8]
   const taxableBase = Math.max(0, revenue - expenses - contributions)
-  const adjustedBase = Math.max(0, taxableBase - 5000)
+  const adjustedBase = Math.max(0, taxableBase - 5551.93) // POPRAVLJENO 30.7.2026
   let tax = 0, prev = 0
   for (const b of BRACKETS) {
     if (adjustedBase <= prev) break
@@ -90,13 +92,30 @@ export default function NormianiPage() {
       setOrg(o)
       if (o.contribution_class) setContributionClass(o.contribution_class)
 
+      // POPRAVLJENO (30.7.2026): dodan LETNI filter (prej sestel vse od
+      // zacetka uporabe) IN KPO prihodki (prej manjkal POS promet, bancni
+      // prilivi, karticni obracuni -> PRENIZKO obracunan davek).
+      const taxYear = new Date().getFullYear()
+      const yearStart = `${taxYear}-01-01`
+      const yearEnd = `${taxYear}-12-31`
+
       const { data: invoices } = await supabase
         .from('issued_invoices').select('amount_net')
         .eq('org_id', o.id).neq('status', 'draft')
+        .gte('issue_date', yearStart).lte('issue_date', yearEnd)
       const { data: receipts } = await supabase
         .from('receipts').select('amount_net').eq('org_id', o.id)
+        .gte('receipt_date', yearStart).lte('receipt_date', yearEnd)
+      // SAMO vnosi BREZ invoice_id - tisti z njim so placila ze prestetih
+      // izdanih racunov (izognemo se dvojnemu stetju).
+      const { data: kpoIncome } = await supabase
+        .from('kpo_entries').select('income')
+        .eq('org_id', o.id).eq('entry_type', 'income').is('invoice_id', null)
+        .gte('entry_date', yearStart).lte('entry_date', yearEnd)
 
-      const totalRev = invoices?.reduce((s: number, i: any) => s + Number(i.amount_net), 0) || 0
+      const invoiceRev = invoices?.reduce((s: number, i: any) => s + Number(i.amount_net), 0) || 0
+      const kpoRev = kpoIncome?.reduce((s: number, e: any) => s + Number(e.income || 0), 0) || 0
+      const totalRev = invoiceRev + kpoRev
       const totalExp = receipts?.reduce((s: number, r: any) => s + Number(r.amount_net), 0) || 0
       if (totalRev > 0) setRevenue(totalRev.toFixed(2))
       if (totalExp > 0) setExpenses(totalExp.toFixed(2))
