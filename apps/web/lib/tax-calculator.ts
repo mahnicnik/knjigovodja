@@ -61,10 +61,15 @@ export interface TaxBreakdown {
 
 // ===== KONSTANTE 2025/2026 =====
 
-/** Minimalna plača bruto 2025 — osnova za minimalne prispevke s.p. */
-const MIN_WAGE_2025 = 1253.90
+/** Minimalna plača bruto 2026 — osnova za minimalne prispevke s.p.
+ *  POSODOBLJENO 30.7.2026: prej 1253,90 EUR (vrednost izpred dveh let).
+ *  Uradni vir: Uradni list RS 2026-01-0175 (velja od 1.1.2026). */
+const MIN_WAGE_2025 = 1481.88
 
-/** Povprečna plača RS — osnova za maksimalne prispevke (predvideno 2025) */
+/** Povprečna plača RS — osnova za maksimalne prispevke (predvideno 2025)
+ *  ⚠️ NEPREVERJENO ZA 2026 (audit 30.7.2026) — ta vrednost je iz 2025 in
+ *  je nisem uradno preveril. Vpliva na izračun maksimalnih prispevkov.
+ *  Priporočilo: preveriti pri računovodji in posodobiti. */
 const AVG_WAGE_2025 = 2280.30
 
 /** Prispevki s.p. — približno ~33% bruto osnove (najnižja osnova) */
@@ -76,17 +81,20 @@ const VAT_RATE = 0.22
 /** Davek od dobička pravnih oseb (d.o.o.) */
 const CIT_RATE = 0.19
 
-/** Dohodnina — progresivna lestvica 2025 (mesečno, /12) */
+/** Dohodnina — progresivna lestvica 2026 (mesečno, /12)
+ *  POSODOBLJENO 30.7.2026: prej lestvica 2025
+ *  (8755,06 / 25750,50 / 51500 / 74160). Vir: FURS, preverjeno 26.7.2026. */
 const INCOME_TAX_BRACKETS = [
-  { upTo: 8755.06 / 12, rate: 0.16 },   // 16%
-  { upTo: 25750.50 / 12, rate: 0.26 },  // 26%
-  { upTo: 51500.00 / 12, rate: 0.33 },  // 33%
-  { upTo: 74160.00 / 12, rate: 0.39 },  // 39%
+  { upTo: 9721.43 / 12, rate: 0.16 },   // 16%
+  { upTo: 28592.44 / 12, rate: 0.26 },  // 26%
+  { upTo: 57184.88 / 12, rate: 0.33 },  // 33%
+  { upTo: 82346.23 / 12, rate: 0.39 },  // 39%
   { upTo: Infinity, rate: 0.50 },        // 50%
 ]
 
-/** Splošna olajšava 2025 (mesečno) */
-const GENERAL_ALLOWANCE = 5000.00 / 12
+/** Splošna olajšava 2026 (mesečno)
+ *  POSODOBLJENO 30.7.2026: prej 5000 EUR (2025). Vir: FURS. */
+const GENERAL_ALLOWANCE = 5551.93 / 12
 
 // ===== POMOŽNE FUNKCIJE =====
 
