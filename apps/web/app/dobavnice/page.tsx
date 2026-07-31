@@ -53,10 +53,12 @@ export default function DobavnicePage() {
     const total = subtotal + vatAmount
 
     // Pridobi naslednjo številko računa
-    const { count } = await supabase.from('issued_invoices').select('*', { count: 'exact', head: true })
-      .eq('org_id', org.id).eq('invoice_type', 'invoice')
-    const num = String((count || 0) + 1).padStart(3, '0')
-    const invoiceNumber = `${new Date().getFullYear()}-${num}`
+    // POPRAVLJENO (30.7.2026, audit A5): prej count(*)+1, ki se pokvari ob
+    // vrzelih v stevilkah (glej isti popravek na /invoices/new, 24.7.).
+    const { data: nextNumber } = await supabase.rpc('get_next_manual_invoice_number', {
+      p_org_id: org.id, p_year: new Date().getFullYear(),
+    })
+    const invoiceNumber = nextNumber || `${new Date().getFullYear()}-001`
 
     const firstDoc = clientDocs[0]
     const { data: inv, error } = await supabase.from('issued_invoices').insert({

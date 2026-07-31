@@ -106,9 +106,13 @@ export default function InvoicesPage() {
 
   async function podvoji(inv: any) {
     setActionLoading('podvoji_' + inv.id)
-    const nums = invoices.map(i => parseInt(i.invoice_number)).filter(n => !isNaN(n))
-    const nextNum = nums.length > 0 ? Math.max(...nums) + 1 : 1
-    const newNum = String(nextNum).padStart(4, '0')
+    // POPRAVLJENO (30.7.2026, audit A4): prej parseInt('2026-015') -> 2026
+    // (ustavi se pri pomisljaju), Math.max+1 -> podvojen racun je dobil
+    // neveljavno stevilko "2027". Zdaj atomarna RPC, enaka kot /invoices/new.
+    const { data: nextNumber } = await supabase.rpc('get_next_manual_invoice_number', {
+      p_org_id: inv.org_id, p_year: new Date().getFullYear(),
+    })
+    const newNum = nextNumber || `${new Date().getFullYear()}-001`
     await supabase.from('issued_invoices').insert({
       org_id: inv.org_id,
       invoice_number: newNum,

@@ -118,14 +118,18 @@ export default function AvansniRacuniPage() {
       const amountNet = isVatRegistered ? remaining / 1.22 : remaining
       const vatAmount = remaining - amountNet
 
+      // POPRAVLJENO (30.7.2026, audit A5): koncni racun po avansu spada v
+      // GLAVNO serijo - prej 4-mestna oblika (2026-0001), neskladna.
       const year = new Date().getFullYear()
-      const { count } = await supabase.from('issued_invoices').select('*', { count: 'exact', head: true }).eq('org_id', orgId).like('invoice_number', `${year}-%`)
-      const seq = String((count ?? 0) + 1).padStart(4, '0')
+      const { data: nextNumber } = await supabase.rpc('get_next_manual_invoice_number', {
+        p_org_id: orgId, p_year: year,
+      })
+      const finalInvoiceNumber = nextNumber || `${year}-001`
       const today = new Date().toISOString().split('T')[0]
 
       const { data: inv } = await supabase.from('issued_invoices').insert({
         org_id: orgId,
-        invoice_number: `${year}-${seq}`,
+        invoice_number: finalInvoiceNumber,
         invoice_type: 'invoice',
         invoice_subtype: 'final',
         client_name: advance.client_name,
@@ -147,7 +151,7 @@ export default function AvansniRacuniPage() {
       setInvoices(prev => [inv!, ...prev])
       setSelectedAdvance(null)
       setModal(null)
-      showToast(`Finalni račun ${year}-${seq} ustvarjen`)
+      showToast(`Finalni račun ${finalInvoiceNumber} ustvarjen`)
     } catch (e: any) { showToast(e.message) }
     setSaving(false)
   }

@@ -61,10 +61,13 @@ export default function PredracuniPage() {
       if (!q) return
 
       // Generiraj številko računa
+      // POPRAVLJENO (30.7.2026, audit A5): prej count(*)+1 s 4-mestno
+      // obliko (2026-0001), neskladno z ostalimi racuni (2026-019).
       const year = new Date().getFullYear()
-      const { count } = await supabase.from('issued_invoices').select('*', { count: 'exact', head: true }).eq('org_id', orgId!).like('invoice_number', `${year}-%`)
-      const seq = String((count ?? 0) + 1).padStart(4, '0')
-      const invoiceNumber = `${year}-${seq}`
+      const { data: nextNumber } = await supabase.rpc('get_next_manual_invoice_number', {
+        p_org_id: orgId, p_year: year,
+      })
+      const invoiceNumber = nextNumber || `${year}-001`
 
       // Ustvari račun
       const { data: invoice } = await supabase.from('issued_invoices').insert({
