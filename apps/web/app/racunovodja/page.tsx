@@ -16,6 +16,7 @@ interface ClientOrg {
   stats: {
     invoices_count: number
     invoices_total: number
+    kpo_income: number
     receipts_count: number
     receipts_unconfirmed: number
     overdue_count: number
@@ -77,15 +78,20 @@ export default function RacunovodjaPortal() {
         (orgs ?? []).map(async (org) => {
           const membership = memberships.find(m => m.org_id === org.id)
 
-          const [invRes, recRes, overdueRes] = await Promise.all([
+          const [invRes, recRes, overdueRes, kpoRes] = await Promise.all([
             supabase.from('issued_invoices').select('amount_total, status').eq('org_id', org.id).gte('issue_date', from).lte('issue_date', to).neq('status', 'draft'),
             supabase.from('receipts').select('status').eq('org_id', org.id).gte('receipt_date', from).lte('receipt_date', to),
             supabase.from('issued_invoices').select('amount_total').eq('org_id', org.id).eq('status', 'sent').lt('due_date', new Date().toISOString().split('T')[0]),
+            // DODANO (30.7.2026): KPO prihodki (POS promet, banka, kartice...)
+            // - SAMO brez invoice_id, da se placila ze prestetih racunov ne
+            // stejejo dvakrat.
+            supabase.from('kpo_entries').select('income').eq('org_id', org.id).eq('entry_type', 'income').is('invoice_id', null).gte('entry_date', from).lte('entry_date', to),
           ])
 
           const invoices = invRes.data ?? []
           const receipts = recRes.data ?? []
           const overdue = overdueRes.data ?? []
+          const kpoIncome = (kpoRes.data ?? []).reduce((s: number, e: any) => s + Number(e.income || 0), 0)
 
           return {
             org_id: org.id,
@@ -97,6 +103,7 @@ export default function RacunovodjaPortal() {
             stats: {
               invoices_count: invoices.length,
               invoices_total: invoices.reduce((s, i) => s + Number(i.amount_total), 0),
+              kpo_income: kpoIncome,
               receipts_count: receipts.length,
               receipts_unconfirmed: receipts.filter(r => r.status === 'pending').length,
               overdue_count: overdue.length,
@@ -227,8 +234,14 @@ export default function RacunovodjaPortal() {
                       </div>
                       <div style={{ textAlign: 'center' }}>
                         <div style={{ fontSize: 18, fontWeight: 700, color: '#1D9E75' }}>€{Math.round(client.stats.invoices_total).toLocaleString('sl-SI')}</div>
-                        <div style={{ fontSize: 11, color: '#888' }}>prihodki</div>
+                        <div style={{ fontSize: 11, color: '#888' }}>iz računov</div>
                       </div>
+                      {client.stats.kpo_income > 0 && (
+                        <div style={{ textAlign: 'center' }}>
+                          <div style={{ fontSize: 18, fontWeight: 700, color: '#1D9E75' }}>€{Math.round(client.stats.kpo_income).toLocaleString('sl-SI')}</div>
+                          <div style={{ fontSize: 11, color: '#888' }} title="POS promet, bančni prilivi, kartični obračuni — iz KPO evidence">ostali prihodki</div>
+                        </div>
+                      )}
                       {client.stats.overdue_count > 0 && (
                         <div style={{ textAlign: 'center' }}>
                           <div style={{ fontSize: 18, fontWeight: 700, color: '#DC2626' }}>{client.stats.overdue_count}</div>
