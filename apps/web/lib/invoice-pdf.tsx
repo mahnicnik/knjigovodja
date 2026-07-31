@@ -80,6 +80,15 @@ export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
             <View style={styles.invoiceMeta}>
               <Text>Številka: {invoice.invoice_number}</Text>
               <Text>Datum: {new Date(invoice.issue_date).toLocaleDateString('sl-SI')}</Text>
+              {/* DODANO (30.7.2026): datum opravljene storitve/dobave je po
+                  ZDDV-1 obvezen, ce se razlikuje od datuma izdaje racuna. */}
+              {invoice.service_date && (
+                <Text>
+                  {invoice.service_date_to && invoice.service_date_to !== invoice.service_date
+                    ? `Opravljeno: ${new Date(invoice.service_date).toLocaleDateString('sl-SI')} – ${new Date(invoice.service_date_to).toLocaleDateString('sl-SI')}`
+                    : `Opravljeno: ${new Date(invoice.service_date).toLocaleDateString('sl-SI')}`}
+                </Text>
+              )}
               <Text>Rok plačila: {new Date(invoice.due_date).toLocaleDateString('sl-SI')}</Text>
             </View>
           </View>
@@ -92,6 +101,9 @@ export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
         <View>
           <Text style={styles.buyerLabel}>Kupec</Text>
           <Text style={styles.buyerName}>{invoice.client_name}</Text>
+          {/* DODANO (30.7.2026): naslov kupca je ZAKONSKO OBVEZEN po
+              ZDDV-1, 82. clen - prej se ni izpisal, ceprav se zbira. */}
+          {invoice.client_address && <Text style={styles.buyerSub}>{invoice.client_address}</Text>}
           {invoice.client_tax_number && <Text style={styles.buyerSub}>ID za DDV: {invoice.client_tax_number}</Text>}
           {invoice.client_email && <Text style={styles.buyerSub}>{invoice.client_email}</Text>}
         </View>
