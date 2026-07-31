@@ -22,13 +22,33 @@ export async function GET(req: NextRequest) {
     // 1. Pridobi vse aktivne businessse
     const { data: businesses } = await supabase
       .from('businesses')
-      .select('id, name')
+      .select('id, name, owner_user_id')
 
     if (!businesses || businesses.length === 0) {
       return NextResponse.json({ message: 'No businesses found', sent: 0 })
     }
 
     for (const biz of businesses) {
+      // POPRAVLJENO (30.7.2026, audit K10): naloži PRAVE podatke
+      // organizacije - prej trdo kodiran (nicelni!) IBAN in Nikovi
+      // podatki podjetja v vsaki poslani e-posti.
+      let orgForBiz: any = null
+      if (biz.owner_user_id) {
+        const { data: mem } = await supabase
+          .from('org_members')
+          .select('org_id')
+          .eq('user_id', biz.owner_user_id)
+          .maybeSingle()
+        if (mem?.org_id) {
+          const { data: o } = await supabase
+            .from('organizations')
+            .select('name, tax_number, iban, bic, email')
+            .eq('id', mem.org_id)
+            .maybeSingle()
+          orgForBiz = o
+        }
+      }
+
       // 2. Generiraj notifikacije za ta business
       await supabase.rpc('generate_pos_notifications', { p_business_id: biz.id })
 
@@ -167,16 +187,16 @@ export async function GET(req: NextRequest) {
               <div style="background:#fff;border:1px solid #e5e1d8;border-radius:10px;padding:16px 20px;margin:16px 0">
                 <div style="font-size:13px;font-weight:700;color:#0d2818;margin-bottom:8px">Plačilni podatki</div>
                 <div style="font-size:13px;color:#444;line-height:1.8">
-                  <div>IBAN: <strong>SI56 0000 0000 0000 000</strong></div>
-                  <div>BIC/SWIFT: <strong>BACXSI22</strong></div>
+                  <div>IBAN: <strong>${orgForBiz?.iban || '(IBAN ni nastavljen — dopolnite v Nastavitvah)'}</strong></div>
+                  ${orgForBiz?.bic ? `<div>BIC/SWIFT: <strong>${orgForBiz.bic}</strong></div>` : ''}
                   <div>Referenca: <strong>${proformaNum}</strong></div>
                   <div>Namen: Podaljšanje — ${pkg.name}</div>
                 </div>
               </div>
               <p style="color:#888;font-size:13px">Po prejemu plačila vam bomo podaljšali kartico in poslali potrdilo. Predračun ni davčno potrjen račun.</p>
-              <p style="color:#444;font-size:14px">Za vprašanja nas kontaktirajte na <a href="mailto:info@sirm.si" style="color:#1f6b3a">info@sirm.si</a>.</p>
+              ${orgForBiz?.email ? `<p style="color:#444;font-size:14px">Za vprašanja nas kontaktirajte na <a href="mailto:${orgForBiz.email}" style="color:#1f6b3a">${orgForBiz.email}</a>.</p>` : ''}
               <div style="border-top:1px solid #e5e1d8;margin-top:28px;padding-top:16px;text-align:center;font-size:12px;color:#999">
-                ŠIRM fitness&bar · Nik Mahniš s.p. · Davčna: 91390419<br/>
+                ${orgForBiz?.name || biz.name}${orgForBiz?.tax_number ? ` · Davčna: ${orgForBiz.tax_number}` : ''}<br/>
                 Izdano s sistemom RAČUNKO · www.racunko.si
               </div>
             </div>`,
