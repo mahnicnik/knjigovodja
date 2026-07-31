@@ -143,18 +143,31 @@ export async function POST(req: NextRequest) {
     }
 
     // Pripravi line items iz WooCommerce naročila
-    const lineItems = (order.line_items ?? []).map((item: any) => ({
-      description: item.name,
-      quantity: item.quantity,
-      unit_price: Number(item.price),
-      amount_net: Number(item.subtotal),
-      vat_rate: org.vat_registered ? 22 : 0,
-      vat_amount: org.vat_registered ? Number(item.subtotal) * 0.22 : 0,
-    }))
+    // POPRAVLJENO (30.7.2026): uporabi DEJANSKI davek iz WooCommerce
+    // (subtotal_tax / total_tax) namesto predpostavke 22% - trgovine z
+    // izdelki po 9,5% (hrana, knjige, zdravila) so prej dobile napacen DDV.
+    const lineItems = (order.line_items ?? []).map((item: any) => {
+      const net = Number(item.subtotal) || 0
+      const tax = Number(item.subtotal_tax ?? item.total_tax ?? 0)
+      // Ce platforma davka ni poslala, pade nazaj na 22% (prejsnje vedenje)
+      const effTax = org.vat_registered ? (tax > 0 ? tax : net * 0.22) : 0
+      const effRate = net > 0 && effTax > 0 ? Math.round((effTax / net) * 1000) / 10 : (org.vat_registered ? 22 : 0)
+      return {
+        description: item.name,
+        quantity: item.quantity,
+        unit_price: Number(item.price),
+        amount_net: net,
+        vat_rate: effRate,
+        vat_amount: Math.round(effTax * 100) / 100,
+      }
+    })
 
-    const amountNet = Number(order.total) / (org.vat_registered ? 1.22 : 1)
-    const vatAmount = org.vat_registered ? Number(order.total) - amountNet : 0
     const amountTotal = Number(order.total)
+    const orderTax = Number(order.total_tax ?? 0)
+    const vatAmount = org.vat_registered
+      ? (orderTax > 0 ? orderTax : amountTotal - amountTotal / 1.22)
+      : 0
+    const amountNet = amountTotal - vatAmount
 
     // Stranka
     const clientName = `${order.billing?.first_name ?? ''} ${order.billing?.last_name ?? ''}`.trim()

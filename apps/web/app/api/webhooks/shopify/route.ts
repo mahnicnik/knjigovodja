@@ -136,20 +136,29 @@ export async function POST(req: NextRequest) {
     if (!org) return NextResponse.json({ error: 'Org ni najdena' }, { status: 404 })
 
     // Line items
-    const lineItems = (order.line_items ?? []).map((item: any) => ({
-      description: item.title + (item.variant_title ? ` — ${item.variant_title}` : ''),
-      quantity: item.quantity,
-      unit_price: Number(item.price),
-      amount_net: Number(item.price) * item.quantity,
-      vat_rate: org.vat_registered ? 22 : 0,
-      vat_amount: org.vat_registered ? Number(item.price) * item.quantity * 0.22 : 0,
-    }))
+    // POPRAVLJENO (30.7.2026): uporabi DEJANSKI davek iz Shopify
+    // (tax_lines / total_tax) namesto predpostavke 22%.
+    const lineItems = (order.line_items ?? []).map((item: any) => {
+      const net = Number(item.price) * item.quantity
+      const taxFromLines = (item.tax_lines ?? []).reduce((s: number, t: any) => s + Number(t.price ?? 0), 0)
+      const effTax = org.vat_registered ? (taxFromLines > 0 ? taxFromLines : net * 0.22) : 0
+      const effRate = net > 0 && effTax > 0 ? Math.round((effTax / net) * 1000) / 10 : (org.vat_registered ? 22 : 0)
+      return {
+        description: item.title + (item.variant_title ? ` — ${item.variant_title}` : ''),
+        quantity: item.quantity,
+        unit_price: Number(item.price),
+        amount_net: net,
+        vat_rate: effRate,
+        vat_amount: Math.round(effTax * 100) / 100,
+      }
+    })
 
     const amountTotal = Number(order.total_price)
-    const amountNet = org.vat_registered
-      ? amountTotal / 1.22
-      : amountTotal
-    const vatAmount = amountTotal - amountNet
+    const orderTax = Number(order.total_tax ?? 0)
+    const vatAmount = org.vat_registered
+      ? (orderTax > 0 ? orderTax : amountTotal - amountTotal / 1.22)
+      : 0
+    const amountNet = amountTotal - vatAmount
 
     // Stranka
     const billing = order.billing_address ?? order.shipping_address ?? {}
