@@ -21,13 +21,13 @@ const ALL_STEPS = [
   {
     id: 'ddv',
     title: 'Ali ste DDV zavezanec?',
-    sub: 'Zavezanec postanete pri prometu nad 50.000 € letno ali prostovoljno.',
+    sub: 'Zavezanec postanete pri obdavčljivem prometu nad 60.000 € v zadnjih 12 mesecih (velja od 1.1.2025) ali prostovoljno.',
     type: 'single' as const,
     showIf: (_a: any) => true,
     options: [
       { icon: '✅', label: 'Da, sem DDV zavezanec', desc: 'Oddajam DDV-O obrazce', value: 'yes' },
       { icon: '❌', label: 'Ne, nisem zavezanec', desc: 'Manjši promet ali normiranec', value: 'no' },
-      { icon: '🔄', label: 'Bom kmalu postal', desc: 'Blizu mejnika 50.000 €', value: 'soon' },
+      { icon: '🔄', label: 'Bom kmalu postal', desc: 'Blizu mejnika 60.000 €', value: 'soon' },
     ],
   },
   {
@@ -68,7 +68,7 @@ const ALL_STEPS = [
     type: 'single' as const,
     showIf: (a: any) => a.tip === 'sp',
     options: [
-      { icon: '📊', label: 'Normirani 80%', desc: 'Priznani odhodki = 80% prihodkov (do 60.000 € letno)', value: 'normirani_80' },
+      { icon: '📊', label: 'Normirani 80%', desc: 'Prag 120.000 € (od 2026); 80% odhodkov priznanih do 60.000 € prihodkov, nad tem 0%', value: 'normirani_80' },
       { icon: '📈', label: 'Normirani 40%', desc: 'Priznani odhodki = 40% prihodkov (do 100.000 € letno)', value: 'normirani_40' },
       { icon: '📒', label: 'Dejanski stroški', desc: 'KPO knjiga z dejanskimi računi za odhodke', value: 'dejanski' },
     ],
