@@ -5,10 +5,21 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 
-// 2026 zakonski minimumi
-const MIN_WAGE = 1253.90      // minimalna plača 2026
-const MIN_REGRES = 1253.90    // minimalni regres = minimalna plača
-const MAX_REGRES_TAXFREE = 1581.29  // neobdavčeni del (126% min. plače)
+// 2026 zakonski minimumi — POPRAVLJENO 30.7.2026 (audit)
+const MIN_WAGE = 1481.88      // minimalna plača 2026 (Uradni list RS 6/2026; prej napačno 1253,90)
+const MIN_REGRES = 1481.88    // minimalni regres = minimalna plača (ZDR-1)
+
+// NEOBDAVČENA MEJA = 100% POVPREČNE mesečne BRUTO plače RS.
+// POPRAVLJENO 30.7.2026: prej 1581,29 z opombo "126% min. plače" — to je
+// bila napačna metodologija (vezana na minimalno namesto na povprečno
+// plačo) IN prenizka vrednost, zaradi česar je aplikacija obdavčila
+// regres, ki je v resnici neobdavčen.
+//
+// ⚠️ TA VREDNOST SE MESEČNO SPREMINJA (objave SURS). Uporabi se zadnji
+// znani podatek NA DAN IZPLAČILA. Pred vsakim izplačilom preveri aktualno
+// vrednost na SURS oz. pri računovodji.
+// Zadnja znana ob popravku: april 2026 = 2.606,09 €, maj 2026 = 2.678,28 €
+const MAX_REGRES_TAXFREE = 2606.09
 
 function r(v: number) { return Math.round(v * 100) / 100 }
 
@@ -171,7 +182,7 @@ export default function RegresPage() {
 
         {/* INFO */}
         <div style={{ background: '#E1F5EE', borderRadius: 12, padding: '14px 18px', marginBottom: 16, fontSize: 13, color: '#0E5E3B', lineHeight: 1.6 }}>
-          💡 <strong>Regres 2026:</strong> Minimalni regres = minimalna plača (€{MIN_REGRES.toFixed(2)}). Neobdavčen del do €{MAX_REGRES_TAXFREE.toFixed(2)} (126% min. plače). Rok izplačila: <strong>do 1. julija</strong> (ali 1. novembra za sezonska dela).
+          💡 <strong>Regres 2026:</strong> Minimalni regres = minimalna plača (€{MIN_REGRES.toFixed(2)}). Neobdavčen do €{MAX_REGRES_TAXFREE.toFixed(2)} (100% povprečne bruto plače RS) — <strong>ta meja se mesečno spreminja</strong>, pred izplačilom preverite aktualni podatek SURS. Rok izplačila: <strong>do 1. julija</strong> (ali 1. novembra za sezonska dela).
         </div>
 
         {employees.length === 0 ? (

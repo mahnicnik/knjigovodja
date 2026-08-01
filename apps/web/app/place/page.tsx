@@ -9,7 +9,7 @@ const EE = { piz: 0.1550, zzzs: 0.0636, unemployment: 0.0014, parental: 0.0010, 
 const ER = { piz: 0.0885, zzzs: 0.0656, injury: 0.0053, unemployment: 0.0014, parental: 0.0010, dolgotrajnaOskrba: 0.0100 }
 const OZP_MONTHLY = 39.36
 const GENERAL_RELIEF_MONTHLY = 462.66 // uradna 2026 splosna olajsava/mesec (5.551,93 EUR/leto) - popravljeno 25.7.2026, prej zastarela 5000/12
-const MIN_WAGE = 1253.90
+const MIN_WAGE = 1481.88 // POPRAVLJENO 30.7.2026: minimalna placa 2026 (Uradni list RS 6/2026)
 // Uradni 2026 davcni razredi (letne meje) - popravljeno 25.7.2026, prej zastareli
 const BRACKETS = [
   { upTo: 9721.43, rate: 0.16 }, { upTo: 28592.44, rate: 0.26 },
@@ -67,9 +67,14 @@ function calcPayroll(grossSalary: number, dependents: number = 0, extras: {
 }
 
 // Regres je neobdavčen do minimalne plače, nad tem se obdavči
+// POPRAVLJENO 30.7.2026 (audit): neobdavcena meja regresa je 100%
+// POVPRECNE bruto place RS (~2.606 EUR, gibljivo z objavami SURS), NE
+// minimalne place. Prej je funkcija obdavcila regres, ki je neobdavcen.
+const REGRES_TAXFREE_LIMIT = 2606.09 // ⚠️ gibljivo - preveri pred izplacilom
+
 function calcRegres(grossSalary: number): { amount: number; taxFree: number; taxable: number; netAmount: number } {
   const amount = Math.max(MIN_WAGE, grossSalary) // vsaj minimalna plača
-  const taxFree = MIN_WAGE // do minimalne plače neobdavčeno
+  const taxFree = Math.min(amount, REGRES_TAXFREE_LIMIT)
   const taxable = Math.max(0, amount - taxFree)
   // Davek samo na obdavčljivi del (dohodnina ~27% povprečno)
   const tax = r(taxable * 0.27)
