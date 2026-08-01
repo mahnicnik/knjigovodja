@@ -14,16 +14,43 @@ const BRACKETS = [
   { upTo: Infinity, rate: 0.50 },
 ]
 
+// POPRAVLJENO 30.7.2026 (audit): stari seznam razredov je imel MOCNO
+// zastarele vrednosti (razred 1 = 215 EUR/mes, privzeti razred 8 = 450
+// EUR/mes) - oboje POD zakonskim minimumom 2026.
+//
+// Uradno 2026: minimalna zavarovalna osnova 1.521,62 EUR (60% povprecne
+// bruto place 2025), minimalni prispevki 651,04 EUR/mesec.
+const SP_MIN_CONTRIBUTIONS_YEAR_2026 = 7812.48 // 651,04 × 12
+
+// Stari razredi — OHRANJENI SAMO ZA ZDRUZLJIVOST s shranjenimi
+// nastavitvami. ⚠️ Vrednosti so zastarele in se NE uporabljajo vec kot
+// primarni vir. Prispevki se berejo iz dejanskih nastavitev organizacije.
 const SP_CONTRIBUTIONS: Record<number, number> = {
   1: 2584.92, 2: 3012.36, 3: 3439.20, 4: 3866.04, 5: 4293.00,
   6: 4719.84, 7: 5146.68, 8: 5399.76, 9: 6024.24, 10: 6451.08,
   11: 6877.80, 12: 7304.64, 13: 7731.48, 14: 8585.16, 15: 9438.84,
 }
 
-function calcNormirani(revenue: number, contributionClass: number) {
+/**
+ * Letni prispevki s.p. — iz DEJANSKIH nastavitev organizacije, ki jih
+ * uporabnik vnese v Nastavitvah (in jih stran /prispevki ze uporablja).
+ * Ce niso nastavljene, vrne zakonski minimum 2026 (NE zastarelega razreda).
+ */
+function getYearlyContributions(org: any): number {
+  const monthly =
+    Number(org?.contrib_piz ?? 0) +
+    Number(org?.contrib_zzzs ?? 0) +
+    Number(org?.contrib_zaposlovanje ?? 0) +
+    Number(org?.contrib_starsevstvo ?? 0)
+  if (monthly > 0) return Math.round(monthly * 12 * 100) / 100
+  return SP_MIN_CONTRIBUTIONS_YEAR_2026
+}
+
+function calcNormirani(revenue: number, contributionClass: number, org?: any) {
   const normExpenses = revenue * 0.80 // 80% normiranih odhodkov
   const taxableBase = Math.max(0, revenue - normExpenses)
-  const contributions = SP_CONTRIBUTIONS[contributionClass] || SP_CONTRIBUTIONS[8]
+  // POPRAVLJENO 30.7.2026: dejanske nastavitve namesto zastarelega razreda
+  const contributions = getYearlyContributions(org)
   const adjustedBase = Math.max(0, taxableBase - contributions - 5551.93) // POPRAVLJENO 30.7.2026: uradna 2026 splosna olajsava (prej 5000)
   let tax = 0, prev = 0
   for (const b of BRACKETS) {
@@ -46,8 +73,9 @@ function calcNormirani(revenue: number, contributionClass: number) {
   }
 }
 
-function calcDejanskih(revenue: number, expenses: number, contributionClass: number) {
-  const contributions = SP_CONTRIBUTIONS[contributionClass] || SP_CONTRIBUTIONS[8]
+function calcDejanskih(revenue: number, expenses: number, contributionClass: number, org?: any) {
+  // POPRAVLJENO 30.7.2026: dejanske nastavitve namesto zastarelega razreda
+  const contributions = getYearlyContributions(org)
   const taxableBase = Math.max(0, revenue - expenses - contributions)
   const adjustedBase = Math.max(0, taxableBase - 5551.93) // POPRAVLJENO 30.7.2026
   let tax = 0, prev = 0
@@ -126,8 +154,8 @@ export default function NormianiPage() {
   const rev = parseFloat(revenue) || 0
   const exp = parseFloat(expenses) || 0
 
-  const normirani = rev > 0 ? calcNormirani(rev, contributionClass) : null
-  const dejanskih = rev > 0 ? calcDejanskih(rev, exp, contributionClass) : null
+  const normirani = rev > 0 ? calcNormirani(rev, contributionClass, org) : null
+  const dejanskih = rev > 0 ? calcDejanskih(rev, exp, contributionClass, org) : null
 
   const betterOption = normirani && dejanskih
     ? normirani.tax < dejanskih.tax ? 'normirani' : 'dejanskih'
