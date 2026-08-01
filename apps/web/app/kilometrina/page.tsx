@@ -4,7 +4,11 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 
-const KM_RATE = 0.21 // €/km neobdavčeno 2026
+// POPRAVLJENO (30.7.2026, audit): Uredba o davčni obravnavi povračil
+// stroškov določa DVE LOČENI stopnji, ki ju zakon strogo razlikuje.
+// Mešanje obeh je ob inšpekciji sankcionirano.
+const KM_RATE_BUSINESS = 0.43  // €/km — SLUŽBENA POT (obisk stranke, sejem, teren)
+const KM_RATE_COMMUTE = 0.21   // €/km — PREVOZ NA DELO IN Z DELA (dnevna vožnja od doma)
 
 export default function KilometrinaPage() {
   const [org, setOrg] = useState<any>(null)
@@ -19,6 +23,7 @@ export default function KilometrinaPage() {
     km: '',
     purpose: '',
     return_trip: false,
+    trip_type: 'business' as 'business' | 'commute',
   })
   const supabase = createClient()
 
@@ -47,16 +52,19 @@ export default function KilometrinaPage() {
     setLoading(false)
   }
 
+  const activeRate = form.trip_type === 'commute' ? KM_RATE_COMMUTE : KM_RATE_BUSINESS
   const totalKm = form.km ? parseFloat(form.km) * (form.return_trip ? 2 : 1) : 0
-  const totalAmount = Math.round(totalKm * KM_RATE * 100) / 100
+  const totalAmount = Math.round(totalKm * activeRate * 100) / 100
 
   async function handleSave() {
     if (!org || !form.from_location || !form.to_location || !form.km) return
     setSaving(true)
 
     const km = parseFloat(form.km) * (form.return_trip ? 2 : 1)
-    const amount = Math.round(km * KM_RATE * 100) / 100
-    const description = `Potni nalog: ${form.from_location} → ${form.to_location}${form.return_trip ? ' (povratno)' : ''} — ${km} km — ${form.purpose}`
+    const rate = form.trip_type === 'commute' ? KM_RATE_COMMUTE : KM_RATE_BUSINESS
+    const typeLabel = form.trip_type === 'commute' ? 'Prevoz na delo' : 'Službena pot'
+    const amount = Math.round(km * rate * 100) / 100
+    const description = `${typeLabel}: ${form.from_location} → ${form.to_location}${form.return_trip ? ' (povratno)' : ''} — ${km} km — ${form.purpose}`
 
     // Vpiši v KPO kot strošek
     await supabase.from('kpo_entries').insert({
@@ -69,7 +77,7 @@ export default function KilometrinaPage() {
       vat_in: 0,
       vat_out: 0,
       category: 'Kilometrina',
-      notes: `${km} km × €${KM_RATE}/km`,
+      notes: `${typeLabel} · ${km} km × €${rate}/km`,
     })
 
     setForm({
@@ -79,6 +87,7 @@ export default function KilometrinaPage() {
       km: '',
       purpose: '',
       return_trip: false,
+      trip_type: form.trip_type,
     })
     setShowForm(false)
     setSaving(false)
@@ -112,7 +121,7 @@ export default function KilometrinaPage() {
     <td>${entry.description.split('→').slice(0,2).join('→').replace('Potni nalog: ','')}</td>
     <td>${entry.description.split('—').slice(-1)[0]?.trim() || ''}</td>
     <td>${entry.notes?.split(' km')[0] || ''}</td>
-    <td>€${KM_RATE}</td>
+    <td>${entry.notes?.match(/€([\d.]+)\/km/)?.[1] ? '€' + entry.notes.match(/€([\d.]+)\/km/)[1] : '—'}</td>
     <td>€${Number(entry.expense).toFixed(2)}</td>
   </tr>
 </table>
@@ -165,7 +174,7 @@ export default function KilometrinaPage() {
         <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 mb-6 flex justify-between items-center">
           <div>
             <div className="font-medium text-blue-800 text-sm">Kilometrina 2026</div>
-            <div className="text-blue-600 text-xs mt-0.5">€0.21/km — neobdavčeno povračilo stroškov prevoza</div>
+            <div className="text-blue-600 text-xs mt-0.5">Službena pot €0.43/km · Prevoz na delo €0.21/km — neobdavčeno po Uredbi</div>
           </div>
           <div className="text-right">
             <div className="text-xs text-blue-600">Skupaj letos</div>
@@ -222,11 +231,34 @@ export default function KilometrinaPage() {
               </div>
             </div>
 
+            {/* DODANO (30.7.2026): izbira vrste poti — zakon določa
+                različni stopnji in ju strogo ločuje. */}
+            <div className="mb-4">
+              <label className="text-xs text-gray-500 block mb-2">Vrsta poti</label>
+              <div className="flex gap-2">
+                <button type="button"
+                  onClick={() => setForm({...form, trip_type: 'business'})}
+                  className={`flex-1 px-3 py-2.5 rounded-xl text-sm font-medium border-2 ${form.trip_type === 'business' ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 text-gray-600'}`}>
+                  🚗 Službena pot — €0.43/km
+                </button>
+                <button type="button"
+                  onClick={() => setForm({...form, trip_type: 'commute'})}
+                  className={`flex-1 px-3 py-2.5 rounded-xl text-sm font-medium border-2 ${form.trip_type === 'commute' ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 text-gray-600'}`}>
+                  🏠 Prevoz na delo — €0.21/km
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mt-1.5">
+                {form.trip_type === 'business'
+                  ? 'Obisk stranke, sejem, teren, vožnja med poslovnimi enotami. Potrebuje potni nalog.'
+                  : 'Dnevna vožnja med domom in stalnim delovnim mestom.'}
+              </p>
+            </div>
+
             {totalKm > 0 && (
               <div className="bg-gray-50 rounded-xl p-3 mb-4 flex gap-6 text-sm">
                 <div><span className="text-gray-500">Skupaj km: </span><span className="font-semibold">{totalKm} km</span></div>
                 <div><span className="text-gray-500">Znesek: </span><span className="font-semibold text-green-600">€{totalAmount.toFixed(2)}</span></div>
-                <div><span className="text-gray-500">({totalKm} × €{KM_RATE})</span></div>
+                <div><span className="text-gray-500">({totalKm} × €{activeRate})</span></div>
               </div>
             )}
 
