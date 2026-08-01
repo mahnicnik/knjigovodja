@@ -4,18 +4,28 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 
-// Neobdavčeni zneski 2026
+// Neobdavčeni zneski 2026 — POPRAVLJENO 30.7.2026 (audit)
+// Vir: Uredba o davčni obravnavi povračil stroškov v zvezi z delom
 const RATES = {
-  km: 0.21,           // €/km
-  daily_domestic: 18.00,   // dnevnica Slovenija
-  daily_foreign: 50.00,    // dnevnica tujina (povprečje)
-  accommodation_max: 70.00, // max nočnina brez dokazila
-  meal_domestic: 6.12,     // dnevnica za malico (brez prenočitve)
+  km: 0.43,           // €/km — SLUŽBENA POT (prej napačno 0,21 = prevoz na delo)
+  // Dnevnica Slovenija je odvisna od TRAJANJA odsotnosti (prej ena vrednost 18,00):
+  daily_domestic_6_8: 9.69,    // 6–8 ur
+  daily_domestic_8_12: 13.88,  // 8–12 ur
+  daily_domestic_12: 27.81,    // nad 12 ur
+  // ⚠️ Dnevnica za tujino je ODVISNA OD DRŽAVE (Uredba ima tabelo po
+  // državah). Ta enotna vrednost je poenostavitev — za natančen obračun
+  // preveri znesek za konkretno državo.
+  daily_foreign: 50.00,
+  // ⚠️ Nočnina se navadno povrne po DEJANSKEM računu, ne po pavšalu.
+  accommodation_max: 70.00,
+  meal_domestic: 7.96,     // malica — neobdavčena meja 2026 (prej 6,12)
 }
 
 const EXPENSE_TYPES = [
   { value: 'km', label: 'Kilometrina', unit: 'km' },
-  { value: 'daily_domestic', label: 'Dnevnica — Slovenija', unit: 'dan' },
+  { value: 'daily_domestic_12', label: 'Dnevnica SLO — nad 12 ur', unit: 'dan' },
+  { value: 'daily_domestic_8_12', label: 'Dnevnica SLO — 8 do 12 ur', unit: 'dan' },
+  { value: 'daily_domestic_6_8', label: 'Dnevnica SLO — 6 do 8 ur', unit: 'dan' },
   { value: 'daily_foreign', label: 'Dnevnica — tujina', unit: 'dan' },
   { value: 'accommodation', label: 'Nočnina', unit: 'noč' },
   { value: 'meal', label: 'Malica', unit: 'dan' },
@@ -78,7 +88,9 @@ export default function PotniStroskiPage() {
   function calcAmount(type: string, qty: number, receiptAmt: number): number {
     switch (type) {
       case 'km': return Math.round(qty * RATES.km * 100) / 100
-      case 'daily_domestic': return Math.round(qty * RATES.daily_domestic * 100) / 100
+      case 'daily_domestic_12': return Math.round(qty * RATES.daily_domestic_12 * 100) / 100
+      case 'daily_domestic_8_12': return Math.round(qty * RATES.daily_domestic_8_12 * 100) / 100
+      case 'daily_domestic_6_8': return Math.round(qty * RATES.daily_domestic_6_8 * 100) / 100
       case 'daily_foreign': return Math.round(qty * RATES.daily_foreign * 100) / 100
       case 'accommodation': return Math.min(receiptAmt, RATES.accommodation_max * qty)
       case 'meal': return Math.round(qty * RATES.meal_domestic * 100) / 100
@@ -223,8 +235,8 @@ export default function PotniStroskiPage() {
         <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 mb-6">
           <div className="font-medium text-blue-800 text-sm mb-2">💡 Neobdavčeni zneski 2026</div>
           <div className="grid grid-cols-3 gap-3 text-xs text-blue-700">
-            <div><strong>Kilometrina:</strong> €{RATES.km}/km</div>
-            <div><strong>Dnevnica SLO:</strong> €{RATES.daily_domestic}/dan</div>
+            <div><strong>Kilometrina (službena pot):</strong> €{RATES.km}/km</div>
+            <div><strong>Dnevnica SLO:</strong> €{RATES.daily_domestic_12} (nad 12h) · €{RATES.daily_domestic_8_12} (8–12h) · €{RATES.daily_domestic_6_8} (6–8h)</div>
             <div><strong>Dnevnica tujina:</strong> €{RATES.daily_foreign}/dan</div>
             <div><strong>Nočnina max:</strong> €{RATES.accommodation_max}/noč</div>
             <div><strong>Malica:</strong> €{RATES.meal_domestic}/dan</div>
