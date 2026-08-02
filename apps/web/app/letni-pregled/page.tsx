@@ -133,7 +133,8 @@ export default function LentniPregledPage() {
     const totalVatIn = receipts.reduce((s: number, r: any) => s + Number(r.vat_amount), 0)
 
     // Prispevki s.p.
-    const annualContributions = SP_CONTRIBUTIONS[contributionClass] || SP_CONTRIBUTIONS[8]
+    // POPRAVLJENO 30.7.2026: dejanske nastavitve namesto zastarelega razreda
+    const annualContributions = getYearlyContributions(org)
 
     // Plače strošek
     const EE = 0.1550 + 0.0636 + 0.0014 + 0.0014

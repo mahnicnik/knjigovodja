@@ -122,7 +122,8 @@ export default function DohodninaPage() {
   // Izračuni
   const rev = parseFloat(revenue) || 0
   const exp = parseFloat(expenses) || 0
-  const annualContributions = SP_CONTRIBUTIONS[contributionClass] || SP_CONTRIBUTIONS[8]
+  // POPRAVLJENO 30.7.2026: dejanske nastavitve namesto zastarelega razreda
+  const annualContributions = getYearlyContributions(org)
   const monthlyContributions = annualContributions / 12
 
   // Ekstrapoliraj na letno če je samo delno leto, ali uporabi povprečni mesečni prihodek
