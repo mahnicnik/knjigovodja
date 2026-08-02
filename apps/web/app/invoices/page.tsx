@@ -357,19 +357,36 @@ export default function InvoicesPage() {
                           </button>
                         </>
                       )}
-                      <div style={{ height: '0.5px', background: '#eee', margin: '4px 0' }} />
-                      <button
-                        onClick={async () => {
-                          if (!confirm('Resnično izbrišem ta račun? To dejanje je nepovrnjivo.')) return
-                          const { error } = await supabase.from('issued_invoices').delete().eq('id', inv.id)
-                          if (!error) { setActionInv(null); load() }
-                          else alert('Napaka: ' + error.message)
-                        }}
-                        style={{ width: '100%', padding: '10px 16px', textAlign: 'left', fontSize: '13px', background: 'none', border: 'none', cursor: 'pointer', color: '#A32D2D', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}
-                        className="hover:bg-red-50"
-                      >
-                        🗑️ Izbriši račun
-                      </button>
+                      {/* POPRAVLJENO (30.7.2026, audit): brisanje je zdaj
+                          dovoljeno SAMO za osnutke. Po ZDDV-1/ZDavP-2 se
+                          izdanega računa NE SME izbrisati (hramba 10 let) —
+                          popravi se s STORNOM. Brisanje fiskaliziranega
+                          računa bi ustvarilo neskladje s FURS evidenco. */}
+                      {inv.status === 'draft' && !inv.zoi && !inv.eor ? (
+                        <>
+                          <div style={{ height: '0.5px', background: '#eee', margin: '4px 0' }} />
+                          <button
+                            onClick={async () => {
+                              if (!confirm('Resnično izbrišem ta osnutek? To dejanje je nepovrnjivo.')) return
+                              const { error } = await supabase.from('issued_invoices').delete().eq('id', inv.id)
+                              if (!error) { setActionInv(null); load() }
+                              else alert('Napaka: ' + error.message)
+                            }}
+                            style={{ width: '100%', padding: '10px 16px', textAlign: 'left', fontSize: '13px', background: 'none', border: 'none', cursor: 'pointer', color: '#A32D2D', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}
+                            className="hover:bg-red-50"
+                          >
+                            🗑️ Izbriši osnutek
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ height: '0.5px', background: '#eee', margin: '4px 0' }} />
+                          <div style={{ padding: '8px 16px', fontSize: '11px', color: '#888', lineHeight: 1.5 }}>
+                            🔒 Izdanega računa ni dovoljeno izbrisati (zakonska hramba 10 let).
+                            {inv.status !== 'storno' ? ' Za popravek uporabite Storniraj račun.' : ''}
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
