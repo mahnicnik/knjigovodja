@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import { EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS, MANDATORY_HEALTH_CONTRIBUTION, GENERAL_RELIEF_MONTH, INCOME_TAX_BRACKETS } from '@/lib/tax-constants'
 
 // POPRAVLJENO (26.7.2026): EE.injury ODSTRANJEN - zaposlenci NIKOLI ne
 // placujejo prispevka za poskodbe pri delu, to bremeni samo delodajalca.

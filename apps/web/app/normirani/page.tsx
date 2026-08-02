@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import { INCOME_TAX_BRACKETS, GENERAL_RELIEF_YEAR, SP_MIN_CONTRIBUTIONS_YEAR, NORMIRANCI } from '@/lib/tax-constants'
 
 // POPRAVLJENO (30.7.2026): uradne 2026 letne meje (prej zastarele
 // 8755/18488/70907/250000). Vir: FURS, preverjeno 26.7.2026.

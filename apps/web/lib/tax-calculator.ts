@@ -14,6 +14,7 @@
  * - ZPIZ-2 (Zakon o pokojninskem zavarovanju) — contribution rates
  * - Furs.si — 2025 minimum/average wage thresholds
  */
+import { INCOME_TAX_BRACKETS as TC_BRACKETS, GENERAL_RELIEF_YEAR, MIN_WAGE as TC_MIN_WAGE } from './tax-constants'
 
 export type LegalForm = 'sp' | 'doo' | 'zavod'
 export type TaxSystem = 'normirani_80' | 'normirani_40' | 'dejanski' | 'doo_obdavcitev'

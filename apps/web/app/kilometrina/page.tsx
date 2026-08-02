@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import { KM_RATE_BUSINESS as TC_KM_BUSINESS, KM_RATE_COMMUTE as TC_KM_COMMUTE } from '@/lib/tax-constants'
 
 // POPRAVLJENO (30.7.2026, audit): Uredba o davčni obravnavi povračil
 // stroškov določa DVE LOČENI stopnji, ki ju zakon strogo razlikuje.

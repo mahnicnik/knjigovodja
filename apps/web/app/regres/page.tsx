@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import { MIN_WAGE as TC_MIN_WAGE, MIN_REGRES as TC_MIN_REGRES, REGRES_TAX_FREE_LIMIT } from '@/lib/tax-constants'
 
 // 2026 zakonski minimumi — POPRAVLJENO 30.7.2026 (audit)
 const MIN_WAGE = TC_MIN_WAGE // iz lib/tax-constants.ts

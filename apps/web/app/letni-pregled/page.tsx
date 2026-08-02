@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import { SP_MIN_CONTRIBUTIONS_YEAR, EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS } from '@/lib/tax-constants'
 
 // POPRAVLJENO 30.7.2026 (audit): stari seznam razredov je imel MOCNO
 // zastarele vrednosti (razred 1 = 215 EUR/mes, privzeti razred 8 = 450
