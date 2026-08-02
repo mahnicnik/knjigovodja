@@ -3,18 +3,23 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+// CENTRALNE DAVCNE KONSTANTE (30.7.2026) - ob letni spremembi zakonodaje
+// se popravi SAMO lib/tax-constants.ts, ne vec vsaka stran posebej.
+import {
+  INCOME_TAX_BRACKETS,
+  GENERAL_RELIEF_YEAR,
+  calcProgressiveTax,
+} from '@/lib/tax-constants'
 
 // DOHODNINSKA LESTVICA 2026
-// POPRAVLJENO (30.7.2026): uradne 2026 letne meje (prej zastarele).
-const BRACKETS = [
-  { upTo: 9721.43,  rate: 0.16, label: '16%' },
-  { upTo: 28592.44, rate: 0.26, label: '26%' },
-  { upTo: 57184.88, rate: 0.33, label: '33%' },
-  { upTo: 82346.23, rate: 0.39, label: '39%' },
-  { upTo: Infinity, rate: 0.50, label: '50%' },
-]
+// POPRAVLJENO (30.7.2026): lestvica prihaja iz lib/tax-constants.ts.
+// Oznake (label) ostanejo tu, ker so samo za prikaz.
+const BRACKETS = INCOME_TAX_BRACKETS.map(b => ({
+  ...b,
+  label: `${Math.round(b.rate * 100)}%`,
+}))
 
-const GENERAL_RELIEF = 5551.93 // POPRAVLJENO 30.7.2026: uradna 2026 vrednost (prej 5000)
+const GENERAL_RELIEF = GENERAL_RELIEF_YEAR // iz lib/tax-constants.ts
 // POPRAVLJENO 30.7.2026 (audit): stari seznam razredov je imel MOCNO
 // zastarele vrednosti (razred 1 = 215 EUR/mes, privzeti razred 8 = 450
 // EUR/mes) - oboje POD zakonskim minimumom 2026.
