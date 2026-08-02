@@ -6,8 +6,8 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 
 // 2026 zakonski minimumi — POPRAVLJENO 30.7.2026 (audit)
-const MIN_WAGE = 1481.88      // minimalna plača 2026 (Uradni list RS 6/2026; prej napačno 1253,90)
-const MIN_REGRES = 1481.88    // minimalni regres = minimalna plača (ZDR-1)
+const MIN_WAGE = TC_MIN_WAGE // iz lib/tax-constants.ts
+const MIN_REGRES = TC_MIN_REGRES // iz lib/tax-constants.ts
 
 // NEOBDAVČENA MEJA = 100% POVPREČNE mesečne BRUTO plače RS.
 // POPRAVLJENO 30.7.2026: prej 1581,29 z opombo "126% min. plače" — to je
@@ -19,7 +19,7 @@ const MIN_REGRES = 1481.88    // minimalni regres = minimalna plača (ZDR-1)
 // znani podatek NA DAN IZPLAČILA. Pred vsakim izplačilom preveri aktualno
 // vrednost na SURS oz. pri računovodji.
 // Zadnja znana ob popravku: april 2026 = 2.606,09 €, maj 2026 = 2.678,28 €
-const MAX_REGRES_TAXFREE = 2606.09
+const MAX_REGRES_TAXFREE = REGRES_TAX_FREE_LIMIT // iz lib/tax-constants.ts (⚠️ gibljivo - preveri pred izplacilom)
 
 function r(v: number) { return Math.round(v * 100) / 100 }
 

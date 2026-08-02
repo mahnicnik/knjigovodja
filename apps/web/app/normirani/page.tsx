@@ -6,13 +6,7 @@ import Link from 'next/link'
 
 // POPRAVLJENO (30.7.2026): uradne 2026 letne meje (prej zastarele
 // 8755/18488/70907/250000). Vir: FURS, preverjeno 26.7.2026.
-const BRACKETS = [
-  { upTo: 9721.43, rate: 0.16 },
-  { upTo: 28592.44, rate: 0.26 },
-  { upTo: 57184.88, rate: 0.33 },
-  { upTo: 82346.23, rate: 0.39 },
-  { upTo: Infinity, rate: 0.50 },
-]
+const BRACKETS = INCOME_TAX_BRACKETS // iz lib/tax-constants.ts
 
 // POPRAVLJENO 30.7.2026 (audit): stari seznam razredov je imel MOCNO
 // zastarele vrednosti (razred 1 = 215 EUR/mes, privzeti razred 8 = 450
@@ -20,7 +14,7 @@ const BRACKETS = [
 //
 // Uradno 2026: minimalna zavarovalna osnova 1.521,62 EUR (60% povprecne
 // bruto place 2025), minimalni prispevki 651,04 EUR/mesec.
-const SP_MIN_CONTRIBUTIONS_YEAR_2026 = 7812.48 // 651,04 × 12
+const SP_MIN_CONTRIBUTIONS_YEAR_2026 = SP_MIN_CONTRIBUTIONS_YEAR // iz lib/tax-constants.ts
 
 // Stari razredi — OHRANJENI SAMO ZA ZDRUZLJIVOST s shranjenimi
 // nastavitvami. ⚠️ Vrednosti so zastarele in se NE uporabljajo vec kot
@@ -51,7 +45,7 @@ function calcNormirani(revenue: number, contributionClass: number, org?: any) {
   const taxableBase = Math.max(0, revenue - normExpenses)
   // POPRAVLJENO 30.7.2026: dejanske nastavitve namesto zastarelega razreda
   const contributions = getYearlyContributions(org)
-  const adjustedBase = Math.max(0, taxableBase - contributions - 5551.93) // POPRAVLJENO 30.7.2026: uradna 2026 splosna olajsava (prej 5000)
+  const adjustedBase = Math.max(0, taxableBase - contributions - GENERAL_RELIEF_YEAR) // iz lib/tax-constants.ts
   let tax = 0, prev = 0
   for (const b of BRACKETS) {
     if (adjustedBase <= prev) break
@@ -77,7 +71,7 @@ function calcDejanskih(revenue: number, expenses: number, contributionClass: num
   // POPRAVLJENO 30.7.2026: dejanske nastavitve namesto zastarelega razreda
   const contributions = getYearlyContributions(org)
   const taxableBase = Math.max(0, revenue - expenses - contributions)
-  const adjustedBase = Math.max(0, taxableBase - 5551.93) // POPRAVLJENO 30.7.2026
+  const adjustedBase = Math.max(0, taxableBase - GENERAL_RELIEF_YEAR) // iz lib/tax-constants.ts
   let tax = 0, prev = 0
   for (const b of BRACKETS) {
     if (adjustedBase <= prev) break

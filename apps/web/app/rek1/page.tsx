@@ -9,16 +9,12 @@ import Link from 'next/link'
 // Dodana EE.parental (manjkala) in EE/ER.dolgotrajnaOskrba (nov prispevek
 // od 1.7.2025) ter OZP_MONTHLY (nov fiksen prispevek od 2024, znesek
 // uskladen 1.3.2026 na 39,36 EUR - UL RS 16/2026).
-const EE = { piz: 0.1550, zzzs: 0.0636, unemployment: 0.0014, parental: 0.0010, dolgotrajnaOskrba: 0.0100 }
-const ER = { piz: 0.0885, zzzs: 0.0656, injury: 0.0053, unemployment: 0.0014, parental: 0.0010, dolgotrajnaOskrba: 0.0100 }
-const OZP_MONTHLY = 39.36
-const GENERAL_RELIEF_MONTHLY = 462.66 // uradna 2026 splosna olajsava/mesec (5.551,93 EUR/leto) - popravljeno 25.7.2026, prej zastarela 5000/12
+const EE = { piz: EMPLOYEE_CONTRIBUTIONS.piz, zzzs: EMPLOYEE_CONTRIBUTIONS.zzzs, unemployment: EMPLOYEE_CONTRIBUTIONS.unemployment, parental: EMPLOYEE_CONTRIBUTIONS.parental, dolgotrajnaOskrba: EMPLOYEE_CONTRIBUTIONS.longTermCare } // iz lib/tax-constants.ts
+const ER = { piz: EMPLOYER_CONTRIBUTIONS.piz, zzzs: EMPLOYER_CONTRIBUTIONS.zzzs, injury: EMPLOYER_CONTRIBUTIONS.injury, unemployment: EMPLOYER_CONTRIBUTIONS.unemployment, parental: EMPLOYER_CONTRIBUTIONS.parental, dolgotrajnaOskrba: EMPLOYER_CONTRIBUTIONS.longTermCare } // iz lib/tax-constants.ts
+const OZP_MONTHLY = MANDATORY_HEALTH_CONTRIBUTION // iz lib/tax-constants.ts
+const GENERAL_RELIEF_MONTHLY = GENERAL_RELIEF_MONTH // iz lib/tax-constants.ts
 // Uradni 2026 davcni razredi (letne meje) - popravljeno 25.7.2026, prej zastareli
-const BRACKETS = [
-  { upTo: 9721.43, rate: 0.16 }, { upTo: 28592.44, rate: 0.26 },
-  { upTo: 57184.88, rate: 0.33 }, { upTo: 82346.23, rate: 0.39 },
-  { upTo: Infinity, rate: 0.50 },
-]
+const BRACKETS = INCOME_TAX_BRACKETS // iz lib/tax-constants.ts
 
 function calcPayroll(grossSalary: number, dependents: number = 0) {
   const ee_piz = r(grossSalary * EE.piz)

@@ -7,8 +7,8 @@ import Link from 'next/link'
 // POPRAVLJENO (30.7.2026, audit): Uredba o davčni obravnavi povračil
 // stroškov določa DVE LOČENI stopnji, ki ju zakon strogo razlikuje.
 // Mešanje obeh je ob inšpekciji sankcionirano.
-const KM_RATE_BUSINESS = 0.43  // €/km — SLUŽBENA POT (obisk stranke, sejem, teren)
-const KM_RATE_COMMUTE = 0.21   // €/km — PREVOZ NA DELO IN Z DELA (dnevna vožnja od doma)
+const KM_RATE_BUSINESS = TC_KM_BUSINESS // iz lib/tax-constants.ts
+const KM_RATE_COMMUTE = TC_KM_COMMUTE // iz lib/tax-constants.ts
 
 export default function KilometrinaPage() {
   const [org, setOrg] = useState<any>(null)

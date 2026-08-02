@@ -9,6 +9,7 @@ import {
   INCOME_TAX_BRACKETS,
   GENERAL_RELIEF_YEAR,
   calcProgressiveTax,
+  SP_MIN_CONTRIBUTIONS_YEAR,
 } from '@/lib/tax-constants'
 
 // DOHODNINSKA LESTVICA 2026
@@ -26,7 +27,7 @@ const GENERAL_RELIEF = GENERAL_RELIEF_YEAR // iz lib/tax-constants.ts
 //
 // Uradno 2026: minimalna zavarovalna osnova 1.521,62 EUR (60% povprecne
 // bruto place 2025), minimalni prispevki 651,04 EUR/mesec.
-const SP_MIN_CONTRIBUTIONS_YEAR_2026 = 7812.48 // 651,04 × 12
+const SP_MIN_CONTRIBUTIONS_YEAR_2026 = SP_MIN_CONTRIBUTIONS_YEAR // iz lib/tax-constants.ts
 
 // Stari razredi — OHRANJENI SAMO ZA ZDRUZLJIVOST s shranjenimi
 // nastavitvami. ⚠️ Vrednosti so zastarele in se NE uporabljajo vec kot

@@ -10,7 +10,7 @@ import Link from 'next/link'
 //
 // Uradno 2026: minimalna zavarovalna osnova 1.521,62 EUR (60% povprecne
 // bruto place 2025), minimalni prispevki 651,04 EUR/mesec.
-const SP_MIN_CONTRIBUTIONS_YEAR_2026 = 7812.48 // 651,04 × 12
+const SP_MIN_CONTRIBUTIONS_YEAR_2026 = SP_MIN_CONTRIBUTIONS_YEAR // iz lib/tax-constants.ts
 
 // Stari razredi — OHRANJENI SAMO ZA ZDRUZLJIVOST s shranjenimi
 // nastavitvami. ⚠️ Vrednosti so zastarele in se NE uporabljajo vec kot
@@ -137,8 +137,8 @@ export default function LentniPregledPage() {
     const annualContributions = getYearlyContributions(org)
 
     // Plače strošek
-    const EE = 0.1550 + 0.0636 + 0.0014 + 0.0014
-    const ER = 0.0885 + 0.0656 + 0.0053 + 0.0014 + 0.0010
+    const EE = EMPLOYEE_CONTRIBUTIONS.piz + EMPLOYEE_CONTRIBUTIONS.zzzs + EMPLOYEE_CONTRIBUTIONS.unemployment + EMPLOYEE_CONTRIBUTIONS.parental // iz lib/tax-constants.ts
+    const ER = EMPLOYER_CONTRIBUTIONS.piz + EMPLOYER_CONTRIBUTIONS.zzzs + EMPLOYER_CONTRIBUTIONS.injury + EMPLOYER_CONTRIBUTIONS.unemployment + EMPLOYER_CONTRIBUTIONS.parental // iz lib/tax-constants.ts
     const salaryExpense = employees.filter((e: any) => e.status === 'active')
       .reduce((s: number, e: any) => s + Number(e.gross_salary) * (1 + ER) * 12, 0)
 

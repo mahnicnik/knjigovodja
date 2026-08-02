@@ -5,17 +5,13 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 
 // POPRAVLJENO (26.7.2026): glej rek1/page.tsx za razlago (isti popravek)
-const EE = { piz: 0.1550, zzzs: 0.0636, unemployment: 0.0014, parental: 0.0010, dolgotrajnaOskrba: 0.0100 }
-const ER = { piz: 0.0885, zzzs: 0.0656, injury: 0.0053, unemployment: 0.0014, parental: 0.0010, dolgotrajnaOskrba: 0.0100 }
-const OZP_MONTHLY = 39.36
-const GENERAL_RELIEF_MONTHLY = 462.66 // uradna 2026 splosna olajsava/mesec (5.551,93 EUR/leto) - popravljeno 25.7.2026, prej zastarela 5000/12
-const MIN_WAGE = 1481.88 // POPRAVLJENO 30.7.2026: minimalna placa 2026 (Uradni list RS 6/2026)
+const EE = { piz: EMPLOYEE_CONTRIBUTIONS.piz, zzzs: EMPLOYEE_CONTRIBUTIONS.zzzs, unemployment: EMPLOYEE_CONTRIBUTIONS.unemployment, parental: EMPLOYEE_CONTRIBUTIONS.parental, dolgotrajnaOskrba: EMPLOYEE_CONTRIBUTIONS.longTermCare } // iz lib/tax-constants.ts
+const ER = { piz: EMPLOYER_CONTRIBUTIONS.piz, zzzs: EMPLOYER_CONTRIBUTIONS.zzzs, injury: EMPLOYER_CONTRIBUTIONS.injury, unemployment: EMPLOYER_CONTRIBUTIONS.unemployment, parental: EMPLOYER_CONTRIBUTIONS.parental, dolgotrajnaOskrba: EMPLOYER_CONTRIBUTIONS.longTermCare } // iz lib/tax-constants.ts
+const OZP_MONTHLY = MANDATORY_HEALTH_CONTRIBUTION // iz lib/tax-constants.ts
+const GENERAL_RELIEF_MONTHLY = GENERAL_RELIEF_MONTH // iz lib/tax-constants.ts
+const MIN_WAGE = TC_MIN_WAGE // iz lib/tax-constants.ts
 // Uradni 2026 davcni razredi (letne meje) - popravljeno 25.7.2026, prej zastareli
-const BRACKETS = [
-  { upTo: 9721.43, rate: 0.16 }, { upTo: 28592.44, rate: 0.26 },
-  { upTo: 57184.88, rate: 0.33 }, { upTo: 82346.23, rate: 0.39 },
-  { upTo: Infinity, rate: 0.50 },
-]
+const BRACKETS = INCOME_TAX_BRACKETS // iz lib/tax-constants.ts
 
 function r(v: number) { return Math.round(v * 100) / 100 }
 
@@ -70,7 +66,7 @@ function calcPayroll(grossSalary: number, dependents: number = 0, extras: {
 // POPRAVLJENO 30.7.2026 (audit): neobdavcena meja regresa je 100%
 // POVPRECNE bruto place RS (~2.606 EUR, gibljivo z objavami SURS), NE
 // minimalne place. Prej je funkcija obdavcila regres, ki je neobdavcen.
-const REGRES_TAXFREE_LIMIT = 2606.09 // ⚠️ gibljivo - preveri pred izplacilom
+const REGRES_TAXFREE_LIMIT = REGRES_TAX_FREE_LIMIT // iz lib/tax-constants.ts (⚠️ gibljivo)
 
 function calcRegres(grossSalary: number): { amount: number; taxFree: number; taxable: number; netAmount: number } {
   const amount = Math.max(MIN_WAGE, grossSalary) // vsaj minimalna plača

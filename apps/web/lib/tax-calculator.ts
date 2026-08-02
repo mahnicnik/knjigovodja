@@ -64,7 +64,7 @@ export interface TaxBreakdown {
 /** Minimalna plača bruto 2026 — osnova za minimalne prispevke s.p.
  *  POSODOBLJENO 30.7.2026: prej 1253,90 EUR (vrednost izpred dveh let).
  *  Uradni vir: Uradni list RS 2026-01-0175 (velja od 1.1.2026). */
-const MIN_WAGE_2025 = 1481.88
+const MIN_WAGE_2025 = TC_MIN_WAGE // iz lib/tax-constants.ts
 
 /** Povprečna plača RS — osnova za maksimalne prispevke (predvideno 2025)
  *  ⚠️ NEPREVERJENO ZA 2026 (audit 30.7.2026) — ta vrednost je iz 2025 in
@@ -84,17 +84,11 @@ const CIT_RATE = 0.19
 /** Dohodnina — progresivna lestvica 2026 (mesečno, /12)
  *  POSODOBLJENO 30.7.2026: prej lestvica 2025
  *  (8755,06 / 25750,50 / 51500 / 74160). Vir: FURS, preverjeno 26.7.2026. */
-const INCOME_TAX_BRACKETS = [
-  { upTo: 9721.43 / 12, rate: 0.16 },   // 16%
-  { upTo: 28592.44 / 12, rate: 0.26 },  // 26%
-  { upTo: 57184.88 / 12, rate: 0.33 },  // 33%
-  { upTo: 82346.23 / 12, rate: 0.39 },  // 39%
-  { upTo: Infinity, rate: 0.50 },        // 50%
-]
+const INCOME_TAX_BRACKETS = TC_BRACKETS.map(b => ({ upTo: b.upTo === Infinity ? Infinity : b.upTo / 12, rate: b.rate })) // mesecne meje iz lib/tax-constants.ts
 
 /** Splošna olajšava 2026 (mesečno)
  *  POSODOBLJENO 30.7.2026: prej 5000 EUR (2025). Vir: FURS. */
-const GENERAL_ALLOWANCE = 5551.93 / 12
+const GENERAL_ALLOWANCE = GENERAL_RELIEF_YEAR / 12 // iz lib/tax-constants.ts
 
 // ===== POMOŽNE FUNKCIJE =====
 
