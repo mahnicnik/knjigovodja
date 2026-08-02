@@ -78,9 +78,13 @@ export default function ExpensesPage() {
       status: 'confirmed',
       is_deductible: true,
     }
-    const { error } = editingId
-      ? await supabase.from('receipts').update(payload).eq('id', editingId)
-      : await supabase.from('receipts').insert(payload)
+    // POPRAVLJENO (30.7.2026, audit): ob urejanju se je v KPO vedno
+    // ustvaril NOV vnos -> strosek se je v davcni evidenci PODVOJIL.
+    // Zdaj se zapise receipt_id (povezava), ob urejanju pa se obstojeci
+    // KPO vnos posodobi namesto podvoji.
+    const { data: savedReceipt, error } = editingId
+      ? await supabase.from('receipts').update(payload).eq('id', editingId).select('id').single()
+      : await supabase.from('receipts').insert(payload).select('id').single()
 
     if (error) {
       alert('Napaka: ' + error.message)
@@ -88,8 +92,9 @@ export default function ExpensesPage() {
       return
     }
 
-    // Dodaj v KPO
-    await supabase.from('kpo_entries').insert({
+    const savedReceiptId = savedReceipt?.id ?? editingId
+
+    const kpoPayload = {
       org_id: org.id,
       entry_date: form.receipt_date,
       description: `${form.vendor} — ${form.category}`,
@@ -99,7 +104,27 @@ export default function ExpensesPage() {
       vat_in: vatAmount,
       vat_out: 0,
       category: form.category,
-    })
+      receipt_id: savedReceiptId,
+    }
+
+    if (editingId) {
+      // Poisci obstojec KPO vnos za ta strosek
+      const { data: existingKpo } = await supabase
+        .from('kpo_entries')
+        .select('id')
+        .eq('org_id', org.id)
+        .eq('receipt_id', editingId)
+        .maybeSingle()
+
+      if (existingKpo) {
+        await supabase.from('kpo_entries').update(kpoPayload).eq('id', existingKpo.id)
+      } else {
+        // Star vnos brez povezave (pred tem popravkom) - ustvari novega
+        await supabase.from('kpo_entries').insert(kpoPayload)
+      }
+    } else {
+      await supabase.from('kpo_entries').insert(kpoPayload)
+    }
 
     posthog.capture('expense_added', {
       category: form.category,
