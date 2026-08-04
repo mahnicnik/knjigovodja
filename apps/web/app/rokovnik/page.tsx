@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
+import { lastWorkingDayOfMonth } from '@/lib/slovenian-holidays'
+import { MIN_REGRES } from '@/lib/tax-constants'
 
 interface Deadline {
   id: string
@@ -62,7 +64,10 @@ function getDeadlines(year: number, month: number, isVatRegistered: boolean, has
     1: { q: 4, period: 'Q4 (okt–dec)' },
   }
   if (isVatRegistered && dueMonths[month]) {
-    const lastDay = new Date(year, month, 0).getDate()
+    // POPRAVLJENO (30.7.2026, audit): rok za DDV-O je zadnji DELOVNI dan,
+    // ne zadnji koledarski. Prej bi za maj 2026 pokazalo 31. (nedelja),
+    // dejanski rok pa je 29. (petek) -> uporabnik bi ZAMUDIL rok.
+    const lastDay = lastWorkingDayOfMonth(year, month)
     deadlines.push({
       id: `ddv-${year}-${m}`,
       date: `${year}-${m}-${lastDay}`,
@@ -79,7 +84,7 @@ function getDeadlines(year: number, month: number, isVatRegistered: boolean, has
       id: `regres-${year}`,
       date: `${year}-07-01`,
       title: 'Regres za letni dopust',
-      description: 'Obvezno izplačilo regresa — minimum = minimalna plača (€1.253,90)',
+      description: `Obvezno izplačilo regresa — minimum = minimalna plača (€${MIN_REGRES.toFixed(2)})`,
       category: 'placa',
       link: '/place',
     })
