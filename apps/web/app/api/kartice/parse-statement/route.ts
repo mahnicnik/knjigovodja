@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -34,9 +35,7 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })
     }
-    const { data: member } = await supabase
-      .from('org_members').select('organizations(subscription_status)')
-      .eq('user_id', user.id).maybeSingle()
+    const member = await resolveActiveOrg(supabase, user.id, getRequestedOrgId(request), 'subscription_status') // vec-org podpora (30.7.2026)
     const subStatus = (member as any)?.organizations?.subscription_status
     const isPro = subStatus === 'pro' || subStatus === 'pro_pos'
     if (!isPro) {

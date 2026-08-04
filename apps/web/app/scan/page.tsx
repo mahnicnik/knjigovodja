@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import posthog from 'posthog-js'
+import { getActiveMembership } from '@/lib/active-org'
 
 // Varna base64 pretvorba za VELIKE datoteke (24.7.2026). btoa(String.
 // fromCharCode(...bytes)) je za vecje PDF-je (100KB+) povzrocalo "Maximum
@@ -64,11 +65,7 @@ export default function ScanPage() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const { data: member } = await supabase
-        .from('org_members')
-        .select('organizations(*)')
-        .eq('user_id', user.id)
-        .single()
+      const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
       if (member) setOrg((member as any).organizations)
     }
     load()

@@ -7,6 +7,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from 'recharts'
+import { getActiveMembership } from '@/lib/active-org'
 
 const MONTHS = ['Jan','Feb','Mar','Apr','Maj','Jun','Jul','Avg','Sep','Okt','Nov','Dec']
 const COLORS_CAT = ['#3B6D11','#1D9E75','#EF9F27','#D4537E','#7F77DD','#D85A30','#888780']
@@ -55,9 +56,7 @@ export default function StatistikaPage() {
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    const { data: member } = await supabase
-      .from('org_members').select('organizations(*)')
-      .eq('user_id', user.id).single()
+    const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
     if (!member) return
     const o = (member as any).organizations
     setOrg(o)

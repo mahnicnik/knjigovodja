@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import { getActiveMembership } from '@/lib/active-org'
 
 // Zakonska zamudna obrestna mera TOM + 8% = cca 11% letno (2026)
 const LEGAL_INTEREST_RATE = 0.11
@@ -32,9 +33,7 @@ export default function OpomnikPage() {
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    const { data: member } = await supabase
-      .from('org_members').select('organizations(*)')
-      .eq('user_id', user.id).single()
+    const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
     if (member) {
       const o = (member as any).organizations
       setOrg(o)

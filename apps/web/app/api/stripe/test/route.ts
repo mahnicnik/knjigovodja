@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 
 // POPRAVLJENO (30.7.2026, audit API sloja):
 //
@@ -35,11 +36,8 @@ export async function POST(request: NextRequest) {
 
     // org_id se IZPELJE IZ SEJE, ne jemlje iz telesa zahteve - s tem je
     // dostop do tuje organizacije strukturno nemogoc.
-    const { data: member } = await authed
-      .from('org_members')
-      .select('org_id, role')
-      .eq('user_id', user.id)
-      .maybeSingle()
+    const { orgId: __orgId, role: __role } = await resolveActiveOrgId(authed, user.id, getRequestedOrgId(request))
+    const member = __orgId ? { org_id: __orgId, role: __role } : null // vec-org podpora (30.7.2026)
 
     if (!member) {
       return NextResponse.json({ error: 'Organizacija ni najdena' }, { status: 404 })

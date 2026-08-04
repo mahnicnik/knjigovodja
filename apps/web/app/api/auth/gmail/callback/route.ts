@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { encryptToken } from '@/lib/token-crypto'
+import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 
 /**
  * Google OAuth callback - sprejme kodo, zamenja za access/refresh token,
@@ -66,11 +67,8 @@ export async function GET(request: NextRequest) {
     })
     const profile = await profileRes.json()
 
-    const { data: member } = await supabase
-      .from('org_members')
-      .select('org_id')
-      .eq('user_id', user.id)
-      .maybeSingle()
+    const { orgId: __orgId, role: __role } = await resolveActiveOrgId(supabase, user.id, getRequestedOrgId(request))
+    const member = __orgId ? { org_id: __orgId, role: __role } : null // vec-org podpora (30.7.2026)
 
     if (!member) {
       return NextResponse.redirect(new URL('/nastavitve?email_error=1', appUrl))

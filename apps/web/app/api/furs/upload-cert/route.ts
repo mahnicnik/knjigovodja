@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
+import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 
 // POPRAVLJENO (26.7.2026): sprejme is_test polje in upsert-a na
 // (org_id, is_test) namesto samo org_id - prej bi nalaganje testnega
@@ -32,11 +33,8 @@ export async function POST(req: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    const { data: member } = await supabase
-      .from('org_members')
-      .select('org_id')
-      .eq('user_id', user.id)
-      .single()
+    const { orgId: __orgId, role: __role } = await resolveActiveOrgId(supabase, user.id, getRequestedOrgId(req))
+    const member = __orgId ? { org_id: __orgId, role: __role } : null // vec-org podpora (30.7.2026)
 
     if (!member) return NextResponse.json({ error: 'Organizacija ni najdena' }, { status: 404 })
 

@@ -3,6 +3,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import { getActiveMembership } from '@/lib/active-org'
 
 function EmailSkeniranjeContent() {
   const [org, setOrg] = useState<any>(null)
@@ -20,7 +21,7 @@ function EmailSkeniranjeContent() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const { data: member } = await supabase.from('org_members').select('org_id, organizations(*)').eq('user_id', user.id).maybeSingle()
+      const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
       if (!member) return
       setOrg((member as any).organizations)
       const { data: conns } = await supabase.from('email_connections').select('*').eq('org_id', member.org_id).order('created_at', { ascending: false })
@@ -58,7 +59,7 @@ function EmailSkeniranjeContent() {
       alert(`Skeniranje koncano. Najdenih ${data.found || 0} novih stroskov v pregled.`)
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+        const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
         if (member) {
           const { data: pend } = await supabase.from('email_scan_pending').select('*').eq('org_id', member.org_id).eq('status', 'pending').order('created_at', { ascending: false })
           setPending(pend || [])

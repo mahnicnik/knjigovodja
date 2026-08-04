@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { confirmIssuedInvoiceWithFurs } from '@/lib/furs-invoice-confirm'
+import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 
 async function getSupabase() {
   const cookieStore = await cookies()
@@ -34,8 +35,8 @@ export async function POST(req: NextRequest) {
     const { invoiceId, paymentType, premiseId: requestedPremiseId } = body
     if (!invoiceId) return NextResponse.json({ error: 'invoiceId je obvezen' }, { status: 400 })
 
-    const { data: member } = await supabase
-      .from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+    const { orgId: __orgId, role: __role } = await resolveActiveOrgId(supabase, user.id, getRequestedOrgId(req))
+    const member = __orgId ? { org_id: __orgId, role: __role } : null // vec-org podpora (30.7.2026)
     if (!member) return NextResponse.json({ error: 'Org ni najdena' }, { status: 404 })
 
     const { data: org0 } = await supabase

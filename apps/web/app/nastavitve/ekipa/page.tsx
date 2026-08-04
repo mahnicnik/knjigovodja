@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import HowTo from '@/components/HowTo'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { getActiveMembership } from '@/lib/active-org'
 
 // ===== TIPI =====
 interface Member {
@@ -87,11 +88,7 @@ export default function EkipaPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
 
-      const { data: member } = await supabase
-        .from('org_members')
-        .select('org_id, role')
-        .eq('user_id', user.id)
-        .maybeSingle()
+      const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
 
       if (!member) return
       setOrgId(member.org_id)

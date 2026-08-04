@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { confirmIssuedInvoiceWithFurs } from '@/lib/furs-invoice-confirm'
+import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 
 export const maxDuration = 300
 
@@ -32,8 +33,8 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })
 
-    const { data: member } = await supabaseAuth
-      .from('org_members').select('org_id, role').eq('user_id', user.id).maybeSingle()
+    const { orgId: __orgId, role: __role } = await resolveActiveOrgId(supabaseAuth, user.id, getRequestedOrgId(req))
+    const member = __orgId ? { org_id: __orgId, role: __role } : null // vec-org podpora (30.7.2026)
     if (!member) return NextResponse.json({ error: 'Org ni najdena' }, { status: 404 })
     if (member.role && !['owner', 'admin'].includes(member.role)) {
       return NextResponse.json({ error: 'Samo lastnik/admin lahko sprozi naknadno fiskalizacijo' }, { status: 403 })

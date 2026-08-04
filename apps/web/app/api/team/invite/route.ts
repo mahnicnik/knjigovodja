@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { resend, FROM_EMAIL } from '@/lib/resend'
+import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 
 async function getSupabase() {
   const cookieStore = await cookies()
@@ -57,11 +58,8 @@ export async function POST(req: NextRequest) {
     const { email, role } = await req.json()
     if (!email || !role) return NextResponse.json({ error: 'Manjkajo parametri' }, { status: 400 })
 
-    const { data: member } = await supabase
-      .from('org_members')
-      .select('org_id, role')
-      .eq('user_id', user.id)
-      .maybeSingle()
+    const { orgId: __orgId, role: __role } = await resolveActiveOrgId(supabase, user.id, getRequestedOrgId(req))
+    const member = __orgId ? { org_id: __orgId, role: __role } : null // vec-org podpora (30.7.2026)
     if (!member) return NextResponse.json({ error: 'Org ni najdena' }, { status: 404 })
     if (!['owner', 'admin'].includes(member.role)) {
       return NextResponse.json({ error: 'Nimate pravic za povabilo novih clanov' }, { status: 403 })

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
+import { resolveActiveOrgId, getRequestedOrgId } from '@/lib/active-org-server'
 
 // NOV ENDPOINT (30.7.2026, audit K8): prej je sprememba vloge tekla
 // NEPOSREDNO iz brskalnika (supabase.from('org_members').update({role})),
@@ -33,11 +34,12 @@ export async function POST(req: NextRequest) {
     if (!memberId || !newRole) return NextResponse.json({ error: 'Manjkajo parametri' }, { status: 400 })
     if (!VALID_ROLES.includes(newRole)) return NextResponse.json({ error: 'Neveljavna vloga' }, { status: 400 })
 
-    const { data: caller } = await supabase
-      .from('org_members')
-      .select('id, org_id, role')
-      .eq('user_id', user.id)
-      .maybeSingle()
+    // POPRAVLJENO (30.7.2026): podpora vec organizacijam - prej je
+    // .maybeSingle() ob vec clanstvih vrnil NAPAKO.
+    const { orgId: callerOrgId, role: callerRole } = await resolveActiveOrgId(
+      supabase, user.id, getRequestedOrgId(req)
+    )
+    const caller = callerOrgId ? { org_id: callerOrgId, role: callerRole } : null
     if (!caller) return NextResponse.json({ error: 'Organizacija ni najdena' }, { status: 404 })
     if (!['owner', 'admin'].includes(caller.role)) {
       return NextResponse.json({ error: 'Nimate pravic za spreminjanje vlog' }, { status: 403 })

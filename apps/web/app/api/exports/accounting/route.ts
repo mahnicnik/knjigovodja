@@ -11,6 +11,7 @@ import {
   type ReceiptRow,
 } from '@/lib/accounting-export'
 import { resend, FROM_EMAIL } from '@/lib/resend'
+import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 
 const MONTHS = [
   'januar', 'februar', 'marec', 'april', 'maj', 'junij',
@@ -56,11 +57,8 @@ export async function POST(req: NextRequest) {
     }
 
     // ===== Pridobi organizacijo =====
-    const { data: member } = await supabase
-      .from('org_members')
-      .select('org_id')
-      .eq('user_id', user.id)
-      .maybeSingle()
+    const { orgId: __orgId, role: __role } = await resolveActiveOrgId(supabase, user.id, getRequestedOrgId(req))
+    const member = __orgId ? { org_id: __orgId, role: __role } : null // vec-org podpora (30.7.2026)
 
     if (!member) {
       return NextResponse.json({ error: 'Organizacija ni najdena' }, { status: 404 })

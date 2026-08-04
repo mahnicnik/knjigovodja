@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { confirmWithFurs, extractFromP12, type FursConfig, type FursInvoiceData } from '@/lib/furs'
 import { getFursCertificate } from '@/lib/furs-cert'
+import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 
 export const maxDuration = 300 // dolg zaporeden postopek
 
@@ -18,8 +19,8 @@ async function assertOwner() {
   )
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
-  const { data: member } = await supabase
-    .from('org_members').select('org_id, role').eq('user_id', user.id).maybeSingle()
+  const { orgId: __orgId, role: __role } = await resolveActiveOrgId(supabase, user.id, getRequestedOrgId(req))
+    const member = __orgId ? { org_id: __orgId, role: __role } : null // vec-org podpora (30.7.2026)
   if (!member || member.org_id !== ORG_ID) return null
   return user
 }

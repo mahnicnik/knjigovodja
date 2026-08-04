@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { getActiveMembership } from '@/lib/active-org'
 
 const MONTHS = [
   { id: 1, name: 'Januar' }, { id: 2, name: 'Februar' }, { id: 3, name: 'Marec' },
@@ -42,7 +43,7 @@ export default function IzvozPage() {
         router.push('/login')
         return
       }
-      const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+      const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
       if (!member) return
       const { data: org } = await supabase.from('organizations').select('name, accountant_email, accountant_name').eq('id', member.org_id).single()
       if (org) {
@@ -63,7 +64,7 @@ export default function IzvozPage() {
     async function loadPreview() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+      const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
       if (!member) return
 
       let periodFrom: string, periodTo: string

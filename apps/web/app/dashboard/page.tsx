@@ -7,6 +7,8 @@ import { usePathname, useRouter } from 'next/navigation'
 import LegalUpdatesWidget from '@/components/LegalUpdatesWidget'
 import { calculateNetIncome, projectMonthlyRevenue, checkNormirancePragRisk, getTaxSystemLabel, type LegalForm, type TaxSystem } from '@/lib/tax-calculator'
 import { generateCashFlow, getChartMaxValue, type OpenInvoice } from '@/lib/cash-flow'
+import { getActiveMembership } from '@/lib/active-org'
+import OrgSwitcher from '@/components/OrgSwitcher'
 
 /* ================================================================
    RAČUNKO DASHBOARD V6 — Faza 2
@@ -281,9 +283,7 @@ export default function DashboardPage() {
       setUserId(user.id)
       setUserEmail(user.email || '')
 
-      const { data: member } = await supabase
-        .from('org_members').select('organizations(*)')
-        .eq('user_id', user.id).maybeSingle()
+      const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
 
       if (!member || !(member as any).organizations) {
         window.location.href = '/onboarding'
@@ -714,6 +714,9 @@ export default function DashboardPage() {
             <h1 className="rk-greet">{greet}, <span className="name">{ownerName}</span> 👋</h1>
           </div>
           <div className="rk-head-tools">
+            {/* Preklopnik organizacij (30.7.2026) - viden SAMO, ce
+                uporabnik pripada vec kot eni organizaciji. */}
+            <OrgSwitcher />
             <div className="rk-head-search" onClick={() => { setPaletteOpen(true); setPaletteQuery(''); setPaletteSelectedIdx(0) }}>
               <Icon name="search" size={16} />
               <span>Iskanje računov, strank…</span>

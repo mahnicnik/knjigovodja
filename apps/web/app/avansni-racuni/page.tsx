@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import { getActiveMembership } from '@/lib/active-org'
 
 interface Invoice {
   id: string
@@ -53,7 +54,7 @@ export default function AvansniRacuniPage() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
-      const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+      const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
       if (!member) return
       setOrgId(member.org_id)
       const { data: org } = await supabase.from('organizations').select('vat_registered').eq('id', member.org_id).single()

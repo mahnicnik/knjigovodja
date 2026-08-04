@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import { getActiveMembership } from '@/lib/active-org'
 
 
 interface Message {
@@ -55,9 +56,7 @@ export default function AIPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const { data: member } = await supabase
-      .from('org_members').select('organizations(*)')
-      .eq('user_id', user.id).single()
+    const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
 
     if (!member) return
     const o = (member as any).organizations

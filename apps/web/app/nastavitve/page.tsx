@@ -6,6 +6,7 @@ import Link from 'next/link'
 import posthog from 'posthog-js'
 import UpgradeButton from '@/components/UpgradeButton'
 import ManageSubscriptionButton from '@/components/ManageSubscriptionButton'
+import { getActiveMembership } from '@/lib/active-org'
 
 const SP_CONTRIBUTIONS: Record<number, number> = {
   1: 2584.92, 2: 3012.36, 3: 3439.20, 4: 3866.04, 5: 4293.00,
@@ -90,9 +91,7 @@ export default function NastavitevPage() {
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    const { data: member } = await supabase
-      .from('org_members').select('organizations(*)')
-      .eq('user_id', user.id).single()
+    const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
     if (member) {
       const o = (member as any).organizations
       setOrg(o)

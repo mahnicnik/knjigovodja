@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import { getActiveMembership } from '@/lib/active-org'
 
 const QUARTERS = [
   { q: 1, label: 'Q1 (jan–mar)', from: '-01-01', to: '-03-31', due: 'april' },
@@ -25,9 +26,7 @@ export default function DDVEvidencaPage() {
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    const { data: member } = await supabase
-      .from('org_members').select('organizations(*)')
-      .eq('user_id', user.id).single()
+    const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
     if (member) setOrg((member as any).organizations)
     setLoading(false)
   }

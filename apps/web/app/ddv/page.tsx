@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import { getActiveMembership } from '@/lib/active-org'
 
 // POPRAVLJENO (29.7.2026, audit portala):
 //  1. VHODNI DDV: prej trdo kodiran na €0.00 (s komentarjem "za zdaj brez
@@ -42,11 +43,7 @@ export default function DDVPage() {
     async function loadOrg() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const { data: member } = await supabase
-        .from('org_members')
-        .select('organizations(*)')
-        .eq('user_id', user.id)
-        .single()
+      const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
       if (member) setOrg((member as any).organizations)
       else setLoading(false)
     }

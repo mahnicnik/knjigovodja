@@ -4,6 +4,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { decryptToken, encryptToken } from '@/lib/token-crypto'
+import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -23,7 +24,8 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })
 
-    const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+    const { orgId: __orgId, role: __role } = await resolveActiveOrgId(supabase, user.id, getRequestedOrgId(request))
+    const member = __orgId ? { org_id: __orgId, role: __role } : null // vec-org podpora (30.7.2026)
     if (!member) return NextResponse.json({ error: 'Org ni najdena' }, { status: 404 })
 
     // Neobvezno: rocno izbrano casovno okno (namesto "od zadnjega skena naprej")

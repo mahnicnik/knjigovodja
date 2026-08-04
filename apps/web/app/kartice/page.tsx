@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import posthog from 'posthog-js'
+import { getActiveMembership } from '@/lib/active-org'
 
 const PROCESSORS = [
   { value: 'sumup', label: 'SumUp', fee: 1.69 },
@@ -56,9 +57,7 @@ export default function KarticeePage() {
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    const { data: member } = await supabase
-      .from('org_members').select('organizations(*)')
-      .eq('user_id', user.id).single()
+    const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
     if (member) {
       const o = (member as any).organizations
       setOrg(o)

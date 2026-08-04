@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
+import { getActiveMembership } from '@/lib/active-org'
 
 const supabase = createClient()
 
@@ -75,11 +76,7 @@ export default function BlagajnaPage() {
       if (!user) { setLoading(false); return }
 
       // Pridobi org_id
-      const { data: member } = await supabase
-        .from('org_members')
-        .select('org_id')
-        .eq('user_id', user.id)
-        .maybeSingle()
+      const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
 
       if (member) {
         // Naloži OBA certifikata (produkcijski + testni), ne samo enega
@@ -146,7 +143,7 @@ export default function BlagajnaPage() {
     try {
       const { data: { user } } = await createClient().auth.getUser()
       if (!user) return
-      const { data: member } = await createClient().from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+      const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
       if (!member) return
       await createClient().from('organizations').update({ furs_test_mode: updated.testMode }).eq('id', member.org_id)
     } catch (e) {
@@ -218,8 +215,7 @@ export default function BlagajnaPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Ni avtentikacije')
 
-      const { data: member } = await supabase
-        .from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+      const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
       if (!member) throw new Error('Org ni najdena')
 
       if (premiseModal.id) {
@@ -308,8 +304,7 @@ export default function BlagajnaPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Ni avtentikacije')
 
-      const { data: member } = await supabase
-        .from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+      const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
       if (!member) throw new Error('Org ni najdena')
 
       // VAROVALKA (21.7.2026): naprave z obstojeco FURS zgodovino NE smejo

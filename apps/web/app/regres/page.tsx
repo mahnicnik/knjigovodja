@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { MIN_WAGE as TC_MIN_WAGE, MIN_REGRES as TC_MIN_REGRES, REGRES_TAX_FREE_LIMIT } from '@/lib/tax-constants'
+import { getActiveMembership } from '@/lib/active-org'
 
 // 2026 zakonski minimumi — POPRAVLJENO 30.7.2026 (audit)
 const MIN_WAGE = TC_MIN_WAGE // iz lib/tax-constants.ts
@@ -62,7 +63,7 @@ export default function RegresPage() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
-      const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+      const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
       if (!member) return
       setOrgId(member.org_id)
 

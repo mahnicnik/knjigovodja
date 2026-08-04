@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import { getActiveMembership } from '@/lib/active-org'
 
 export default function DownloadPage() {
   const [org, setOrg] = useState<any>(null)
@@ -14,9 +15,7 @@ export default function DownloadPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const { data: member } = await supabase
-        .from('org_members').select('organizations(*)')
-        .eq('user_id', user.id).maybeSingle()
+      const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
 
       if (member) {
         setOrg((member as any).organizations)

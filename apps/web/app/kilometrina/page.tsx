@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { KM_RATE_BUSINESS as TC_KM_BUSINESS, KM_RATE_COMMUTE as TC_KM_COMMUTE } from '@/lib/tax-constants'
+import { getActiveMembership } from '@/lib/active-org'
 
 // POPRAVLJENO (30.7.2026, audit): Uredba o davčni obravnavi povračil
 // stroškov določa DVE LOČENI stopnji, ki ju zakon strogo razlikuje.
@@ -33,11 +34,7 @@ export default function KilometrinaPage() {
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    const { data: member } = await supabase
-      .from('org_members')
-      .select('organizations(*)')
-      .eq('user_id', user.id)
-      .single()
+    const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
     if (member) {
       const o = (member as any).organizations
       setOrg(o)

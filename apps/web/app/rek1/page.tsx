@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS, MANDATORY_HEALTH_CONTRIBUTION, GENERAL_RELIEF_MONTH, INCOME_TAX_BRACKETS } from '@/lib/tax-constants'
+import { getActiveMembership } from '@/lib/active-org'
 
 // POPRAVLJENO (26.7.2026): EE.injury ODSTRANJEN - zaposlenci NIKOLI ne
 // placujejo prispevka za poskodbe pri delu, to bremeni samo delodajalca.
@@ -109,9 +110,7 @@ export default function REK1Page() {
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    const { data: member } = await supabase
-      .from('org_members').select('organizations(*)')
-      .eq('user_id', user.id).single()
+    const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
     if (member) {
       const o = (member as any).organizations
       setOrg(o)

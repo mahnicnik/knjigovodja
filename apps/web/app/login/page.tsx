@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import posthog from 'posthog-js'
+import { getActiveMembership } from '@/lib/active-org'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -32,11 +33,7 @@ export default function LoginPage() {
       posthog.identify(user.id, { email: user.email })
       posthog.capture('user_logged_in', { email: user.email })
 
-      const { data: member } = await supabase
-        .from('org_members')
-        .select('org_id')
-        .eq('user_id', user.id)
-        .single()
+      const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
 
       if (member) {
         router.push('/dashboard')

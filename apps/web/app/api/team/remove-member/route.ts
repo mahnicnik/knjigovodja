@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
+import { resolveActiveOrgId, getRequestedOrgId } from '@/lib/active-org-server'
 
 // NOV ENDPOINT (30.7.2026, audit K8) - glej team/change-role/route.ts za
 // polno razlago problema. Isti popravek za odstranitev clana.
@@ -24,11 +25,12 @@ export async function POST(req: NextRequest) {
     const { memberId } = await req.json()
     if (!memberId) return NextResponse.json({ error: 'Manjka memberId' }, { status: 400 })
 
-    const { data: caller } = await supabase
-      .from('org_members')
-      .select('id, org_id, role')
-      .eq('user_id', user.id)
-      .maybeSingle()
+    // POPRAVLJENO (30.7.2026): podpora vec organizacijam - prej je
+    // .maybeSingle() ob vec clanstvih vrnil NAPAKO.
+    const { orgId: callerOrgId, role: callerRole } = await resolveActiveOrgId(
+      supabase, user.id, getRequestedOrgId(req)
+    )
+    const caller = callerOrgId ? { org_id: callerOrgId, role: callerRole } : null
     if (!caller) return NextResponse.json({ error: 'Organizacija ni najdena' }, { status: 404 })
     if (!['owner', 'admin'].includes(caller.role)) {
       return NextResponse.json({ error: 'Nimate pravic za odstranjevanje članov' }, { status: 403 })
