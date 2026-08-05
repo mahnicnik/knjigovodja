@@ -30,6 +30,16 @@ export default function IntegrationPage() {
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
 
   // WooCommerce form
+  // DODANO (30.7.2026, audit - varnostna najdba): webhook skrivnosti so
+  // bile prikazane v celoti, v navadnem besedilu. Zdaj privzeto skrite.
+  function maskSecret(secret: string): string {
+    if (!secret) return ''
+    return '•'.repeat(Math.max(0, secret.length - 4)) + secret.slice(-4)
+  }
+  const [showWcSecret, setShowWcSecret] = useState(false)
+  const [showShSecret, setShowShSecret] = useState(false)
+  const [showStrSecret, setShowStrSecret] = useState(false)
+
   const [wcModal, setWcModal] = useState(false)
   const [wcUrl, setWcUrl] = useState('')
   const [wcSecret, setWcSecret] = useState('')
@@ -203,8 +213,13 @@ export default function IntegrationPage() {
                 {webhookBaseUrl}/woocommerce?org_id={orgId}
               </div>
               <div style={{ fontSize: 11, color: '#888', marginTop: 10, marginBottom: 4, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em' }}>Webhook Secret</div>
-              <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#0D1F12', background: '#fff', padding: '8px 12px', borderRadius: 6, border: '0.5px solid rgba(0,0,0,0.1)' }}>
-                {wcIntegration.webhook_secret}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ flex: 1, fontFamily: 'monospace', fontSize: 12, color: '#0D1F12', background: '#fff', padding: '8px 12px', borderRadius: 6, border: '0.5px solid rgba(0,0,0,0.1)' }}>
+                  {showWcSecret ? wcIntegration.webhook_secret : maskSecret(wcIntegration.webhook_secret)}
+                </div>
+                <button onClick={() => setShowWcSecret(!showWcSecret)} style={{ padding: '6px 10px', borderRadius: 6, border: '0.5px solid rgba(0,0,0,0.12)', fontSize: 11, cursor: 'pointer', background: '#fff', whiteSpace: 'nowrap' }}>
+                  {showWcSecret ? 'Skrij' : 'Pokaži'}
+                </button>
               </div>
               <div style={{ fontSize: 12, color: '#888', marginTop: 10, lineHeight: 1.5 }}>
                 V WooCommerce: <strong>Nastavitve → Napredno → Webhooks → Dodaj</strong><br />
@@ -257,8 +272,13 @@ export default function IntegrationPage() {
                 {webhookBaseUrl}/shopify?org_id={orgId}
               </div>
               <div style={{ fontSize: 11, color: '#888', marginTop: 10, marginBottom: 4, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em' }}>Webhook Secret</div>
-              <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#0D1F12', background: '#fff', padding: '8px 12px', borderRadius: 6, border: '0.5px solid rgba(0,0,0,0.1)' }}>
-                {shIntegration.webhook_secret}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ flex: 1, fontFamily: 'monospace', fontSize: 12, color: '#0D1F12', background: '#fff', padding: '8px 12px', borderRadius: 6, border: '0.5px solid rgba(0,0,0,0.1)' }}>
+                  {showShSecret ? shIntegration.webhook_secret : maskSecret(shIntegration.webhook_secret)}
+                </div>
+                <button onClick={() => setShowShSecret(!showShSecret)} style={{ padding: '6px 10px', borderRadius: 6, border: '0.5px solid rgba(0,0,0,0.12)', fontSize: 11, cursor: 'pointer', background: '#fff', whiteSpace: 'nowrap' }}>
+                  {showShSecret ? 'Skrij' : 'Pokaži'}
+                </button>
               </div>
               <div style={{ fontSize: 12, color: '#888', marginTop: 10, lineHeight: 1.5 }}>
                 V Shopify: <strong>Nastavitve → Obvestila → Webhooks → Ustvari webhook</strong><br />
@@ -311,8 +331,13 @@ export default function IntegrationPage() {
                 {webhookBaseUrl}/stripe?org_id={orgId}
               </div>
               <div style={{ fontSize: 11, color: '#888', marginTop: 10, marginBottom: 4, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em' }}>Webhook Secret (Stripe Signing secret)</div>
-              <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#0D1F12', background: '#fff', padding: '8px 12px', borderRadius: 6, border: '0.5px solid rgba(0,0,0,0.1)' }}>
-                {strIntegration.webhook_secret}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ flex: 1, fontFamily: 'monospace', fontSize: 12, color: '#0D1F12', background: '#fff', padding: '8px 12px', borderRadius: 6, border: '0.5px solid rgba(0,0,0,0.1)' }}>
+                  {showStrSecret ? strIntegration.webhook_secret : maskSecret(strIntegration.webhook_secret)}
+                </div>
+                <button onClick={() => setShowStrSecret(!showStrSecret)} style={{ padding: '6px 10px', borderRadius: 6, border: '0.5px solid rgba(0,0,0,0.12)', fontSize: 11, cursor: 'pointer', background: '#fff', whiteSpace: 'nowrap' }}>
+                  {showStrSecret ? 'Skrij' : 'Pokaži'}
+                </button>
               </div>
               <div style={{ fontSize: 12, color: '#888', marginTop: 10, lineHeight: 1.5 }}>
                 V Stripe: <strong>Developers → Webhooks → Add endpoint</strong><br />
