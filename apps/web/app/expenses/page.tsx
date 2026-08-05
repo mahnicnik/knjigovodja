@@ -6,6 +6,8 @@ import Link from 'next/link'
 import posthog from 'posthog-js'
 import { getActiveMembership } from '@/lib/active-org'
 
+const MONTHS = ['Januar','Februar','Marec','April','Maj','Junij','Julij','Avgust','September','Oktober','November','December']
+
 export default function ExpensesPage() {
   const [org, setOrg] = useState<any>(null)
   const [expenses, setExpenses] = useState<any[]>([])
@@ -13,6 +15,46 @@ export default function ExpensesPage() {
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+
+  // DODANO (30.7.2026): izbirnik obdobja - privzeto tekoci mesec namesto
+  // nalaganja vse zgodovine. Petih nacinov: mesec / cetrtletje / leto /
+  // vse / po meri.
+  type PeriodMode = 'month' | 'quarter' | 'year' | 'all' | 'custom'
+  const now = new Date()
+  const [periodMode, setPeriodMode] = useState<PeriodMode>('month')
+  const [selMonth, setSelMonth] = useState(now.getMonth())
+  const [selYear, setSelYear] = useState(now.getFullYear())
+  const [selQuarter, setSelQuarter] = useState(Math.ceil((now.getMonth() + 1) / 3))
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+
+  function getPeriodRange(): { from: string | null; to: string | null; label: string } {
+    const pad = (n: number) => String(n).padStart(2, '0')
+    if (periodMode === 'all') return { from: null, to: null, label: 'Vse od začetka' }
+    if (periodMode === 'year') {
+      return { from: `${selYear}-01-01`, to: `${selYear}-12-31`, label: `Poslovno leto ${selYear}` }
+    }
+    if (periodMode === 'quarter') {
+      const startMonth = (selQuarter - 1) * 3
+      const lastDay = new Date(selYear, startMonth + 3, 0).getDate()
+      return {
+        from: `${selYear}-${pad(startMonth + 1)}-01`,
+        to: `${selYear}-${pad(startMonth + 3)}-${lastDay}`,
+        label: `Q${selQuarter} ${selYear}`,
+      }
+    }
+    if (periodMode === 'custom') {
+      return { from: customFrom || null, to: customTo || null, label: 'Po meri' }
+    }
+    // mesec (privzeto)
+    const lastDay = new Date(selYear, selMonth + 1, 0).getDate()
+    return {
+      from: `${selYear}-${pad(selMonth + 1)}-01`,
+      to: `${selYear}-${pad(selMonth + 1)}-${lastDay}`,
+      label: `${MONTHS[selMonth]} ${selYear}`,
+    }
+  }
+
   const [form, setForm] = useState({
     vendor: '',
     receipt_date: new Date().toISOString().split('T')[0],
@@ -23,22 +65,25 @@ export default function ExpensesPage() {
   })
   const supabase = createClient()
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { loadOrg() }, [])
+  useEffect(() => { if (org) loadExpenses() }, [org, periodMode, selMonth, selYear, selQuarter, customFrom, customTo])
 
-  async function load() {
+  async function loadOrg() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
-    if (member) {
-      const o = (member as any).organizations
-      setOrg(o)
-      const { data } = await supabase
-        .from('receipts')
-        .select('*')
-        .eq('org_id', o.id)
-        .order('receipt_date', { ascending: false })
-      setExpenses(data || [])
-    }
+    if (member) setOrg((member as any).organizations)
+    else setLoading(false)
+  }
+
+  async function loadExpenses() {
+    setLoading(true)
+    const { from, to } = getPeriodRange()
+    let query = supabase.from('receipts').select('*').eq('org_id', org.id)
+    if (from) query = query.gte('receipt_date', from)
+    if (to) query = query.lte('receipt_date', to)
+    const { data } = await query.order('receipt_date', { ascending: false })
+    setExpenses(data || [])
     setLoading(false)
   }
 
@@ -139,7 +184,7 @@ export default function ExpensesPage() {
     })
     setShowForm(false)
     setSaving(false)
-    load()
+    loadExpenses()
   }
 
   const totalNet = expenses.reduce((s, e) => s + Number(e.amount_net || 0), 0)
@@ -178,6 +223,60 @@ export default function ExpensesPage() {
           >
             + Dodaj strošek
           </button>
+        </div>
+      </div>
+
+      {/* DODANO (30.7.2026): izbirnik obdobja */}
+      <div className="max-w-4xl mx-auto px-6 pt-6 flex flex-wrap items-center gap-2">
+        {([
+          ['month', 'Mesec'],
+          ['quarter', 'Četrtletje'],
+          ['year', 'Poslovno leto'],
+          ['all', 'Vse'],
+          ['custom', 'Po meri'],
+        ] as const).map(([mode, label]) => (
+          <button
+            key={mode}
+            onClick={() => setPeriodMode(mode)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${periodMode === mode ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+          >
+            {label}
+          </button>
+        ))}
+
+        <div className="flex items-center gap-2 ml-2">
+          {periodMode === 'month' && (
+            <>
+              <select value={selMonth} onChange={e => setSelMonth(Number(e.target.value))} className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs">
+                {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
+              </select>
+              <select value={selYear} onChange={e => setSelYear(Number(e.target.value))} className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs">
+                {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2].map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </>
+          )}
+          {periodMode === 'quarter' && (
+            <>
+              <select value={selQuarter} onChange={e => setSelQuarter(Number(e.target.value))} className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs">
+                {[1,2,3,4].map(q => <option key={q} value={q}>Q{q}</option>)}
+              </select>
+              <select value={selYear} onChange={e => setSelYear(Number(e.target.value))} className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs">
+                {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2].map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </>
+          )}
+          {periodMode === 'year' && (
+            <select value={selYear} onChange={e => setSelYear(Number(e.target.value))} className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs">
+              {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2, now.getFullYear() - 3].map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          )}
+          {periodMode === 'custom' && (
+            <>
+              <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs" />
+              <span className="text-gray-400 text-xs">–</span>
+              <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs" />
+            </>
+          )}
         </div>
       </div>
 
