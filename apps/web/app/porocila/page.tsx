@@ -50,20 +50,27 @@ export default function PoslovnaPorocila() {
       const yearStart = `${year}-01-01`
       const yearEnd = `${year}-12-31`
 
-      const [invRes, expRes] = await Promise.all([
+      const [invRes, expRes, kpoRes] = await Promise.all([
         supabase.from('issued_invoices').select('*').eq('org_id', member.org_id).gte('issue_date', yearStart).lte('issue_date', yearEnd).neq('status', 'draft'),
         supabase.from('receipts').select('*').eq('org_id', member.org_id).gte('receipt_date', yearStart).lte('receipt_date', yearEnd),
+        // DODANO (30.7.2026): KPO prihodki (POS promet, banka, kartice...)
+        // - SAMO brez invoice_id, da se placila ze prestetih racunov ne
+        // stejejo dvakrat (ista varovalka kot na /kpo, /izvoz, /racunovodja).
+        supabase.from('kpo_entries').select('income, entry_date').eq('org_id', member.org_id).eq('entry_type', 'income').is('invoice_id', null).gte('entry_date', yearStart).lte('entry_date', yearEnd),
       ])
 
       const invoices = invRes.data ?? []
       const receipts = expRes.data ?? []
+      const kpoIncome = kpoRes.data ?? []
 
       // Mesečni podatki
       const monthly: MonthData[] = Array.from({ length: 12 }, (_, i) => {
         const monthStr = String(i + 1).padStart(2, '0')
         const monthInv = invoices.filter(inv => inv.issue_date.startsWith(`${year}-${monthStr}`))
         const monthExp = receipts.filter(r => r.receipt_date.startsWith(`${year}-${monthStr}`))
+        const monthKpo = kpoIncome.filter(e => e.entry_date.startsWith(`${year}-${monthStr}`))
         const revenue = monthInv.reduce((s, i) => s + Number(i.amount_net), 0)
+          + monthKpo.reduce((s, e) => s + Number(e.income || 0), 0)
         const expenses = monthExp.reduce((s, r) => s + Number(r.amount_net ?? 0), 0)
         const vatOut = monthInv.reduce((s, i) => s + Number(i.vat_amount), 0)
         const vatIn = monthExp.reduce((s, r) => s + Number(r.vat_amount ?? 0), 0)
@@ -82,7 +89,7 @@ export default function PoslovnaPorocila() {
         profit: totalRevenue - totalExpenses,
         vatOut: totalVatOut,
         vatIn: totalVatIn,
-        vatDue: Math.max(0, totalVatOut - totalVatIn),
+        vatDue: totalVatOut - totalVatIn, // POPRAVLJENO 30.7.2026: prej Math.max(0,...) skril upravicenost do vracila
       })
 
       // Po strankah
@@ -137,7 +144,7 @@ export default function PoslovnaPorocila() {
             { label: 'Prihodki', value: fmt(totals.revenue), color: '#6EE7B7' },
             { label: 'Odhodki', value: fmt(totals.expenses), color: '#FCA5A5' },
             { label: 'Dobiček', value: fmtN(totals.profit), color: totals.profit >= 0 ? '#E8B547' : '#FCA5A5' },
-            { label: 'DDV dolgovan', value: fmt(totals.vatDue), color: '#FCD34D' },
+            { label: totals.vatDue >= 0 ? 'DDV dolgovan' : 'DDV za vračilo', value: fmt(Math.abs(totals.vatDue)), color: totals.vatDue >= 0 ? '#FCD34D' : '#86EFAC' },
             { label: 'Marža', value: totals.revenue > 0 ? `${Math.round((totals.profit / totals.revenue) * 100)}%` : '—', color: '#A78BFA' },
           ].map(s => (
             <div key={s.label} style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: '12px 16px' }}>
@@ -222,7 +229,7 @@ export default function PoslovnaPorocila() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
                 {[
                   { label: 'Marža', value: totals.revenue > 0 ? `${Math.round((totals.profit / totals.revenue) * 100)}%` : '—' },
-                  { label: 'DDV dolgovan FURS', value: fmt(totals.vatDue) },
+                  { label: totals.vatDue >= 0 ? 'DDV dolgovan FURS' : 'DDV za vračilo od FURS', value: fmt(Math.abs(totals.vatDue)) },
                   { label: 'Povp. mesečni dobiček', value: fmtN(totals.profit / 12) },
                 ].map(s => (
                   <div key={s.label}>
@@ -296,7 +303,7 @@ export default function PoslovnaPorocila() {
                   <td style={{ padding: '12px 16px', fontSize: 12, textAlign: 'right', color: 'rgba(255,255,255,0.6)' }}>
                     {totals.revenue > 0 ? `${Math.round((totals.profit / totals.revenue) * 100)}%` : '—'}
                   </td>
-                  <td style={{ padding: '12px 16px', fontSize: 12, textAlign: 'right', color: '#FCD34D' }}>{fmt(totals.vatDue)}</td>
+                  <td style={{ padding: '12px 16px', fontSize: 12, textAlign: 'right', color: totals.vatDue >= 0 ? '#FCD34D' : '#86EFAC' }}>{totals.vatDue < 0 ? '+' : ''}{fmt(Math.abs(totals.vatDue))}</td>
                 </tr>
               </tfoot>
             </table>
