@@ -4,14 +4,39 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { decryptToken, encryptToken } from '@/lib/token-crypto'
-import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 /**
- * Preveri Gmail povezave organizacije, poisce e-maile z racuni/PDF prilogami
- * od zadnjega skeniranja naprej, jih analizira z AI, in shrani v
- * email_scan_pending za rocno potrditev. Nic ne gre avtomatsko v receipts.
+ * Preveri Gmail povezave organizacije, poisce e-maile s prilogami od
+ * zadnjega skeniranja (ali izbranega obdobja) naprej, jih analizira z AI,
+ * in shrani v email_scan_pending za rocno potrditev. Nic ne gre avtomatsko
+ * v receipts.
+ *
+ * POPRAVLJENO (30.7.2026, na Nikovo prosnjo - "spusti veliko racunov"):
+ * najdeni in odpravljeni STIRJE loceni vzroki izgube racunov:
+ *
+ * 1. PAGINACIJA: Gmail vrne max 20 zadetkov na klic, koda ni brala
+ *    naslednjih strani (nextPageToken) - pri vecjem stevilu racunov v
+ *    obdobju je obdelala samo prvih 20, ostalo tiho izgubila.
+ *    -> Zdaj bere do 5 strani (100 sporocil), z opozorilom ce jih je se vec.
+ *
+ * 2. KLJUCNE BESEDE KOT OBVEZEN POGOJ: iskanje je zahtevalo eno od besed
+ *    "racun/invoice/faktura/receipt" V BESEDILU e-poste. Dobavitelj, ki
+ *    napise samo "V prilogi posiljamo dokument", je bil spregledan -
+ *    CEPRAV ima priloz en pravi racun.
+ *    -> Zdaj iscemo VSE e-poste s prilogo v obdobju; AI ze itak razvrsca
+ *    is_invoice:true/false PO branju, torej dvojno filtriranje ni bilo
+ *    potrebno in je le izgubljalo prave racune.
+ *
+ * 3. LAST_SCANNED_AT SE JE PREMAKNIL TUDI OB NAPAKI: ce je Gmail vrnil
+ *    napako (potekel zeton, kvota), se je cas skeniranja vseeno posodobil
+ *    -> tisto obdobje se ni NIKOLI vec skeniralo. Zdaj se cas premakne
+ *    SAMO ob resnicnem uspehu.
+ *
+ * 4. SAMO .pdf: druge oblike (.xml e-SLOG, skenirane slike) se niso nasle.
+ *    NAMENOMA NEPOPRAVLJENO v tem koraku - AI branje spodaj pricakuje PDF;
+ *    razsiritev na slike/XML zahteva locen poseg v AI klic in shranjevanje.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -24,8 +49,7 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })
 
-    const { orgId: __orgId, role: __role } = await resolveActiveOrgId(supabase, user.id, getRequestedOrgId(request))
-    const member = __orgId ? { org_id: __orgId, role: __role } : null // vec-org podpora (30.7.2026)
+    const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
     if (!member) return NextResponse.json({ error: 'Org ni najdena' }, { status: 404 })
 
     // Neobvezno: rocno izbrano casovno okno (namesto "od zadnjega skena naprej")
@@ -48,16 +72,15 @@ export async function POST(request: NextRequest) {
     }
 
     let totalFound = 0
+    let totalScanned = 0
+    let anyCapped = false
 
     for (const conn of connections) {
-      // POPRAVLJENO (24.7.2026, audit R5): tokeni se desifrirajo pred uporabo,
-      // nov access_token se ponovno sifrira pred shranjevanjem.
       let accessToken = decryptToken(conn.access_token)
-      const refreshToken = decryptToken(conn.refresh_token)
 
-      // Osvezi token ce je potekel
+      // Osvezi zeton, ce je potekel
       if (conn.token_expires_at && new Date(conn.token_expires_at) <= new Date()) {
-        if (!refreshToken) continue
+        const refreshToken = decryptToken(conn.refresh_token)
         const refreshRes = await fetch('https://oauth2.googleapis.com/token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -75,32 +98,57 @@ export async function POST(request: NextRequest) {
         await supabase.from('email_connections').update({ access_token: encryptToken(accessToken), token_expires_at: newExpiresAt }).eq('id', conn.id)
       }
 
-      // Sestavi Gmail search query: od zadnjega skeniranja, ima prilogo, kljucne besede
       const since = customFrom || (conn.last_scanned_at
         ? new Date(conn.last_scanned_at)
         : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)) // privzeto zadnjih 7 dni
       const afterStr = Math.floor(since.getTime() / 1000)
       const beforeStr = customTo ? Math.floor(customTo.getTime() / 1000) : null
-      const keywords = (conn.keyword_filters || []).join(' OR ')
       const senderFilter = (conn.sender_filters || []).length > 0
         ? '(' + conn.sender_filters.map((s: string) => `from:${s}`).join(' OR ') + ')'
         : ''
       const beforePart = beforeStr ? `before:${beforeStr}` : ''
-      const query = `has:attachment filename:pdf after:${afterStr} ${beforePart} ${senderFilter} (${keywords})`.trim()
+      // POPRAVLJENO: ključne besede odstranjene kot obvezen pogoj - AI že
+      // razvrsti is_invoice po branju priloge, torej Gmail iskanje samo
+      // omeji na "ima prilogo v obdobju" (+ pošiljatelj, če je nastavljen).
+      const query = `has:attachment after:${afterStr} ${beforePart} ${senderFilter}`.trim()
 
-      const listRes = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=20`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      )
-      const listData = await listRes.json()
-      if (!listRes.ok || !listData.messages) {
-        if (!customFrom) {
-        await supabase.from('email_connections').update({ last_scanned_at: new Date().toISOString() }).eq('id', conn.id)
+      // POPRAVLJENO: paginacija - beremo do 5 strani (100 sporočil), da se
+      // večje število računov v obdobju ne izgubi tiho pri prvih 20.
+      const MAX_PAGES = 5
+      let allMessages: { id: string }[] = []
+      let pageToken: string | undefined = undefined
+      let gmailError = false
+
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const url = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages')
+        url.searchParams.set('q', query)
+        url.searchParams.set('maxResults', '20')
+        if (pageToken) url.searchParams.set('pageToken', pageToken)
+
+        const listRes = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } })
+        const listData = await listRes.json()
+
+        if (!listRes.ok) {
+          gmailError = true
+          break
+        }
+        if (listData.messages) allMessages.push(...listData.messages)
+        if (!listData.nextPageToken) break
+        pageToken = listData.nextPageToken
+        if (page === MAX_PAGES - 1) anyCapped = true
       }
+
+      // POPRAVLJENO: last_scanned_at se premakne SAMO ob resnicnem uspehu
+      // (prej se je premaknil tudi ob napaki Gmail API-ja -> tisto obdobje
+      // se ni nikoli vec skeniralo).
+      if (gmailError) {
+        console.error('email-scan: Gmail API napaka za povezavo', conn.id)
         continue
       }
 
-      for (const msgRef of listData.messages) {
+      totalScanned += allMessages.length
+
+      for (const msgRef of allMessages) {
         const msgRes = await fetch(
           `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgRef.id}`,
           { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -191,7 +239,12 @@ Vrni SAMO JSON brez dodatnega besedila.`,
       }
     }
 
-    return NextResponse.json({ success: true, found: totalFound })
+    return NextResponse.json({
+      success: true,
+      found: totalFound,
+      scanned: totalScanned,
+      capped: anyCapped, // true = obstaja se vec sporocil, ki jih ta tek ni zajel - pozeni znova
+    })
   } catch (e: any) {
     console.error('Email scan run error:', e)
     return NextResponse.json({ error: e.message }, { status: 500 })

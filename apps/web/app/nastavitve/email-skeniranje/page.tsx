@@ -56,7 +56,12 @@ function EmailSkeniranjeContent() {
       })
       const data = await res.json()
       if (!res.ok) { alert('Napaka: ' + data.error); return }
-      alert(`Skeniranje koncano. Najdenih ${data.found || 0} novih stroskov v pregled.`)
+      // POPRAVLJENO (30.7.2026): opozori, ce paginacijska meja (100
+      // sporocil) ni zajela vsega - uporabnik naj pozene se enkrat.
+      const cappedMsg = data.capped
+        ? '\n\n⚠️ V tem obdobju je bilo VEC kot 100 e-mailov s prilogo - ta tek jih ni zajel vseh. Poženite skeniranje še enkrat za isto obdobje, da zajamete preostale.'
+        : ''
+      alert(`Skeniranje koncano. Pregledanih ${data.scanned || 0} e-mailov, najdenih ${data.found || 0} novih stroskov v pregled.${cappedMsg}`)
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
