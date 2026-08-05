@@ -77,11 +77,13 @@ async function generateInvoiceNumber(supabase: any, orgId: string): Promise<stri
 }
 
 export async function POST(req: NextRequest) {
+  let orgId: string | null = null
+  let supabase: any = null
   try {
-    const supabase = await getSupabase()
+    supabase = await getSupabase()
 
     const { searchParams } = new URL(req.url)
-    const orgId = searchParams.get('org_id')
+    orgId = searchParams.get('org_id')
 
     if (!orgId) {
       return NextResponse.json({ error: 'org_id parameter manjka' }, { status: 400 })
@@ -105,6 +107,14 @@ export async function POST(req: NextRequest) {
     if (integration.webhook_secret && signature) {
       const isValid = verifyStripeSignature(rawBody, signature, integration.webhook_secret)
       if (!isValid) {
+        // DODANO (30.7.2026): beleži neveljaven podpis - prej se je
+        // tiho zavrnilo brez sledi v /integracije.
+        await supabase.from('integration_logs').insert({
+          org_id: orgId,
+          integration_type: 'stripe',
+          status: 'failed',
+          payload: { error: 'invalid_signature' },
+        })
         return NextResponse.json({ error: 'Neveljaven podpis' }, { status: 401 })
       }
     }
@@ -330,6 +340,17 @@ export async function POST(req: NextRequest) {
 
   } catch (e: any) {
     console.error('Stripe integration webhook error:', e)
+    // DODANO (30.7.2026): beleži splošno napako - prej se je obdelava
+    // lahko podrla brez sledi v /integracije ("zakaj se ni poknjižilo").
+    // orgId/supabase sta zdaj dosegljiva tudi tu (dvignjena pred try).
+    if (orgId && supabase) {
+      await supabase.from('integration_logs').insert({
+        org_id: orgId,
+        integration_type: 'stripe',
+        status: 'failed',
+        payload: { error: String(e?.message || e) },
+      }).then(() => {}, () => {})
+    }
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }
