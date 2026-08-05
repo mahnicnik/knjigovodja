@@ -70,7 +70,10 @@ export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
             <View style={styles.companyInfo}>
               <Text>{org.address || ''}</Text>
               <Text>{org.post_code || ''} {org.city || ''}</Text>
-              <Text>Davčna številka: {org.tax_number || ''}</Text>
+              {/* POPRAVLJENO (30.7.2026): odstrani SI predpono - "Davčna
+                  številka" jo po konvenciji NE vsebuje (za razliko od "ID za
+                  DDV" spodaj, ki jo vedno ima). Prej sta bili polji identicni. */}
+              <Text>Davčna številka: {(org.tax_number || '').replace(/^SI/i, '')}</Text>
               {org.vat_registered && <Text>ID za DDV: SI{(org.tax_number || '').replace(/^SI/i, '')}</Text>}
               {org.iban && <Text>TRR: {org.iban}</Text>}
             </View>

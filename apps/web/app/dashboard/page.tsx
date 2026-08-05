@@ -1023,11 +1023,15 @@ export default function DashboardPage() {
                       <div className={`rk-act-ico ${isOverdue ? 'late' : ''}`}>{initial}</div>
                       <div>
                         <div className="rk-act-name">{inv.client_name}</div>
-                        <div className="rk-act-sub">#{inv.invoice_number} · {isPaid ? 'plačano' : isOverdue ? 'zapadel' : 'poslano'} {dateStr}</div>
+                        {/* POPRAVLJENO (30.7.2026): prej vsak status:'sent' zapis
+                          prikazan kot "Poslano", tudi ce email nikoli ni bil
+                          odposlan. Zdaj ista logika kot /invoices -
+                          preveri last_email_sent_at. */}
+                      <div className="rk-act-sub">#{inv.invoice_number} · {isPaid ? 'plačano' : isOverdue ? 'zapadel' : inv.last_email_sent_at ? 'poslano' : 'izdano'} {dateStr}</div>
                       </div>
                       <div className={`rk-act-amt ${isOverdue ? 'neg' : 'in'}`}>+€{Math.round(Number(inv.amount_total))}</div>
                       <div className={`rk-pill ${isPaid ? 'paid' : isOverdue ? 'late' : 'sent'}`}>
-                        {isPaid ? 'Plačano' : isOverdue ? 'Zamuda' : 'Poslano'}
+                        {isPaid ? 'Plačano' : isOverdue ? 'Zamuda' : inv.last_email_sent_at ? 'Poslano' : 'Izdano'}
                       </div>
                     </Link>
                   )
