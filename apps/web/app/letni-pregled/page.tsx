@@ -106,13 +106,20 @@ export default function LentniPregledPage() {
     const receipts = receiptsRes.data || []
     const kpo = kpoRes.data || []
     const employees = employeesRes.data || []
+    // POPRAVLJENO (30.7.2026): 'kpo' se je doslej pridobil, a NIKOLI ni
+    // vplival na izracun - prihodki so bili v resnici samo izdani racuni.
+    // SAMO brez invoice_id (ta so placila ze prestetih racunov - izognemo
+    // se dvojnemu stetju, ista varovalka kot na /kpo, /porocila, /izvoz).
+    const kpoIncomeOnly = kpo.filter((e: any) => e.entry_type === 'income' && !e.invoice_id)
 
     // Mesečni pregled
     const monthly = Array.from({length: 12}, (_, i) => {
       const m = String(i+1).padStart(2,'0')
       const monthInv = invoices.filter((inv: any) => inv.issue_date?.startsWith(`${selectedYear}-${m}`))
       const monthExp = receipts.filter((r: any) => r.receipt_date?.startsWith(`${selectedYear}-${m}`))
+      const monthKpo = kpoIncomeOnly.filter((e: any) => e.entry_date?.startsWith(`${selectedYear}-${m}`))
       const revenue = monthInv.reduce((s: number, i: any) => s + Number(i.amount_net), 0)
+        + monthKpo.reduce((s: number, e: any) => s + Number(e.income || 0), 0)
       const expenses = monthExp.reduce((s: number, r: any) => s + Number(r.amount_net), 0)
       const vatOut = monthInv.reduce((s: number, i: any) => s + Number(i.vat_amount), 0)
       const vatIn = monthExp.reduce((s: number, r: any) => s + Number(r.vat_amount), 0)
@@ -128,6 +135,7 @@ export default function LentniPregledPage() {
 
     // Letni seštevki
     const totalRevenue = invoices.reduce((s: number, i: any) => s + Number(i.amount_net), 0)
+      + kpoIncomeOnly.reduce((s: number, e: any) => s + Number(e.income || 0), 0)
     const totalExpenses = receipts.reduce((s: number, r: any) => s + Number(r.amount_net), 0)
     const totalVatOut = invoices.reduce((s: number, i: any) => s + Number(i.vat_amount), 0)
     const totalVatIn = receipts.reduce((s: number, r: any) => s + Number(r.vat_amount), 0)
