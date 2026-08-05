@@ -4,9 +4,12 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
+import { LEGAL_DEFAULT_INTEREST_RATE } from '@/lib/tax-constants'
 
-// Zakonska zamudna obrestna mera TOM + 8% = cca 11% letno (2026)
-const LEGAL_INTEREST_RATE = 0.11
+// POPRAVLJENO (30.7.2026): prej trdo kodirana 11% - napacna za oba dela
+// 2026 (10,15% / 10,40%). Zdaj iz lib/tax-constants.ts, kjer je jasno
+// oznaceno, da se ta mera uskladi DVAKRAT LETNO.
+const LEGAL_INTEREST_RATE = LEGAL_DEFAULT_INTEREST_RATE
 
 function calcInterest(amount: number, dueDateStr: string): number {
   const dueDate = new Date(dueDateStr)

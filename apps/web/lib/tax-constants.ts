@@ -141,6 +141,22 @@ export const MEAL_ALLOWANCE = 7.96
 export const DAILY_ALLOWANCE_FOREIGN_AVG = 50.00
 export const ACCOMMODATION_MAX = 70.00
 
+// ───────────────────────── ZAMUDNE OBRESTI ─────────────────────────
+
+/**
+ * Zakonska zamudna obrestna mera (ZPOMZO-1).
+ * ⚠️ SPREMINJA SE DVAKRAT LETNO (1.1. in 1.7.) - drugače kot ostale
+ * konstante v tej datoteki, ki se uskladijo enkrat januarja!
+ * Objavi minister za finance v Uradnem listu, vsako polletje posebej.
+ *
+ * Zgodovina 2026:
+ *   1.1.–30.6.2026: 10,15 %
+ *   1.7.–31.12.2026: 10,40 %  ← trenutno velja
+ *
+ * Pred uporabo PREVERI aktualno vrednost na Uradnem listu RS.
+ */
+export const LEGAL_DEFAULT_INTEREST_RATE = 0.1040 // velja od 1.7.2026
+
 // ───────────────────────── DDV ─────────────────────────
 
 export const VAT_RATES = { standard: 22, reduced: 9.5, zero: 0 } as const
