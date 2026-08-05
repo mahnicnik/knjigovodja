@@ -206,7 +206,11 @@ export default function KPOPage() {
               <div className="col-span-4"></div>
               <div className="col-span-2 text-right text-xs font-semibold text-green-600">€{totalIncome.toFixed(2)}</div>
               <div className="col-span-2 text-right text-xs font-semibold text-red-500">€{totalExpense.toFixed(2)}</div>
-              <div className="col-span-2 text-right text-xs font-semibold text-gray-700">€{totalVatOut.toFixed(2)}</div>
+              {/* POPRAVLJENO (30.7.2026): SKUPAJ je sestevek vsega DDV, prikazanega
+                  v tem stolpcu (prihodek + strosek), NE neto obveznost -
+                  ta je pravilno ze zgoraj v kartici "DDV dolg". Prej je
+                  vrstica izpuscala DDV od stroskov v celoti. */}
+              <div className="col-span-2 text-right text-xs font-semibold text-gray-700">€{(totalVatOut + totalVatIn).toFixed(2)}</div>
             </div>
           )}
         </div>
