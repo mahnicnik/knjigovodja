@@ -312,7 +312,10 @@ export default function DashboardPage() {
         // DODANO 26.7.2026 (audit K3): dejanski denarni tok iz KPO (banka,
         // kartice, POS, place, stroski...) - locen prikaz od fakturiranega
         // prometa, da se izogne dvojnemu stetju.
-        supabase.from('kpo_entries').select('income, entry_date').eq('org_id', o.id).eq('entry_type', 'income').gte('entry_date', monthStart).lte('entry_date', monthEnd),
+        // POPRAVLJENO (30.7.2026): razsirjeno na celo leto (prej samo mesec)
+        // + dodan invoice_id, da lahko izpeljemo tudi pravilen LETNI
+        // prihodek za prag normiranca (glej kpoYearIncomeForLimit spodaj).
+        supabase.from('kpo_entries').select('income, entry_date, invoice_id').eq('org_id', o.id).eq('entry_type', 'income').gte('entry_date', yearStart).lte('entry_date', monthEnd),
         // DODANO 29.7.2026: stevilo samodejno pripravljenih osnutkov
         // ponavljajocih racunov, ki cakajo na rocno potrditev.
         supabase.from('issued_invoices').select('id', { count: 'exact', head: true }).eq('org_id', o.id).eq('status', 'draft').like('notes', 'Ponavljajoč račun%'),
@@ -329,7 +332,14 @@ export default function DashboardPage() {
       const monthInv = invoices.filter((i:any) => i.issue_date >= monthStart && i.issue_date <= monthEnd)
       const yearInv = invoices.filter((i:any) => i.issue_date >= yearStart)
       const revenue = monthInv.reduce((s:number,i:any) => s + Number(i.amount_net), 0)
-      const yearRevenue = yearInv.reduce((s:number,i:any) => s + Number(i.amount_net), 0)
+      // POPRAVLJENO (30.7.2026): letni prihodek za prag normiranca je prej
+      // stel SAMO izdane racune - manjkal je POS/bancni/karticni promet.
+      // SAMO KPO vnosi BREZ invoice_id (izognemo se dvojnemu stetju s
+      // placili ze prestetih racunov).
+      const kpoYearIncomeForLimit = (kpoRes.data || [])
+        .filter((e: any) => !e.invoice_id)
+        .reduce((s: number, e: any) => s + Number(e.income || 0), 0)
+      const yearRevenue = yearInv.reduce((s:number,i:any) => s + Number(i.amount_net), 0) + kpoYearIncomeForLimit
       const expenses = receipts.filter((r:any) => r.receipt_date >= monthStart && r.receipt_date <= monthEnd).reduce((s:number,r:any) => s + Number(r.amount_net), 0)
       const vatOut = invoices.reduce((s:number,i:any) => s + Number(i.vat_amount), 0)
       const vatIn = receipts.reduce((s:number,r:any) => s + Number(r.vat_amount), 0)
