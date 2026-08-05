@@ -50,18 +50,23 @@ export default function PoslovnaPorocila() {
       const yearStart = `${year}-01-01`
       const yearEnd = `${year}-12-31`
 
-      const [invRes, expRes, kpoRes] = await Promise.all([
+      const [invRes, expRes, kpoRes, kpoExpRes] = await Promise.all([
         supabase.from('issued_invoices').select('*').eq('org_id', member.org_id).gte('issue_date', yearStart).lte('issue_date', yearEnd).neq('status', 'draft'),
         supabase.from('receipts').select('*').eq('org_id', member.org_id).gte('receipt_date', yearStart).lte('receipt_date', yearEnd),
         // DODANO (30.7.2026): KPO prihodki (POS promet, banka, kartice...)
         // - SAMO brez invoice_id, da se placila ze prestetih racunov ne
         // stejejo dvakrat (ista varovalka kot na /kpo, /izvoz, /racunovodja).
         supabase.from('kpo_entries').select('income, entry_date').eq('org_id', member.org_id).eq('entry_type', 'income').is('invoice_id', null).gte('entry_date', yearStart).lte('entry_date', yearEnd),
+        // DODANO (30.7.2026): KPO stroski (bancni odlivi, place, karticne
+        // provizije...) - SIMETRICNO s prihodki zgoraj. SAMO brez
+        // receipt_id, da se ze rocno vneseni stroski ne stejejo dvakrat.
+        supabase.from('kpo_entries').select('expense, vat_in, entry_date').eq('org_id', member.org_id).eq('entry_type', 'expense').is('receipt_id', null).gte('entry_date', yearStart).lte('entry_date', yearEnd),
       ])
 
       const invoices = invRes.data ?? []
       const receipts = expRes.data ?? []
       const kpoIncome = kpoRes.data ?? []
+      const kpoExpense = kpoExpRes.data ?? []
 
       // Mesečni podatki
       const monthly: MonthData[] = Array.from({ length: 12 }, (_, i) => {
@@ -69,11 +74,14 @@ export default function PoslovnaPorocila() {
         const monthInv = invoices.filter(inv => inv.issue_date.startsWith(`${year}-${monthStr}`))
         const monthExp = receipts.filter(r => r.receipt_date.startsWith(`${year}-${monthStr}`))
         const monthKpo = kpoIncome.filter(e => e.entry_date.startsWith(`${year}-${monthStr}`))
+        const monthKpoExp = kpoExpense.filter(e => e.entry_date.startsWith(`${year}-${monthStr}`))
         const revenue = monthInv.reduce((s, i) => s + Number(i.amount_net), 0)
           + monthKpo.reduce((s, e) => s + Number(e.income || 0), 0)
         const expenses = monthExp.reduce((s, r) => s + Number(r.amount_net ?? 0), 0)
+          + monthKpoExp.reduce((s, e) => s + Number(e.expense || 0), 0)
         const vatOut = monthInv.reduce((s, i) => s + Number(i.vat_amount), 0)
         const vatIn = monthExp.reduce((s, r) => s + Number(r.vat_amount ?? 0), 0)
+          + monthKpoExp.reduce((s, e) => s + Number(e.vat_in || 0), 0)
         return { month: i, revenue, expenses, profit: revenue - expenses, vatOut, vatIn }
       })
       setMonthlyData(monthly)

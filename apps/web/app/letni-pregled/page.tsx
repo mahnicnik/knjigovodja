@@ -111,6 +111,10 @@ export default function LentniPregledPage() {
     // SAMO brez invoice_id (ta so placila ze prestetih racunov - izognemo
     // se dvojnemu stetju, ista varovalka kot na /kpo, /porocila, /izvoz).
     const kpoIncomeOnly = kpo.filter((e: any) => e.entry_type === 'income' && !e.invoice_id)
+    // DODANO (30.7.2026): KPO stroski - simetricno s prihodki zgoraj.
+    // SAMO brez receipt_id, da se ze rocno vneseni stroski (receipts) ne
+    // stejejo dvakrat.
+    const kpoExpenseOnly = kpo.filter((e: any) => e.entry_type === 'expense' && !e.receipt_id)
 
     // Mesečni pregled
     const monthly = Array.from({length: 12}, (_, i) => {
@@ -118,11 +122,14 @@ export default function LentniPregledPage() {
       const monthInv = invoices.filter((inv: any) => inv.issue_date?.startsWith(`${selectedYear}-${m}`))
       const monthExp = receipts.filter((r: any) => r.receipt_date?.startsWith(`${selectedYear}-${m}`))
       const monthKpo = kpoIncomeOnly.filter((e: any) => e.entry_date?.startsWith(`${selectedYear}-${m}`))
+      const monthKpoExp = kpoExpenseOnly.filter((e: any) => e.entry_date?.startsWith(`${selectedYear}-${m}`))
       const revenue = monthInv.reduce((s: number, i: any) => s + Number(i.amount_net), 0)
         + monthKpo.reduce((s: number, e: any) => s + Number(e.income || 0), 0)
       const expenses = monthExp.reduce((s: number, r: any) => s + Number(r.amount_net), 0)
+        + monthKpoExp.reduce((s: number, e: any) => s + Number(e.expense || 0), 0)
       const vatOut = monthInv.reduce((s: number, i: any) => s + Number(i.vat_amount), 0)
       const vatIn = monthExp.reduce((s: number, r: any) => s + Number(r.vat_amount), 0)
+        + monthKpoExp.reduce((s: number, e: any) => s + Number(e.vat_in || 0), 0)
       return { month: i, revenue, expenses, vatOut, vatIn, profit: revenue - expenses }
     })
 
@@ -137,8 +144,10 @@ export default function LentniPregledPage() {
     const totalRevenue = invoices.reduce((s: number, i: any) => s + Number(i.amount_net), 0)
       + kpoIncomeOnly.reduce((s: number, e: any) => s + Number(e.income || 0), 0)
     const totalExpenses = receipts.reduce((s: number, r: any) => s + Number(r.amount_net), 0)
+      + kpoExpenseOnly.reduce((s: number, e: any) => s + Number(e.expense || 0), 0)
     const totalVatOut = invoices.reduce((s: number, i: any) => s + Number(i.vat_amount), 0)
     const totalVatIn = receipts.reduce((s: number, r: any) => s + Number(r.vat_amount), 0)
+      + kpoExpenseOnly.reduce((s: number, e: any) => s + Number(e.vat_in || 0), 0)
 
     // Prispevki s.p.
     // POPRAVLJENO 30.7.2026: dejanske nastavitve namesto zastarelega razreda
