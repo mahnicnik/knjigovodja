@@ -88,14 +88,24 @@ export default function ApiPage() {
 
   async function revokeKey(id: string) {
     if (!confirm('Deaktiviram ta API ključ? Vse integracije ki ga uporabljajo bodo prenehale delovati.')) return
-    await supabase.from('api_keys').update({ is_active: false }).eq('id', id)
+    // POPRAVLJENO (30.7.2026): prej brez preverjanja napake - UI je
+    // prikazal "uspesno" tudi ce je operacija TIHO SPODLETELA (npr. RLS).
+    const { error } = await supabase.from('api_keys').update({ is_active: false }).eq('id', id)
+    if (error) {
+      showToast('Napaka pri deaktivaciji: ' + error.message)
+      return
+    }
     setKeys(prev => prev.map(k => k.id === id ? { ...k, is_active: false } : k))
     showToast('API ključ deaktiviran')
   }
 
   async function deleteKey(id: string) {
     if (!confirm('Izbrišem ta API ključ? To je nepovratno.')) return
-    await supabase.from('api_keys').delete().eq('id', id)
+    const { error } = await supabase.from('api_keys').delete().eq('id', id)
+    if (error) {
+      showToast('Napaka pri brisanju: ' + error.message)
+      return
+    }
     setKeys(prev => prev.filter(k => k.id !== id))
     showToast('API ključ izbrisan')
   }
