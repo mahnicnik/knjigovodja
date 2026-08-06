@@ -408,6 +408,9 @@ export default function ExpensesPage() {
           </div>
         ) : (
           <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+            {/* DODANO (30.7.2026): horizontalno drsenje na mobilnih napravah. */}
+            <div className="overflow-x-auto">
+            <div className="min-w-[640px]">
             <div className="grid grid-cols-12 gap-2 px-6 py-3 bg-gray-50 border-b border-gray-100">
               <div className="col-span-2 text-xs font-medium text-gray-500">Datum</div>
               <div className="col-span-3 text-xs font-medium text-gray-500">Dobavitelj</div>
@@ -433,6 +436,8 @@ export default function ExpensesPage() {
               <div className="col-span-2 text-xs text-right font-semibold text-red-500">€{totalNet.toFixed(2)}</div>
               <div className="col-span-2 text-xs text-right font-semibold text-green-600">€{totalVat.toFixed(2)}</div>
               <div className="col-span-1 text-xs text-right font-semibold">€{totalGross.toFixed(2)}</div>
+            </div>
+            </div>
             </div>
           </div>
         )}

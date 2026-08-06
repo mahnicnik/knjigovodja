@@ -164,6 +164,10 @@ export default function KPOPage() {
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+          {/* DODANO (30.7.2026): horizontalno drsenje na mobilnih napravah
+              namesto obrezane/prekrivajoce vsebine pri grid-cols-12. */}
+          <div className="overflow-x-auto">
+          <div className="min-w-[640px]">
           <div className="grid grid-cols-12 gap-2 px-6 py-3 bg-gray-50 border-b border-gray-100">
             <div className="col-span-2 text-xs font-medium text-gray-500">Datum</div>
             <div className="col-span-4 text-xs font-medium text-gray-500">Opis</div>
@@ -213,6 +217,8 @@ export default function KPOPage() {
               <div className="col-span-2 text-right text-xs font-semibold text-gray-700">€{(totalVatOut + totalVatIn).toFixed(2)}</div>
             </div>
           )}
+          </div>
+          </div>
         </div>
       </div>
     </div>
