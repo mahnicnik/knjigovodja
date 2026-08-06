@@ -71,7 +71,7 @@ export default function PredracuniPage() {
       const invoiceNumber = nextNumber || `${year}-001`
 
       // Ustvari račun
-      const { data: invoice } = await supabase.from('issued_invoices').insert({
+      const { data: invoice, error: invoiceError } = await supabase.from('issued_invoices').insert({
         org_id: orgId,
         invoice_number: invoiceNumber,
         invoice_type: 'invoice',
@@ -89,7 +89,13 @@ export default function PredracuniPage() {
         notes: `Iz predračuna ${q.quote_number}`,
       }).select('id').single()
 
-      if (!invoice) return
+      // POPRAVLJENO (30.7.2026): prej "if (!invoice) return" tiho
+      // prekinilo brez sporocila - predracun je ostal "Osnutek", uporabnik
+      // ni izvedel NICESAR. Zdaj se napaka prikaze.
+      if (invoiceError || !invoice) {
+        showToast(`Napaka pri ustvarjanju racuna: ${invoiceError?.message || 'neznana napaka'}`)
+        return
+      }
 
       // Posodobi predračun
       await supabase.from('quotes').update({ status: 'accepted', converted_to_invoice_id: invoice.id }).eq('id', quote.id)
