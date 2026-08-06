@@ -279,7 +279,10 @@ export default function PageHelp() {
       <style>{`
         @media (max-width: 480px) {
           .pagehelp-fab {
-            bottom: 16px !important;
+            /* POPRAVLJENO 30.7.2026 (2x): 16px je trcilo z Dashboardovim
+               glavnim CTA gumbom "+ Nov racun" (bottom:28/right:32) IN se
+               vedno prekrivalo zadnje znake v karticah - premaknjeno visje. */
+            bottom: 80px !important;
             right: 16px !important;
             left: auto !important;
             width: 40px !important;

@@ -147,7 +147,7 @@ export default function PoslovnaPorocila() {
         </div>
 
         {/* KPI kartice */}
-        <div style={{ maxWidth: 1000, margin: '16px auto 0', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
+        <div style={{ maxWidth: 1000, margin: '16px auto 0', display: 'flex', flexWrap: 'wrap', gap: 12 }}>
           {[
             { label: 'Prihodki', value: fmt(totals.revenue), color: '#6EE7B7' },
             { label: 'Odhodki', value: fmt(totals.expenses), color: '#FCA5A5' },
@@ -155,7 +155,7 @@ export default function PoslovnaPorocila() {
             { label: totals.vatDue >= 0 ? 'DDV dolgovan' : 'DDV za vračilo', value: fmt(Math.abs(totals.vatDue)), color: totals.vatDue >= 0 ? '#FCD34D' : '#86EFAC' },
             { label: 'Marža', value: totals.revenue > 0 ? `${Math.round((totals.profit / totals.revenue) * 100)}%` : '—', color: '#A78BFA' },
           ].map(s => (
-            <div key={s.label} style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: '12px 16px' }}>
+            <div key={s.label} style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: '12px 16px', flex: '1 1 140px', minWidth: 140 }}>
               <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginBottom: 4 }}>{s.label}</div>
               <div style={{ fontSize: 18, fontWeight: 700, color: s.color }}>{s.value}</div>
             </div>

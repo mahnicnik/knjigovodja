@@ -383,7 +383,11 @@ ${data.receipts.length > 0 ? `
             </select>
             <select value={contributionClass}
               onChange={e => { setContributionClass(parseInt(e.target.value)); setData(null) }}
-              className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none flex-1">
+              // POPRAVLJENO (30.7.2026): dodan min-w-0 - flex elementi imajo
+              // privzeto min-width:auto, kar preprecuje skrcitev pod
+              // vsebinsko sirino (najdaljso <option>) - to je povleklo
+              // celo stran v horizontalno drsenje na mobilnem.
+              className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none flex-1 min-w-0">
               {Array.from({length: 15}, (_, i) => i+1).map(c => (
                 <option key={c} value={c}>
                   Prispevni razred {c} — €{(SP_CONTRIBUTIONS[c]/12).toFixed(0)}/mes (€{SP_CONTRIBUTIONS[c].toFixed(2)}/leto)

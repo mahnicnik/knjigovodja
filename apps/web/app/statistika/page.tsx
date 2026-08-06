@@ -14,7 +14,7 @@ const COLORS_CAT = ['#3B6D11','#1D9E75','#EF9F27','#D4537E','#7F77DD','#D85A30',
 
 function StatCard({ label, value, sub, color }: any) {
   return (
-    <div style={{ background:'#fff', border:'0.5px solid rgba(0,0,0,0.08)', borderRadius:'12px', padding:'16px 18px' }}>
+    <div style={{ background:'#fff', border:'0.5px solid rgba(0,0,0,0.08)', borderRadius:'12px', padding:'16px 18px', flex: '1 1 140px', minWidth: 140 }}>
       <div style={{ fontSize:'10px', color:'#888', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'6px' }}>{label}</div>
       <div style={{ fontSize:'24px', fontWeight:'500', color: color || '#0D1F12', letterSpacing:'-0.5px' }}>{value}</div>
       {sub && <div style={{ fontSize:'11px', color:'#888', marginTop:'4px' }}>{sub}</div>}
@@ -194,7 +194,7 @@ export default function StatistikaPage() {
       <div style={{ padding:'24px 28px' }}>
 
         {/* Summary cards */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'12px', marginBottom:'24px' }}>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:'12px', marginBottom:'24px' }}>
           <StatCard label="Prihodki" value={`€${totals.revenue.toLocaleString()}`} sub="Brez DDV" color="#27500A" />
           <StatCard label="Odhodki" value={`€${totals.expenses.toLocaleString()}`} sub="Brez DDV" color="#A32D2D" />
           <StatCard label="Dobiček" value={`€${totals.profit.toLocaleString()}`} sub="Prihodki − odhodki" color={totals.profit >= 0 ? '#0D1F12' : '#A32D2D'} />
