@@ -68,7 +68,7 @@ export default function RegresPage() {
       setOrgId(member.org_id)
 
       const [empRes, entryRes] = await Promise.all([
-        supabase.from('employees').select('*').eq('org_id', member.org_id).eq('status', 'active').order('name'),
+        supabase.from('employees').select('*').eq('org_id', member.org_id).eq('status', 'active').order('full_name'), // POPRAVLJENO 30.7.2026: stolpec je 'full_name', ne 'name' - poizvedba je bila zaradi tega zavrnjena s 400
         supabase.from('regres_entries').select('*').eq('org_id', member.org_id).eq('year', year),
       ])
 
