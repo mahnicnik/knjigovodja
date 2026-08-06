@@ -142,6 +142,9 @@ export default function RokovnikPage() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [deadlines, setDeadlines] = useState<Deadline[]>([])
   const [done, setDone] = useState<Record<string, boolean>>({})
+  // DODANO (30.7.2026): "legenda" nad seznamom je bila samo vizualna
+  // (brez onClick) - a ker izgleda kot filter, je zdaj dejansko funkcionalna.
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [hasEmployees, setHasEmployees] = useState(false)
   const supabase = createClient()
 
@@ -249,17 +252,30 @@ export default function RokovnikPage() {
           </div>
         </div>
 
-        {/* Legenda */}
+        {/* DODANO (30.7.2026): legenda -> dejanski filter po kategoriji */}
         <div className="flex gap-2 mb-4 flex-wrap">
           {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
-            <span key={key} className={`text-xs px-2.5 py-1 rounded-full border ${CATEGORY_COLORS[key]}`}>
+            <button
+              key={key}
+              onClick={() => setSelectedCategory(prev => prev === key ? null : key)}
+              className={`text-xs px-2.5 py-1 rounded-full border cursor-pointer transition-all ${CATEGORY_COLORS[key]} ${selectedCategory === key ? 'ring-2 ring-offset-1 ring-gray-900 font-semibold' : 'opacity-70 hover:opacity-100'}`}
+            >
               {label}
-            </span>
+            </button>
           ))}
+          {selectedCategory && (
+            <button onClick={() => setSelectedCategory(null)} className="text-xs px-2.5 py-1 rounded-full border border-gray-300 text-gray-500 hover:bg-gray-50">
+              ✕ Prikaži vse
+            </button>
+          )}
         </div>
 
         {/* Seznam rokov */}
-        {deadlines.length === 0 ? (
+        {(() => {
+          const filteredDeadlines = selectedCategory
+            ? deadlines.filter(d => d.category === selectedCategory)
+            : deadlines
+          return filteredDeadlines.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
             <div className="text-4xl mb-4">✅</div>
             <h3 className="font-semibold text-gray-900 mb-2">Ni rokov ta mesec</h3>
@@ -267,7 +283,7 @@ export default function RokovnikPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {deadlines.map(deadline => {
+            {filteredDeadlines.map(deadline => {
               const isDone = done[deadline.id] || false
               const urgency = getUrgency(deadline.date, isDone)
               const daysLeft = getDaysLeft(deadline.date)
@@ -330,7 +346,8 @@ export default function RokovnikPage() {
               )
             })}
           </div>
-        )}
+        )
+        })()}
 
         {/* Letni pregled rokov */}
         <div className="bg-gray-900 rounded-2xl p-5 mt-6 text-white">
