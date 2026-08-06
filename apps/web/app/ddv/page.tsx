@@ -32,6 +32,7 @@ export default function DDVPage() {
   const [org, setOrg] = useState<any>(null)
   const [invoices, setInvoices] = useState<any[]>([])
   const [receipts, setReceipts] = useState<any[]>([])
+  const [kpoExpenses, setKpoExpenses] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
@@ -59,7 +60,7 @@ export default function DDVPage() {
     setLoading(true)
     const { from, to } = quarterRange(quarter, year)
 
-    const [invRes, recRes] = await Promise.all([
+    const [invRes, recRes, kpoExpRes] = await Promise.all([
       supabase
         .from('issued_invoices')
         .select('*')
@@ -75,15 +76,29 @@ export default function DDVPage() {
         .gte('receipt_date', from)
         .lte('receipt_date', to)
         .order('receipt_date', { ascending: false }),
+      // DODANO (30.7.2026): KPO stroski (bancni odlivi, place,
+      // provizije...) - SAMO brez receipt_id, da se ze rocno vneseni
+      // stroski ne stejejo dvakrat (ista varovalka kot na /porocila,
+      // /letni-pregled, /statistika).
+      supabase
+        .from('kpo_entries')
+        .select('vat_in, entry_date')
+        .eq('org_id', org.id)
+        .eq('entry_type', 'expense')
+        .is('receipt_id', null)
+        .gte('entry_date', from)
+        .lte('entry_date', to),
     ])
 
     setInvoices(invRes.data || [])
     setReceipts(recRes.data || [])
+    setKpoExpenses(kpoExpRes.data || [])
     setLoading(false)
   }
 
   const vatOut = invoices.reduce((s, i) => s + Number(i.vat_amount || 0), 0)
   const vatIn = receipts.reduce((s, r) => s + Number(r.vat_amount || 0), 0)
+    + kpoExpenses.reduce((s, e) => s + Number(e.vat_in || 0), 0)
   const vatDue = vatOut - vatIn
   const isRefund = vatDue < 0
 

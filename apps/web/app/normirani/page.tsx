@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
-import { INCOME_TAX_BRACKETS, GENERAL_RELIEF_YEAR, SP_MIN_CONTRIBUTIONS_YEAR, NORMIRANCI } from '@/lib/tax-constants'
+import { INCOME_TAX_BRACKETS, GENERAL_RELIEF_YEAR, SP_MIN_CONTRIBUTIONS_YEAR, NORMIRANCI, calcNormiraniDeduction } from '@/lib/tax-constants'
 import { getActiveMembership } from '@/lib/active-org'
 
 // POPRAVLJENO (30.7.2026): uradne 2026 letne meje (prej zastarele
@@ -43,7 +43,11 @@ function getYearlyContributions(org: any): number {
 }
 
 function calcNormirani(revenue: number, contributionClass: number, org?: any) {
-  const normExpenses = revenue * 0.80 // 80% normiranih odhodkov
+  // POPRAVLJENO (30.7.2026): prej revenue * 0.80 (ravno 80% CELOTNEGA
+  // prihodka) - napacno za sistem ZPZR, veljaven od 1.1.2026. Zdaj
+  // dvostopenjsko: 80% SAMO do 60.000 EUR, nad tem 0% (gre v progresivno
+  // dohodnino v celoti).
+  const normExpenses = calcNormiraniDeduction(revenue)
   const taxableBase = Math.max(0, revenue - normExpenses)
   // POPRAVLJENO 30.7.2026: dejanske nastavitve namesto zastarelega razreda
   const contributions = getYearlyContributions(org)

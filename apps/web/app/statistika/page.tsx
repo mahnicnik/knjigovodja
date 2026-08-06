@@ -65,15 +65,27 @@ export default function StatistikaPage() {
     const yearEnd = `${currentYear}-12-31`
     const today = now.toISOString().split('T')[0]
 
-    const [invRes, expRes] = await Promise.all([
+    const [invRes, expRes, kpoIncRes, kpoExpRes] = await Promise.all([
       supabase.from('issued_invoices').select('*').eq('org_id', o.id)
         .neq('status','draft').gte('issue_date', yearStart).lte('issue_date', yearEnd),
       supabase.from('receipts').select('*').eq('org_id', o.id)
         .gte('receipt_date', yearStart).lte('receipt_date', yearEnd),
+      // DODANO (30.7.2026): KPO prihodki (POS, banka, kartice...) - SAMO
+      // brez invoice_id (izognemo se dvojnemu stetju s placili ze
+      // prestetih racunov, ista varovalka kot povsod drugod danes).
+      supabase.from('kpo_entries').select('income, entry_date').eq('org_id', o.id)
+        .eq('entry_type', 'income').is('invoice_id', null)
+        .gte('entry_date', yearStart).lte('entry_date', yearEnd),
+      // DODANO (30.7.2026): KPO stroski, simetricno - SAMO brez receipt_id.
+      supabase.from('kpo_entries').select('expense, entry_date').eq('org_id', o.id)
+        .eq('entry_type', 'expense').is('receipt_id', null)
+        .gte('entry_date', yearStart).lte('entry_date', yearEnd),
     ])
 
     const invoices = invRes.data || []
     const receipts = expRes.data || []
+    const kpoIncomeOnly = kpoIncRes.data || []
+    const kpoExpenseOnly = kpoExpRes.data || []
 
     // Mesečni podatki
     const allMonthly = MONTHS.map((name, i) => {
@@ -82,9 +94,15 @@ export default function StatistikaPage() {
       const rev = invoices
         .filter((inv: any) => inv.issue_date?.startsWith(monthStr))
         .reduce((s: number, inv: any) => s + Number(inv.amount_net), 0)
+        + kpoIncomeOnly
+        .filter((e: any) => e.entry_date?.startsWith(monthStr))
+        .reduce((s: number, e: any) => s + Number(e.income || 0), 0)
       const exp = receipts
         .filter((r: any) => r.receipt_date?.startsWith(monthStr))
         .reduce((s: number, r: any) => s + Number(r.amount_net), 0)
+        + kpoExpenseOnly
+        .filter((e: any) => e.entry_date?.startsWith(monthStr))
+        .reduce((s: number, e: any) => s + Number(e.expense || 0), 0)
       return {
         name,
         Prihodki: Math.round(rev),
