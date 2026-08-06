@@ -237,7 +237,10 @@ export default function REK1Page() {
           <div className="space-y-4">
             {employees.map(emp => {
               const grossOverride = grossOverrides[emp.id]
-              const { fromUpload, p } = getPayrollFor(emp, grossOverride)
+              // POPRAVLJENO (30.7.2026): 'effectiveGross' ni bil izlocen, koda
+              // spodaj pa ga je pricakovala (kot napacno poimenovan 'grossSalary')
+              // -> ReferenceError, stran se je sesula ob vsakem obisku.
+              const { fromUpload, p, effectiveGross } = getPayrollFor(emp, grossOverride)
               return (
                 <div key={emp.id} className="bg-white rounded-2xl border border-gray-100 p-6">
                   <div className="flex justify-between items-start mb-4">
@@ -269,7 +272,7 @@ export default function REK1Page() {
                           <input
                             type="number"
                             step="0.01"
-                            value={grossSalary || ''}
+                            value={effectiveGross || ''}
                             onChange={e => setGrossOverrides(prev => ({ ...prev, [emp.id]: e.target.value === '' ? 0 : Number(e.target.value) }))}
                             className="w-24 text-right font-medium border border-gray-200 rounded-lg px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-900"
                           />
