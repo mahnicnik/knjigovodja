@@ -43,7 +43,17 @@ export default function NewQuotePage() {
       setOrgId(member.org_id)
       const { data: org } = await supabase.from('organizations').select('vat_registered').eq('id', member.org_id).single()
       setIsVatRegistered(org?.vat_registered ?? false)
-      if (org?.vat_registered) setItems([{ description: '', quantity: 1, unit_price: 0, vat_rate: 22, discount_pct: 0, amount_net: 0, vat_amount: 0 }])
+      // POPRAVLJENO (30.7.2026): ne prepisuj CELOTNEGA items polja - to je
+      // brisalo uporabnikov vnos, ce je zacel tipkati PREDEN se je ta
+      // pocasnejsa veriga (3 zaporedni klici) zakljucila. Zdaj samo
+      // POSODOBI vat_rate na obstojecih vrsticah, ohrani vse ostalo.
+      if (org?.vat_registered) {
+        setItems(prev => prev.map(item =>
+          item.quantity === 1 && item.unit_price === 0 && item.description === ''
+            ? { ...item, vat_rate: 22 }
+            : item
+        ))
+      }
     }
     load()
   }, [router, supabase])
