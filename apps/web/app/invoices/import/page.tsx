@@ -31,10 +31,35 @@ export default function ImportInvoicesPage() {
   const router = useRouter()
   const supabase = createClient()
 
+  // POPRAVLJENO (30.7.2026): accept="application/pdf" je samo NAMIG za
+  // dialog izbire datoteke - ne dejanska validacija (drag-and-drop ali
+  // "Vse datoteke" jo obide). Zdaj se preveri DEJANSKI tip datoteke.
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files || [])
-    setFiles(selected)
+    const validPdfs = selected.filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'))
+    const rejected = selected.filter(f => !(f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')))
+    if (rejected.length > 0) {
+      alert(`Naslednje datoteke niso PDF in ne bodo uvožene: ${rejected.map(f => f.name).join(', ')}`)
+    }
+    setFiles(validPdfs)
     setExtracted([])
+  }
+
+  // DODANO (30.7.2026): prevede znane backend/API napake v prijazna
+  // sporocila - prej je uporabnik videl surov API odziv (npr. razkrite
+  // notranje podrobnosti Anthropic API klica).
+  function friendlyImportError(rawError: string): string {
+    if (!rawError) return 'Neznana napaka pri obdelavi datoteke.'
+    if (rawError.includes('PDF specified was not valid') || rawError.includes('not valid')) {
+      return 'Datoteka ni veljaven PDF ali je poškodovana.'
+    }
+    if (rawError.includes('too large') || rawError.includes('size')) {
+      return 'Datoteka je prevelika.'
+    }
+    if (rawError.startsWith('40') || rawError.startsWith('50')) {
+      return 'Napaka pri obdelavi datoteke - poskusite znova.'
+    }
+    return rawError
   }
 
   async function fileToBase64(file: File): Promise<string> {
@@ -68,7 +93,7 @@ export default function ImportInvoicesPage() {
           results.push({
             invoice_number: '', client_name: '', client_tax_number: '', client_address: '',
             issue_date: '', due_date: '', amount_net: 0, vat_amount: 0, amount_total: 0,
-            line_items: [], _fileName: file.name, _status: 'error', _error: data.error, _selected: false,
+            line_items: [], _fileName: file.name, _status: 'error', _error: friendlyImportError(data.error), _selected: false,
           })
         } else {
           results.push({ ...data.invoice, _fileName: file.name, _status: 'ok', _selected: true })
