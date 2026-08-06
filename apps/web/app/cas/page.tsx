@@ -295,7 +295,7 @@ export default function CasPage() {
                         {e.is_billable && e.hourly_rate ? (
                           <div style={{ fontSize: 14, fontWeight: 700, color: '#1D9E75' }}>{fmt(e.hours * e.hourly_rate)}</div>
                         ) : (
-                          <div style={{ fontSize: 11, color: e.is_billable ? '#aaa' : '#888' }}>{e.is_billable ? 'Ni postavke' : 'Nezaračunljivo'}</div>
+                          <div style={{ fontSize: 11, color: e.is_billable ? '#aaa' : '#888' }}>{e.is_billable ? 'Brez urne postavke' : 'Nezaračunljivo'}</div>
                         )}
                       </div>
                       <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>

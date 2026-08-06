@@ -586,7 +586,7 @@ export default function DashboardPage() {
   const focus = useMemo(() => {
     const candidates = [
       { name: 'Prispevki za s.p.', amount: Number(org?.contrib_piz||0)+Number(org?.contrib_zzzs||0)+Number(org?.contrib_zaposlovanje||3.04)+Number(org?.contrib_starsevstvo||3.04), days: daysUntil15, day: 15, href: '/prispevki', emoji: '⏰' },
-      { name: 'Akontacija dohodnine', amount: 84, days: daysUntil15, day: 15, href: '/dohodnina', emoji: '📋' },
+      { name: 'Akontacija dohodnine', amount: Number(org?.contrib_akontacija || 0), days: daysUntil15, day: 15, href: '/dohodnina', emoji: '📋' }, // POPRAVLJENO 30.7.2026: prej trdo kodirano 84
     ]
     if (data.hasEmployees) {
       candidates.push({ name: 'REK-1 + plača', amount: 0, days: daysUntil25, day: 25, href: '/rek1', emoji: '👥' })
@@ -602,7 +602,7 @@ export default function DashboardPage() {
   const deadlines = useMemo(() => {
     const list = [
       { name: 'Prispevki s.p.',       date: `15. ${MONTHS_SHORT[month]}`, amount: Number(org?.contrib_piz||0)+Number(org?.contrib_zzzs||0)+Number(org?.contrib_zaposlovanje||3.04)+Number(org?.contrib_starsevstvo||3.04), days: daysUntil15, href: '/prispevki', urgent: daysUntil15 <= 7 && daysUntil15 >= 0 },
-      { name: 'Akontacija dohodnine', date: `15. ${MONTHS_SHORT[month]}`, amount: 84,  days: daysUntil15, href: '/dohodnina', urgent: false },
+      { name: 'Akontacija dohodnine', date: `15. ${MONTHS_SHORT[month]}`, amount: Number(org?.contrib_akontacija || 0), days: daysUntil15, href: '/dohodnina', urgent: false }, // POPRAVLJENO 30.7.2026: prej trdo kodirano 84
     ]
     if (data.hasEmployees) {
       list.push({ name: 'REK-1 + plača', date: `25. ${MONTHS_SHORT[month]}`, amount: 0, days: daysUntil25, href: '/rek1', urgent: daysUntil25 <= 7 && daysUntil25 >= 0 })

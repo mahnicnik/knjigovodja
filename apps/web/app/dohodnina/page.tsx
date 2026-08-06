@@ -287,10 +287,20 @@ export default function DohodninaPage() {
                   </div>
                 )
               })}
-              <div className={`flex justify-between text-xs px-2 py-1.5 rounded-lg ${adjustedBase > 250000 ? 'bg-gray-900 text-white' : 'text-gray-500'}`}>
-                <span>nad €250.000</span>
-                <span className="font-medium">50%</span>
-              </div>
+              {(() => {
+                // POPRAVLJENO (30.7.2026): prej trdo kodirano "nad €250.000"
+                // - napacno, dejanski izracun uporabi 50% takoj po meji
+                // predzadnjega razreda. Zdaj izpeljano iz ISTEGA BRACKETS
+                // polja kot zgornje vrstice, ne vec locena trdna vrednost.
+                const finiteBrackets = BRACKETS.filter(b => b.upTo !== Infinity)
+                const topBracketFloor = finiteBrackets[finiteBrackets.length - 1]?.upTo ?? 0
+                return (
+                  <div className={`flex justify-between text-xs px-2 py-1.5 rounded-lg ${adjustedBase > topBracketFloor ? 'bg-gray-900 text-white' : 'text-gray-500'}`}>
+                    <span>nad €{topBracketFloor.toLocaleString()}</span>
+                    <span className="font-medium">50%</span>
+                  </div>
+                )
+              })()}
             </div>
           </div>
         </div>
