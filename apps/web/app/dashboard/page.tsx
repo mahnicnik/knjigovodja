@@ -1526,7 +1526,7 @@ const cssGlobal = `
   .rk-quick-eyebrow { font-family: var(--rk-mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink3); }
   .rk-quick-edit { font-family: var(--rk-mono); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink2); cursor: pointer; background: none; border: 0; padding: 0; display: inline-flex; align-items: center; gap: 6px; }
   .rk-quick-edit:hover { color: var(--green); }
-  .rk-quick-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+  .rk-quick-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(85px, 1fr)); gap: 8px; } /* POPRAVLJENO 30.7.2026: auto-fit namesto fiksnih 7 stolpcev - samodejno se prilagodi sirini, ni odvisno od tocnega breakpointa */
   .rk-qa { background: #fff; border: 1px solid var(--rule); border-radius: 14px; padding: 16px 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; cursor: pointer; font: inherit; transition: border-color 0.12s, background 0.12s; min-height: 88px; position: relative; text-decoration: none; color: var(--ink); }
   .rk-shell[data-theme="dark"] .rk-qa { background: var(--panel); }
   .rk-qa:hover { border-color: var(--green); }

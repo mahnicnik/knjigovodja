@@ -273,7 +273,22 @@ export default function PageHelp() {
   return (
     <>
       {/* Floating gumb */}
+      {/* DODANO (30.7.2026): className "pagehelp-fab" za mobilno
+          medijsko poizvedbo spodaj - na ozkih zaslonih se premakne, da ne
+          prekriva vsebine kartic (prej fiksno bottom:100/left:24 povsod). */}
+      <style>{`
+        @media (max-width: 480px) {
+          .pagehelp-fab {
+            bottom: 16px !important;
+            right: 16px !important;
+            left: auto !important;
+            width: 40px !important;
+            height: 40px !important;
+          }
+        }
+      `}</style>
       <button
+        className="pagehelp-fab"
         onClick={() => setOpen(true)}
         style={{
           position: 'fixed',
