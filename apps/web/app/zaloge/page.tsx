@@ -82,20 +82,24 @@ export default function ZalogePage() {
     setSavingItem(true)
     try {
       if (itemModal.id) {
-        await supabase.from('inventory_items').update({
+        // POPRAVLJENO (30.7.2026): prej brez preverjanja napake - try/catch
+        // ujame samo vrzene izjeme, NE Supabase {error} odgovorov.
+        const { error: updateError } = await supabase.from('inventory_items').update({
           name: itemModal.name, sku: itemModal.sku || null, category: itemModal.category || null,
           unit: itemModal.unit ?? 'kos', purchase_price: itemModal.purchase_price ?? 0,
           sale_price: itemModal.sale_price ?? 0, vat_rate: itemModal.vat_rate ?? 22,
           min_stock: itemModal.min_stock ?? 0,
         }).eq('id', itemModal.id)
+        if (updateError) throw updateError
       } else {
-        const { data: newItem } = await supabase.from('inventory_items').insert({
+        const { data: newItem, error: insertError } = await supabase.from('inventory_items').insert({
           org_id: orgId, name: itemModal.name, sku: itemModal.sku || null,
           category: itemModal.category || null, unit: itemModal.unit ?? 'kos',
           purchase_price: itemModal.purchase_price ?? 0, sale_price: itemModal.sale_price ?? 0,
           vat_rate: itemModal.vat_rate ?? 22, current_stock: itemModal.current_stock ?? 0,
           min_stock: itemModal.min_stock ?? 0,
         }).select().single()
+        if (insertError) throw insertError
 
         // Če je začetna zaloga > 0, dodaj movement
         if ((itemModal.current_stock ?? 0) > 0 && newItem) {

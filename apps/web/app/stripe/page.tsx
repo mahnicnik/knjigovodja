@@ -57,7 +57,14 @@ export default function StripePage() {
     if (!form.secret_key.startsWith('••••')) upsertData.secret_key = form.secret_key
     if (!form.webhook_secret.startsWith('••••')) upsertData.webhook_secret = form.webhook_secret
 
-    await supabase.from('stripe_settings').upsert(upsertData, { onConflict: 'org_id' })
+    // POPRAVLJENO (30.7.2026): prej brez preverjanja napake - ce
+    // shranjevanje spodleti, uporabnik ni izvedel nicesar.
+    const { error: saveError } = await supabase.from('stripe_settings').upsert(upsertData, { onConflict: 'org_id' })
+    if (saveError) {
+      alert('Napaka pri shranjevanju: ' + saveError.message)
+      setSaving(false)
+      return
+    }
     setSaving(false)
     load()
   }

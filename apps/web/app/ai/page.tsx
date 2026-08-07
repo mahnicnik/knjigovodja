@@ -132,6 +132,14 @@ export default function AIPage() {
       })
 
       const data = await response.json()
+      // POPRAVLJENO (30.7.2026): prej se ni preverilo response.ok - ce
+      // backend vrne napako (npr. 403 "samo Pro paket"), je bilo
+      // sporocilo tiho izgubljeno namesto prikazano uporabniku.
+      if (!response.ok) {
+        setMessages(prev => [...prev, { role: 'assistant', content: data.error || 'Prišlo je do napake. Poskusite znova.' }])
+        setLoading(false)
+        return
+      }
       const actions = getActionsForResponse(data.response || '')
       setMessages(prev => [...prev, { role: 'assistant', content: data.response, actions }])
     } catch {
