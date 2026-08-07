@@ -116,7 +116,15 @@ export default function NastavitevPage() {
       address: form.address, post_code: form.post_code, city: form.city,
       phone: form.phone, email: form.email, contribution_class: form.contribution_class, contrib_piz: form.contrib_piz, contrib_zzzs: form.contrib_zzzs, contrib_zaposlovanje: form.contrib_zaposlovanje, contrib_starsevstvo: form.contrib_starsevstvo, contrib_akontacija: form.contrib_akontacija,
     }).eq('id', org.id)
-    if (!error) { setSaved(true); setTimeout(() => setSaved(false), 3000) }
+    // POPRAVLJENO (30.7.2026, KRITICNA najdba): prej se ob napaki ni
+    // zgodilo NICESAR - shranjevanje je lahko tiho spodletelo (npr.
+    // manjkajoca RLS politika) brez KAKRSNEGAKOLI opozorila.
+    if (!error) {
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } else {
+      alert('Napaka pri shranjevanju nastavitev: ' + error.message)
+    }
     setSaving(false)
   }
 
