@@ -78,18 +78,28 @@ export default function IzvozPage() {
         periodTo = `${year}-${mm}-${String(lastDay).padStart(2, '0')}`
       }
 
-      const [invRes, recRes] = await Promise.all([
+      const [invRes, recRes, kpoIncRes, kpoExpRes] = await Promise.all([
         supabase.from('issued_invoices').select('amount_net,amount_total').eq('org_id', member.org_id).gte('issue_date', periodFrom).lte('issue_date', periodTo).neq('status', 'draft'),
         supabase.from('receipts').select('amount_net,amount_total').eq('org_id', member.org_id).gte('receipt_date', periodFrom).lte('receipt_date', periodTo),
+        // DODANO (30.7.2026): predogled naj odraza dejansko slikovito
+        // stanje - ista varovalka proti dvojnemu stetju kot povsod drugod.
+        // ⚠️ OPOMBA: dejanska IZVOZENA datoteka teh podatkov se NE vsebuje
+        // - to je samo popravek prikaza na zaslonu, ne generirane datoteke.
+        supabase.from('kpo_entries').select('income').eq('org_id', member.org_id).eq('entry_type', 'income').is('invoice_id', null).gte('entry_date', periodFrom).lte('entry_date', periodTo),
+        supabase.from('kpo_entries').select('expense').eq('org_id', member.org_id).eq('entry_type', 'expense').is('receipt_id', null).gte('entry_date', periodFrom).lte('entry_date', periodTo),
       ])
 
       const invoices = invRes.data ?? []
       const receipts = recRes.data ?? []
+      const kpoInc = kpoIncRes.data ?? []
+      const kpoExp = kpoExpRes.data ?? []
       setPreviewStats({
         invoices: invoices.length,
         receipts: receipts.length,
-        revenue: invoices.reduce((s, i: any) => s + Number(i.amount_net ?? 0), 0),
-        expenses: receipts.reduce((s, r: any) => s + Number(r.amount_net ?? 0), 0),
+        revenue: invoices.reduce((s, i: any) => s + Number(i.amount_net ?? 0), 0)
+          + kpoInc.reduce((s, e: any) => s + Number(e.income ?? 0), 0),
+        expenses: receipts.reduce((s, r: any) => s + Number(r.amount_net ?? 0), 0)
+          + kpoExp.reduce((s, e: any) => s + Number(e.expense ?? 0), 0),
       })
     }
     loadPreview()
