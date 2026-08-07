@@ -140,7 +140,7 @@ export default function KPOPage() {
       </div>
 
       <div className="max-w-4xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-xs text-gray-500 mb-1">Prihodki</div>
             <div className="text-xl font-semibold text-green-600">€{totalIncome.toFixed(2)}</div>

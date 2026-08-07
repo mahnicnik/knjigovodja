@@ -268,7 +268,7 @@ export default function BankaPage() {
   const [processing, setProcessing] = useState(false)
   const [importing, setImporting] = useState(false)
   const [step, setStep] = useState<'upload' | 'review' | 'done'>('upload')
-  const [selectedBank, setSelectedBank] = useState('delavska')
+  const [selectedBank, setSelectedBank] = useState('auto') // POPRAVLJENO 30.7.2026: prej trdo kodirano 'delavska' - videti kot ostanek testiranja
   const [stats, setStats] = useState({ matched: 0, unmatched: 0, totalIn: 0, totalOut: 0 })
   const [toast, setToast] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)

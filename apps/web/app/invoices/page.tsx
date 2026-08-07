@@ -245,8 +245,8 @@ export default function InvoicesPage() {
             {invoices.map((inv, i) => {
               const s = statusLabel(inv.status, inv.last_email_sent_at)
               return (
-                <div key={inv.id} className={`flex items-center gap-4 px-6 py-4 ${i < invoices.length-1 ? 'border-b border-gray-50' : ''}`}>
-                  <div className="flex-1 min-w-0">
+                <div key={inv.id} className={`flex items-center flex-wrap gap-4 px-6 py-4 ${i < invoices.length-1 ? 'border-b border-gray-50' : ''}`}>
+                  <div className="flex-1 min-w-[100px]">
                     <div className="font-medium text-sm text-gray-900 truncate">{inv.client_name}</div>
                     <div className="text-xs text-gray-500 mt-0.5">
                       #{inv.invoice_number} · {new Date(inv.issue_date).toLocaleDateString('sl-SI')}

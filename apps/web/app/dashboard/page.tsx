@@ -1867,5 +1867,24 @@ const cssGlobal = `
     .rk-palette { max-width: calc(100vw - 24px); margin: 0 12px; }
     .rk-palette-backdrop { padding-top: 8vh; }
     .rk-notif-dropdown { top: 70px; right: 12px; width: calc(100vw - 24px); }
+
+    /* PRISILNA RESITEV (30.7.2026, 3. poskus) - !important na vseh
+       kljucnih lastnostih, da zagotovo prepise VSE prejsnje poskuse in
+       morebitne neznane konflikte. */
+    .rk-quick-grid {
+      display: grid !important;
+      grid-template-columns: repeat(3, 1fr) !important;
+      gap: 8px !important;
+    }
+    .rk-qa {
+      width: auto !important;
+      min-width: 0 !important;
+      max-width: none !important;
+    }
+    .rk-qa-label {
+      white-space: normal !important;
+      word-break: break-word !important;
+      font-size: 11px !important;
+    }
   }
 `
