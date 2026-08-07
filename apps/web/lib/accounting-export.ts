@@ -60,6 +60,7 @@ export interface KPOEntryRow {
   category: string | null
   notes: string | null
   invoice_id: string | null
+  receipt_id: string | null // DODANO 30.7.2026: manjkal je za prepoznavo ze stetih STROSKOV
 }
 
 export interface ExportInput {
@@ -309,7 +310,10 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
     ['DDV za plačilo (oz. vračilo če negativen)', formatAmount(vatBalance), 'EUR'],
     [],
     ['POSLOVNI REZULTAT', '', ''],
-    ['Razlika (prihodki - odhodki, brez DDV)', formatAmount(totalNet - totalKprNet), 'EUR'],
+    ['Razlika (prihodki - odhodki, brez DDV)', formatAmount(
+      totalNet - totalKprNet
+      + input.kpoEntries.filter(e => !e.invoice_id && !e.receipt_id).reduce((s, e) => s + Number(e.income ?? 0) - Number(e.expense ?? 0), 0)
+    ), 'EUR'], // POPRAVLJENO 30.7.2026: vkljucuje KPO promet "za knjizenje"
     [],
     ['OPOMBA', '', ''],
     ['Ta izvoz je informativen. Podatki morajo biti pregledani in', '', ''],
@@ -322,16 +326,19 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
   
   XLSX.utils.book_append_sheet(wb, wsSum, 'Rekapitulacija')
 
-  // ===== SHEET 4: KPO EVIDENCA (dodano 29.7.2026, audit K6) =====
-  // LOCEN list (ne zdruzen z izdanimi/prejetimi racuni) - racunovodja sam
-  // presodi morebitno prekrivanje z zgornjima listoma (npr. vnos z
-  // invoice_id je placilo ze prikazanega izdanega racuna).
+  // ===== SHEET 4: KPO EVIDENCA (dodano 29.7.2026, RAZDELJENO 30.7.2026) =====
+  // POPRAVLJENO: prej EN mesan seznam, kjer je moral racunovodja SAM
+  // prepoznati in izlociti vnose z "Da" v stolpcu "Povezan racun?" - zdaj
+  // je seznam RAZDELJEN na dva jasna dela, brez rocnega filtriranja.
   const kpoHeaders = [
     'Datum', 'Opis', 'Tip', 'Prihodek', 'Odhodek',
-    'DDV vhod', 'DDV izhod', 'Kategorija', 'Povezan račun?', 'Opombe',
+    'DDV vhod', 'DDV izhod', 'Kategorija', 'Opombe',
   ]
 
-  const kpoRows = input.kpoEntries.map(e => [
+  const kpoBookable = input.kpoEntries.filter(e => !e.invoice_id && !e.receipt_id)
+  const kpoAlreadyCounted = input.kpoEntries.filter(e => e.invoice_id || e.receipt_id)
+
+  const toKpoRow = (e: KPOEntryRow) => [
     formatDate(e.entry_date),
     e.description ?? '',
     e.entry_type === 'income' ? 'Prihodek' : 'Odhodek',
@@ -340,33 +347,44 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
     formatAmount(e.vat_in),
     formatAmount(e.vat_out),
     e.category ?? '',
-    e.invoice_id ? 'Da — glej list Izdani računi' : '',
     e.notes ?? '',
-  ])
-
-  const totalKpoIncome = input.kpoEntries.reduce((s, e) => s + Number(e.income ?? 0), 0)
-  const totalKpoExpense = input.kpoEntries.reduce((s, e) => s + Number(e.expense ?? 0), 0)
-  const sumRowKpo = [
-    'SKUPAJ', '', '',
-    formatAmount(totalKpoIncome), formatAmount(totalKpoExpense),
-    '', '', '', '', '',
   ]
 
-  const wsKpo = XLSX.utils.aoa_to_sheet([
-    [`KPO EVIDENCA (banka, kartice, POS, plače, amortizacija...) — ${input.periodLabel}`],
+  const totalBookableIncome = kpoBookable.reduce((s, e) => s + Number(e.income ?? 0), 0)
+  const totalBookableExpense = kpoBookable.reduce((s, e) => s + Number(e.expense ?? 0), 0)
+  const sumRowBookable = [
+    'SKUPAJ ZA KNJIŽENJE', '', '',
+    formatAmount(totalBookableIncome), formatAmount(totalBookableExpense),
+    '', '', '', '',
+  ]
+
+  const kpoSheetData: any[][] = [
+    [`KPO EVIDENCA — ${input.periodLabel}`],
     [`${input.orgName} · DŠ: ${input.orgTaxNumber ?? '—'}`],
-    ['OPOMBA: ta list je LOČEN od zgornjih dveh - vnosi z "Da" v stolpcu'],
-    ['"Povezan račun?" so plačila že prikazanih izdanih računov (glej ZOI/EOR'],
-    ['tam) - pri seštevanju skupnega prometa jih ne štejte dvakrat.'],
+    [],
+    ['DEL 1: ZA KNJIŽENJE — promet brez izdanega računa/prejetega stroška (banka, POS, kartice, plače, amortizacija...)'],
     [],
     kpoHeaders,
-    ...kpoRows,
+    ...kpoBookable.map(toKpoRow),
     [],
-    sumRowKpo,
-  ])
+    sumRowBookable,
+  ]
+
+  if (kpoAlreadyCounted.length > 0) {
+    kpoSheetData.push(
+      [], [],
+      ['DEL 2: SAMO REFERENCA — NE KNJIŽITE PONOVNO'],
+      ['Spodnji vnosi so plačila že prikazanih računov/stroškov v listih "Izdani računi (KIR)" / "Prejeti računi (KPR)" zgoraj - prikazani le za sled plačila, NE za dodatno knjiženje.'],
+      [],
+      kpoHeaders,
+      ...kpoAlreadyCounted.map(toKpoRow),
+    )
+  }
+
+  const wsKpo = XLSX.utils.aoa_to_sheet(kpoSheetData)
   wsKpo['!cols'] = [
     { wch: 12 }, { wch: 35 }, { wch: 10 }, { wch: 12 }, { wch: 12 },
-    { wch: 10 }, { wch: 10 }, { wch: 20 }, { wch: 22 }, { wch: 30 },
+    { wch: 10 }, { wch: 10 }, { wch: 20 }, { wch: 30 },
   ]
 
   XLSX.utils.book_append_sheet(wb, wsKpo, 'KPO evidenca')

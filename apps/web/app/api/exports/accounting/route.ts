@@ -181,6 +181,7 @@ export async function POST(req: NextRequest) {
       category: e.category,
       notes: e.notes,
       invoice_id: e.invoice_id,
+      receipt_id: e.receipt_id, // DODANO 30.7.2026
     }))
 
     const exportInput: ExportInput = {
