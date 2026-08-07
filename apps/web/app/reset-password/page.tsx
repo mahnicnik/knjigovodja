@@ -14,11 +14,31 @@ export default function ResetPasswordPage() {
   const supabase = createClient()
 
   useEffect(() => {
-    // Supabase redirect po email linku — preveri session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) setReady(true)
-      else setError('Neveljavna ali potekla povezava. Zahtevajte novo ponastavitev gesla.')
+    // POPRAVLJENO (30.7.2026): prej getSession() preveril SAMO, ali
+    // obstaja KATERAKOLI seja - to je vkljucevalo tudi ze prijavljene
+    // uporabnike, ki so obiskali to stran po nesreci (brez pravega
+    // tokena). Zdaj poslusa specificen 'PASSWORD_RECOVERY' dogodek, ki
+    // ga Supabase sprozi SAMO ob obdelavi pravega tokena za ponastavitev.
+    let resolved = false
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        resolved = true
+        setReady(true)
+      }
     })
+
+    // Varovalka: ce dogodek PASSWORD_RECOVERY ne pride v razumnem casu,
+    // predpostavi neveljaven/manjkajoc token.
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        setError('Neveljavna ali potekla povezava. Zahtevajte novo ponastavitev gesla.')
+      }
+    }, 3000)
+
+    return () => {
+      authListener.subscription.unsubscribe()
+      clearTimeout(timeout)
+    }
   }, [])
 
   async function handleSubmit(e: React.FormEvent) {
