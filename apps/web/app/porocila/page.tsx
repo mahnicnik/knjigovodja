@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 function fmt(n: number) { return `€${Math.abs(Number(n)).toFixed(2)}` }
 function fmtN(n: number) { return n >= 0 ? `€${n.toFixed(2)}` : `-€${Math.abs(n).toFixed(2)}` }
@@ -130,6 +131,7 @@ export default function PoslovnaPorocila() {
   if (loading) return <div style={{ padding: 48, textAlign: 'center', color: '#888' }}>Nalagam...</div>
 
   return (
+    <AppLayout org={org}>
     <div style={{ minHeight: '100vh', background: '#F7F6F2' }}>
       {/* HEADER */}
       <div style={{ background: '#0D1F12', padding: '20px 24px' }}>
@@ -411,5 +413,6 @@ export default function PoslovnaPorocila() {
         )}
       </div>
     </div>
+    </AppLayout>
   )
 }
