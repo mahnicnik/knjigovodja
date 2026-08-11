@@ -120,6 +120,7 @@ export default function ApiPage() {
   if (loading) return (
     <AppLayout>
     <div style={{ padding: 48, textAlign: 'center', color: '#888' }}>Nalagam...</div>
+    </AppLayout>
   )
 
   return (
@@ -274,7 +275,6 @@ export default function ApiPage() {
           ✓ {toast}
         </div>
       )}
-    </AppLayout>
     </div>
     </AppLayout>
   )
