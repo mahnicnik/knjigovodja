@@ -152,7 +152,7 @@ export default function CasPage() {
   if (loading) return <div style={{ padding: 48, textAlign: 'center', color: '#888' }}>Nalagam...</div>
 
   return (
-    <AppLayout org={org}>
+    <AppLayout>
     <div style={{ minHeight: '100vh', background: '#F7F6F2' }}>
       {/* HEADER */}
       <div style={{ background: '#0D1F12', padding: '20px 24px' }}>

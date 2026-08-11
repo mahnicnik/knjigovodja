@@ -485,7 +485,7 @@ export default function BankaPage() {
   const willBookCount = transactions.filter(t => t.selected && !t.isInternal && (t.matched_invoice || t.bookCategory)).length
 
   return (
-    <AppLayout org={org}>
+    <AppLayout>
     <div style={{ minHeight: '100vh', background: '#F7F6F2' }}>
       {/* HEADER */}
       <div style={{ background: '#0D1F12', padding: '20px 24px' }}>

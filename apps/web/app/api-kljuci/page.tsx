@@ -123,7 +123,7 @@ export default function ApiPage() {
   )
 
   return (
-    <AppLayout org={org}>
+    <AppLayout>
     <div style={{ minHeight: '100vh', background: '#F7F6F2', padding: '32px 16px' }}>
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
 

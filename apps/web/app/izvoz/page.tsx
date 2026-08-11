@@ -215,7 +215,7 @@ export default function IzvozPage() {
     : `${MONTHS[month - 1].name} ${year}`
 
   return (
-    <AppLayout org={org}>
+    <AppLayout>
     <div style={{ minHeight: '100vh', background: '#F7F6F2', padding: '32px 16px' }}>
       <div style={{ maxWidth: 760, margin: '0 auto' }}>
 

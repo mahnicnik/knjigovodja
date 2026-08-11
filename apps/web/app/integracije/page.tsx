@@ -464,7 +464,7 @@ function IntegrationLogs({ orgId, supabase }: { orgId: string | null; supabase: 
   if (logs.length === 0) return null
 
   return (
-    <AppLayout org={org}>
+    <AppLayout>
     <div style={{ background: '#fff', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.08)', padding: 24 }}>
       <div style={{ fontSize: 14, fontWeight: 600, color: '#0D1F12', marginBottom: 14 }}>Zadnji dogodki</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
