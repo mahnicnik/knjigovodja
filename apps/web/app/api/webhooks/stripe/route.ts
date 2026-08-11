@@ -134,6 +134,19 @@ export async function POST(req: NextRequest) {
 
     const obj = event.data.object
 
+    // POPRAVLJENO (11.8.2026, najdba pri zivem testiranju): pri NAROCNINI
+    // (subscription) checkout.session.completed IN invoice.paid OBA
+    // sprozita ob prvem placilu - a imata RAZLICNA Stripe ID-ja (cs_live_
+    // proti in_), zato ju obstojeca dedup zascita (po obj.id) NE prepozna
+    // kot isto transakcijo -> podvojen racun. Za narocnine je invoice.paid
+    // PRAVI vir resnice (sprozi se tudi za VSAKO naslednjo obnovitev), zato
+    // checkout.session.completed za mode:'subscription' PRESKOCIMO.
+    // Za enkratna placila (mode:'payment') checkout.session.completed
+    // ostane edini/pravilni dogodek - nespremenjeno.
+    if (event.type === 'checkout.session.completed' && obj.mode === 'subscription') {
+      return NextResponse.json({ message: 'Checkout za narocnino - caka se invoice.paid' }, { status: 200 })
+    }
+
     // Preveri ali račun za ta Stripe objekt že obstaja
     const externalRef = `stripe-${obj.id}`
     const { data: existing } = await supabase

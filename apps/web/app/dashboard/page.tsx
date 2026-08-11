@@ -9,6 +9,7 @@ import { calculateNetIncome, projectMonthlyRevenue, checkNormirancePragRisk, get
 import { generateCashFlow, getChartMaxValue, type OpenInvoice } from '@/lib/cash-flow'
 import { getActiveMembership } from '@/lib/active-org'
 import OrgSwitcher from '@/components/OrgSwitcher'
+import AppLayout from '@/components/AppLayout'
 
 /* ================================================================
    RAČUNKO DASHBOARD V6 — Faza 2
@@ -626,93 +627,19 @@ export default function DashboardPage() {
   /* ============ RENDER ============ */
   if (loading) {
     return (
-      <div data-theme="light" data-density="comfortable" className="rk-shell">
-        <div className="rk-loading">Nalagam...</div>
-        <style jsx global>{cssGlobal}</style>
-      </div>
+      <AppLayout>
+        <div data-theme="light" data-density="comfortable" className="rk-shell">
+          <div className="rk-loading">Nalagam...</div>
+          <style jsx global>{cssGlobal}</style>
+        </div>
+      </AppLayout>
     )
   }
 
   return (
+    <AppLayout org={org}>
     <div data-theme={theme} data-density={density} className="rk-shell">
 
-      {/* ============ THIN RAIL ============ */}
-      <aside className="rk-rail">
-        <div className="rk-logo">
-          <svg viewBox="0 0 100 100" width="36" height="36">
-            <path d="M82 50 C 82 28, 66 14, 46 14 C 26 14, 14 30, 14 50 C 14 70, 28 84, 46 84 C 50 84, 54 83, 58 82 L 64 92 L 64 78 C 76 72, 82 62, 82 50 Z" fill="#0E5E3B"/>
-            <circle cx="36" cy="46" r="5" fill="#FFFFFF"/>
-            <circle cx="56" cy="46" r="5" fill="#E8B547"/>
-            <path d="M30 60 Q 46 72, 62 60" stroke="#FFFFFF" strokeWidth="3.5" strokeLinecap="round" fill="none"/>
-          </svg>
-        </div>
-        {RAIL_GROUPS.map(group => {
-          if (group.single) {
-            const active = pathname === group.href
-            return (
-              <Link key={group.id} href={group.href!} className={`rk-rail-icon ${active ? 'active' : ''}`}>
-                <Icon name={group.icon} />
-                <span className="rk-tip">{group.label}</span>
-              </Link>
-            )
-          }
-          const isGroupActive = group.items?.some((i: any) => pathname === i.href)
-          const showBadge = group.badge && data.overdueCount > 0
-          return (
-            <div key={group.id} className={`rk-rail-group ${isGroupActive ? 'active' : ''}`}>
-              <div className="rk-rail-icon rk-rail-group-trigger">
-                <Icon name={group.icon} />
-                {showBadge && <span className="rk-badge-dot" />}
-                <span className="rk-tip">{group.label}</span>
-              </div>
-              <div className="rk-rail-dropdown">
-                <div className="rk-rail-dropdown-label">{group.label}</div>
-                {group.items?.filter((item: any) => {
-                  if (item.href === '/pos') {
-                    return org?.subscription_status === 'pro_pos'
-                  }
-                  return true
-                }).map((item: any) => {
-                  const active = pathname === item.href
-                  return (
-                    <Link key={item.href} href={item.href} className={`rk-rail-dropdown-item ${active ? 'active' : ''}`}>
-                      <Icon name={item.icon} size={15} />
-                      <span>{item.label}</span>
-                    </Link>
-                  )
-                })}
-              </div>
-            </div>
-          )
-        })}
-        <div className="rk-rail-foot">
-          <Link href="/nastavitve" className="rk-rail-icon">
-            <Icon name="settings" />
-            <span className="rk-tip">Nastavitve</span>
-          </Link>
-          <div style={{ position: 'relative' }}>
-            <button onClick={() => setAvatarMenuOpen(v => !v)} className="rk-rail-avatar" style={{ border: 'none', cursor: 'pointer' }}>
-              {ownerName.charAt(0).toUpperCase() || 'U'}
-            </button>
-            {avatarMenuOpen && (
-              <>
-                <div onClick={() => setAvatarMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 1500 }} />
-                <div style={{ position: 'absolute', bottom: 0, left: 56, background: '#fff', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.25)', border: '1px solid #e4e8e2', minWidth: 180, padding: 6, zIndex: 1501 }}>
-                  <Link href="/nastavitve" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, fontSize: 13, fontWeight: 500, color: '#1a2e25', textDecoration: 'none' }}>
-                    ⚙️ Nastavitve
-                  </Link>
-                  <button
-                    onClick={async () => { const { createClient } = await import('@/lib/supabase'); await createClient().auth.signOut(); window.location.href = '/login' }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, fontSize: 13, fontWeight: 500, color: '#a83232', background: 'none', border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer' }}
-                  >
-                    ↪ Odjava
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </aside>
 
       {/* ============ MAIN ============ */}
       <main className="rk-main">
@@ -895,7 +822,7 @@ export default function DashboardPage() {
               <h3>{cashFlow.summary.message || `Imam dovolj v ${MONTHS_LONG[(month+1) % 12]}u?`}</h3>
             </div>
             <div className="rk-cf-summary">
-              <div className="item"><div className="l">Pričakovan dotok</div><div className="v in">+€{Math.round(cashFlow.summary.totalInflow).toLocaleString('sl-SI')}</div></div>
+              <div className="item"><div className="l">Pričakovan dotok</div><div className="v in">{cashFlow.summary.totalInflow >= 0 ? '+' : ''}€{Math.round(cashFlow.summary.totalInflow).toLocaleString('sl-SI')}</div></div>
               <div className="item"><div className="l">Načrtovani odhodki</div><div className="v out">−€{Math.round(cashFlow.summary.totalOutflow).toLocaleString('sl-SI')}</div></div>
               <div className="item"><div className="l">Stanje po 30 dneh</div><div className="v" style={{ color: cashFlow.summary.endBalance >= 0 ? 'var(--green)' : 'var(--bad)' }}>€{Math.round(cashFlow.summary.endBalance).toLocaleString('sl-SI')}</div></div>
             </div>
@@ -1379,6 +1306,7 @@ export default function DashboardPage() {
 
       <style jsx global>{cssGlobal}</style>
     </div>
+    </AppLayout>
   )
 }
 
@@ -1441,7 +1369,7 @@ const cssGlobal = `
     --d-gap: 0.5;
     --d-type: 0.82;
   }
-  .rk-shell { background: var(--bg); color: #fff; font-family: var(--rk-sans); -webkit-font-smoothing: antialiased; font-size: 14px; min-height: 100vh; display: grid; grid-template-columns: 64px 1fr; }
+  .rk-shell { background: var(--bg); color: #fff; font-family: var(--rk-sans); -webkit-font-smoothing: antialiased; font-size: 14px; min-height: 100vh; } /* POPRAVLJENO 30.7.2026: odstranjen display:grid + grid-template-columns (64px sidebar) - AppLayout zdaj zagotavlja svoj sidebar, .rk-shell je samo se nosilec CSS spremenljivk teme/gostote */
   .rk-shell * { box-sizing: border-box; }
   .rk-loading { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; min-height: 100vh; color: rgba(255,255,255,0.5); font-size: 13px; }
 

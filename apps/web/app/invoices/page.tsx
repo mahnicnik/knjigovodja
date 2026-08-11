@@ -70,7 +70,10 @@ export default function InvoicesPage() {
       amount_net: -Math.abs(inv.amount_net),
       vat_amount: -Math.abs(inv.vat_amount),
       amount_total: -Math.abs(inv.amount_total),
-      status: 'sent',
+      // POPRAVLJENO 11.8.2026: status 'storno' namesto 'sent' - ta
+      // kreditni zapis ne cakа na placilo, mora biti izkljucen iz
+      // totalSent/totalUnpaid izracunov (isti status kot original).
+      status: 'storno',
       notes: `Storno računa ${inv.invoice_number}`,
       reference: `SI00 ${stornoNumber}`,
     })
