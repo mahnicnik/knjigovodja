@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { MIN_WAGE as TC_MIN_WAGE, MIN_REGRES as TC_MIN_REGRES, REGRES_TAX_FREE_LIMIT } from '@/lib/tax-constants'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 // 2026 zakonski minimumi — POPRAVLJENO 30.7.2026 (audit)
 const MIN_WAGE = TC_MIN_WAGE // iz lib/tax-constants.ts
@@ -149,6 +150,7 @@ export default function RegresPage() {
   if (loading) return <div style={{ padding: 48, textAlign: 'center', color: '#888' }}>Nalagam...</div>
 
   return (
+    <AppLayout org={org}>
     <div style={{ minHeight: '100vh', background: '#F7F6F2' }}>
       {/* HEADER */}
       <div style={{ background: '#0D1F12', padding: '20px 24px' }}>
@@ -303,5 +305,6 @@ export default function RegresPage() {
         <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: '#0D1F12', color: '#fff', padding: '12px 20px', borderRadius: 999, fontSize: 13, fontWeight: 500, zIndex: 3000 }}>✓ {toast}</div>
       )}
     </div>
+    </AppLayout>
   )
 }

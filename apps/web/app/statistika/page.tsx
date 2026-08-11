@@ -8,6 +8,7 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from 'recharts'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 const MONTHS = ['Jan','Feb','Mar','Apr','Maj','Jun','Jul','Avg','Sep','Okt','Nov','Dec']
 const COLORS_CAT = ['#3B6D11','#1D9E75','#EF9F27','#D4537E','#7F77DD','#D85A30','#888780']
@@ -161,14 +162,17 @@ export default function StatistikaPage() {
   }
 
   if (loading) return (
+    <AppLayout>
     <div style={{minHeight:"100vh",background:"#f9fafb"}}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh' }}>
         <div style={{ fontSize:'14px', color:'#888' }}>Nalagam...</div>
       </div>
     </div>
+    </AppLayout>
   )
 
   return (
+    <AppLayout org={org}>
     <div style={{minHeight:"100vh",background:"#f9fafb"}}>
       {/* Topbar */}
       <div style={{ background:'#fff', borderBottom:'0.5px solid rgba(0,0,0,0.08)', padding:'16px 28px', display:'flex', alignItems:'center', justifyContent:'space-between', position:'sticky', top:0, zIndex:10 }}>
@@ -286,5 +290,6 @@ export default function StatistikaPage() {
         </div>
       </div>
     </div>
+    </AppLayout>
   )
 }

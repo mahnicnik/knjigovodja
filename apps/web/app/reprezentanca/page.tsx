@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 const CATEGORIES = [
   { value: 'kosilo', label: 'Poslovno kosilo/večerja', deductible: 50 },
@@ -105,16 +106,18 @@ export default function ReprezentancaPage() {
   const totalNonDeductible = totalAmount - totalDeductible
 
   if (loading) return (
+    <AppLayout>
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <p className="text-gray-500">Nalagam...</p>
     </div>
+    </AppLayout>
   )
 
   return (
+    <AppLayout org={org}>
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
         <div>
-          <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900">← Domov</Link>
           <h1 className="font-semibold text-gray-900 mt-0.5">Reprezentanca</h1>
         </div>
         <button onClick={() => setShowForm(!showForm)}
@@ -277,5 +280,6 @@ export default function ReprezentancaPage() {
         )}
       </div>
     </div>
+    </AppLayout>
   )
 }

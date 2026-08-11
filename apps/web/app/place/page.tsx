@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS, MANDATORY_HEALTH_CONTRIBUTION, GENERAL_RELIEF_MONTH, MIN_WAGE as TC_MIN_WAGE, INCOME_TAX_BRACKETS, REGRES_TAX_FREE_LIMIT } from '@/lib/tax-constants'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 // POPRAVLJENO (26.7.2026): glej rek1/page.tsx za razlago (isti popravek)
 const EE = { piz: EMPLOYEE_CONTRIBUTIONS.piz, zzzs: EMPLOYEE_CONTRIBUTIONS.zzzs, unemployment: EMPLOYEE_CONTRIBUTIONS.unemployment, parental: EMPLOYEE_CONTRIBUTIONS.parental, dolgotrajnaOskrba: EMPLOYEE_CONTRIBUTIONS.longTermCare } // iz lib/tax-constants.ts
@@ -548,16 +549,18 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
   const showRegresAlert = employees.length > 0 && daysToJuly > 0 && daysToJuly <= 60
 
   if (loading) return (
+    <AppLayout>
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <p className="text-gray-500">Nalagam...</p>
     </div>
+    </AppLayout>
   )
 
   return (
+    <AppLayout org={org}>
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
         <div>
-          <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900">← Domov</Link>
           <h1 className="font-semibold text-gray-900 mt-0.5">Plače in zaposleni</h1>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -911,5 +914,6 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
         </div>
       )}
     </div>
+    </AppLayout>
   )
 }

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 export default function DownloadPage() {
   const [org, setOrg] = useState<any>(null)
@@ -39,12 +40,15 @@ export default function DownloadPage() {
   const version = release?.tag_name || 'v1.0.21'
 
   if (loading) return (
+    <AppLayout>
     <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f9fafb' }}>
       <div style={{ color: '#888', fontSize: 14 }}>Nalagam...</div>
     </div>
+    </AppLayout>
   )
 
   return (
+    <AppLayout org={org}>
     <div style={{ minHeight: '100vh', background: '#f9fafb' }}>
       <div style={{ background: '#fff', borderBottom: '1px solid #f0f0f0', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
@@ -137,5 +141,6 @@ export default function DownloadPage() {
         )}
       </div>
     </div>
+    </AppLayout>
   )
 }

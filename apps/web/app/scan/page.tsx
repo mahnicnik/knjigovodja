@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import posthog from 'posthog-js'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 // Varna base64 pretvorba za VELIKE datoteke (24.7.2026). btoa(String.
 // fromCharCode(...bytes)) je za vecje PDF-je (100KB+) povzrocalo "Maximum
@@ -323,10 +324,10 @@ export default function ScanPage() {
   }
 
   return (
+    <AppLayout org={org}>
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
         <div>
-          <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900">← Domov</Link>
           <h1 className="font-semibold text-gray-900 mt-0.5">Skeniraj račun</h1>
         </div>
       </div>
@@ -551,5 +552,6 @@ export default function ScanPage() {
         )}
       </div>
     </div>
+    </AppLayout>
   )
 }

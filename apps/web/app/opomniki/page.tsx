@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import { LEGAL_DEFAULT_INTEREST_RATE } from '@/lib/tax-constants'
+import AppLayout from '@/components/AppLayout'
 
 // POPRAVLJENO (30.7.2026): prej trdo kodirana 11% - napacna za oba dela
 // 2026 (10,15% / 10,40%). Zdaj iz lib/tax-constants.ts, kjer je jasno
@@ -214,12 +215,15 @@ ${org.phone || ''}`
   const totalInterest = overdueInvoices.reduce((s, i) => s + calcInterest(Number(i.amount_total), i.due_date), 0)
 
   if (loading) return (
+    <AppLayout>
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <p className="text-gray-500">Nalagam...</p>
     </div>
+    </AppLayout>
   )
 
   return (
+    <AppLayout org={org}>
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-100 px-6 py-4">
         <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900">← Domov</Link>
@@ -337,5 +341,6 @@ ${org.phone || ''}`
         )}
       </div>
     </div>
+    </AppLayout>
   )
 }

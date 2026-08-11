@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 // Neobdavčeni zneski 2026 — POPRAVLJENO 30.7.2026 (audit)
 // Vir: Uredba o davčni obravnavi povračil stroškov v zvezi z delom
@@ -210,16 +211,18 @@ export default function PotniStroskiPage() {
   const totalAll = entries.reduce((s, e) => s + e.amount, 0)
 
   if (loading) return (
+    <AppLayout>
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <p className="text-gray-500">Nalagam...</p>
     </div>
+    </AppLayout>
   )
 
   return (
+    <AppLayout org={org}>
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
         <div>
-          <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900">← Domov</Link>
           <h1 className="font-semibold text-gray-900 mt-0.5">Potni stroški zaposlenih</h1>
         </div>
         <button onClick={() => setShowForm(!showForm)}
@@ -419,5 +422,6 @@ export default function PotniStroskiPage() {
         )}
       </div>
     </div>
+    </AppLayout>
   )
 }

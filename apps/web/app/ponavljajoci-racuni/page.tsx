@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 interface RecurringInvoice {
   id: string
@@ -164,6 +165,7 @@ export default function PonavljajoceRacunePage() {
   if (loading) return <div style={{ padding: 48, textAlign: 'center', color: '#888' }}>Nalagam...</div>
 
   return (
+    <AppLayout org={org}>
     <div style={{ minHeight: '100vh', background: '#F7F6F2' }}>
       <div style={{ background: '#0D1F12', padding: '20px 24px' }}>
         <div style={{ maxWidth: 960, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
@@ -314,5 +316,6 @@ export default function PonavljajoceRacunePage() {
         <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: '#0D1F12', color: '#fff', padding: '12px 20px', borderRadius: 999, fontSize: 13, fontWeight: 500, zIndex: 3000 }}>✓ {toast}</div>
       )}
     </div>
+    </AppLayout>
   )
 }

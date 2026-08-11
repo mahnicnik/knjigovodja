@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import QRCode from 'qrcode'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 const MONTHS_FULL = ['Januar','Februar','Marec','April','Maj','Junij',
                      'Julij','Avgust','September','Oktober','November','December']
@@ -160,6 +161,7 @@ export default function PrispevkiPage() {
   )
 
   return (
+    <AppLayout org={org}>
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-100 px-6 py-4">
         <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900">← Domov</Link>
@@ -262,5 +264,6 @@ export default function PrispevkiPage() {
 
       </div>
     </div>
+    </AppLayout>
   )
 }

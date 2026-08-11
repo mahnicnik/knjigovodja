@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { KM_RATE_BUSINESS as TC_KM_BUSINESS, KM_RATE_COMMUTE as TC_KM_COMMUTE } from '@/lib/tax-constants'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 // POPRAVLJENO (30.7.2026, audit): Uredba o davčni obravnavi povračil
 // stroškov določa DVE LOČENI stopnji, ki ju zakon strogo razlikuje.
@@ -148,16 +149,18 @@ export default function KilometrinaPage() {
   const totalExpense = entries.reduce((s, e) => s + Number(e.expense), 0)
 
   if (loading) return (
+    <AppLayout>
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <p className="text-gray-500">Nalagam...</p>
     </div>
+    </AppLayout>
   )
 
   return (
+    <AppLayout org={org}>
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
         <div>
-          <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900">← Domov</Link>
           <h1 className="font-semibold text-gray-900 mt-0.5">Kilometrina in potni nalogi</h1>
         </div>
         <button onClick={() => setShowForm(!showForm)}
@@ -326,5 +329,6 @@ export default function KilometrinaPage() {
         )}
       </div>
     </div>
+    </AppLayout>
   )
 }

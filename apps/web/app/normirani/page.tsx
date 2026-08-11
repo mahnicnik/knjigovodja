@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { INCOME_TAX_BRACKETS, GENERAL_RELIEF_YEAR, SP_MIN_CONTRIBUTIONS_YEAR, NORMIRANCI, calcNormiraniDeduction } from '@/lib/tax-constants'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 // POPRAVLJENO (30.7.2026): uradne 2026 letne meje (prej zastarele
 // 8755/18488/70907/250000). Vir: FURS, preverjeno 26.7.2026.
@@ -164,12 +165,15 @@ export default function NormianiPage() {
     : 0
 
   if (loading) return (
+    <AppLayout>
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <p className="text-gray-500">Nalagam...</p>
     </div>
+    </AppLayout>
   )
 
   return (
+    <AppLayout org={org}>
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-100 px-6 py-4">
         <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900">← Domov</Link>
@@ -350,5 +354,6 @@ export default function NormianiPage() {
         )}
       </div>
     </div>
+    </AppLayout>
   )
 }

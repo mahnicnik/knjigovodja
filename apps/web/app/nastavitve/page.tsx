@@ -7,6 +7,7 @@ import posthog from 'posthog-js'
 import UpgradeButton from '@/components/UpgradeButton'
 import ManageSubscriptionButton from '@/components/ManageSubscriptionButton'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 const SP_CONTRIBUTIONS: Record<number, number> = {
   1: 2584.92, 2: 3012.36, 3: 3439.20, 4: 3866.04, 5: 4293.00,
@@ -154,6 +155,7 @@ export default function NastavitevPage() {
   const inp = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
 
   return (
+    <AppLayout org={org}>
     <div style={{ minHeight: '100vh', background: '#f9fafb' }}>
       {/* Header */}
       <div style={{ background: '#fff', borderBottom: '1px solid #f0f0f0', padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -494,5 +496,6 @@ export default function NastavitevPage() {
 
       </div>
     </div>
+    </AppLayout>
   )
 }

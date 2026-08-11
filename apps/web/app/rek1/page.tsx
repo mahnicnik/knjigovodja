@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS, MANDATORY_HEALTH_CONTRIBUTION, GENERAL_RELIEF_MONTH, INCOME_TAX_BRACKETS } from '@/lib/tax-constants'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 // POPRAVLJENO (26.7.2026): EE.injury ODSTRANJEN - zaposlenci NIKOLI ne
 // placujejo prispevka za poskodbe pri delu, to bremeni samo delodajalca.
@@ -175,16 +176,18 @@ export default function REK1Page() {
   }
 
   if (loading) return (
+    <AppLayout>
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <p className="text-gray-500">Nalagam...</p>
     </div>
+    </AppLayout>
   )
 
   return (
+    <AppLayout org={org}>
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
         <div>
-          <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900">← Domov</Link>
           <h1 className="font-semibold text-gray-900 mt-0.5">REK-1 obrazci</h1>
         </div>
         {employees.length > 0 && (
@@ -325,5 +328,6 @@ export default function REK1Page() {
         )}
       </div>
     </div>
+    </AppLayout>
   )
 }
