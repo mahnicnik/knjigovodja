@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 const MONTHS = [
   { id: 1, name: 'Januar' }, { id: 2, name: 'Februar' }, { id: 3, name: 'Marec' },
@@ -214,6 +215,7 @@ export default function IzvozPage() {
     : `${MONTHS[month - 1].name} ${year}`
 
   return (
+    <AppLayout org={org}>
     <div style={{ minHeight: '100vh', background: '#F7F6F2', padding: '32px 16px' }}>
       <div style={{ maxWidth: 760, margin: '0 auto' }}>
 
@@ -373,5 +375,6 @@ export default function IzvozPage() {
 
       </div>
     </div>
+    </AppLayout>
   )
 }

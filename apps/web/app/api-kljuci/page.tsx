@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import HowTo from '@/components/HowTo'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 interface ApiKey {
   id: string
@@ -117,10 +118,12 @@ export default function ApiPage() {
   }
 
   if (loading) return (
+    <AppLayout>
     <div style={{ padding: 48, textAlign: 'center', color: '#888' }}>Nalagam...</div>
   )
 
   return (
+    <AppLayout org={org}>
     <div style={{ minHeight: '100vh', background: '#F7F6F2', padding: '32px 16px' }}>
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
 
@@ -271,6 +274,8 @@ export default function ApiPage() {
           ✓ {toast}
         </div>
       )}
+    </AppLayout>
     </div>
+    </AppLayout>
   )
 }

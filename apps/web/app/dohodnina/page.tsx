@@ -12,6 +12,7 @@ import {
   SP_MIN_CONTRIBUTIONS_YEAR,
 } from '@/lib/tax-constants'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 // DOHODNINSKA LESTVICA 2026
 // POPRAVLJENO (30.7.2026): lestvica prihaja iz lib/tax-constants.ts.
@@ -157,16 +158,18 @@ export default function DohodninaPage() {
   const akontacija = monthlyTax
 
   if (loading) return (
+    <AppLayout>
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <p className="text-gray-500">Nalagam...</p>
     </div>
+    </AppLayout>
   )
 
   return (
+    <AppLayout org={org}>
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
         <div>
-          <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900">← Domov</Link>
           <h1 className="font-semibold text-gray-900 mt-0.5">Akontacija dohodnine</h1>
         </div>
         <div className="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-lg">2026</div>
@@ -405,5 +408,6 @@ export default function DohodninaPage() {
         </div>
       </div>
     </div>
+    </AppLayout>
   )
 }

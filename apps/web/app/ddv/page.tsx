@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 // POPRAVLJENO (29.7.2026, audit portala):
 //  1. VHODNI DDV: prej trdo kodiran na €0.00 (s komentarjem "za zdaj brez
@@ -109,10 +110,10 @@ export default function DDVPage() {
   )
 
   return (
+    <AppLayout org={org}>
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center flex-wrap gap-3">
         <div>
-          <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900">← Domov</Link>
           <h1 className="font-semibold text-gray-900 mt-0.5">DDV obračun</h1>
         </div>
         <div className="flex items-center gap-2">
@@ -248,5 +249,6 @@ export default function DDVPage() {
         )}
       </div>
     </div>
+    </AppLayout>
   )
 }

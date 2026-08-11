@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 // Amortizacijske stopnje po ZDoh-2
 const CATEGORIES = [
@@ -152,16 +153,18 @@ export default function AmortizacijaPage() {
   const selectedCat = CATEGORIES.find(c => c.value === form.category)!
 
   if (loading) return (
+    <AppLayout>
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <p className="text-gray-500">Nalagam...</p>
     </div>
+    </AppLayout>
   )
 
   return (
+    <AppLayout org={org}>
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
         <div>
-          <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900">← Domov</Link>
           <h1 className="font-semibold text-gray-900 mt-0.5">Amortizacija opreme</h1>
         </div>
         <button onClick={() => setShowForm(!showForm)}
@@ -353,5 +356,6 @@ export default function AmortizacijaPage() {
         )}
       </div>
     </div>
+    </AppLayout>
   )
 }

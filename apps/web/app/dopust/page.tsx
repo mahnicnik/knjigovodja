@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 const LEAVE_TYPES = [
   { value: 'vacation', label: 'Letni dopust', emoji: '🏖️', paid: true },
@@ -160,7 +161,6 @@ export default function DopustPage() {
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
         <div>
-          <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900">← Domov</Link>
           <h1 className="font-semibold text-gray-900 mt-0.5">Dopust in odsotnosti</h1>
         </div>
         <button onClick={() => setShowForm(!showForm)}
@@ -282,6 +282,7 @@ export default function DopustPage() {
     .reduce((s, r) => s + r.days, 0)
   if (sickDays < 20) return null
   return (
+    <AppLayout org={org}>
     <div key={`sick-${emp.id}`} className={`rounded-2xl p-4 mb-4 border ${sickDays >= 30 ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200'}`}>
       <div className={`font-medium text-sm mb-1 ${sickDays >= 30 ? 'text-red-800' : 'text-orange-800'}`}>
         {sickDays >= 30 ? '🚨' : '⚠️'} Bolniška — {emp.full_name}: <strong>{sickDays} dni</strong>
@@ -358,5 +359,6 @@ export default function DopustPage() {
         )}
       </div>
     </div>
+    </AppLayout>
   )
 }

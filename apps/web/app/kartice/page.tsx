@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import posthog from 'posthog-js'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 const PROCESSORS = [
   { value: 'sumup', label: 'SumUp', fee: 1.69 },
@@ -283,16 +284,18 @@ export default function KarticeePage() {
   const totalNet = settlements.reduce((s, r) => s + r.net_payout, 0)
 
   if (loading) return (
+    <AppLayout>
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <p className="text-gray-500">Nalagam...</p>
     </div>
+    </AppLayout>
   )
 
   return (
+    <AppLayout org={org}>
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
         <div>
-          <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900">← Domov</Link>
           <h1 className="font-semibold text-gray-900 mt-0.5">Kartično poslovanje</h1>
         </div>
         <div className="flex gap-2">
@@ -555,5 +558,6 @@ export default function KarticeePage() {
         )}
       </div>
     </div>
+    </AppLayout>
   )
 }

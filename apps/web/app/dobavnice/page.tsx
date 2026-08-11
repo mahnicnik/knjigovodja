@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 export default function DobavnicePage() {
   const [org, setOrg] = useState<any>(null)
@@ -102,10 +103,10 @@ export default function DobavnicePage() {
   const billedDocs = docs.filter(d => d.status === 'sent')
 
   return (
+    <AppLayout org={org}>
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
         <div>
-          <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900">← Domov</Link>
           <h1 className="font-semibold text-gray-900 mt-0.5">Dobavnice</h1>
         </div>
         <Link href="/dobavnice/new" className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium">
@@ -204,5 +205,6 @@ export default function DobavnicePage() {
 
       </div>
     </div>
+    </AppLayout>
   )
 }

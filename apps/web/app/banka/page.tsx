@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 // ================================================================
 // FORMATI SLOVENSKIH BANK
@@ -484,6 +485,7 @@ export default function BankaPage() {
   const willBookCount = transactions.filter(t => t.selected && !t.isInternal && (t.matched_invoice || t.bookCategory)).length
 
   return (
+    <AppLayout org={org}>
     <div style={{ minHeight: '100vh', background: '#F7F6F2' }}>
       {/* HEADER */}
       <div style={{ background: '#0D1F12', padding: '20px 24px' }}>
@@ -672,5 +674,6 @@ export default function BankaPage() {
         <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: '#0D1F12', color: '#fff', padding: '12px 20px', borderRadius: 999, fontSize: 13, fontWeight: 500, zIndex: 3000 }}>✓ {toast}</div>
       )}
     </div>
+    </AppLayout>
   )
 }
