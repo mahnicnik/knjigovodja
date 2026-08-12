@@ -282,6 +282,18 @@ export default function StripePage() {
           </div>
         )}
 
+        {/* DODANO (11.8.2026): navodila - povezava med FURS demo nacinom in
+            Stripe sandbox simulacijo, da uporabnik razume celoten tok. */}
+        <div style={{ background: '#F7F6F2', borderRadius: '10px', padding: '12px 16px', marginBottom: '10px', fontSize: '12px', color: '#666', lineHeight: 1.6 }}>
+          <b style={{ color: '#0D1F12' }}>💡 Testiranje brez zunanjih odvisnosti:</b> spodnji gumb ustvari testni
+          račun brez pravega Stripe plačila. Za popoln test brez zunanjih odvisnosti (vključno s fiskalizacijo)
+          najprej vklopite{' '}
+          <Link href="/nastavitve/blagajna" style={{ color: '#1D9E75', fontWeight: 600, textDecoration: 'underline' }}>
+            FURS demo način
+          </Link>
+          {' '}— brez tega bo simulacija poskusila pravo fiskalizacijo (potreben certifikat).
+        </div>
+
         {/* Gumbi */}
         <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
           <button
