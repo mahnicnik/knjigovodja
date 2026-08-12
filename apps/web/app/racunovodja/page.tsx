@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import HowTo from '@/components/HowTo'
+import AppLayout from '@/components/AppLayout'
 
 interface ClientOrg {
   org_id: string
@@ -129,12 +130,15 @@ export default function RacunovodjaPortal() {
   const totalUnconfirmed = clients.reduce((s, c) => s + (c.stats?.receipts_unconfirmed ?? 0), 0)
 
   if (loading) return (
+    <AppLayout>
     <div style={{ minHeight: '100vh', background: '#0D1F12', display: 'grid', placeItems: 'center', color: '#fff', fontSize: 14 }}>
       Nalagam stranke...
     </div>
+    </AppLayout>
   )
 
   return (
+    <AppLayout org={org}>
     <div style={{ minHeight: '100vh', background: '#F7F6F2' }}>
 
       {/* HEADER */}
@@ -268,5 +272,6 @@ export default function RacunovodjaPortal() {
         )}
       </div>
     </div>
+    </AppLayout>
   )
 }

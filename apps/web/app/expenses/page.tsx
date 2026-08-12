@@ -100,6 +100,24 @@ export default function ExpensesPage() {
     setEditingId(exp.id)
     setShowForm(true)
   }
+  // DODANO (11.8.2026): manjkala je moznost brisanja stroska.
+  async function deleteReceipt(id: string) {
+    if (!confirm('Res želite izbrisati ta strošek? To dejanje je nepovratno.')) return
+    setSaving(true)
+    // Najprej pocisti povezan KPO vnos (ce obstaja), da ne ostane osirotel
+    await supabase.from('kpo_entries').delete().eq('receipt_id', id)
+    const { error } = await supabase.from('receipts').delete().eq('id', id)
+    if (error) {
+      alert('Napaka pri brisanju: ' + error.message)
+      setSaving(false)
+      return
+    }
+    setShowForm(false)
+    setEditingId(null)
+    setSaving(false)
+    load()
+  }
+
   async function handleSave() {
     if (!org || !form.vendor || !form.amount_net) return
     setSaving(true)
@@ -362,6 +380,15 @@ export default function ExpensesPage() {
             )}
 
             <div className="flex gap-3">
+              {editingId && (
+                <button
+                  onClick={() => deleteReceipt(editingId)}
+                  disabled={saving}
+                  className="border border-red-200 bg-red-50 text-red-700 rounded-xl px-4 py-2.5 text-sm font-medium disabled:opacity-40"
+                >
+                  🗑️ Izbriši
+                </button>
+              )}
               <button
                 onClick={handleSave}
                 disabled={saving || !form.vendor || !form.amount_net}

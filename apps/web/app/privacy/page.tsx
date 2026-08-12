@@ -1,7 +1,9 @@
 import Link from 'next/link'
+import AppLayout from '@/components/AppLayout'
 
 export default function PrivacyPage() {
   return (
+    <AppLayout>
     <>
       <style>{`
         *{box-sizing:border-box;margin:0;padding:0}
@@ -136,5 +138,6 @@ export default function PrivacyPage() {
         </footer>
       </div>
     </>
+    </AppLayout>
   )
 }

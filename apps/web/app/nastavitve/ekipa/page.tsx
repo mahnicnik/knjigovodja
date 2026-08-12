@@ -6,6 +6,7 @@ import HowTo from '@/components/HowTo'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 // ===== TIPI =====
 interface Member {
@@ -239,10 +240,12 @@ export default function EkipaPage() {
   const isOwner = myRole === 'owner'
 
   if (loading) return (
+    <AppLayout>
     <div style={{ padding: 48, textAlign: 'center', color: '#888' }}>Nalagam...</div>
   )
 
   return (
+    <AppLayout org={org}>
     <div style={{ minHeight: '100vh', background: '#F7F6F2', padding: '32px 16px' }}>
       <div style={{ maxWidth: 680, margin: '0 auto' }}>
 
@@ -440,6 +443,8 @@ export default function EkipaPage() {
         )}
 
       </div>
+    </AppLayout>
     </div>
+    </AppLayout>
   )
 }

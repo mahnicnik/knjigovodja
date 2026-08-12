@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import posthog from 'posthog-js'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 interface LineItem {
   description: string
@@ -355,6 +356,7 @@ export default function NewInvoicePage() {
 
   // ── DESKTOP LAYOUT ──
   return (
+    <AppLayout org={org}>
     <>
     <UpgradeModal
       open={showUpgradeModal}
@@ -483,5 +485,6 @@ export default function NewInvoicePage() {
       </div>
     </div>
     </>
+    </AppLayout>
   )
 }

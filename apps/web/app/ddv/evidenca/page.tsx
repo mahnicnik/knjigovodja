@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 const QUARTERS = [
   { q: 1, label: 'Q1 (jan–mar)', from: '-01-01', to: '-03-31', due: 'april' },
@@ -138,12 +139,15 @@ export default function DDVEvidencaPage() {
   }
 
   if (loading) return (
+    <AppLayout>
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <p className="text-gray-500">Nalagam...</p>
     </div>
+    </AppLayout>
   )
 
   return (
+    <AppLayout org={org}>
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
         <div>
@@ -270,5 +274,6 @@ export default function DDVEvidencaPage() {
         )}
       </div>
     </div>
+    </AppLayout>
   )
 }
