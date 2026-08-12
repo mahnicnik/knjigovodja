@@ -13,6 +13,10 @@ export default function StripePage() {
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<any>(null)
+  // DODANO (11.8.2026): Racunko sandbox - simulacija Stripe placila brez
+  // pravega webhooka/certifikata.
+  const [simulating, setSimulating] = useState(false)
+  const [simResult, setSimResult] = useState<any>(null)
   const [form, setForm] = useState({
     secret_key: '',
     webhook_secret: '',
@@ -88,6 +92,23 @@ export default function StripePage() {
 
     setSaving(false)
     load()
+  }
+
+  async function simulateTestPayment() {
+    setSimulating(true)
+    setSimResult(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const resp = await fetch('/api/stripe/simulate-test-payment', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${session?.access_token ?? ''}` },
+      })
+      const data = await resp.json()
+      setSimResult(data)
+    } catch (e: any) {
+      setSimResult({ error: e.message })
+    }
+    setSimulating(false)
   }
 
   async function testConnection() {
@@ -244,6 +265,33 @@ export default function StripePage() {
             </div>
           </div>
         )}
+
+        {/* DODANO (11.8.2026): Racunko sandbox - rezultat simulacije */}
+        {simResult && (
+          <div style={{ background: simResult.error ? '#FCEBEB' : '#E1F5EE', border: `0.5px solid ${simResult.error ? '#F7C1C1' : '#A8DFC5'}`, borderRadius: '10px', padding: '12px 16px', marginBottom: '14px' }}>
+            <div style={{ fontSize: '12px', fontWeight: '500', color: simResult.error ? '#A32D2D' : '#085041', marginBottom: '4px' }}>
+              {simResult.error ? '❌ Napaka pri simulaciji' : `✅ Testni račun ${simResult.invoiceNumber} ustvarjen`}
+            </div>
+            {!simResult.error && (
+              <div style={{ fontSize: '11px', color: '#0F6E56' }}>
+                {simResult.fursConfirmed
+                  ? (simResult.fursDemoMode ? '🎭 FURS demo fiskalizacija uspešna (DEMO kode)' : '✅ FURS fiskalizacija uspešna')
+                  : `⚠ FURS fiskalizacija ni uspela: ${simResult.fursError ?? 'preverite nastavitve blagajne'}`}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Gumbi */}
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+          <button
+            onClick={simulateTestPayment}
+            disabled={simulating}
+            style={{ flex: 1, padding: '10px 18px', borderRadius: '8px', border: '0.5px solid #1D9E75', background: '#E1F5EE', color: '#0F6E56', fontSize: '13px', fontWeight: '500', cursor: 'pointer', opacity: simulating ? 0.6 : 1 }}
+          >
+            {simulating ? 'Simuliram...' : '🧪 Simuliraj testno plačilo (Računko sandbox)'}
+          </button>
+        </div>
 
         {/* Gumbi */}
         <div style={{ display: 'flex', gap: '10px' }}>
