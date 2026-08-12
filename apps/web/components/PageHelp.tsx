@@ -296,7 +296,10 @@ export default function PageHelp() {
         style={{
           position: 'fixed',
           bottom: 100,
-          left: 24,
+          // POPRAVLJENO (11.8.2026): premaknjeno na desno - left:24 je
+          // padlo ZNOTRAJ novega 220px stranskega menija (AppLayout),
+          // uvedenega danes na vseh straneh - gumb je bil za njim skrit.
+          right: 24,
           width: 44,
           height: 44,
           borderRadius: '50%',
