@@ -78,6 +78,20 @@ export default function ZalogePage() {
     load()
   }, [router, supabase])
 
+  // DODANO (11.8.2026): manjkala je moznost brisanja artikla - uporabnik
+  // ni mogel odstraniti napacno vnesenih testnih vnosov.
+  async function deleteItem(id: string) {
+    if (!confirm('Res želite izbrisati ta artikel? To dejanje je nepovratno in bo izbrisalo tudi zgodovino gibanja zaloge zanj.')) return
+    const { error } = await supabase.from('inventory_items').delete().eq('id', id)
+    if (error) {
+      showToast('Napaka pri brisanju: ' + error.message)
+      return
+    }
+    setItemModal(null)
+    showToast('Artikel izbrisan')
+    load()
+  }
+
   async function saveItem() {
     if (!orgId || !itemModal?.name?.trim()) { showToast('Ime artikla je obvezno'); return }
     setSavingItem(true)
@@ -425,11 +439,16 @@ export default function ZalogePage() {
                 </div>
               )}
             </div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
-              <button onClick={() => setItemModal(null)} style={{ padding: '9px 16px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.12)', fontSize: 13, cursor: 'pointer', background: '#fff' }}>Prekliči</button>
-              <button onClick={saveItem} disabled={savingItem} style={{ background: '#0D1F12', color: '#fff', border: 0, borderRadius: 8, padding: '9px 20px', fontSize: 13, fontWeight: 500, cursor: 'pointer', opacity: savingItem ? 0.6 : 1 }}>
-                {savingItem ? 'Shranjujem...' : 'Shrani'}
-              </button>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', marginTop: 20 }}>
+              {itemModal.id ? (
+                <button onClick={() => deleteItem(itemModal.id!)} style={{ padding: '9px 16px', borderRadius: 8, border: '0.5px solid #F7C1C1', background: '#FCEBEB', color: '#A32D2D', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>🗑️ Izbriši</button>
+              ) : <div />}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setItemModal(null)} style={{ padding: '9px 16px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.12)', fontSize: 13, cursor: 'pointer', background: '#fff' }}>Prekliči</button>
+                <button onClick={saveItem} disabled={savingItem} style={{ background: '#0D1F12', color: '#fff', border: 0, borderRadius: 8, padding: '9px 20px', fontSize: 13, fontWeight: 500, cursor: 'pointer', opacity: savingItem ? 0.6 : 1 }}>
+                  {savingItem ? 'Shranjujem...' : 'Shrani'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
