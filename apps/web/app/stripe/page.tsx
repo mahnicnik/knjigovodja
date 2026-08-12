@@ -32,14 +32,21 @@ export default function StripePage() {
     setOrg(o)
 
     const { data: s } = await supabase.from('stripe_settings').select('*').eq('org_id', o.id).single()
+    // POVEZAVA z /integracije (11.8.2026): dejanski webhook handler bere
+    // skrivnost IZ 'integrations', ne iz 'stripe_settings' - zato jo tukaj
+    // PREDNOSTNO preberemo od tam, da obe strani prikazujeta ISTO stanje.
+    const { data: integ } = await supabase.from('integrations').select('webhook_secret').eq('org_id', o.id).eq('type', 'stripe').maybeSingle()
+    const effectiveWebhookSecret = integ?.webhook_secret || s?.webhook_secret
     if (s) {
       setSettings(s)
       setForm({
         secret_key: s.secret_key ? '••••••••' + s.secret_key.slice(-4) : '',
-        webhook_secret: s.webhook_secret ? '••••••••' + s.webhook_secret.slice(-4) : '',
+        webhook_secret: effectiveWebhookSecret ? '••••••••' + effectiveWebhookSecret.slice(-4) : '',
         default_vat_rate: s.default_vat_rate || '0',
         auto_create_invoices: s.auto_create_invoices ?? true,
       })
+    } else if (effectiveWebhookSecret) {
+      setForm(f => ({ ...f, webhook_secret: '••••••••' + effectiveWebhookSecret.slice(-4) }))
     }
     setLoading(false)
   }
@@ -65,6 +72,20 @@ export default function StripePage() {
       setSaving(false)
       return
     }
+
+    // POVEZAVA z /integracije (11.8.2026): ce je uporabnik vnesel novo
+    // webhook skrivnost (ne masked), jo zapisemo TUDI v 'integrations' -
+    // to je tabela, ki jo dejansko bere webhook handler. Brez tega bi
+    // sprememba tukaj ostala "nevidna" za /integracije stran in obratno.
+    if (upsertData.webhook_secret) {
+      const { data: existingInteg } = await supabase.from('integrations').select('id').eq('org_id', org.id).eq('type', 'stripe').maybeSingle()
+      if (existingInteg) {
+        await supabase.from('integrations').update({ webhook_secret: upsertData.webhook_secret, is_active: true }).eq('id', existingInteg.id)
+      } else {
+        await supabase.from('integrations').insert({ org_id: org.id, type: 'stripe', settings: {}, webhook_secret: upsertData.webhook_secret, is_active: true })
+      }
+    }
+
     setSaving(false)
     load()
   }

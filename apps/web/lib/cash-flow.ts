@@ -37,6 +37,9 @@ export interface CashFlowInput {
   monthlyIncomeTax: number
   /** Pričakovani mesečni prispevki */
   monthlyContributions: number
+  /** Pricakovan mesecni strosek plac (bruto + prispevki delodajalca) -
+      DODANO 11.8.2026, prej trdo kodiranih €800 "Placeholder" */
+  monthlyPayrollCost?: number
   /** Trenutni datum (default: now) */
   now?: Date
 }
@@ -76,6 +79,9 @@ export interface CashFlowSummary {
 export interface CashFlowResult {
   days: CashFlowDay[]
   summary: CashFlowSummary
+  /** DODANO 11.8.2026: surovi seznam vseh napovedanih odtokov (za
+      razclenitveno tabelo - "od kod prihaja ta znesek") */
+  deadlines: Array<{ date: string; amount: number; label: string }>
 }
 
 // ===== POMOŽNE FUNKCIJE =====
@@ -141,8 +147,8 @@ function getTaxDeadlines(
       if (days >= 0 && days <= 30) {
         deadlines.push({
           date: dueDate,
-          amount: 800, // Placeholder — bi moralo priti iz salary calculator
-          label: 'REK-1 + plače',
+          amount: input.monthlyPayrollCost ?? 0, // POPRAVLJENO 11.8.2026: prej trdo kodiranih 800
+          label: 'REK-1 + plače (bruto + prispevki delodajalca)',
         })
       }
     }
@@ -252,6 +258,7 @@ export function generateCashFlow(input: CashFlowInput): CashFlowResult {
       openInvoiceCount: input.openInvoices.length,
       message,
     },
+    deadlines: deadlines.map(d => ({ date: formatDate(d.date), amount: d.amount, label: d.label })),
   }
 }
 

@@ -203,6 +203,7 @@ export default function DashboardPage() {
     recentExpenses: [] as any[],
     openInvoices: [] as OpenInvoice[],
     hasEmployees: false,
+    monthlyPayrollCost: 0, // DODANO 11.8.2026
     hasClients: false,
     hasInvoices: false,
     hasExpenses: false,
@@ -305,7 +306,7 @@ export default function DashboardPage() {
       const [invRes, expRes, empRes, cliRes, prefsRes2, emailPendRes, emailConnRes, kpoRes, pendingRecurringRes] = await Promise.all([
         supabase.from('issued_invoices').select('*').eq('org_id', o.id).neq('status','draft'),
         supabase.from('receipts').select('*').eq('org_id', o.id),
-        supabase.from('employees').select('id').eq('org_id', o.id).eq('status','active'),
+        supabase.from('employees').select('id, gross_salary').eq('org_id', o.id).eq('status','active'), // POPRAVLJENO 11.8.2026: dodan gross_salary za pravi izracun strosk place
         supabase.from('invoice_partners').select('id').eq('org_id', o.id).limit(1), // POPRAVLJENO 26.7.2026: 'clients' tabela ne obstaja (404), prava je invoice_partners
         supabase.from('user_preferences').select('onboarding_answers').eq('user_id', user.id).maybeSingle(),
         supabase.from('email_scan_pending').select('id', { count: 'exact', head: true }).eq('org_id', o.id).eq('status', 'pending'),
@@ -375,6 +376,10 @@ export default function DashboardPage() {
         recentExpenses: recentExp,
         openInvoices: openInvs,
         hasEmployees: (empRes.data || []).length > 0,
+        // DODANO 11.8.2026: dejanski strosek plac namesto trdih 800 v cash-flow -
+        // 0.1718 = skupna stopnja prispevkov delodajalca (PIZ+ZZZS+poskodbe+
+        // brezposelnost+starsevsko+dolgotrajna oskrba, iz tax-constants.ts)
+        monthlyPayrollCost: (empRes.data || []).reduce((s: number, e: any) => s + Number(e.gross_salary || 0) * 1.1718, 0),
         hasClients: (cliRes.data || []).length > 0,
         hasInvoices: invoices.length > 0,
         hasExpenses: receipts.length > 0,
@@ -550,6 +555,7 @@ export default function DashboardPage() {
       monthlyVatLiability: taxResult.details.vatLiability,
       monthlyIncomeTax: taxResult.details.incomeTax,
       monthlyContributions: taxResult.details.contributions,
+      monthlyPayrollCost: data.monthlyPayrollCost, // DODANO 11.8.2026
     })
   }, [data, org, taxResult])
 
@@ -867,6 +873,19 @@ export default function DashboardPage() {
             <span><span className="dot out" />Odtok (davki, prispevki, naročnine)</span>
             <span><span className="dot bal" />Bilanca</span>
           </div>
+          {/* DODANO (11.8.2026): razclenitvena tabela - jasno vidno OD KOD
+              prihaja vsak znesek v napovedi (namesto samo skupne stevilke). */}
+          {cashFlow.deadlines.length > 0 && (
+            <div style={{ marginTop: 16, borderTop: '0.5px solid rgba(255,255,255,0.1)', paddingTop: 12 }}>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>Razčlenitev odtokov</div>
+              {cashFlow.deadlines.map((d, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '4px 0', color: 'rgba(255,255,255,0.75)' }}>
+                  <span>{d.label} · {new Date(d.date).toLocaleDateString('sl-SI', { day: 'numeric', month: 'short' })}</span>
+                  <span style={{ fontWeight: 600 }}>€{Math.round(d.amount).toLocaleString('sl-SI')}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* LIMIT THERMOMETER (real, dynamic based on tax system) */}

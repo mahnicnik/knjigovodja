@@ -9,6 +9,9 @@ import AppLayout from '@/components/AppLayout'
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<any[]>([])
+  // DODANO (11.8.2026): arhiviranje - storno racunov ni mogoce izbrisati
+  // (zakonska hramba), a jih je mogoce skriti iz privzetega pogleda.
+  const [showArchived, setShowArchived] = useState(false)
   const [org, setOrg] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [actionInv, setActionInv] = useState<any>(null)
@@ -49,6 +52,11 @@ export default function InvoicesPage() {
     await load()
     setActionLoading('')
     setActionInv(null)
+  }
+
+  async function toggleArchive(inv: any, archive: boolean) {
+    await supabase.from('issued_invoices').update({ archived: archive }).eq('id', inv.id)
+    await load()
   }
 
   async function storno(inv: any) {
@@ -235,6 +243,14 @@ export default function InvoicesPage() {
           </div>
         </div>
 
+        {invoices.some(inv => inv.archived) && (
+          <div style={{ marginBottom: 16, textAlign: 'right' }}>
+            <button onClick={() => setShowArchived(s => !s)} style={{ fontSize: 12, color: '#666', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+              {showArchived ? 'Skrij arhivirane' : `Prikazi arhivirane (${invoices.filter(inv => inv.archived).length})`}
+            </button>
+          </div>
+        )}
+
         {invoices.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
             <div className="text-4xl mb-4">📄</div>
@@ -246,7 +262,7 @@ export default function InvoicesPage() {
           </div>
         ) : (
           <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-            {invoices.map((inv, i) => {
+            {invoices.filter(inv => showArchived || !inv.archived).map((inv, i) => {
               const s = statusLabel(inv.status, inv.last_email_sent_at)
               return (
                 <div key={inv.id} className={`flex items-center flex-wrap gap-4 px-6 py-4 ${i < invoices.length-1 ? 'border-b border-gray-50' : ''}`}>
@@ -357,6 +373,20 @@ export default function InvoicesPage() {
                             className="hover:bg-red-50"
                           >
                             🚫 Storniraj račun
+                          </button>
+                        </>
+                      )}
+                      {/* DODANO (11.8.2026): arhiviranje - za storno racune
+                          in njihove -S/-D zapise, ki jih ni mogoce izbrisati. */}
+                      {(inv.status === 'storno' || inv.invoice_number?.includes('-S') || inv.invoice_number?.includes('-D')) && (
+                        <>
+                          <div style={{ height: '0.5px', background: '#eee', margin: '4px 0' }} />
+                          <button
+                            onClick={() => toggleArchive(inv, !inv.archived)}
+                            style={{ width: '100%', padding: '10px 16px', textAlign: 'left', fontSize: '13px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                            className="hover:bg-gray-50"
+                          >
+                            {inv.archived ? '📤 Obnovi iz arhiva' : '📥 Arhiviraj'}
                           </button>
                         </>
                       )}

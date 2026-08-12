@@ -65,7 +65,9 @@ export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
-          <View>
+          {/* POPRAVLJENO (11.8.2026): dodana maxWidth - prej se je dolgo
+              ime podjetja stiskalo ob naslov "RAČUN" brez preloma vrstice. */}
+          <View style={{ maxWidth: '60%' }}>
             <Text style={styles.companyName}>{org.name || ''}</Text>
             <View style={styles.companyInfo}>
               <Text>{org.address || ''}</Text>
