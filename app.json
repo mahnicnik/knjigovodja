@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "fda72c05-3601-4b45-a958-4fe8d72cd7d9"
+      }
+    },
+    "android": {
+      "package": "si.racunko.pos"
+    }
+  }
+}
