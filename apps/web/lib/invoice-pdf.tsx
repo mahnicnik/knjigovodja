@@ -184,7 +184,17 @@ export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
           </View>
         )}
 
-        {(invoice.zoi || invoice.eor) && (
+        {/* DODANO (11.8.2026): DEMO nacin - jasen vodni zig namesto normalnega
+            FURS potrditvenega bloka, ce sta ZOI/EOR oznacena kot demo. */}
+        {(invoice.zoi?.startsWith('DEMO-') || invoice.eor?.startsWith('DEMO-')) ? (
+          <View style={{ marginTop: 14, paddingTop: 10, borderTopWidth: 2, borderTopColor: '#c00', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 10, fontWeight: 700, marginBottom: 3, color: '#c00' }}>⚠ DEMO RAČUN — NI DAVČNO POTRJEN</Text>
+              <Text style={{ fontSize: 7, color: '#c00' }}>Ta račun je bil ustvarjen v demo/preskusnem načinu aplikacije in NI bil</Text>
+              <Text style={{ fontSize: 7, color: '#c00' }}>poslan na FURS. Ne uporabljajte ga za dejansko gotovinsko poslovanje.</Text>
+            </View>
+          </View>
+        ) : (invoice.zoi || invoice.eor) && (
           <View style={{ marginTop: 14, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#ddd', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 8, fontWeight: 700, marginBottom: 3, color: '#333' }}>Davčno potrjen račun (FURS)</Text>

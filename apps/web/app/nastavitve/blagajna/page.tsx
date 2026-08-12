@@ -4,6 +4,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { getActiveMembership } from '@/lib/active-org'
+import AppLayout from '@/components/AppLayout'
 
 const supabase = createClient()
 
@@ -49,6 +50,10 @@ interface FursDevice {
 export default function BlagajnaPage() {
   const [tab, setTab] = useState<'certifikat' | 'prostori' | 'naprave' | 'test'>('certifikat')
   const [config, setConfig] = useState<FursConfig>({ testMode: true, premises: [], devices: [], certPassword: undefined, certExpiry: undefined, certSubject: undefined })
+  // DODANO (11.8.2026): DEMO nacin - LOCEN od testMode. NE komunicira s
+  // FURS sploh, generira jasno lazne ZOI/EOR kode za testiranje/predstavitev.
+  const [demoMode, setDemoMode] = useState(false)
+  const [orgIdForDemo, setOrgIdForDemo] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<{msg: string, ok: boolean} | null>(null)
@@ -104,7 +109,9 @@ export default function BlagajnaPage() {
           .eq('org_id', member.org_id)
           .eq('is_active', true)
 
-        const { data: orgTestMode } = await supabase.from('organizations').select('furs_test_mode').eq('id', member.org_id).single()
+        const { data: orgTestMode } = await supabase.from('organizations').select('furs_test_mode, furs_demo_mode').eq('id', member.org_id).single()
+        setDemoMode((orgTestMode as any)?.furs_demo_mode ?? false)
+        setOrgIdForDemo(member.org_id)
         setConfig({
           testMode: orgTestMode?.furs_test_mode ?? (process.env.NEXT_PUBLIC_FURS_TEST_MODE === 'true'),
           premises: (premises || []).map(p => ({
@@ -367,6 +374,37 @@ export default function BlagajnaPage() {
         <a href="/nastavitve" style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:13, color:"var(--rk-ink-3)", textDecoration:"none", marginBottom:8, fontFamily:"var(--rk-font-mono)" }}>← Nastavitve</a>
         <h1 style={{ fontSize: 28, fontWeight: 800, margin: 0, color: '#0d2818' }}>Davčna blagajna</h1>
         <p style={{ fontSize: 14, color: '#666', marginTop: 6 }}>FURS certifikat, poslovni prostori in naprave</p>
+      </div>
+
+      {/* DODANO (11.8.2026): DEMO mode banner - LOCEN od test mode zgoraj.
+          Demo nacin NE komunicira s FURS sploh - generira lazne ZOI/EOR. */}
+      <div style={{ padding: '12px 16px', borderRadius: 10, marginBottom: 12, background: demoMode ? 'rgba(200,40,40,0.08)' : '#f7f6f2', border: `1px solid ${demoMode ? '#c02828' : '#ddd'}40` }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <span style={{ fontWeight: 700, fontSize: 13, color: demoMode ? '#c02828' : '#666' }}>
+              🎭 DEMO način (brez FURS certifikata)
+            </span>
+            <div style={{ fontSize: 11, color: '#666', marginTop: 3, maxWidth: 480 }}>
+              Za testiranje/predstavitev aplikacije - NE potrebujete certifikata.
+              Računi dobijo jasno OZNAČENE lažne kode (DEMO-...) namesto pravih
+              ZOI/EOR. NIKOLI ne uporabljajte za dejansko gotovinsko poslovanje -
+              ti računi NISO davčno potrjeni pri FURS.
+            </div>
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, flexShrink: 0, marginLeft: 12 }}>
+            <input type="checkbox" checked={demoMode}
+              onChange={async e => {
+                const next = e.target.checked
+                if (next && !confirm('Vklopiti DEMO nacin? Vsi novi racuni bodo imeli LAZNE fiskalizacijske kode (DEMO-...), NE bodo davcno potrjeni pri FURS. Uporabljajte SAMO za testiranje/predstavitev aplikacije.')) return
+                setDemoMode(next)
+                if (orgIdForDemo) {
+                  await supabase.from('organizations').update({ furs_demo_mode: next }).eq('id', orgIdForDemo)
+                }
+              }}
+              style={{ accentColor: '#c02828', width: 16, height: 16 }} />
+            Demo način
+          </label>
+        </div>
       </div>
 
       {/* Test mode banner */}
@@ -798,10 +836,12 @@ export default function BlagajnaPage() {
 // ── Helpers ──
 function FormField({ label, children }: { label: string, children: React.ReactNode }) {
   return (
+    <AppLayout org={org}>
     <div>
       <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 5 }}>{label}</label>
       {children}
     </div>
+    </AppLayout>
   )
 }
 

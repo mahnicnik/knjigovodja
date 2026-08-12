@@ -77,6 +77,23 @@ export async function confirmIssuedInvoiceWithFurs(
     .single()
   if (!org?.tax_number) return { success: false, error: 'Davcna stevilka ni nastavljena' }
 
+  // DODANO (11.8.2026): DEMO nacin - fiskalizacija BREZ pravega FURS
+  // certifikata/komunikacije. Namenjeno testiranju/predstavitvi aplikacije,
+  // NE za dejansko poslovanje. ZOI/EOR sta VEDNO jasno oznacena s predpono
+  // "DEMO-" - nikoli ju ni mogoce zamenjati za prave FURS kode.
+  if (org?.furs_demo_mode) {
+    const demoCode = `DEMO-${invoiceId.replace(/-/g, '').slice(0, 12).toUpperCase()}`
+    await supabase
+      .from('issued_invoices')
+      .update({
+        zoi: demoCode,
+        eor: demoCode,
+        furs_confirmed_at: new Date().toISOString(),
+      })
+      .eq('id', invoiceId)
+    return { success: true, zoi: demoCode, eor: demoCode, invoiceNumber: invoice.invoice_number }
+  }
+
   const { data: cert } = await supabase
     .from('furs_certificates')
     .select('*')
