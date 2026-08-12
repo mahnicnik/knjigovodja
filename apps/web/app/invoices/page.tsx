@@ -81,11 +81,11 @@ export default function InvoicesPage() {
       // POPRAVLJENO 11.8.2026: status 'storno' namesto 'sent' - ta
       // kreditni zapis ne cakа na placilo, mora biti izkljucen iz
       // totalSent/totalUnpaid izracunov (isti status kot original).
-      status: 'storno',
+      status: 'cancelled', // POPRAVLJENO 11.8.2026 (NUJNO): 'storno' NI veljavna vrednost v bazi (CHECK constraint)!
       notes: `Storno računa ${inv.invoice_number}`,
       reference: `SI00 ${stornoNumber}`,
     })
-    await supabase.from('issued_invoices').update({ status: 'storno' }).eq('id', inv.id)
+    await supabase.from('issued_invoices').update({ status: 'cancelled' }).eq('id', inv.id) // POPRAVLJENO 11.8.2026 (NUJNO)
     await load()
     setActionLoading('')
     setActionInv(null)
@@ -106,7 +106,10 @@ export default function InvoicesPage() {
       amount_net: -Math.abs(inv.amount_net),
       vat_amount: -Math.abs(inv.vat_amount),
       amount_total: -Math.abs(inv.amount_total),
-      status: 'sent',
+      // POPRAVLJENO 11.8.2026: 'sent' bi (kot pri storno prej) vleklo
+      // Neplacano v minus zaradi negativnega zneska - 'cancelled' izkljuci
+      // iz totalSent/totalUnpaid izracunov, dosledno s storno logiko.
+      status: 'cancelled',
       notes: `Dobropis za račun ${inv.invoice_number}`,
       reference: `SI00 ${dobNumber}`,
     })
@@ -178,7 +181,7 @@ export default function InvoicesPage() {
           ? { label: 'Poslano', color: '#854F0B', bg: '#FAEEDA' }
           : { label: 'Izdano', color: '#1E4E8C', bg: '#E6EEF7' }
       case 'overdue': return { label: 'Zamuda', color: '#A32D2D', bg: '#FCEBEB' }
-      case 'storno': return { label: 'Storno', color: '#555', bg: '#eee' }
+      case 'cancelled': return { label: 'Storno', color: '#555', bg: '#eee' } // POPRAVLJENO 11.8.2026: 'storno' -> 'cancelled' (prava vrednost baze)
       case 'draft': return { label: 'Osnutek', color: '#888', bg: '#F7F6F2' }
       default: return { label: status, color: '#888', bg: '#F7F6F2' }
     }
@@ -190,7 +193,7 @@ export default function InvoicesPage() {
     </div>
   )
 
-  const totalSent = invoices.filter(i => i.status !== 'draft' && i.status !== 'storno').reduce((s, i) => s + Number(i.amount_total), 0)
+  const totalSent = invoices.filter(i => i.status !== 'draft' && i.status !== 'cancelled').reduce((s, i) => s + Number(i.amount_total), 0)
   const totalPaid = invoices.filter(i => i.status === 'paid').reduce((s, i) => s + Number(i.amount_total), 0)
   const isFree = !['pro', 'pro_pos'].includes(org?.subscription_status)
   const invoiceCount = invoices.length
@@ -286,7 +289,7 @@ export default function InvoicesPage() {
                     >
                       ⬇ PDF
                     </button>
-                    {inv.status !== 'storno' && (
+                    {inv.status !== 'cancelled' && (
                       isFree ? (
                         <a href="/nastavitve#narocnina" style={{ border: '1px solid #d1d5db', background: '#f9fafb', color: '#9ca3af', borderRadius: 12, padding: '6px 12px', fontSize: 12, textDecoration: 'none', cursor: 'pointer' }} title="Nadgradi na Pro za email pošiljanje">
                           🔒 Pošlji
@@ -321,7 +324,7 @@ export default function InvoicesPage() {
                       borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
                       zIndex: 100, minWidth: '180px', overflow: 'hidden',
                     }}>
-                      {inv.status !== 'paid' && inv.status !== 'storno' && (
+                      {inv.status !== 'paid' && inv.status !== 'cancelled' && (
                         <button
                           onClick={() => markPaid(inv)}
                           disabled={actionLoading === 'paid_' + inv.id}
@@ -355,7 +358,7 @@ export default function InvoicesPage() {
                       >
                         📋 Podvoji račun
                       </button>
-                      {inv.status !== 'storno' && !inv.invoice_number?.includes('-S') && !inv.invoice_number?.includes('-D') && (
+                      {inv.status !== 'cancelled' && !inv.invoice_number?.includes('-S') && !inv.invoice_number?.includes('-D') && (
                         <>
                           <div style={{ height: '0.5px', background: '#eee', margin: '4px 0' }} />
                           <button
@@ -378,7 +381,7 @@ export default function InvoicesPage() {
                       )}
                       {/* DODANO (11.8.2026): arhiviranje - za storno racune
                           in njihove -S/-D zapise, ki jih ni mogoce izbrisati. */}
-                      {(inv.status === 'storno' || inv.invoice_number?.includes('-S') || inv.invoice_number?.includes('-D')) && (
+                      {(inv.status === 'cancelled' || inv.invoice_number?.includes('-S') || inv.invoice_number?.includes('-D')) && (
                         <>
                           <div style={{ height: '0.5px', background: '#eee', margin: '4px 0' }} />
                           <button
@@ -416,7 +419,7 @@ export default function InvoicesPage() {
                           <div style={{ height: '0.5px', background: '#eee', margin: '4px 0' }} />
                           <div style={{ padding: '8px 16px', fontSize: '11px', color: '#888', lineHeight: 1.5 }}>
                             🔒 Izdanega računa ni dovoljeno izbrisati (zakonska hramba 10 let).
-                            {inv.status !== 'storno' ? ' Za popravek uporabite Storniraj račun.' : ''}
+                            {inv.status !== 'cancelled' ? ' Za popravek uporabite Storniraj račun.' : ''}
                           </div>
                         </>
                       )}
