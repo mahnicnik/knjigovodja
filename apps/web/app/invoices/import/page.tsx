@@ -164,7 +164,7 @@ export default function ImportInvoicesPage() {
   const errorCount = extracted.filter(i => i._status === 'error').length
 
   return (
-    <AppLayout org={org}>
+    <AppLayout>
     <div style={{ minHeight: '100vh', background: '#f7f6f3', padding: '24px 32px' }}>
       <div style={{ maxWidth: 1000, margin: '0 auto' }}>
         <Link href="/invoices" style={{ fontSize: 13, color: '#888', textDecoration: 'none' }}>← Nazaj na Izdane račune</Link>
