@@ -125,7 +125,10 @@ export default function StripePage() {
     setTesting(false)
   }
 
-  const webhookUrl = org ? `https://knjigovodja.vercel.app/api/stripe/webhook?org_id=${org.id}` : ''
+  // POPRAVLJENO (13.8.2026, KRITICNO): napacna pot (stripe/webhook namesto
+  // webhooks/stripe) IN trdo kodirana domena - to je uporabnike posiljalo na
+  // NAPACEN, nepovezan endpoint (Racunkova lastna Pro narocnina).
+  const webhookUrl = org && typeof window !== 'undefined' ? `${window.location.origin}/api/webhooks/stripe?org_id=${org.id}` : ''
 
   if (loading) return <AppLayout><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}><div style={{ color: '#888', fontSize: '14px' }}>Nalagam...</div></div></AppLayout>
 
@@ -156,7 +159,7 @@ export default function StripePage() {
             Ko stranka opravi nakup na vaši spletni strani → Stripe pošlje obvestilo na Računko → aplikacija <strong>samodejno ustvari račun</strong> v vaši bazi. Račun je takoj viden v sekciji Računi z oznako "Plačano".
           </div>
           <div style={{ marginTop: '10px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-            {['payment_intent.succeeded', 'invoice.paid', 'charge.refunded'].map(e => (
+            {['checkout.session.completed', 'invoice.paid'].map(e => (
               <span key={e} style={{ fontSize: '10px', fontFamily: 'monospace', background: '#E6F1FB', color: '#185FA5', padding: '2px 8px', borderRadius: '6px' }}>{e}</span>
             ))}
           </div>
@@ -246,7 +249,7 @@ export default function StripePage() {
             <div style={{ marginTop: '12px' }}>
               <div style={{ fontSize: '11px', fontWeight: '500', color: '#666', marginBottom: '6px' }}>Stripe eventi ki jih morate vklopiti:</div>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {['payment_intent.succeeded', 'invoice.paid', 'charge.refunded'].map(e => (
+                {['checkout.session.completed', 'invoice.paid'].map(e => (
                   <span key={e} style={{ fontSize: '11px', fontFamily: 'monospace', background: '#F7F6F2', color: '#0D1F12', padding: '3px 9px', borderRadius: '6px', border: '0.5px solid rgba(0,0,0,0.1)' }}>{e}</span>
                 ))}
               </div>
@@ -332,7 +335,7 @@ export default function StripePage() {
             ['1', 'Prijavite se v Stripe Dashboard na dashboard.stripe.com'],
             ['2', 'Pojdite na Developers → API keys → Kopirajte "Secret key" (sk_live_...)'],
             ['3', 'Pojdite na Developers → Webhooks → Add endpoint'],
-            ['4', 'Prilepite Webhook URL od zgoraj in izberite eventi: payment_intent.succeeded, invoice.paid, charge.refunded'],
+            ['4', 'Prilepite Webhook URL od zgoraj in izberite eventi: checkout.session.completed, invoice.paid'],
             ['5', 'Po ustvaritvi webhookа kopirajte "Signing secret" (whsec_...)'],
             ['6', 'Prilepite oba ključa sem in kliknite Shrani'],
             ['7', 'Kliknite Testiraj povezavo — ob uspešnem testu ste pripravljeni'],
