@@ -242,6 +242,7 @@ export default function EkipaPage() {
   if (loading) return (
     <AppLayout>
     <div style={{ padding: 48, textAlign: 'center', color: '#888' }}>Nalagam...</div>
+    </AppLayout>
   )
 
   return (
