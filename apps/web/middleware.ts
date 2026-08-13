@@ -36,6 +36,13 @@ const ROLE_HOME: Record<string, string> = {
 const PUBLIC_PREFIXES = [
   '/login', '/signup', '/onboarding', '/invite', '/api/auth',
   '/_next', '/favicon', '/robots', '/sitemap', '/privacy', '/terms',
+  // DODANO (13.8.2026, kriticno): webhooki (Stripe, WooCommerce, Shopify)
+  // klicejo zunanji servisi BREZ prijavljene seje - preverjajo se s
+  // podpisom (HMAC), ne z uporabniskim piskotkom. Ce middleware rekonstruira
+  // zahtevo (NextResponse.next({request:{headers}})) preden pride do
+  // handlerja, se lahko poskodi SUROVO telo zahteve, kar pokvari Stripe
+  // podpis ("Invalid signature") - webhooki morajo iti skozi NEDOTAKNJENI.
+  '/api/webhooks',
 ]
 
 function isPublicPath(pathname: string): boolean {
