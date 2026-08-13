@@ -877,9 +877,9 @@ export default function DashboardPage() {
               prihaja vsak znesek v napovedi (namesto samo skupne stevilke). */}
           {cashFlow.deadlines.length > 0 && (
             <div style={{ marginTop: 16, borderTop: '0.5px solid rgba(255,255,255,0.1)', paddingTop: 12 }}>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>Razčlenitev odtokov</div>
+              <div style={{ fontSize: 11, color: 'var(--ink3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>Razčlenitev odtokov</div>
               {cashFlow.deadlines.map((d, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '4px 0', color: 'rgba(255,255,255,0.75)' }}>
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '4px 0', color: 'var(--ink2)' }}>
                   <span>{d.label} · {new Date(d.date).toLocaleDateString('sl-SI', { day: 'numeric', month: 'short' })}</span>
                   <span style={{ fontWeight: 600 }}>€{Math.round(d.amount).toLocaleString('sl-SI')}</span>
                 </div>
@@ -1835,4 +1835,3 @@ const cssGlobal = `
     }
   }
 `
-// force-rebuild 1786551317
