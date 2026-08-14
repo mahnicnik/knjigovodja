@@ -46,7 +46,7 @@ const NAV_DEFAULT = [
     { href: '/avto',         icon: 'ti-car',           label: 'Službeni avto' },
   ]},
   { label: 'Blagajna', items: [
-    { href: '/blagajna', icon: 'ti-building-store', label: 'POS blagajna' },
+    { href: '/pos', icon: 'ti-building-store', label: 'POS blagajna' },
     { href: '/eslog',    icon: 'ti-file-invoice',   label: 'e-Račun' },
   ]},
 ]
@@ -56,7 +56,7 @@ const QA_DEFAULT = [
   { href: '/expenses',     icon: 'ti-receipt',         label: 'Nov strošek' },
   { href: '/scan',         icon: 'ti-scan',            label: 'Skeniraj' },
   { href: '/dashboard',    icon: 'ti-layout-dashboard',label: 'Dashboard' },
-  { href: '/blagajna',     icon: 'ti-building-store',  label: 'Blagajna' },
+  { href: '/pos',     icon: 'ti-building-store',  label: 'Blagajna' },
   { href: '/kpo',          icon: 'ti-book',            label: 'KPO knjiga' },
 ]
 
