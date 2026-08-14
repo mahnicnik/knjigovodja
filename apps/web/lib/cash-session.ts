@@ -18,6 +18,9 @@ export interface CashSession {
   id: string
   business_id: string
   opened_by: string
+  // DODANO (13.8.2026): locene seje po osebi - staff_id je PIN-preverjena
+  // identiteta osebja (staff.id), locena od opened_by (Supabase auth naprave).
+  staff_id: string | null
   opened_at: string
   cash_opening: number
   opening_note: string | null
@@ -78,13 +81,21 @@ const MAX_OPEN_HOURS = 24 // če je odprto več kot 24h, pri otvoritvi avto-zapr
  * Vrne trenutno odprto izmeno za to blagajno (če obstaja).
  * Če je izmena starejša od 24h, vrne null (in jo treba ročno zapreti).
  */
-export async function getCurrentSession(): Promise<CashSession | null> {
+export async function getCurrentSession(staffId?: string): Promise<CashSession | null> {
   const db = createClient()
-  const { data, error } = await db
+  // POPRAVLJENO (13.8.2026, KRITICNO): ce je staffId podan, filtriraj SAMO
+  // na sejo TE osebe - vec ljudi ima lahko ODPRTO SVOJO sejo hkrati. Prej se
+  // je filtriralo SAMO po business_id, zato so VSI videli isto (prvo odprto)
+  // sejo, ne glede na to, kdo se je prijavil s PIN-om.
+  let query = db
     .from('cash_sessions')
     .select('*')
     .eq('business_id', BUSINESS_ID)
     .eq('status', 'open')
+  if (staffId) {
+    query = query.eq('staff_id', staffId)
+  }
+  const { data, error } = await query
     .order('opened_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -115,12 +126,14 @@ export async function getCurrentSession(): Promise<CashSession | null> {
 export async function openSession(params: {
   cashOpening: number
   openedBy: string
+  staffId?: string
   note?: string
 }): Promise<{ session: CashSession | null; error: string | null }> {
   const db = createClient()
 
-  // Preveri da ni odprte izmene
-  const existing = await getCurrentSession()
+  // POPRAVLJENO (13.8.2026, KRITICNO): preveri "ze odprto" SAMO za TO osebo
+  // (staffId), ne za celo podjetje - vec ljudi lahko ima odprto svojo sejo.
+  const existing = await getCurrentSession(params.staffId)
   if (existing && existing.status === 'open') {
     return {
       session: null,
@@ -133,6 +146,7 @@ export async function openSession(params: {
     .insert({
       business_id: BUSINESS_ID,
       opened_by: params.openedBy,
+      staff_id: params.staffId || null,
       cash_opening: params.cashOpening,
       opening_note: params.note || null,
       status: 'open',

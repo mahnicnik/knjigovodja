@@ -4403,9 +4403,13 @@ function OpenCashModal({ posData, auth, onClose, onOpened }) {
       const { data: { user } } = await createClient().auth.getUser()
       if (!user) throw new Error('Niste prijavljeni')
 
+      // POPRAVLJENO (13.8.2026, KRITICNO): dodan staffId (PRAVA PIN identiteta
+      // iz auth.user, ne Supabase auth uporabnika naprave) - omogoca loceno
+      // sejo za vsako osebo.
       const { session, error: err } = await openSession({
         cashOpening: amount,
         openedBy: user.id,
+        staffId: auth.user?.id,
         note: note || undefined,
       })
       if (err) throw new Error(err)
@@ -4604,10 +4608,14 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
       const { data: { user } } = await createClient().auth.getUser()
       if (!user) throw new Error('Niste prijavljeni')
 
+      // POPRAVLJENO (13.8.2026, KRITICNO): closedBy uporablja PRAVO PIN
+      // identiteto (auth.user) za Z-porocilo staff_id - prej Supabase auth
+      // uporabnika naprave, zato je Z-porocilo vedno beleZilo napacno osebo
+      // kot tistega, ki je zakljucil izmeno.
       const { zReportNumber, difference: diff, error: err } = await closeSession({
         session,
         cashClosingDeclared: declared,
-        closedBy: user.id,
+        closedBy: auth.user?.id || user.id,
         note: note || undefined,
       })
       if (err) throw new Error(err)
@@ -9816,14 +9824,17 @@ function KlasikApp() {
   const [showCloseCash, setShowCloseCash] = React.useState(false)
 
   React.useEffect(() => {
-    getCurrentSession().then(s => {
+    // POPRAVLJENO (13.8.2026, KRITICNO): posreduje PRAVO PIN identiteto
+    // (auth.user.id) - prej brez parametra, zato je vsak videl isto,
+    // deljeno sejo ne glede na to, kdo je prijavljen.
+    getCurrentSession(auth.user?.id).then(s => {
       setCashSession(s)
       setSessionLoaded(true)
     })
-  }, [])
+  }, [auth.user?.id])
 
   function refreshSession() {
-    getCurrentSession().then(s => setCashSession(s))
+    getCurrentSession(auth.user?.id).then(s => setCashSession(s))
   }
   const [now, setNow] = useState(new Date())
   const [notifOpen, setNotifOpen] = useState(false)
