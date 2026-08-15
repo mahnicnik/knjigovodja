@@ -4648,13 +4648,19 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
       await printCashReceipt(html)
 
       // Pošlji email
-      const ownerEmail = posData.staffList?.find(s => s.role === 'Lastnik')?.email
-      if (ownerEmail || org?.email) {
+      // POPRAVLJENO (14.8.2026, KRITICNO): 'org' spremenljivka NIKOLI ni bila
+      // definirana v tem obsegu - vsak zakljucek blagajne je povzrocil
+      // ReferenceError, ki se je tiho ujel (try/catch), zaradi cesar VSE po
+      // tej tocki (setSaved, zapiranje modala) NI NIKOLI izvedlo. Prav tako
+      // je staff.email polje, ki ne obstaja v bazi (staff tabela nima email
+      // stolpca) - ownerEmail je bil VEDNO undefined. Uporabimo user.email,
+      // ki je ze zanesljivo pridobljen zgoraj v tej isti funkciji.
+      if (user?.email) {
         fetch('/api/email/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            to: ownerEmail || org?.email,
+            to: user.email,
             subject: `Z-poročilo #${zReportNumber} — ${new Date().toLocaleDateString('sl-SI')}`,
             html,
           })
@@ -4860,15 +4866,17 @@ function ZReportModal({ posData, onClose }) {
       if (error) throw error
 
       // Pošlji email z Z-poročilom na lastnika
-      const biz = posData.businessProfile
-      const ownerEmail = posData.staffList.find(s => s.role === 'Lastnik')?.email
-
-      if (ownerEmail || biz?.email) {
+      // POPRAVLJENO (14.8.2026): staff.email in biz.email polji NE obstajata
+      // v bazi (staff/businesses tabeli nimata email stolpca) - ta pogoj je
+      // bil VEDNO false, email se NIKOLI ni poslal. Uporabimo trenutno
+      // prijavljeno Supabase identiteto namesto tega.
+      const { data: { user: currentUser } } = await createClient().auth.getUser()
+      if (currentUser?.email) {
         await fetch('/api/email/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            to: ownerEmail || biz?.email,
+            to: currentUser.email,
             subject: `Z-poročilo #${reportNumber} — ${data.date.toLocaleDateString('sl-SI')}`,
             html: buildZReportHTML(data, reportNumber, cashOpening, cashClosing),
           })
