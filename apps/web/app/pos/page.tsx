@@ -9217,12 +9217,28 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
   const sevColor = { danger:T.danger, warning:T.warn, info:T.accent }
 
   async function dismiss(id) {
-    await createClient().from('pos_notifications').update({ dismissed:true }).eq('id', id)
+    // POPRAVLJENO (14.8.2026): dodano preverjanje napake in stevila
+    // dejansko spremenjenih vrstic - prej se ni preverjalo, ce je RLS
+    // (ali kaj drugega) tiho blokiral posodobitev (0 vrstic, brez napake).
+    const { error, count } = await createClient().from('pos_notifications').update({ dismissed:true }).eq('id', id).select('id', { count: 'exact' })
+    if (error) {
+      console.error('Napaka pri zavrnitvi obvestila:', error)
+      alert('Napaka pri zavrnitvi obvestila: ' + error.message)
+      return
+    }
+    if (!count) {
+      console.warn('Zavrnitev obvestila ni spremenila nobene vrstice (id:', id, ') - preveri RLS pravice.')
+    }
     posData.refresh()
   }
 
   async function markAllRead() {
-    await createClient().from('pos_notifications').update({ read:true }).eq('business_id', BUSINESS_ID).eq('dismissed', false)
+    const { error } = await createClient().from('pos_notifications').update({ read:true }).eq('business_id', BUSINESS_ID).eq('dismissed', false)
+    if (error) {
+      console.error('Napaka pri oznacevanju kot prebrano:', error)
+      alert('Napaka: ' + error.message)
+      return
+    }
     posData.refresh()
   }
 
@@ -9287,7 +9303,20 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
                 {(lowItems.length + lowIngr.length) > 0 && (
                   <button onClick={()=>{setOrderListOpen(true);setNotifOpen(false)}} style={{ width:'100%', padding:'8px', borderRadius:8, background:T.accent, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:12, color:'#fff', marginBottom:6 }}>Narocilnica ({lowItems.length + lowIngr.length})</button>
                 )}
-                <button onClick={async()=>{ await createClient().from('pos_notifications').update({dismissed:true}).eq('business_id',BUSINESS_ID); posData.refresh(); setNotifOpen(false) }}
+                <button onClick={async()=>{
+                  // POPRAVLJENO (14.8.2026): dodano preverjanje napake/stevila
+                  // vrstic - prej se ni preverjalo, ce RLS tiho blokira posodobitev.
+                  const { error, count } = await createClient().from('pos_notifications').update({dismissed:true}).eq('business_id',BUSINESS_ID).eq('dismissed', false).select('id', { count: 'exact' })
+                  if (error) {
+                    console.error('Napaka pri "Pocisti vse":', error)
+                    alert('Napaka pri čiščenju obvestil: ' + error.message)
+                    return
+                  }
+                  if (!count) {
+                    console.warn('"Pocisti vse" ni spremenilo nobene vrstice - preveri RLS pravice ali business_id.')
+                  }
+                  posData.refresh(); setNotifOpen(false)
+                }}
                   style={{ width:'100%', padding:'8px', borderRadius:8, background:T.surface2, border:'1px solid '+T.line, cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:12, color:T.muted }}>
                   Počisti vse
                 </button>
