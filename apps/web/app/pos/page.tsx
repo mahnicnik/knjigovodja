@@ -5137,6 +5137,14 @@ function TableActionsModal({ activeTable, posData, auth, onClose, onDone }) {
     try {
       const existing = await pos.orders.getOpenOnTable(activeTable.id)
       if (!existing) throw new Error('Na tej mizi ni odprtega naročila')
+      // DODANO (16.8.2026): brez te preverbe bi prenos na ZASEDENO mizo ustvaril
+      // DVE odprti narocili na isti mizi - getOpenOnTable vrne samo najnovejso,
+      // starejse narocilo pa bi postalo NEVIDNO in nikoli placano (izgubljen racun).
+      const targetExisting = await pos.orders.getOpenOnTable(targetTableId)
+      if (targetExisting) {
+        const targetName = otherTables.find(t => t.id === targetTableId)?.name || 'ciljna miza'
+        throw new Error(`Miza "${targetName}" že ima odprto naročilo. Uporabite zavihek "Združi mizi" namesto prenosa.`)
+      }
       const db = createClient()
       const { error: err } = await db.from('orders').update({ table_id: targetTableId }).eq('id', existing.id)
       if (err) throw err
@@ -7761,8 +7769,23 @@ function SpacesSection({ posData }) {
   }
 
   async function deleteSpace(id, name) {
-    if (!confirm(`Izbrišem prostor "${name}" in vse mize?`)) return
-    await createClient().from('spaces').delete().eq('id',id)
+    // DODANO (16.8.2026): tables.space_id ima ON DELETE CASCADE - brisanje
+    // prostora IZBRISE VSE njegove mize. Ce ima katera odprto narocilo,
+    // brisanje TIHO spodleti (orders.table_id ga blokira), uporabnik pa je
+    // prej dobil sporocilo "Prostor izbrisan", ceprav se ni zgodilo nic.
+    const { data: spaceTables } = await createClient().from('tables').select('id, name').eq('space_id', id)
+    if (spaceTables?.length) {
+      for (const t of spaceTables) {
+        const openOrder = await pos.orders.getOpenOnTable(t.id)
+        if (openOrder) {
+          alert(`Prostora "${name}" ni mogoce izbrisati: miza "${t.name}" ima odprto narocilo. Najprej zakljucite vsa odprta narocila v tem prostoru.`)
+          return
+        }
+      }
+    }
+    if (!confirm(`Izbrišem prostor "${name}" in vse mize (${spaceTables?.length || 0})?`)) return
+    const { error: delErr } = await createClient().from('spaces').delete().eq('id',id)
+    if (delErr) { showToast('Napaka pri brisanju: ' + delErr.message, false); return }
     const next = posData.spaces.find(s=>s.id!==id)
     setSelectedSpaceId(next?.id||null)
     posData.refresh(); showToast('Prostor izbrisan')
@@ -7788,8 +7811,17 @@ function SpacesSection({ posData }) {
   }
 
   async function deleteTable(id) {
+    // DODANO (16.8.2026): prej se ni preverilo, ali ima miza ODPRTO narocilo -
+    // brisanje bi pustilo narocilo brez mize (nedostopno, nikoli placano), ali
+    // pa tiho spodletelo zaradi tujega kljuca, brez sporocila uporabniku.
+    const openOrder = await pos.orders.getOpenOnTable(id)
+    if (openOrder) {
+      alert('Te mize ni mogoče izbrisati, ker ima odprto naročilo. Najprej zaključite ali prenesite naročilo.')
+      return
+    }
     if (!confirm('Izbrišem to mizo?')) return
-    await createClient().from('tables').delete().eq('id',id)
+    const { error } = await createClient().from('tables').delete().eq('id',id)
+    if (error) { showToast('Napake pri brisanju: ' + error.message, false); return }
     posData.refresh(); showToast('Miza izbrisana')
   }
 
