@@ -44,17 +44,32 @@ test('davcni izracun: prispevki znizajo davcno osnovo', () => {
   // NAPAKA (popravljeno 16.8.2026): prispevki so se odsteli sele od cistega
   // prihodka, davek pa se je racunal od PREVISOKE osnove. Pri s.p. so
   // prispevki davcno priznan odhodek.
-  const brezPrispevkov = calculateNetIncome({
-    monthlyRevenue: 10000, monthlyExpenses: 0, yearlyRevenueToDate: 120000,
-    legalForm: 'sp', taxSystem: 'normirani_80', isVatRegistered: false,
-    monthlyContributions: 0,
-  })
-  const sPrispevki = calculateNetIncome({
+  //
+  // OPOMBA: vrednosti 0 NE moremo uporabiti za primerjavo - koda jo razume kot
+  // "ni vneseno" in uporabi zakonski minimum (s.p. vedno placuje vsaj minimum).
+  // Zato primerjamo dve RAZLICNI veljavni visini prispevkov.
+  const nizji = calculateNetIncome({
     monthlyRevenue: 10000, monthlyExpenses: 0, yearlyRevenueToDate: 120000,
     legalForm: 'sp', taxSystem: 'normirani_80', isVatRegistered: false,
     monthlyContributions: 651.04,
   })
-  expect(sPrispevki.details.incomeTax).toBeLessThan(brezPrispevkov.details.incomeTax)
+  const visji = calculateNetIncome({
+    monthlyRevenue: 10000, monthlyExpenses: 0, yearlyRevenueToDate: 120000,
+    legalForm: 'sp', taxSystem: 'normirani_80', isVatRegistered: false,
+    monthlyContributions: 1500,
+  })
+  // Visji prispevki = nizja davcna osnova = nizji davek
+  expect(visji.details.incomeTax).toBeLessThan(nizji.details.incomeTax)
+})
+
+test('davcni izracun: vrednost 0 pomeni "ni vneseno" in uporabi minimum', () => {
+  // S.p. vedno placuje vsaj zakonski minimum - nicelnih prispevkov ni.
+  const r = calculateNetIncome({
+    monthlyRevenue: 5000, monthlyExpenses: 0, yearlyRevenueToDate: 60000,
+    legalForm: 'sp', taxSystem: 'normirani_80', isVatRegistered: false,
+    monthlyContributions: 0,
+  })
+  expect(r.details.contributions).toBeCloseTo(SP_MIN_CONTRIBUTIONS_MONTH, 2)
 })
 
 test('davcni izracun: uporabi DEJANSKE prispevke iz nastavitev', () => {
