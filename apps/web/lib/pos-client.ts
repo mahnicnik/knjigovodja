@@ -36,7 +36,13 @@ export async function resolveBusinessId(orgId: string, orgName: string, ownerUse
     .insert({
       name: orgName,
       owner_user_id: ownerUserId,
-      profile_type: 'trznica',
+      // POPRAVLJENO (16.8.2026): tu je bilo 'trznica' - NAJBOLJ OMEJEN profil
+      // od petih. Nov uporabnik je tako dobil blagajno brez mize, koledarja,
+      // strank in paketov, cetudi vodi restavracijo ali fitnes. Baza sama ima
+      // privzeto vrednost 'all', kar je smiselno: pokazi VSE, uporabnik naj
+      // nato izbere ozji profil, ce ga zeli. Koda je to privzeto vrednost
+      // prepisala z najozjo, cesar nihce ni nameraval.
+      profile_type: 'all',
       vat_rate: 22.00,
       currency: 'EUR',
       language: 'sl-SI',
