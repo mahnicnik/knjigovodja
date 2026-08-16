@@ -196,6 +196,10 @@ function usePosData() {
   const [loading, setLoading] = useState(true)
   const [reloadKey, setReloadKey] = useState(0)
   const [bizReady, setBizReady] = useState(false)
+  // DODANO (16.8.2026): napaka pri postavitvi blagajne se je zapisala SAMO v
+  // konzolo - uporabnik je obtical na nalaganju brez pojasnila in ni vedel,
+  // ali je kriva prijava, pravice ali kaj tretjega.
+  const [bizNapaka, setBizNapaka] = useState<string | null>(null)
 
   const refresh = useCallback(() => setReloadKey(k => k + 1), [])
 
@@ -204,14 +208,18 @@ function usePosData() {
       try {
         const sb2 = createClient()
         const { data: { user } } = await sb2.auth.getUser()
-        if (!user) return
+        if (!user) { setBizNapaka('Niste prijavljeni. Prijavite se in poskusite znova.'); return }
         const mem = await getActiveMembership().then(m => m ? { org_id: m.org_id } : null) // POPRAVLJENO 16.8.2026: vec-org varno
-        if (!mem) return
+        if (!mem) {
+          setBizNapaka('Vaš uporabniški račun ni povezan z nobenim podjetjem. Najprej izpolnite profil podjetja v Nastavitvah.')
+          return
+        }
         const { data: o } = await sb2.from('organizations').select('name').eq('id', mem.org_id).single()
         await resolveBusinessId(mem.org_id, o?.name || 'Moj biznis', user.id)
         setBizReady(true)
-      } catch (e) {
+      } catch (e: any) {
         console.error('Napaka pri inicializaciji POS biznisa:', e)
+        setBizNapaka(e?.message || 'Blagajne ni bilo mogoče pripraviti.')
       }
     }
     initBusiness()
@@ -275,7 +283,7 @@ function usePosData() {
     return [{ id: 'cat-fav', name: 'Priljubljeno', icon: '★', color: '#E9B949' }, ...categories]
   }, [categories])
 
-  return { categories: categoriesWithFav, items, spaces, customers, staffList, packageTemplates, services, ingredients, notifications, setNotifications, todayStats, businessProfile, setBusinessProfile, happyHourRules, loading, itemsIn, refresh }
+  return { categories: categoriesWithFav, items, spaces, customers, staffList, packageTemplates, services, ingredients, notifications, setNotifications, todayStats, businessProfile, setBusinessProfile, happyHourRules, loading, itemsIn, refresh, bizNapaka }
 }
 
 // ================================================================
@@ -10634,6 +10642,27 @@ function KlasikApp() {
       <ReceiptToast data={receipt} onClose={() => setReceipt(null)}/>
       {sellPackageModal && <SellPackageModal template={sellPackageModal} posData={posData} onClose={()=>setSellPackageModal(null)} auth={auth} setPaymentOpen={setPaymentOpen}/>}
       {showClockIn && <ClockInModal posData={posData} onClose={()=>setShowClockIn(false)} onClockedIn={()=>{ setShowClockIn(false); setWsRefreshKey(k=>k+1) }}/>}
+      {/* DODANO (16.8.2026): ce postavitev blagajne ne uspe, to POVEJ. Prej se
+          je napaka zapisala samo v konzolo, stran pa je ostala na nalaganju -
+          uporabnik ni vedel, ali je kriva prijava, pravice ali kaj tretjega. */}
+      {posData.bizNapaka && (
+        <div style={{ position:'fixed', inset:0, zIndex:9999, background:'rgba(15,27,20,0.96)', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
+          <div style={{ maxWidth:460, background:'#fff', borderRadius:14, padding:28, textAlign:'center' }}>
+            <div style={{ fontSize:15, fontWeight:700, marginBottom:10 }}>Blagajne ni bilo mogoče pripraviti</div>
+            <div style={{ fontSize:13, color:'#555', lineHeight:1.6, marginBottom:18 }}>{posData.bizNapaka}</div>
+            <div style={{ display:'flex', gap:8, justifyContent:'center' }}>
+              <button onClick={()=>window.location.reload()}
+                style={{ padding:'9px 16px', borderRadius:9, border:'none', background:'#1D9E75', color:'#fff', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+                Poskusi znova
+              </button>
+              <a href="/nastavitve"
+                style={{ padding:'9px 16px', borderRadius:9, border:'0.5px solid #ddd', color:'#333', fontSize:13, fontWeight:600, textDecoration:'none' }}>
+                Nastavitve
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
       {showOpenCash && <OpenCashModal posData={posData} auth={auth} onClose={()=>setShowOpenCash(false)} onOpened={(s)=>{ setCashSession(s); setShowOpenCash(false) }}/>}
       {showVmesnoStanje && cashSession && <VmesnoStanjeModal session={cashSession} posData={posData} auth={auth} onClose={()=>setShowVmesnoStanje(false)}/>}
       {showTableActions && activeTable && <TableActionsModal activeTable={activeTable} posData={posData} auth={auth} onClose={()=>setShowTableActions(false)} onDone={()=>{ switchToTable(null); posData.refresh() }}/>}
