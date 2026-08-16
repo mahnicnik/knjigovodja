@@ -43,7 +43,13 @@ function vatBreakdownForCart(cart, scale = 1) {
   let net = 0, vat = 0
   const byRateMap = {}
   for (const l of (cart || [])) {
-    const gross = Number(l.price || 0) * Number(l.qty || 0) * scale
+    // POPRAVLJENO (16.8.2026, DDV): prej "price * qty" - BREZ doplacil
+    // modifikatorjev in BREZ happy hour popusta. H.lineTotal oboje upostevaje,
+    // zato se je osnova za DDV na racunu razlikovala od dejansko placanega
+    // zneska (npr. kava 2,00 + mleko 0,50, 2x: osnova racunana od 4,00 namesto
+    // od 5,00). To je davcno pomembno - osnova in DDV na racunu morata ustrezati
+    // placanemu znesku. Zdaj uporabimo isti izracun kot za vsoto vrstice.
+    const gross = H.lineTotal(l) * scale
     const rate = Number(l.vat_rate || 22)
     const lineNet = gross / (1 + rate / 100)
     const lineVat = gross - lineNet
@@ -6700,22 +6706,29 @@ function ReportsScreen({ posData, auth }) {
     setLoading(true)
     const now = new Date()
     let from, to
+    // POPRAVLJENO (16.8.2026, POROCILA): obdobje se je racunalo po UTC, ne po
+    // LOKALNEM casu. Slovenija je poleti 2 uri pred UTC, zato je "danes"
+    // pomenilo okno od 02:00 do 01:59 naslednjega dne po lokalnem casu -
+    // prodaja med polnocjo in 2. uro zjutraj (bar!) je v dnevnem porocilu
+    // MANJKALA in se pojavila v vcerajsnjem. Zdaj meje po lokalnem casu.
+    const zacetekDneva = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0)
+    const konecDneva  = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999)
     if (p === 'today') {
-      from = new Date(now.toISOString().slice(0,10) + 'T00:00:00.000Z')
-      to = new Date(now.toISOString().slice(0,10) + 'T23:59:59Z')
+      from = zacetekDneva(now)
+      to = konecDneva(now)
     } else if (p === 'yesterday') {
-      const y = new Date(now); y.setUTCDate(y.getUTCDate()-1)
-      from = new Date(y.toISOString().slice(0,10) + 'T00:00:00.000Z')
-      to = new Date(y.toISOString().slice(0,10) + 'T23:59:59Z')
+      const y = new Date(now); y.setDate(y.getDate()-1)
+      from = zacetekDneva(y)
+      to = konecDneva(y)
     } else if (p === 'week') {
-      const w = new Date(now); w.setUTCDate(w.getUTCDate()-7)
-      from = new Date(w.toISOString().slice(0,10) + 'T00:00:00.000Z')
+      const w = new Date(now); w.setDate(w.getDate()-7)
+      from = zacetekDneva(w)
       to = now
     } else if (p === 'month') {
-      from = new Date(now.getUTCFullYear() + '-' + String(now.getUTCMonth()+1).padStart(2,'0') + '-01T00:00:00.000Z')
+      from = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0)
       to = now
     } else if (p === 'custom' && customFrom && customTo) {
-      from = new Date(customFrom)
+      from = new Date(customFrom + 'T00:00:00')
       to = new Date(customTo + 'T23:59:59')
     } else {
       from = new Date(now.getFullYear(), now.getMonth(), now.getDate())
