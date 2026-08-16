@@ -199,7 +199,7 @@ function usePosData() {
         const sb2 = createClient()
         const { data: { user } } = await sb2.auth.getUser()
         if (!user) return
-        const { data: mem } = await sb2.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+        const mem = await getActiveMembership().then(m => m ? { org_id: m.org_id } : null) // POPRAVLJENO 16.8.2026: vec-org varno
         if (!mem) return
         const { data: o } = await sb2.from('organizations').select('name').eq('id', mem.org_id).single()
         await resolveBusinessId(mem.org_id, o?.name || 'Moj biznis', user.id)
@@ -666,7 +666,7 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         const sb = createClient()
         const { data: { user } } = await sb.auth.getUser()
         if (user) {
-          const { data: mem } = await sb.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+          const mem = await getActiveMembership().then(m => m ? { org_id: m.org_id } : null) // POPRAVLJENO 16.8.2026: vec-org varno
           if (mem) {
             const { data: o } = await sb.from('organizations').select('*').eq('id', mem.org_id).single()
             orgInfo = o
@@ -1311,7 +1311,7 @@ function WriteoffModal({ cart, auth, onClose, onDone }) {
     try {
       const { data: { user } } = await createClient().auth.getUser()
       if (!user) throw new Error('Niste prijavljeni')
-      const { data: member } = await createClient().from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+      const member = await getActiveMembership().then(m => m ? { org_id: m.org_id } : null) // POPRAVLJENO 16.8.2026: vec-org varno
       const { error: err } = await createClient().from('stock_writeoffs').insert({
         business_id: BUSINESS_ID,
         org_id: member?.org_id || null,
@@ -1320,14 +1320,24 @@ function WriteoffModal({ cart, auth, onClose, onDone }) {
         total_cost: totalCost,
         vat_self_assessed: reason === 'lastna_poraba' ? vatOnCost : 0,
         note: note || null,
-        created_by: user.id,
+        // POPRAVLJENO (16.8.2026): prej identiteta NAPRAVE (na skupnem terminalu
+        // vedno ista oseba) - odpis je bil pripisan napacnemu blagajniku.
+        created_by: auth?.user?.id || user.id,
       })
       if (err) throw err
       // Odstej zalogo enako kot pri prodaji, brez placila/FURS
+      // POPRAVLJENO (16.8.2026): prej branje ZASTARELEGA posnetka line.stock +
+      // zapis absolutne vrednosti - ce je vmes tekla prodaja ali prevzem, je
+      // odpis povozil tiste spremembe. Zdaj atomarno odstevanje v bazi, z
+      // preverjanjem napake (prej je odpis tiho spodletel, uporabnik pa je
+      // videl potrditev).
       for (const line of cart) {
         if (line.item_type !== 'recipe' && line.stock !== null && line.stock !== undefined) {
-          const newStock = Math.max(0, (line.stock || 0) - line.qty)
-          await createClient().from('items').update({ stock: newStock }).eq('id', line.id)
+          const { error: stockErr } = await createClient().rpc('decrement_stock', {
+            p_item_id: line.id,
+            p_qty: line.qty,
+          })
+          if (stockErr) throw new Error(`Zaloge za "${line.name}" ni bilo mogoče odpisati: ${stockErr.message}`)
         }
       }
       onDone()
@@ -2000,10 +2010,13 @@ function CalendarScreen({ posData }) {
     const oldStart = new Date(b.start_at)
     const diff = newStart.getTime() - oldStart.getTime()
     const newEnd = b.end_at ? new Date(new Date(b.end_at).getTime() + diff) : null
-    await createClient().from('bookings').update({
+    const { error: dragErr } = await createClient().from('bookings').update({
       start_at: newStart.toISOString(),
       ...(newEnd ? { end_at: newEnd.toISOString() } : {})
     }).eq('id', bookingId)
+    // POPRAVLJENO (16.8.2026): prej brez preverbe - termin je na zaslonu ostal
+    // premaknjen, v bazi pa ne; ob osvezitvi je skocil nazaj brez pojasnila.
+    if (dragErr) alert('Termina ni bilo mogoče premakniti: ' + dragErr.message)
     await loadBookings()
     setDraggingId(null)
   }
@@ -2428,7 +2441,8 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
 
   async function deleteBooking() {
     if (!confirm('Izbrišem to rezervacijo?')) return
-    await createClient().from('bookings').delete().eq('id', booking.id)
+    const { error: delBookErr } = await createClient().from('bookings').delete().eq('id', booking.id)
+    if (delBookErr) { alert('Termina ni bilo mogoče izbrisati: ' + delBookErr.message); return }
     onSaved()
   }
 
@@ -2436,7 +2450,8 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
     // POPRAVLJENO (16.8.2026): brez te varovalke je dvojni klik na "Prišel"
     // odstel obisk DVAKRAT - stranki je izginil obisk s kartice po krivem.
     const alreadyArrived = booking.status === 'arrived'
-    await createClient().from('bookings').update({ status }).eq('id', booking.id)
+    const { error: statusErr } = await createClient().from('bookings').update({ status }).eq('id', booking.id)
+    if (statusErr) { showToast('Statusa ni bilo mogoče spremeniti: ' + statusErr.message, false); return }
     // Če "arrived" in ima paket → odštej obisk
     if (status === 'arrived' && selectedPkg && !alreadyArrived) {
       const pkg = activePkgs.find(p => p.id === selectedPkg)
@@ -2455,7 +2470,8 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
             updates.expires = exp.toISOString().split('T')[0]
           }
         }
-        await createClient().from('customer_packages').update(updates).eq('id', selectedPkg)
+        const { error: visitErr } = await createClient().from('customer_packages').update(updates).eq('id', selectedPkg)
+        if (visitErr) { showToast('Obiska ni bilo mogoče odšteti: ' + visitErr.message, false); return }
         showToast('✓ Obisk zabeležen + odštet iz kartice')
       }
     } else if (status === 'arrived') {
@@ -3012,7 +3028,8 @@ function CustomerNotesTab({ customer, onSave }) {
 
   async function save() {
     setSaving(true)
-    await createClient().from('customers').update({ notes }).eq('id', customer.id)
+    const { error: notesErr } = await createClient().from('customers').update({ notes }).eq('id', customer.id)
+    if (notesErr) { alert('Opombe ni bilo mogoče shraniti: ' + notesErr.message); return }
     setSaving(false); setSaved(true); onSave()
     setTimeout(()=>setSaved(false),3000)
   }
@@ -3582,7 +3599,8 @@ function DobavnicaImportModal({ posData, onClose, onImported }) {
           total_ex_vat: Number(a.vrednost_brez_ddv || 0),
           total_inc_vat: Number(a.vrednost_z_ddv || 0),
         }))
-        await sb.from('delivery_lines').insert(lines)
+        const { error: dlErr } = await sb.from('delivery_lines').insert(lines)
+        if (dlErr) console.error('Vrstic dobavnice ni bilo mogoce shraniti:', dlErr)
       }
     } catch(e) {
       console.error('delivery save error:', e)
@@ -3823,15 +3841,19 @@ function InventoryScreen({ posData }) {
     const price = parseFloat(newPrice)
     if (isNaN(price) || price < 0) return
     const db = createClient()
-    await db.from('ingredients').update({ cost_price: price }).eq('id', item.id)
+    const { error: cpErr } = await db.from('ingredients').update({ cost_price: price }).eq('id', item.id)
+    if (cpErr) { showInvToast('Nabavne cene ni bilo mogoče shraniti: ' + cpErr.message, false); return }
     // Zapiši v zgodovino
-    await db.from('price_history').insert({
+    const { error: phErr } = await db.from('price_history').insert({
       item_id: item.id,
       item_name: item.name,
       cost_price: price,
       recorded_at: new Date().toISOString(),
       business_id: BUSINESS_ID,
     }).select()
+    // POPRAVLJENO (16.8.2026): prej brez preverbe - zgodovina cen se je tiho
+    // ne zapisala, kar popaci kasnejso analizo nabavnih cen.
+    if (phErr) console.error('Zgodovine cen ni bilo mogoce zapisati:', phErr)
     posData.refresh()
   }
 
@@ -3870,7 +3892,8 @@ function InventoryScreen({ posData }) {
         savedId = data.id
       }
       if (itemType === 'recipe' && savedId) {
-        await createClient().from('item_ingredients').delete().eq('item_id', savedId)
+        const { error: recErr } = await createClient().from('item_ingredients').delete().eq('item_id', savedId)
+        if (recErr) throw recErr
         const normLines = (itemModal.normativ||[]).filter(n=>n.ingredient_id&&n.qty_used)
         if (normLines.length > 0) {
           const {error} = await createClient().from('item_ingredients').insert(
@@ -3885,20 +3908,24 @@ function InventoryScreen({ posData }) {
   }
   async function deleteItem(id, name) {
     if (!confirm(`Izbrišem artikel "${name}"?`)) return
-    await createClient().from('items').update({archived:true}).eq('id',id)
+    const { error: arcErr } = await createClient().from('items').update({archived:true}).eq('id',id)
+    if (arcErr) { showInvToast('Artikla ni bilo mogoče izbrisati: ' + arcErr.message, false); return }
     posData.refresh(); showInvToast('Artikel izbrisan')
   }
   async function saveEdit() {
     if (!editModal) return
     setEditSaving(true)
     try {
-      await createClient().from('items').update({
+      // POPRAVLJENO (16.8.2026): prej brez preverbe napake - uporabnik je videl
+      // "Artikel posodobljen", tudi ce se v bazi ni nic spremenilo.
+      const { error: editItemErr } = await createClient().from('items').update({
         name: editModal.name || undefined,
         price: editModal.price !== '' ? Number(editModal.price) : undefined,
         stock: editModal.stock !== '' ? Number(editModal.stock) : null,
         low_stock: editModal.min_stock !== '' ? Number(editModal.min_stock) : null,
         cost_price: editModal.cost_price !== '' ? Number(editModal.cost_price) : null,
       }).eq('id', editModal.id)
+      if (editItemErr) throw editItemErr
       posData.refresh(); setEditModal(null)
       setInvToast({msg:'Artikel posodobljen',ok:true}); setTimeout(()=>setInvToast(null),3000)
     } catch(e) {
@@ -4107,7 +4134,16 @@ function InventoryScreen({ posData }) {
                       </span>
                     </td>
                     <td style={{ padding:'10px 12px', textAlign:'center' }}>
-                      <button onClick={async()=>{const q=prompt(`Nova zaloga za ${ig.name} (${ig.unit}):`,ig.stock_qty);if(q!==null)await createClient().from('ingredients').update({stock_qty:Number(q)}).eq('id',ig.id).then(()=>posData.refresh())}}
+                      <button onClick={async()=>{
+                        const q=prompt(`Nova zaloga za ${ig.name} (${ig.unit}):`,ig.stock_qty)
+                        if(q===null) return
+                        // POPRAVLJENO (16.8.2026): prej brez preverbe vnosa (NaN) in napake
+                        const qn = Number(String(q).replace(',','.'))
+                        if(!isFinite(qn) || qn < 0) { alert('Vnesite veljavno število (npr. 12,5)'); return }
+                        const { error } = await createClient().from('ingredients').update({stock_qty:qn}).eq('id',ig.id)
+                        if(error) { alert('Zaloge ni bilo mogoče posodobiti: ' + error.message); return }
+                        posData.refresh()
+                      }}
                         style={{ width:28, height:28, borderRadius:7, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontSize:14 }}>+</button>
                     </td>
                   </tr>
@@ -4306,7 +4342,8 @@ function InventoryScreen({ posData }) {
                           <input type="checkbox" checked={linked} onChange={async e => {
                             if (itemModal?.id) {
                               if (e.target.checked) {
-                                await createClient().from('item_modifier_group_links').insert({ item_id: itemModal.id, group_id: mg.id })
+                                const { error: linkErr } = await createClient().from('item_modifier_group_links').insert({ item_id: itemModal.id, group_id: mg.id })
+                                if (linkErr) alert('Skupine ni bilo mogoče povezati z artiklom: ' + linkErr.message)
                               } else {
                                 await createClient().from('item_modifier_group_links').delete().eq('item_id', itemModal.id).eq('group_id', mg.id)
                               }
@@ -4377,8 +4414,10 @@ function InventoryScreen({ posData }) {
                   if (!modGroupModal.name.trim()) return
                   let groupId = modGroupModal.id
                   if (groupId) {
-                    await createClient().from('item_modifier_groups').update({ name:modGroupModal.name, required:modGroupModal.required, multi_select:modGroupModal.multi_select }).eq('id', groupId)
-                    await createClient().from('item_modifiers').delete().eq('group_id', groupId)
+                    const { error: mgErr } = await createClient().from('item_modifier_groups').update({ name:modGroupModal.name, required:modGroupModal.required, multi_select:modGroupModal.multi_select }).eq('id', groupId)
+                    if (mgErr) { alert('Skupine ni bilo mogoče shraniti: ' + mgErr.message); return }
+                    const { error: mdErr } = await createClient().from('item_modifiers').delete().eq('group_id', groupId)
+                    if (mdErr) { alert('Starih doplačil ni bilo mogoče odstraniti: ' + mdErr.message); return }
                   } else {
                     const { data: mg } = await createClient().from('item_modifier_groups').insert({ business_id:BUSINESS_ID, name:modGroupModal.name, required:modGroupModal.required, multi_select:modGroupModal.multi_select }).select().single()
                     groupId = mg?.id
@@ -4428,8 +4467,10 @@ function InventoryScreen({ posData }) {
                   if (!modGroupModal.name.trim()) return
                   let groupId = modGroupModal.id
                   if (groupId) {
-                    await createClient().from('item_modifier_groups').update({ name:modGroupModal.name, required:modGroupModal.required, multi_select:modGroupModal.multi_select }).eq('id', groupId)
-                    await createClient().from('item_modifiers').delete().eq('group_id', groupId)
+                    const { error: mgErr } = await createClient().from('item_modifier_groups').update({ name:modGroupModal.name, required:modGroupModal.required, multi_select:modGroupModal.multi_select }).eq('id', groupId)
+                    if (mgErr) { alert('Skupine ni bilo mogoče shraniti: ' + mgErr.message); return }
+                    const { error: mdErr } = await createClient().from('item_modifiers').delete().eq('group_id', groupId)
+                    if (mdErr) { alert('Starih doplačil ni bilo mogoče odstraniti: ' + mdErr.message); return }
                   } else {
                     const { data: mg } = await createClient().from('item_modifier_groups').insert({ business_id:BUSINESS_ID, name:modGroupModal.name, required:modGroupModal.required, multi_select:modGroupModal.multi_select }).select().single()
                     groupId = mg?.id
@@ -4525,7 +4566,7 @@ function OpenCashModal({ posData, auth, onClose, onOpened }) {
       const sessionNumber = (allSessions || []).findIndex(s => s.id === session!.id) + 1
 
       // Org za izpis
-      const { data: member } = await createClient().from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+      const member = await getActiveMembership().then(m => m ? { org_id: m.org_id } : null) // POPRAVLJENO 16.8.2026: vec-org varno
       const { data: org } = member ? await createClient().from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
       const cashierName = user.email?.split('@')[0] || ''
 
@@ -4611,7 +4652,7 @@ function VmesnoStanjeModal({ session, posData, auth, onClose }) {
     try {
       const db = createClient()
       const { data: { user } } = await createClient().auth.getUser()
-      const { data: member } = user ? await createClient().from('org_members').select('org_id').eq('user_id', user.id).maybeSingle() : { data: null }
+      const member = user ? await getActiveMembership().then(m => m ? { org_id: m.org_id } : null) : null // POPRAVLJENO 16.8.2026: vec-org varno
       const { data: org } = member ? await createClient().from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
       const { data: allSessions } = await createClient().from('cash_sessions').select('id').eq('business_id', BUSINESS_ID).order('created_at', { ascending: true })
       const sessionNumber = (allSessions || []).findIndex(s => s.id === session.id) + 1
@@ -4723,7 +4764,7 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
       if (err) throw new Error(err)
 
       // Pridobi org za izpis
-      const { data: member } = await createClient().from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+      const member = await getActiveMembership().then(m => m ? { org_id: m.org_id } : null) // POPRAVLJENO 16.8.2026: vec-org varno
       const { data: org } = member ? await createClient().from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
       // Prenesi dnevni promet POS blagajne v KPO knjigo (izdelki/storitve loceno)
       if (member) {
@@ -5000,7 +5041,8 @@ function ZReportModal({ posData, onClose }) {
           })
         })
         // Označi Z-poročilo kot poslano
-        await createClient().from('z_reports').update({ sent_to_racunko: true }).eq('id', zReport?.id)
+        const { error: zSyncErr } = await createClient().from('z_reports').update({ sent_to_racunko: true }).eq('id', zReport?.id)
+        if (zSyncErr) console.error('Z-porocila ni bilo mogoce oznaciti kot poslano:', zSyncErr)
       } catch (syncErr) {
         console.warn('Sync z računko.si ni uspel:', syncErr)
       }
@@ -5396,7 +5438,7 @@ function VoidModal({ order, lines, payment, posData, auth, onClose, onVoided }) 
       }
 
       // 3. Označi order kot storniran
-      await createClient().from('orders').update({
+      const { error: voidErr } = await createClient().from('orders').update({
         voided_at: new Date().toISOString(),
         // POPRAVLJENO (16.8.2026): voided_by je uporabljal Supabase identiteto
         // NAPRAVE (na skupnem terminalu vedno ista oseba), ne PIN-preverjene
@@ -5407,6 +5449,9 @@ function VoidModal({ order, lines, payment, posData, auth, onClose, onVoided }) 
         void_furs_zoi: fursData.zoi || null,
         status: 'voided',
       }).eq('id', order.id)
+      // POPRAVLJENO (16.8.2026): prej brez preverbe - ce oznaka storna spodleti,
+      // je uporabnik vseeno videl potrdilo, racun pa je ostal veljaven.
+      if (voidErr) throw new Error('Storna ni bilo mogoče zabeležiti: ' + voidErr.message)
 
       // 4. Natisni storno račun
       const { data: org } = member ? await createClient().from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
@@ -5816,7 +5861,7 @@ function OrdersScreen({ posData, auth }) {
     try {
       const { data: { user } } = await db.auth.getUser()
       if (user) {
-        const { data: member } = await db.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+        const member = await getActiveMembership().then(m => m ? { org_id: m.org_id } : null) // POPRAVLJENO 16.8.2026: vec-org varno
         if (member) {
           const { data: org } = await db.from('organizations').select('*').eq('id', member.org_id).single()
           orgData = org
@@ -6063,14 +6108,16 @@ function OrdersScreen({ posData, auth }) {
                   try {
                     const { data: { user } } = await db.auth.getUser()
                     if (user) {
-                      const { data: member } = await db.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+                      const member = await getActiveMembership().then(m => m ? { org_id: m.org_id } : null) // POPRAVLJENO 16.8.2026: vec-org varno
                       if (member) {
                         const { data: org } = await db.from('organizations').select('*').eq('id', member.org_id).single()
                         orgData = org
                         const { data: premise } = await db.from('business_premises').select('*').eq('org_id', member.org_id).eq('is_active', true).limit(1).maybeSingle()
                         premiseData = premise
                       }
-                      const { data: me } = await db.from('org_members').select('display_name').eq('user_id', user.id).maybeSingle()
+                      // POPRAVLJENO (16.8.2026): maybeSingle() bi vrgel napako pri
+                      // uporabniku, ki je clan vec organizacij - omejimo na aktivno.
+                      const { data: me } = await db.from('org_members').select('display_name').eq('user_id', user.id).eq('org_id', member.org_id).maybeSingle()
                       cashierName = me?.display_name || user.email?.split('@')[0] || ''
                     }
                   } catch {}
@@ -6348,11 +6395,14 @@ function InventuraScreen({ posData, auth }) {
         if (upErr) throw new Error(`Napaka pri posodabljanju "${line.item_name}": ${upErr.message}`)
       }
 
-      await db.from('inventory_sessions').update({
+      const { error: closeInvErr } = await db.from('inventory_sessions').update({
         status: 'closed',
         closed_at: new Date().toISOString(),
         total_differences: diffs,
       }).eq('id', activeSession.id)
+      // POPRAVLJENO (16.8.2026): prej brez preverbe - zaloge so bile posodobljene,
+      // inventura pa je ostala odprta, uporabnik pa je videl "zakljucena".
+      if (closeInvErr) throw new Error('Inventure ni bilo mogoče zaključiti: ' + closeInvErr.message)
 
       posData.refresh()
       setActiveSession(null)
@@ -6469,8 +6519,12 @@ function InventuraScreen({ posData, auth }) {
                       </button>
                       <button onClick={async()=>{
                         if (!confirm('Izbrišem inventuro?')) return
-                        await createClient().from('inventory_lines').delete().eq('session_id', s.id)
-                        await createClient().from('inventory_sessions').delete().eq('id', s.id)
+                        // POPRAVLJENO (16.8.2026): prej brez preverbe napak - inventura
+                        // je lahko ostala v seznamu, uporabnik pa je mislil, da je izbrisana.
+                        const { error: linesErr } = await createClient().from('inventory_lines').delete().eq('session_id', s.id)
+                        if (linesErr) { alert('Napaka pri brisanju vrstic: ' + linesErr.message); return }
+                        const { error: sessErr } = await createClient().from('inventory_sessions').delete().eq('id', s.id)
+                        if (sessErr) { alert('Napaka pri brisanju inventure: ' + sessErr.message); return }
                         await loadSessions()
                         showToast('Inventura izbrisana')
                       }} style={{ ...btnS, padding:'8px 10px', fontSize:12, color:T.danger }}>
@@ -6597,7 +6651,10 @@ function InventuraScreen({ posData, auth }) {
                         onChange={async e => {
                           const note = e.target.value
                           setLines(prev => prev.map(l => l.id===line.id ? {...l,note} : l))
-                          await createClient().from('inventory_lines').update({ note }).eq('id', line.id)
+                          // POPRAVLJENO (16.8.2026): prej brez preverbe napake -
+                          // opomba je izginila ob naslednjem nalaganju inventure.
+                          const { error: noteErr } = await createClient().from('inventory_lines').update({ note }).eq('id', line.id)
+                          if (noteErr) alert('Opombe ni bilo mogoče shraniti: ' + noteErr.message)
                         }}
                         placeholder="opomba..."
                         style={{ width:'100%', minWidth:100, padding:'4px 8px', borderRadius:6, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:11, background:T.inputBg, outline:'none' }}
@@ -7087,7 +7144,8 @@ function StaffSection({ posData }) {
 
   async function remove(id, name) {
     if (!confirm(`Izbrišem ${name}?`)) return
-    await createClient().from('staff').update({ active:false }).eq('id', id)
+    const { error: staffErr } = await createClient().from('staff').update({ active:false }).eq('id', id)
+    if (staffErr) { showToast('Zaposlenega ni bilo mogoče deaktivirati: ' + staffErr.message, false); return }
     posData.refresh()
     showToast('Zaposleni izbrisan')
   }
@@ -7475,7 +7533,8 @@ function CatalogSection({ posData }) {
 
   async function deleteCat(id, name) {
     if (!confirm(`Izbrišem kategorijo "${name}"? Artikli ostanejo brez kategorije.`)) return
-    await createClient().from('categories').delete().eq('id',id)
+    const { error: catDelErr } = await createClient().from('categories').delete().eq('id',id)
+    if (catDelErr) { showToast('Kategorije ni bilo mogoče izbrisati: ' + catDelErr.message, false); return }
     posData.refresh(); showToast('Kategorija izbrisana')
   }
 
@@ -7508,7 +7567,8 @@ function CatalogSection({ posData }) {
       }
       // Shrani normativ če je recipe tip
       if (itemType === 'recipe' && savedId) {
-        await createClient().from('item_ingredients').delete().eq('item_id', savedId)
+        const { error: recErr } = await createClient().from('item_ingredients').delete().eq('item_id', savedId)
+        if (recErr) throw recErr
         const normLines = (itemModal.normativ||[]).filter(n=>n.ingredient_id&&n.qty_used)
         if (normLines.length > 0) {
           const {error} = await createClient().from('item_ingredients').insert(
@@ -7524,7 +7584,8 @@ function CatalogSection({ posData }) {
 
   async function deleteItem(id, name) {
     if (!confirm(`Izbrišem artikel "${name}"?`)) return
-    await createClient().from('items').update({archived:true}).eq('id',id)
+    const { error: arcErr } = await createClient().from('items').update({archived:true}).eq('id',id)
+    if (arcErr) { showToast('Artikla ni bilo mogoče izbrisati: ' + arcErr.message, false); return }
     posData.refresh(); showToast('Artikel izbrisan')
   }
 
@@ -7745,7 +7806,8 @@ function CatalogSection({ posData }) {
                       <input type="checkbox" checked={linked} onChange={async (e:any) => {
                         if (itemModal?.id) {
                           if (e.target.checked) {
-                            await createClient().from('item_modifier_group_links').insert({ item_id: itemModal.id, group_id: mg.id })
+                            const { error: linkErr } = await createClient().from('item_modifier_group_links').insert({ item_id: itemModal.id, group_id: mg.id })
+                                if (linkErr) alert('Skupine ni bilo mogoče povezati z artiklom: ' + linkErr.message)
                           } else {
                             await createClient().from('item_modifier_group_links').delete().eq('item_id', itemModal.id).eq('group_id', mg.id)
                           }
@@ -8202,7 +8264,8 @@ function PackagesAdminSection({ posData, modal, setModal }) {
 
   async function remove(id, name) {
     if (!confirm(`Izbrišem paket "${name}"?`)) return
-    await createClient().from('package_templates').update({archived:true}).eq('id',id)
+    const { error: tplErr } = await createClient().from('package_templates').update({archived:true}).eq('id',id)
+    if (tplErr) { showToast('Predloge ni bilo mogoče arhivirati: ' + tplErr.message, false); return }
     posData.refresh(); showToast('Paket izbrisan')
   }
 
@@ -8403,7 +8466,12 @@ function SestavineSection({ posData }) {
   async function updateStock(ig) {
     const qty = prompt(`Nova zaloga za ${ig.name} (${ig.unit}):`, ig.stock_qty)
     if (qty === null) return
-    await createClient().from('ingredients').update({ stock_qty: Number(qty) }).eq('id',ig.id)
+    // POPRAVLJENO (16.8.2026): prej brez preverbe vnosa in brez preverbe napake -
+    // vnos "abc" je zapisal NaN, neuspesen zapis pa je ostal neopazen.
+    const qtyNum = Number(String(qty).replace(',', '.'))
+    if (!isFinite(qtyNum) || qtyNum < 0) { showToast('Vnesite veljavno število (npr. 12,5)', false); return }
+    const { error: qtyErr } = await createClient().from('ingredients').update({ stock_qty: qtyNum }).eq('id',ig.id)
+    if (qtyErr) { showToast('Zaloge ni bilo mogoče posodobiti: ' + qtyErr.message, false); return }
     posData.refresh(); showToast('Zaloga posodobljena')
   }
 
@@ -8541,7 +8609,8 @@ function StoritveCrudSection({ posData, modal, setModal }) {
       }
       let linkedItemId = modal.linked_item_id || null
       if (linkedItemId) {
-        await db.from('items').update(itemPayload).eq('id', linkedItemId)
+        const { error: svcItemErr } = await db.from('items').update(itemPayload).eq('id', linkedItemId)
+        if (svcItemErr) throw svcItemErr
       } else {
         const { data: newItem, error: itemErr } = await db.from('items').insert(itemPayload).select().single()
         if (itemErr) throw itemErr
@@ -8573,15 +8642,18 @@ function StoritveCrudSection({ posData, modal, setModal }) {
     if (!confirm(`Izbrišem storitev "${name}"?`)) return
     const db = createClient()
     const { data: svc } = await db.from('services').select('linked_item_id').eq('id', id).maybeSingle()
-    await db.from('services').update({ active: false }).eq('id', id)
+    const { error: svcDeactErr } = await db.from('services').update({ active: false }).eq('id', id)
+    if (svcDeactErr) { showToast('Storitve ni bilo mogoče deaktivirati: ' + svcDeactErr.message, false); return }
     if (svc?.linked_item_id) {
-      await db.from('items').update({ archived: true }).eq('id', svc.linked_item_id)
+      const { error: svcArcErr } = await db.from('items').update({ archived: true }).eq('id', svc.linked_item_id)
+      if (svcArcErr) { showToast('Povezanega artikla ni bilo mogoče arhivirati: ' + svcArcErr.message, false); return }
     }
     posData.refresh(); showToast('Storitev izbrisana (tudi iz prodaje)')
   }
 
   async function toggleActive(svc) {
-    await createClient().from('services').update({ active: !svc.active }).eq('id', svc.id)
+    const { error: svcToggleErr } = await createClient().from('services').update({ active: !svc.active }).eq('id', svc.id)
+    if (svcToggleErr) { showToast('Storitve ni bilo mogoče spremeniti: ' + svcToggleErr.message, false); return }
     posData.refresh()
   }
 
@@ -8678,7 +8750,8 @@ function HappyHourSection({ posData }) {
   useEffect(() => { loadRules() }, [])
 
   async function toggleRule(rule) {
-    await createClient().from('happy_hour_rules').update({ active: !rule.active }).eq('id', rule.id)
+    const { error: hhErr } = await createClient().from('happy_hour_rules').update({ active: !rule.active }).eq('id', rule.id)
+    if (hhErr) { showToast('Pravila ni bilo mogoče spremeniti: ' + hhErr.message, false); return }
     loadRules()
     showToast(rule.active ? 'Pravilo deaktivirano' : 'Pravilo aktivirano')
   }
@@ -8715,7 +8788,8 @@ function HappyHourSection({ posData }) {
 
   async function remove(id) {
     if (!confirm('Izbrišem to pravilo?')) return
-    await createClient().from('happy_hour_rules').delete().eq('id', id)
+    const { error: hhDelErr } = await createClient().from('happy_hour_rules').delete().eq('id', id)
+    if (hhDelErr) { showToast('Pravila ni bilo mogoče izbrisati: ' + hhDelErr.message, false); return }
     loadRules(); showToast('Pravilo izbrisano')
   }
 
@@ -8900,7 +8974,8 @@ function KuhinjaSection({ posData }) {
   }
 
   async function markDone(orderId) {
-    await createClient().from('orders').update({ status: 'ready' }).eq('id', orderId)
+    const { error: doneErr } = await createClient().from('orders').update({ status: 'ready' }).eq('id', orderId)
+    if (doneErr) { showToast('Naročila ni bilo mogoče označiti: ' + doneErr.message, false); return }
     showToast('Naročilo označeno kot pripravljeno ✓')
   }
 
@@ -9294,7 +9369,8 @@ function ProfileSection({ posData }) {
     if (saving) return
     setSaving(true)
     try {
-      await createClient().from('businesses').update({ profile_type: pid }).eq('id', BUSINESS_ID)
+      const { error: profErr } = await createClient().from('businesses').update({ profile_type: pid }).eq('id', BUSINESS_ID)
+    if (profErr) { alert('Profila ni bilo mogoče shraniti: ' + profErr.message); return }
       posData.setBusinessProfile(pid)
     } catch(e) { console.error(e) }
     setSaving(false)
@@ -10375,7 +10451,8 @@ function KlasikApp() {
                     </button>
                     <button onClick={async()=>{
                       if (!confirm('Izbrisem ta shranjeni racun?')) return
-                      await createClient().from('orders').update({ status:'cancelled' }).eq('id', o.id)
+                      const { error: delHeldErr } = await createClient().from('orders').update({ status:'cancelled' }).eq('id', o.id)
+                      if (delHeldErr) { alert('Računa ni bilo mogoče izbrisati: ' + delHeldErr.message); return }
                       const updated = await pos.orders.getHeldOrders()
                       setHeldOrders(updated)
                     }} style={{ padding:'9px 14px', borderRadius:8, border:'1px solid '+T.line, background:'transparent', cursor:'pointer', fontFamily:'inherit', fontSize:12, color:T.danger }}>
@@ -10536,9 +10613,18 @@ function EditPackageModal({ pkg, onClose, onDone }) {
   async function save() {
     setSaving(true)
     const updates = { expires: expires || null }
-    if (pkg.remaining !== null) updates.remaining = remaining === '' ? null : Number(remaining)
-    await createClient().from('customer_packages').update(updates).eq('id', pkg.id)
+    if (pkg.remaining !== null) {
+      // POPRAVLJENO (16.8.2026): prej brez preverbe vnosa - vnos "abc" ali
+      // negativno stevilo je zapisalo NaN oz. negativne obiske.
+      const rem = remaining === '' ? null : Number(remaining)
+      if (rem !== null && (!isFinite(rem) || rem < 0)) { alert('Vnesite veljavno število obiskov (0 ali več).'); setSaving(false); return }
+      updates.remaining = rem
+    }
+    // POPRAVLJENO (16.8.2026): prej brez preverbe napake - uporabnik je videl,
+    // da je shranjeno, tudi ce se v bazi ni nic spremenilo.
+    const { error: editErr } = await createClient().from('customer_packages').update(updates).eq('id', pkg.id)
     setSaving(false)
+    if (editErr) { alert('Kartice ni bilo mogoče shraniti: ' + editErr.message); return }
     onDone()
   }
   return (
@@ -10568,10 +10654,16 @@ function ExtendPackageModal({ pkg, onClose, onDone }) {
   const [saving, setSaving] = useState(false)
   async function save() {
     setSaving(true)
+    // POPRAVLJENO (16.8.2026): prej brez preverbe vnosa - vnos "abc" je dal
+    // Invalid Date in vrgel napako pri toISOString(), ki je nihce ni ujel.
+    const d = Number(days)
+    if (!isFinite(d) || d === 0) { alert('Vnesite veljavno število dni.'); setSaving(false); return }
     const base = pkg.expires ? new Date(pkg.expires) : new Date()
-    base.setDate(base.getDate() + Number(days))
-    await createClient().from('customer_packages').update({ expires: base.toISOString().split('T')[0] }).eq('id', pkg.id)
+    base.setDate(base.getDate() + d)
+    // POPRAVLJENO (16.8.2026): prej brez preverbe napake.
+    const { error: extErr } = await createClient().from('customer_packages').update({ expires: base.toISOString().split('T')[0] }).eq('id', pkg.id)
     setSaving(false)
+    if (extErr) { alert('Veljavnosti ni bilo mogoče podaljšati: ' + extErr.message); return }
     onDone()
   }
   return (
@@ -10600,11 +10692,13 @@ function FreezePackageModal({ pkg, onClose, onDone }) {
   async function save() {
     if (mode === 'until' && !untilDate) return
     setSaving(true)
-    await createClient().from('customer_packages').update({
+    // POPRAVLJENO (16.8.2026): prej brez preverbe napake.
+    const { error: freezeErr } = await createClient().from('customer_packages').update({
       frozen_at: new Date().toISOString(),
       frozen_until: mode === 'until' ? untilDate : null,
     }).eq('id', pkg.id)
     setSaving(false)
+    if (freezeErr) { alert('Kartice ni bilo mogoče zamrzniti: ' + freezeErr.message); return }
     onDone()
   }
   return (
