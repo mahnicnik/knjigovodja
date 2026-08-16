@@ -69,6 +69,19 @@ export async function POST(request: NextRequest) {
     }
 
     const { pdfBase64, fileBase64, mediaType } = await request.json()
+
+    // DODANO (16.8.2026): omejitev velikosti. Prej se je datoteka poslala v AI
+    // brez preverbe - prevelika je pomenila zavrnitev z nerazumljivo napako,
+    // dolgo cakanje in po nepotrebnem porabljen strosek obdelave.
+    const vsebina = pdfBase64 || fileBase64
+    if (vsebina) {
+      const velikostMB = (String(vsebina).length * 3 / 4) / (1024 * 1024)
+      if (velikostMB > 10) {
+        return NextResponse.json({
+          error: `Datoteka je prevelika (${velikostMB.toFixed(1)} MB). Najvecja dovoljena velikost je 10 MB - dokument stisnite ali skenirajte pri nizji locljivosti.`,
+        }, { status: 413 })
+      }
+    }
     const data = fileBase64 || pdfBase64
     const type = mediaType || 'application/pdf'
     if (!data) {

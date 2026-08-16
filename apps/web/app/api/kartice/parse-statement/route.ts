@@ -43,6 +43,16 @@ export async function POST(request: NextRequest) {
     }
 
     const { fileBase64, mediaType } = await request.json()
+
+    // DODANO (16.8.2026): omejitev velikosti - glej parse-payslip.
+    if (fileBase64) {
+      const velikostMB = (String(fileBase64).length * 3 / 4) / (1024 * 1024)
+      if (velikostMB > 10) {
+        return NextResponse.json({
+          error: `Datoteka je prevelika (${velikostMB.toFixed(1)} MB). Najvecja dovoljena velikost je 10 MB.`,
+        }, { status: 413 })
+      }
+    }
     if (!fileBase64 || !mediaType) {
       return NextResponse.json({ error: 'fileBase64 ali mediaType manjka' }, { status: 400 })
     }
