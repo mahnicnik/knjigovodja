@@ -9576,6 +9576,58 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
     posData.refresh()
   }
 
+  // DODANO (16.8.2026): rocno posiljanje obvestila stranki iz POS terminala.
+  // Pokaze, ali je bila stranka ze obvescena in kdaj, ter omogoca zavestno
+  // ponovno posiljanje - prej ni bilo nobenega vpogleda in nobene kontrole.
+  const [posiljam, setPosiljam] = useState<string | null>(null)
+  async function posljiStranki(n: any) {
+    const cust = n.customers
+    if (!cust?.email) { alert('Stranka nima vnesenega e-naslova.'); return }
+    // DODANO (16.8.2026): preverimo, ali je bila stranka o TEJ KARTICI ze
+    // obvescena - tudi ce je slo za DRUGO obvestilo (npr. "potece danes" proti
+    // "potekla 1 dan nazaj"). Samodejno se poslje samo prvo; vsa nadaljnja
+    // zahtevajo zavestno potrditev, da stranke ne zasujemo s sporocili.
+    setPosiljam(n.id)
+    const { data: prejsnja } = await createClient()
+      .from('pos_notifications')
+      .select('email_sent_at, message')
+      .eq('customer_id', n.customer_id)
+      .eq('package_id', n.package_id)
+      .eq('email_sent', true)
+      .order('email_sent_at', { ascending: false })
+      .limit(1)
+    const zadnje = prejsnja?.[0]
+    if (zadnje) {
+      const kdaj = zadnje.email_sent_at ? new Date(zadnje.email_sent_at).toLocaleString('sl-SI') : 'pred kratkim'
+      if (!confirm(`${cust.name} je bil(a) o tej kartici že obveščen(a) ${kdaj}.\n\nPrejeto sporočilo: "${zadnje.message}"\n\nPošljem še eno sporočilo?`)) { setPosiljam(null); return }
+    }
+    try {
+      const res = await fetch('/api/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: cust.email,
+          subject: n.type === 'expired' ? `Vaša karta je potekla` : `Vaša karta kmalu poteče`,
+          customerName: cust.name,
+          packageName: (n.message || '').split(':').slice(1).join(':').trim() || 'kartica',
+          severity: n.severity,
+        }),
+      })
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}))
+        throw new Error(e.error || 'Pošiljanje ni uspelo')
+      }
+      const { error } = await createClient().from('pos_notifications')
+        .update({ email_sent: true, email_sent_at: new Date().toISOString() })
+        .eq('id', n.id)
+      if (error) alert('Sporočilo je poslano, oznake pa ni bilo mogoče shraniti: ' + error.message)
+      posData.refresh()
+    } catch (e: any) {
+      alert('Sporočila ni bilo mogoče poslati: ' + e.message)
+    }
+    setPosiljam(null)
+  }
+
   async function markAllRead() {
     const { error } = await createClient().from('pos_notifications').update({ read:true }).eq('business_id', BUSINESS_ID).eq('dismissed', false)
     if (error) {
@@ -9637,6 +9689,35 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
                   <div style={{ flex:1 }}>
                     <div style={{ fontSize:13, fontWeight: n.read?400:600, lineHeight:1.4 }}>{n.message}</div>
                     <div style={{ fontSize:11, color:T.muted, marginTop:3 }}>{new Date(n.created_at).toLocaleDateString('sl-SI')}</div>
+                    {/* DODANO (16.8.2026): stanje obvescanja stranke + rocno posiljanje */}
+                    {n.customer_id && (
+                      <div style={{ marginTop:6, display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                        {(() => {
+                          // Obvescenost velja za CELOTNO kartico, ne le za to
+                          // obvestilo - stranka je morda prejela sporocilo ob
+                          // prejsnji stopnji ("potece danes" proti "potekla").
+                          const sestra = notifications.find((o: any) =>
+                            o.customer_id === n.customer_id && o.package_id === n.package_id && o.email_sent)
+                          const obvescena = n.email_sent ? n : sestra
+                          if (obvescena) return (
+                            <span style={{ fontSize:11, color:T.accent, fontWeight:600 }}>
+                              ✉ Obveščena {obvescena.email_sent_at ? new Date(obvescena.email_sent_at).toLocaleString('sl-SI', { day:'numeric', month:'numeric', hour:'2-digit', minute:'2-digit' }) : ''}
+                            </span>
+                          )
+                          return (
+                            <span style={{ fontSize:11, color:T.muted }}>
+                              {n.customers?.email ? '✉ Še ni obveščena' : '✉ Brez e-naslova'}
+                            </span>
+                          )
+                        })()}
+                        {n.customers?.email && (
+                          <button onClick={()=>posljiStranki(n)} disabled={posiljam===n.id}
+                            style={{ fontSize:11, fontWeight:600, color:T.accent, background:'none', border:'1px solid '+T.line, borderRadius:6, padding:'2px 8px', cursor:posiljam===n.id?'default':'pointer', fontFamily:'inherit', opacity:posiljam===n.id?0.5:1 }}>
+                            {posiljam===n.id ? 'Pošiljam…' : (n.email_sent || notifications.some((o: any) => o.customer_id === n.customer_id && o.package_id === n.package_id && o.email_sent)) ? 'Pošlji znova' : 'Pošlji stranki'}
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <button onClick={()=>dismiss(n.id)} title="Opusti" style={{ background:'none', border:0, cursor:'pointer', color:T.muted, padding:2, flexShrink:0 }}>✕</button>
                 </div>

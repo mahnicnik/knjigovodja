@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
       const { data: notifs } = await supabase
         .from('pos_notifications')
         .select(`
-          id, message, severity, type,
+          id, message, severity, type, customer_id, package_id,
           customers (id, name, email, notification_email),
           customer_packages (id, expires, name, template_type)
         `)
@@ -74,6 +74,28 @@ export async function GET(req: NextRequest) {
 
         // Preskoči če ni emaila ali je opt-out
         if (!customer?.email || customer?.notification_email === false) {
+          continue
+        }
+
+        // DODANO (16.8.2026): SAMODEJNO se poslje SAMO ENO sporocilo na stranko
+        // in kartico. Brez tega bi stranka pri poteku kartice prejela vec
+        // sporocil zapored (potece cez 3 dni, potece danes, potekla 1 dan
+        // nazaj...), ker je vsako svoje obvestilo. Vsa nadaljnja sporocila se
+        // posljejo LE ROCNO iz POS terminala, s potrditvijo.
+        const { data: zeObvescena } = await supabase
+          .from('pos_notifications')
+          .select('id')
+          .eq('customer_id', notif.customer_id)
+          .eq('package_id', notif.package_id)
+          .eq('email_sent', true)
+          .limit(1)
+        if (zeObvescena?.length) {
+          results.push({
+            customer: customer.name,
+            package: pkg?.name,
+            status: 'skipped',
+            reason: 'Stranka je bila o tej kartici že samodejno obveščena — nadaljnja sporočila pošljite ročno.',
+          })
           continue
         }
 
@@ -101,10 +123,15 @@ export async function GET(req: NextRequest) {
 
           if (emailRes.ok) {
             // Označi kot poslano
-            await supabase
+            // DODANO (16.8.2026): zabelezimo tudi CAS posiljanja, da je v POS
+            // terminalu vidno, kdaj je bila stranka obvescena.
+            const { error: markErr } = await supabase
               .from('pos_notifications')
-              .update({ email_sent: true, read: false })
+              .update({ email_sent: true, email_sent_at: new Date().toISOString(), read: false })
               .eq('id', notif.id)
+            // POPRAVLJENO (16.8.2026): prej brez preverbe - ce se oznaka ne
+            // shrani, bi stranka naslednji dan prejela ISTO sporocilo znova.
+            if (markErr) console.error('Obvestilo', notif.id, 'je bilo poslano, oznake pa NI bilo mogoce shraniti - stranka lahko prejme podvojeno sporocilo:', markErr)
 
             results.push({
               customer: customer.name,
