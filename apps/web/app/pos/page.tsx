@@ -67,7 +67,10 @@ function vatBreakdownForCart(cart, scale = 1) {
 // STATIČNA KONFIGURACIJA (ne gre v DB)
 // ================================================================
 const CFG = {
-  business: { name: 'ŠIRM fitness&bar', location: 'Gorenja vas' },
+  // POPRAVLJENO (16.8.2026): tu je bilo TRDO ZAPISANO ime "ŠIRM fitness&bar".
+  // Vsak nov uporabnik je na svoji blagajni videl tuje ime podjetja - v glavi
+  // in na zaklenjenem zaslonu. Ime zdaj prihaja iz organizacije uporabnika.
+  business: { name: '', location: '' },
   paymentMethods: [
     { id: 'cash', name: 'Gotovina', icon: '💶' },
     { id: 'card', name: 'Kartica', icon: '💳' },
@@ -200,6 +203,8 @@ function usePosData() {
   // konzolo - uporabnik je obtical na nalaganju brez pojasnila in ni vedel,
   // ali je kriva prijava, pravice ali kaj tretjega.
   const [bizNapaka, setBizNapaka] = useState<string | null>(null)
+  // DODANO (16.8.2026): ime podjetja iz organizacije - prej trdo zapisano.
+  const [businessName, setBusinessName] = useState('')
 
   const refresh = useCallback(() => setReloadKey(k => k + 1), [])
 
@@ -215,6 +220,7 @@ function usePosData() {
           return
         }
         const { data: o } = await sb2.from('organizations').select('name').eq('id', mem.org_id).single()
+        setBusinessName(o?.name || '')
         await resolveBusinessId(mem.org_id, o?.name || 'Moj biznis', user.id)
         setBizReady(true)
       } catch (e: any) {
@@ -283,7 +289,7 @@ function usePosData() {
     return [{ id: 'cat-fav', name: 'Priljubljeno', icon: '★', color: '#E9B949' }, ...categories]
   }, [categories])
 
-  return { categories: categoriesWithFav, items, spaces, customers, staffList, packageTemplates, services, ingredients, notifications, setNotifications, todayStats, businessProfile, setBusinessProfile, happyHourRules, loading, itemsIn, refresh, bizNapaka }
+  return { categories: categoriesWithFav, items, spaces, customers, staffList, packageTemplates, services, ingredients, notifications, setNotifications, todayStats, businessProfile, setBusinessProfile, happyHourRules, loading, itemsIn, refresh, bizNapaka, businessName }
 }
 
 // ================================================================
@@ -423,7 +429,7 @@ const KI = ({ name, size = 18, strokeWidth = 1.7 }) => {
 // ================================================================
 // LOCK SCREEN
 // ================================================================
-function LockScreen({ auth }) {
+function LockScreen({ auth, imePodjetja, jePrivzetiPin }) {
   const [pin, setPin] = useState('')
   const [error, setError] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -434,16 +440,20 @@ function LockScreen({ auth }) {
   async function tryUnlock(fullPin) {
     setLoading(true)
     const ok = await auth.unlock(fullPin)
-    if (!ok) { setError(true); setPin(''); setTimeout(() => setError(false), 1200) }
+    // POPRAVLJENO (16.8.2026): sporocilo o napacni kodi je izginilo po 1,2 s,
+    // poleg tega ga je NASLEDNJI pritisk tipke takoj izbrisal - uporabnik ni
+    // videl nicesar in ni vedel, ali je zatipkal ali sistem ne dela.
+    // Zdaj ostane vidno 4 sekunde in se ne izbrise ob naslednjem pritisku,
+    // ampak sele ko se sprozi nov poskus.
+    if (!ok) { setError(true); setPin(''); setTimeout(() => setError(false), 4000) }
     setLoading(false)
   }
 
   function press(d) {
     if (pin.length >= 6 || loading) return
-    setError(false)
     const next = pin + d
     setPin(next)
-    setTimeout(() => tryUnlock(next), 800)
+    setTimeout(() => { setError(false); tryUnlock(next) }, 800)
   }
 
   function backspace() { setError(false); setPin(p => p.slice(0, -1)) }
@@ -456,7 +466,7 @@ function LockScreen({ auth }) {
       <div style={{ position:'absolute', top:32, left:0, right:0, display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
           <div style={{ width:36, height:36, borderRadius:9, background:T.brand, color:T.header, fontWeight:800, fontSize:18, display:'flex', alignItems:'center', justifyContent:'center' }}>R</div>
-          <div style={{ fontSize:18, fontWeight:700 }}>{CFG.business.name}</div>
+          <div style={{ fontSize:18, fontWeight:700 }}>{imePodjetja || 'Blagajna'}</div>
         </div>
       </div>
 
@@ -471,12 +481,27 @@ function LockScreen({ auth }) {
 
       <div style={{ textAlign:'center', marginBottom:22 }}>
         <div style={{ fontSize:13, opacity:0.65, fontWeight:600, marginBottom:14, letterSpacing:'0.04em' }}>Vnesite PIN za vstop</div>
-        <div style={{ display:'flex', gap:10, justifyContent:'center' }}>
-          {Array.from({length:6}).map((_,i) => (
-            <div key={i} style={{ width:14, height:14, borderRadius:999, background: pin.length > i ? (error ? '#ff5577' : T.brand) : 'rgba(246,241,232,0.15)', border:'1.5px solid '+(pin.length > i ? 'transparent' : 'rgba(246,241,232,0.3)'), transition:'background .15s' }}/>
-          ))}
+        {/* POPRAVLJENO (16.8.2026): prej vedno SEST krogcev, PIN-i pa so lahko
+            dolgi od ene do sestih stevk. Zaslon je nakazoval sestmestno kodo,
+            preverjanje pa se je sprozilo prej - videti je bilo, kot da se ni
+            zgodilo nic. Zdaj se prikaze en krogec na vneseno stevko. */}
+        <div style={{ display:'flex', gap:10, justifyContent:'center', minHeight:14, alignItems:'center' }}>
+          {pin.length === 0
+            ? <div style={{ fontSize:12, opacity:0.4 }}>· · · ·</div>
+            : Array.from({length: pin.length}).map((_,i) => (
+                <div key={i} style={{ width:14, height:14, borderRadius:999, background: error ? '#ff5577' : T.brand, transition:'background .15s' }}/>
+              ))}
         </div>
         {error && <div style={{ fontSize:13, color:'#ff5577', marginTop:14, fontWeight:700 }}>Napačna koda</div>}
+        {/* DODANO (16.8.2026): nov uporabnik ne bi vedel, s katerim PIN-om
+            sploh vstopiti - ob postavitvi blagajne se ustvari lastnik s PIN
+            1111. Namig se pokaze samo, dokler je ta privzeti PIN se v rabi. */}
+        {!error && jePrivzetiPin && (
+          <div style={{ fontSize:12, opacity:0.75, marginTop:14, lineHeight:1.6, maxWidth:300 }}>
+            Prva prijava: PIN <b style={{ letterSpacing:'0.1em' }}>1111</b><br/>
+            <span style={{ opacity:0.7 }}>Po vstopu ga takoj spremenite v Nastavitve → Osebje.</span>
+          </div>
+        )}
         {loading && <div style={{ fontSize:13, opacity:0.6, marginTop:14 }}>Preverjam...</div>}
       </div>
 
@@ -10299,6 +10324,11 @@ function KlasikApp() {
   const [showCloseCash, setShowCloseCash] = React.useState(false)
 
   React.useEffect(() => {
+    // POPRAVLJENO (16.8.2026): pocakaj, da je business_id razrescen. Prej se
+    // je poizvedba sprozila TAKOJ ob izrisu, ko je bil se prazen - streznik je
+    // vrnil napako 400 ("business_id=eq." brez vrednosti), v konzoli pa se je
+    // ob vsakem odprtju blagajne pojavila napaka "getCurrentSession error".
+    if (!posData.businessName && posData.loading) return
     // POPRAVLJENO (13.8.2026, KRITICNO): posreduje PRAVO PIN identiteto
     // (auth.user.id) - prej brez parametra, zato je vsak videl isto,
     // deljeno sejo ne glede na to, kdo je prijavljen.
@@ -10306,7 +10336,7 @@ function KlasikApp() {
       setCashSession(s)
       setSessionLoaded(true)
     })
-  }, [auth.user?.id])
+  }, [auth.user?.id, posData.loading, posData.businessName])
 
   function refreshSession() {
     getCurrentSession(auth.user?.id).then(s => setCashSession(s))
@@ -10363,7 +10393,7 @@ function KlasikApp() {
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
           <div style={{ width:32, height:32, borderRadius:8, background:T.brand, color:T.header, fontWeight:800, fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>R</div>
           <div style={{ lineHeight:1.1 }}>
-            <div style={{ fontWeight:700, fontSize:14 }}>{CFG.business.name}</div>
+            <div style={{ fontWeight:700, fontSize:14 }}>{posData.businessName || 'Blagajna'}</div>
             <div style={{ fontSize:11, opacity:0.65, marginTop:2 }}>{profile.name}</div>
           </div>
         </div>
@@ -10668,7 +10698,7 @@ function KlasikApp() {
       {showTableActions && activeTable && <TableActionsModal activeTable={activeTable} posData={posData} auth={auth} onClose={()=>setShowTableActions(false)} onDone={()=>{ switchToTable(null); posData.refresh() }}/>}
       {showCloseCash && cashSession && <CloseCashModal session={cashSession} posData={posData} auth={auth} onClose={()=>setShowCloseCash(false)} onClosed={()=>{ setCashSession(null); refreshSession() }}/>}
       
-      {auth.locked && <LockScreen auth={auth}/>}
+      {auth.locked && <LockScreen auth={auth} imePodjetja={posData.businessName} jePrivzetiPin={posData.staffList?.length === 1 && posData.staffList[0]?.pin === '1111'}/>}
     </div>
   )
 }
