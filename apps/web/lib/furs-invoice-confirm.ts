@@ -141,7 +141,15 @@ export async function confirmIssuedInvoiceWithFurs(
   // zato uporabimo isti atomaren RPC kot POS in storno.
   const { data: seqData, error: seqError } = usesWebSequence
     ? await supabase.rpc('get_next_web_invoice_number')
-    : await supabase.rpc('get_next_pos_invoice_number')
+    : await (async () => {
+        // POPRAVLJENO (16.8.2026): stevilka se dodeli PO PODJETJU. Racuni iz
+        // portala niso vezani na POS blagajno, zato jo poiscemo prek organizacije.
+        const { data: orgRow } = await supabase
+          .from('organizations').select('pos_business_id').eq('id', orgId).maybeSingle()
+        return supabase.rpc('get_next_pos_invoice_number', {
+          p_business_id: orgRow?.pos_business_id ?? orgId,
+        })
+      })()
   if (seqError) {
     return { success: false, error: 'Napaka pri generiranju stevilke racuna: ' + seqError.message }
   }

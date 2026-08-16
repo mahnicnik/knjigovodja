@@ -4840,7 +4840,7 @@ function VmesnoStanjeModal({ session, posData, auth, onClose }) {
       const { data: org } = member ? await createClient().from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
       const { data: allSessions } = await createClient().from('cash_sessions').select('id').eq('business_id', BUSINESS_ID).order('created_at', { ascending: true })
       const sessionNumber = (allSessions || []).findIndex(s => s.id === session.id) + 1
-      const cashierName = user?.email?.split('@')[0] || ''
+      const cashierName = auth?.user?.name || user?.email?.split('@')[0] || ''
 
       const html = buildXReportReceipt({
         session,
@@ -4980,7 +4980,7 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
       }
       const { data: allSessions } = await createClient().from('cash_sessions').select('id').eq('business_id', BUSINESS_ID).order('created_at', { ascending: true })
       const sessionNumber = (allSessions || []).findIndex(s => s.id === session.id) + 1
-      const cashierName = user.email?.split('@')[0] || ''
+      const cashierName = auth?.user?.name || user.email?.split('@')[0] || ''
 
       // Natisni Z-poročilo
       const updatedSession = { ...session, closed_at: new Date().toISOString(), closing_note: note }
@@ -5676,7 +5676,7 @@ function VoidModal({ order, lines, payment, posData, auth, onClose, onVoided }) 
 
       // 4. Natisni storno račun
       const { data: org } = member ? await createClient().from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
-      const cashierName = user.email?.split('@')[0] || ''
+      const cashierName = auth?.user?.name || user.email?.split('@')[0] || ''
       const html = buildStornoReceiptHTML({
         order, lines, payment, org, cashierName,
         voidEor: fursData.eor,
@@ -6076,7 +6076,13 @@ function OrdersScreen({ posData, auth }) {
     (o.payments?.[0]?.furs_eor || '').toLowerCase().includes(search.toLowerCase())
   )
 
-  const totalFiltered = filtered.reduce((s,o) => s + Number(o.total||0), 0)
+  // POPRAVLJENO (16.8.2026): vsota je vstevala tudi STORNIRANE racune, zato je
+  // stevec nad seznamom kazal promet, ki ga v resnici ni bilo. Zakljucek blagajne
+  // jih je pravilno izvzel, seznam pa ne - dve razlicni stevilki za isto stvar.
+  const totalFiltered = filtered
+    .filter(o => o.status !== 'voided' && !o.voided_at)
+    .reduce((s,o) => s + Number(o.total||0), 0)
+  const stStorniranih = filtered.filter(o => o.status === 'voided' || o.voided_at).length
 
   async function printReceipt(order, lines, payment) {
     // Pridobi org + premise + cashier za glavo računa
@@ -6260,7 +6266,10 @@ function OrdersScreen({ posData, auth }) {
         </div>
         <div style={{ padding:'10px 16px', borderBottom:'1px solid '+T.line, display:'flex', gap:10, alignItems:'center' }}>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Išči po številki ali EOR..." style={{ flex:1, padding:'7px 10px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:12, background:T.inputBg, outline:'none' }}/>
-          <div style={{ fontSize:12, color:T.muted, whiteSpace:'nowrap' }}>{filtered.length} računov · €{totalFiltered.toFixed(2)}</div>
+          <div style={{ fontSize:12, color:T.muted, whiteSpace:'nowrap' }}>
+            {filtered.length} računov · €{totalFiltered.toFixed(2)}
+            {stStorniranih > 0 && <span style={{ color:T.danger }}> · {stStorniranih} storn.</span>}
+          </div>
         </div>
         <div style={{ flex:1, overflowY:'auto' }}>
           {loading ? (
@@ -6278,13 +6287,22 @@ function OrdersScreen({ posData, auth }) {
                     <span style={{ fontSize:10, padding:'2px 6px', borderRadius:4, background:T.chipBg, color:T.muted, fontWeight:600 }}>
                       {METHOD_LABELS[payment?.method] || '—'}
                     </span>
-                    {'' && <span style={{ fontSize:10, color:T.muted }}>{o.spaces.name}</span>}
+                    {/* DODANO (16.8.2026): oznaka storna. Prej je storniran racun
+                        na seznamu izgledal enako kot veljaven - z zneskom in brez
+                        opozorila; storno je bil viden sele ob odprtju. */}
+                    {(o.status === 'voided' || o.voided_at) && (
+                      <span style={{ fontSize:10, padding:'2px 6px', borderRadius:4, background:'rgba(168,50,50,0.15)', color:T.danger, fontWeight:700 }}>
+                        STORNIRAN
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>
                     {new Date(o.closed_at).toLocaleString('sl-SI')}
                   </div>
                 </div>
-                <div style={{ fontWeight:800, fontSize:15, fontVariantNumeric:'tabular-nums' }}>€{Number(o.total).toFixed(2)}</div>
+                <div style={{ fontWeight:800, fontSize:15, fontVariantNumeric:'tabular-nums',
+                  textDecoration:(o.status==='voided'||o.voided_at)?'line-through':'none',
+                  color:(o.status==='voided'||o.voided_at)?T.muted:'inherit' }}>€{Number(o.total).toFixed(2)}</div>
               </div>
             )
           })}
@@ -6299,7 +6317,15 @@ function OrdersScreen({ posData, auth }) {
           posData={posData}
           auth={auth}
           onClose={()=>setShowVoid(false)}
-          onVoided={()=>{ setSelectedOrder(null); loadOrders() }}
+          onVoided={()=>{
+            setSelectedOrder(null)
+            loadOrders()
+            // DODANO (16.8.2026): osvezi tudi GLAVO (PROMET, RACUNI) in zalogo.
+            // Prej se je osvezil samo seznam, glava pa je se naprej kazala
+            // promet storniranega racuna - dnevni promet v glavi ni ustrezal
+            // niti seznamu niti zakljucku blagajne.
+            posData.refresh()
+          }}
         />
       )}
       {showRefund && selectedOrder && (
@@ -6309,7 +6335,7 @@ function OrdersScreen({ posData, auth }) {
           payment={orderPayment}
           auth={auth}
           onClose={()=>setShowRefund(false)}
-          onRefunded={()=>{ setSelectedOrder(null); loadOrders() }}
+          onRefunded={()=>{ setSelectedOrder(null); loadOrders(); posData.refresh() }}
         />
       )}
       {showChangePayment && selectedOrder && orderPayment && (

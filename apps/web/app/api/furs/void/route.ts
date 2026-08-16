@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
     const stornoBusinessId = stornoOrder?.business_id
 
-    const { data: seqData, error: seqError } = await supabase.rpc('get_next_pos_invoice_number')
+    const { data: seqData, error: seqError } = await supabase.rpc('get_next_pos_invoice_number', { p_business_id: stornoBusinessId })
     if (seqError) {
       return NextResponse.json({ error: 'Napaka pri generiranju številke kredit note: ' + seqError.message }, { status: 500 })
     }

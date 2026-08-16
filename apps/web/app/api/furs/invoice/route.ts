@@ -131,7 +131,10 @@ export async function POST(req: NextRequest) {
     // Atomarno stevilo preko DB sekvence (RPC get_next_pos_invoice_number).
     // Prejsnja implementacija je stela vrstice "preberi-nato-povecaj", kar je
     // povzrocalo kolizije stevilk pri hitro zaporednih/socasnih placilih.
-    const { data: seqData, error: seqError } = await supabase.rpc('get_next_pos_invoice_number')
+    // POPRAVLJENO (16.8.2026): stevilka se dodeli PO PODJETJU. Prej je bilo
+    // zaporedje globalno za vsa podjetja - novo podjetje bi dobilo stevilko 351
+    // in imelo nepojasnjeno vrzel od 1 do 350, kar FURS zahteva pojasniti.
+    const { data: seqData, error: seqError } = await supabase.rpc('get_next_pos_invoice_number', { p_business_id: order.business_id })
     if (seqError) {
       return NextResponse.json({ error: 'Napaka pri generiranju številke računa: ' + seqError.message }, { status: 500 })
     }
