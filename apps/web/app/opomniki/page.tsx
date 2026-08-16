@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
-import { LEGAL_DEFAULT_INTEREST_RATE } from '@/lib/tax-constants'
+import { LEGAL_DEFAULT_INTEREST_RATE, legalInterestRateOn } from '@/lib/tax-constants'
 import AppLayout from '@/components/AppLayout'
 
 // POPRAVLJENO (30.7.2026): prej trdo kodirana 11% - napacna za oba dela
@@ -13,10 +13,26 @@ import AppLayout from '@/components/AppLayout'
 const LEGAL_INTEREST_RATE = LEGAL_DEFAULT_INTEREST_RATE
 
 function calcInterest(amount: number, dueDateStr: string): number {
+  // POPRAVLJENO (16.8.2026): dva popravka.
+  // 1) Prej ena sama obrestna mera za celotno zamudo. Mera se spremeni vsako
+  //    polletje (10,15% do 30.6.2026, 10,40% od 1.7.2026), zato je treba vsak
+  //    dan obracunati po meri, ki je veljala TISTI dan.
+  // 2) Dodana omejitev po 376. clenu Obligacijskega zakonika (ultra alterum
+  //    tantum): obresti nehajo teci, ko njihova vsota doseze glavnico. Prej
+  //    so rasle neomejeno, kar bi pri dolgih zamudah pomenilo previsok zahtevek.
   const dueDate = new Date(dueDateStr)
   const today = new Date()
-  const daysLate = Math.max(0, Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)))
-  return Math.round(amount * LEGAL_INTEREST_RATE * (daysLate / 365) * 100) / 100
+  if (today <= dueDate) return 0
+
+  let obresti = 0
+  const dan = new Date(dueDate)
+  dan.setDate(dan.getDate() + 1) // obresti tecejo od PRVEGA dne po zapadlosti
+  while (dan <= today) {
+    obresti += amount * legalInterestRateOn(dan) / 365
+    if (obresti >= amount) return Math.round(amount * 100) / 100
+    dan.setDate(dan.getDate() + 1)
+  }
+  return Math.round(obresti * 100) / 100
 }
 
 function daysOverdue(dueDateStr: string): number {
@@ -47,6 +63,9 @@ export default function OpomnikPage() {
         .select('*')
         .eq('org_id', o.id)
         .eq('status', 'sent')
+        // DODANO (16.8.2026): brez tega bi lahko stranka prejela opomin za
+        // racun iz peskovnika (DEMO fiskalizacija), ki ni pravi.
+        .or('zoi.is.null,zoi.not.like.DEMO-%')
         .lt('due_date', today)
         .order('due_date', { ascending: true })
       setOverdueInvoices(data || [])

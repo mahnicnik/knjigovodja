@@ -112,9 +112,20 @@ export default function DohodninaPage() {
           .from('receipts')
           .select('amount_net')
           .eq('org_id', o.id)
+        // DODANO (16.8.2026): promet in stroski iz knjige (POS blagajna, banka,
+        // kartice, place). Prej so se steli SAMO izdani racuni - pri gostinstvu
+        // gre vecina prometa mimo njih, zato je bila ocena dohodnine mocno
+        // prenizka. Filter invoice_id/receipt_id prepreci dvojno stetje.
+        const { data: kpo } = await supabase
+          .from('kpo_entries')
+          .select('income, expense, entry_type, invoice_id, receipt_id')
+          .eq('org_id', o.id)
+        const kpoOwn = (kpo || []).filter((e: any) => !e.invoice_id && !e.receipt_id)
 
-        const totalRevenue = invoices?.reduce((s: number, i: any) => s + Number(i.amount_net), 0) || 0
-        const totalExpenses = receipts?.reduce((s: number, r: any) => s + Number(r.amount_net), 0) || 0
+        const totalRevenue = (invoices?.reduce((s: number, i: any) => s + Number(i.amount_net), 0) || 0)
+          + kpoOwn.filter((e: any) => e.entry_type === 'income').reduce((s: number, e: any) => s + Number(e.income || 0), 0)
+        const totalExpenses = (receipts?.reduce((s: number, r: any) => s + Number(r.amount_net), 0) || 0)
+          + kpoOwn.filter((e: any) => e.entry_type === 'expense').reduce((s: number, e: any) => s + Number(e.expense || 0), 0)
 
         if (totalRevenue > 0) setRevenue(totalRevenue.toFixed(2))
         if (totalExpenses > 0) setExpenses(totalExpenses.toFixed(2))

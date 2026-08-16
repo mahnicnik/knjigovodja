@@ -157,6 +157,28 @@ export const ACCOMMODATION_MAX = 70.00
  */
 export const LEGAL_DEFAULT_INTEREST_RATE = 0.1040 // velja od 1.7.2026
 
+/**
+ * ZGODOVINA predpisanih zamudnih obrestnih mer (ZPOMZO-1: vodilna mera ECB
+ * + 8 odstotnih tock, objava polletno v Uradnem listu).
+ * DODANO 16.8.2026: ce zamuda seka polletje, je treba VSAK DAN obracunati po
+ * meri, ki je veljala tisti dan. Prej se je uporabila ena sama mera za celo
+ * obdobje, kar je dalo napacen znesek pri dolgih zamudah.
+ * Ob vsaki polletni objavi dodaj nov vnos na ZACETEK seznama.
+ */
+export const LEGAL_INTEREST_HISTORY: { from: string; rate: number }[] = [
+  { from: '2026-07-01', rate: 0.1040 },
+  { from: '2026-01-01', rate: 0.1015 },
+]
+
+/** Mera, ki je veljala na dani dan. */
+export function legalInterestRateOn(date: Date | string): number {
+  const d = typeof date === 'string' ? date : date.toISOString().slice(0, 10)
+  for (const o of LEGAL_INTEREST_HISTORY) {
+    if (d >= o.from) return o.rate
+  }
+  return LEGAL_INTEREST_HISTORY[LEGAL_INTEREST_HISTORY.length - 1].rate
+}
+
 // ───────────────────────── DDV ─────────────────────────
 
 export const VAT_RATES = { standard: 22, reduced: 9.5, zero: 0 } as const
