@@ -48,7 +48,7 @@ export default function DDVEvidencaPage() {
       // DODANO (16.8.2026, KRITICNO): promet iz POS blagajne, banke in kartic
       // se knjizi v kpo_entries, ne kot izdan racun. Evidenca ga ni zajela,
       // zato je bil obrazec DDV-O sestavljen iz nepopolnih podatkov.
-      supabase.from('kpo_entries').select('income, vat_out, entry_date')
+      supabase.from('kpo_entries').select('income, vat_out, vat_rate, entry_date')
         .eq('org_id', org.id).eq('entry_type', 'income').is('invoice_id', null)
         .gte('entry_date', from).lte('entry_date', to),
     ])
@@ -56,22 +56,28 @@ export default function DDVEvidencaPage() {
     const invoices = invoicesRes.data || []
     const receipts = receiptsRes.data || []
     const kpoIncome = kpoRes.data || []
-    // Promet iz knjige je pri gostinstvu/trgovini praviloma po standardni
-    // stopnji; ce bo potreben locen prikaz po stopnjah, ga je treba dodati
-    // v kpo_entries kot lastno polje.
-    const kpoVatOut = kpoIncome.reduce((s: number, e: any) => s + Number(e.vat_out || 0), 0)
-    const kpoNet = kpoIncome.reduce((s: number, e: any) => s + Number(e.income || 0), 0)
+    // POPRAVLJENO (16.8.2026): promet iz knjige se zdaj razvrsti po DEJANSKI
+    // stopnji (kpo_entries.vat_rate). POS blagajna od tega popravka naprej
+    // knjizi loceno za 22% in 9,5%. Starejsi zapisi brez stopnje se stejejo
+    // pod standardno stopnjo.
+    const jeNizja = (e: any) => Number(e.vat_rate) === 9.5
+    const kpoVatOut22 = kpoIncome.filter((e: any) => !jeNizja(e)).reduce((s: number, e: any) => s + Number(e.vat_out || 0), 0)
+    const kpoNet22 = kpoIncome.filter((e: any) => !jeNizja(e)).reduce((s: number, e: any) => s + Number(e.income || 0), 0)
+    const kpoVatOut95 = kpoIncome.filter(jeNizja).reduce((s: number, e: any) => s + Number(e.vat_out || 0), 0)
+    const kpoNet95 = kpoIncome.filter(jeNizja).reduce((s: number, e: any) => s + Number(e.income || 0), 0)
 
     const vatOut22 = invoices.filter((i: any) => !i.vat_rate || i.vat_rate === 22)
       .reduce((s: number, i: any) => s + Number(i.vat_amount), 0)
-      + kpoVatOut
+      + kpoVatOut22
     const vatOut95 = invoices.filter((i: any) => i.vat_rate === 9.5)
       .reduce((s: number, i: any) => s + Number(i.vat_amount), 0)
+      + kpoVatOut95
     const sales22 = invoices.filter((i: any) => !i.vat_rate || i.vat_rate === 22)
       .reduce((s: number, i: any) => s + Number(i.amount_net), 0)
-      + kpoNet
+      + kpoNet22
     const sales95 = invoices.filter((i: any) => i.vat_rate === 9.5)
       .reduce((s: number, i: any) => s + Number(i.amount_net), 0)
+      + kpoNet95
     const vatIn = receipts.reduce((s: number, r: any) => s + Number(r.vat_amount), 0)
     const purchases = receipts.reduce((s: number, r: any) => s + Number(r.amount_net), 0)
     const vatDue = Math.max(0, vatOut22 + vatOut95 - vatIn)

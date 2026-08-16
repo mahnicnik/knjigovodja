@@ -437,50 +437,48 @@ export const pos = {
       let productNet = 0, productVat = 0
       let serviceNet = 0, serviceVat = 0
 
+      // POPRAVLJENO (16.8.2026): promet se je sestel v DVA zapisa (izdelki,
+      // storitve), stopnje DDV pa so se pri tem POMESALE - obrazec DDV-O
+      // zahteva LOCENI vrstici za 22% in 9,5%. Zdaj grupiramo po vrsti IN
+      // stopnji, tako da vsak zapis nosi svojo stopnjo.
+      const skupine = new Map<string, { net: number; vat: number; rate: number; jeStoritev: boolean }>()
       for (const o of mojaNarocila) {
         for (const l of o.order_lines || []) {
           if (l.voided) continue
           // POPRAVLJENO (16.8.2026): prej brez doplacil modifikatorjev - prihodek
           // v knjigi bi bil prenizek. Stolpec total jih ze vsebuje.
           const lineTotal = l.total != null ? Number(l.total) : Number(l.qty || 0) * Number(l.unit_price || 0)
-          const rate = Number(l.vat_rate || 22)
+          const rate = Number(l.vat_rate ?? 22)
           const net = rate > 0 ? lineTotal / (1 + rate / 100) : lineTotal
           const vat = lineTotal - net
-          if (l.service_id) {
-            serviceNet += net
-            serviceVat += vat
-          } else {
-            productNet += net
-            productVat += vat
-          }
+          const jeStoritev = !!l.service_id
+          const kljuc = `${jeStoritev ? 'storitev' : 'izdelek'}|${rate}`
+          const obstoj = skupine.get(kljuc) || { net: 0, vat: 0, rate, jeStoritev }
+          obstoj.net += net
+          obstoj.vat += vat
+          skupine.set(kljuc, obstoj)
+          if (jeStoritev) { serviceNet += net; serviceVat += vat }
+          else { productNet += net; productVat += vat }
         }
       }
 
       const today = new Date(sessionTo).toISOString().split('T')[0]
 
-      if (productNet > 0) {
-        await db.from('kpo_entries').insert({
+      // En zapis na kombinacijo vrste in stopnje DDV.
+      for (const s of skupine.values()) {
+        if (s.net <= 0) continue
+        const { error: kpoErr } = await db.from('kpo_entries').insert({
           org_id: orgId,
           entry_date: today,
-          description: `POS blagajna — prodaja izdelkov (${today})`,
+          description: `POS blagajna — prodaja ${s.jeStoritev ? 'storitev' : 'izdelkov'} ${s.rate}% (${today})`,
           entry_type: 'income',
-          income: Math.round(productNet * 100) / 100,
-          vat_out: Math.round(productVat * 100) / 100,
-          category: 'pos_prodaja',
+          income: Math.round(s.net * 100) / 100,
+          vat_out: Math.round(s.vat * 100) / 100,
+          vat_rate: s.rate,
+          category: s.jeStoritev ? 'pos_storitve' : 'pos_prodaja',
           notes: 'Avtomatski dnevni povzetek iz POS blagajne',
         })
-      }
-      if (serviceNet > 0) {
-        await db.from('kpo_entries').insert({
-          org_id: orgId,
-          entry_date: today,
-          description: `POS blagajna — prodaja storitev (${today})`,
-          entry_type: 'income',
-          income: Math.round(serviceNet * 100) / 100,
-          vat_out: Math.round(serviceVat * 100) / 100,
-          category: 'pos_storitve',
-          notes: 'Avtomatski dnevni povzetek iz POS blagajne',
-        })
+        if (kpoErr) console.error('POS -> KPO: zapisa za stopnjo', s.rate, 'ni bilo mogoce shraniti:', kpoErr)
       }
 
       return { productIncome: productNet, serviceIncome: serviceNet }
