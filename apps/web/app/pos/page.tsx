@@ -598,6 +598,20 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         }
       }
 
+      // DODANO (16.8.2026, KRITICNO): pri placilu s PREDPLACILOM se stranki
+      // stanje NIKOLI ni odstelo - nikjer v kodi ali bazi ni bilo odstevanja,
+      // zato bi lahko isto stanje porabila neomejeno mnogokrat. Odstejemo
+      // PRED zabelezbo placila (atomarno v bazi, s preverbo kritja) - ce
+      // kritja ni dovolj, se placilo sploh ne izvede.
+      if (method === 'prep') {
+        if (!activeCustomer?.id) throw new Error('Za plačilo s predplačilom izberite stranko.')
+        const { error: prepErr } = await createClient().rpc('use_prepaid', {
+          p_customer_id: activeCustomer.id,
+          p_amount: finalTotal,
+        })
+        if (prepErr) throw new Error(prepErr.message || 'Predplačila ni bilo mogoče odšteti')
+      }
+
       const payResult = await pos.orders.pay({
         orderId,
         method: method === 'bon' ? 'bon' : method === 'prep' ? 'prep' : method,
@@ -3253,10 +3267,16 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
     const amount = parseFloat(prepaidAmount)
     if (isNaN(amount) || amount <= 0) return
     setAddingPrepaid(true)
-    const newBalance = (Number(customer.prepaid)||0) + amount
-    await createClient().from('customers').update({ prepaid: newBalance }).eq('id', customer.id)
-    setPrepaidAmount('')
+    // POPRAVLJENO (16.8.2026): prej branje stanja + zapis ABSOLUTNE vrednosti -
+    // ce je stranka vmes placala na drugi blagajni, je polnjenje povozilo tisto
+    // placilo (lost update). Zdaj atomarno v bazi. Prav tako se preverja napaka.
+    const { error: prepErr } = await createClient().rpc('refund_prepaid', {
+      p_customer_id: customer.id,
+      p_amount: amount,
+    })
     setAddingPrepaid(false)
+    if (prepErr) { showToast('Napaka pri polnjenju: ' + prepErr.message, false); return }
+    setPrepaidAmount('')
     showToast(`✓ Dodano ${eur(amount)} predplačila`)
     onRefresh()
   }
@@ -5339,6 +5359,16 @@ function VoidModal({ order, lines, payment, posData, auth, onClose, onVoided }) 
         })
       })
       const fursData = await fursRes.json().catch(() => ({}))
+
+      // DODANO (16.8.2026): ce je bilo placano s PREDPLACILOM, ga ob stornu
+      // vrnemo stranki - sicer bi ji znesek ostal odstet, racun pa razveljavljen.
+      if (payment?.method === 'prep' && order?.customer_id) {
+        const { error: refundPrepErr } = await createClient().rpc('refund_prepaid', {
+          p_customer_id: order.customer_id,
+          p_amount: Number(payment.amount),
+        })
+        if (refundPrepErr) throw new Error('Predplačila ni bilo mogoče vrniti: ' + refundPrepErr.message)
+      }
 
       // 3. Označi order kot storniran
       await createClient().from('orders').update({
