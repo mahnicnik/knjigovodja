@@ -216,7 +216,10 @@ Vrni SAMO JSON brez dodatnega besedila.`,
 
           extracted._gmail_message_id = msgRef.id
 
-          await supabase.from('email_scan_pending').insert({
+          // POPRAVLJENO (16.8.2026): prej brez preverbe napake - najden racun se
+          // ni shranil, stevec pa ga je vseeno stel. Ker se e-posta oznaci kot
+          // preskenirana, tega racuna NE bi nikoli vec nasel.
+          const { error: pendErr } = await supabase.from('email_scan_pending').insert({
             org_id: member.org_id,
             connection_id: conn.id,
             email_subject: subject,
@@ -227,6 +230,7 @@ Vrni SAMO JSON brez dodatnega besedila.`,
             pdf_base64: pdfBase64,
             status: 'pending',
           })
+          if (pendErr) { console.error('email-scan: najdenega racuna ni bilo mogoce shraniti:', msgRef.id, pendErr); continue }
           totalFound++
         } catch (aiErr) {
           console.error('AI scan error for message', msgRef.id, aiErr)
@@ -235,7 +239,8 @@ Vrni SAMO JSON brez dodatnega besedila.`,
       }
 
       if (!customFrom) {
-        await supabase.from('email_connections').update({ last_scanned_at: new Date().toISOString() }).eq('id', conn.id)
+        const { error: lsErr } = await supabase.from('email_connections').update({ last_scanned_at: new Date().toISOString() }).eq('id', conn.id)
+        if (lsErr) console.error('email-scan: oznake zadnjega skeniranja ni bilo mogoce shraniti:', lsErr)
       }
     }
 

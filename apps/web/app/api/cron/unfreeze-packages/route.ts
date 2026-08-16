@@ -43,11 +43,18 @@ export async function GET(request: NextRequest) {
         newExpires = exp.toISOString().split('T')[0]
       }
 
-      await supabase.from('customer_packages').update({
+      // POPRAVLJENO (16.8.2026): prej brez preverbe napake - kartica je ostala
+      // zamrznjena, stevec pa jo je vseeno stel med odmrznjene. Stranka ne bi
+      // mogla uporabljati clanarine, ne da bi kdo vedel zakaj.
+      const { error: unfreezeErr } = await supabase.from('customer_packages').update({
         frozen_at: null,
         frozen_until: null,
         expires: newExpires,
       }).eq('id', pkg.id)
+      if (unfreezeErr) {
+        console.error('Kartice', pkg.id, 'NI bilo mogoce odmrzniti:', unfreezeErr)
+        continue
+      }
 
       unfrozen++
     } catch (e) {

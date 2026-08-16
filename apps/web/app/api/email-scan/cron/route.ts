@@ -172,7 +172,10 @@ Vrni SAMO JSON brez dodatnega besedila.`,
             if (extracted.is_invoice === false) continue
             extracted._gmail_message_id = msgRef.id
 
-            await supabase.from('email_scan_pending').insert({
+            // POPRAVLJENO (16.8.2026): prej brez preverbe napake - najden racun se
+          // ni shranil, stevec pa ga je vseeno stel. Ker se e-posta oznaci kot
+          // preskenirana, tega racuna NE bi nikoli vec nasel.
+          const { error: pendErr } = await supabase.from('email_scan_pending').insert({
               org_id: conn.org_id,
               connection_id: conn.id,
               email_subject: subject,
@@ -187,7 +190,10 @@ Vrni SAMO JSON brez dodatnega besedila.`,
         }
       }
 
-      await supabase.from('email_connections').update({ last_scanned_at: now.toISOString() }).eq('id', conn.id)
+      const { error: lsErr } = await supabase.from('email_connections').update({ last_scanned_at: now.toISOString() }).eq('id', conn.id)
+      // POPRAVLJENO (16.8.2026): ce se oznaka ne shrani, bo naslednji zagon
+      // preskeniral ISTO obdobje in ustvaril podvojene predloge stroskov.
+      if (lsErr) console.error('email-scan cron: oznake zadnjega skeniranja NI bilo mogoce shraniti - naslednji zagon lahko ustvari podvojene vnose:', conn.id, lsErr)
       processed++
     } catch (connErr) {
       console.error('Cron scan error for connection', conn.id, connErr)

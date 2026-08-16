@@ -44,10 +44,17 @@ export async function POST(request: NextRequest) {
           const priceId = sub.items.data[0]?.price?.id || null
           plan = getPlanFromPriceId(priceId)
         }
-        await sb.from('organizations').update({
+        // POPRAVLJENO (16.8.2026): prej brez preverbe napake. Webhook vrne
+        // uspeh, zato Stripe dogodka NE ponovi - uporabnik bi placal narocnino,
+        // dostopa pa ne bi dobil, brez sledi o vzroku.
+        const { error: upErr } = await sb.from('organizations').update({
           subscription_status: plan,
           stripe_subscription_id: session.subscription as string || null,
         }).eq('id', orgId)
+        if (upErr) {
+          console.error(`KRITICNO: placilo je uspelo, narocnina (${plan}) za org ${orgId} pa NI bila aktivirana:`, upErr)
+          return NextResponse.json({ error: 'Aktivacija naročnine ni uspela' }, { status: 500 })
+        }
         console.log(`✅ Checkout complete - plan ${plan}: ${orgId}`)
       }
       break
@@ -60,11 +67,15 @@ export async function POST(request: NextRequest) {
       const plan = getPlanFromPriceId(priceId)
 
       if (orgId) {
-        await sb.from('organizations').update({
+        const { error: subErr } = await sb.from('organizations').update({
           subscription_status: plan,
           stripe_subscription_id: sub.id,
           plan_expires_at: new Date(sub.current_period_end * 1000).toISOString(),
         }).eq('id', orgId)
+        if (subErr) {
+          console.error(`KRITICNO: podaljsanja narocnine (${plan}) za org ${orgId} NI bilo mogoce zabeleziti:`, subErr)
+          return NextResponse.json({ error: 'Posodobitev naročnine ni uspela' }, { status: 500 })
+        }
         console.log(`✅ Subscription ${plan}: ${orgId}`)
       }
       break
@@ -72,11 +83,17 @@ export async function POST(request: NextRequest) {
 
     case 'customer.subscription.deleted': {
       if (orgId) {
-        await sb.from('organizations').update({
+        // POPRAVLJENO (16.8.2026): ce se preklic ne zabelezi, ostane organizacija
+        // na placljivem planu, ceprav narocnine ne placuje vec.
+        const { error: cancelErr } = await sb.from('organizations').update({
           subscription_status: 'free',
           stripe_subscription_id: null,
           plan_expires_at: null,
         }).eq('id', orgId)
+        if (cancelErr) {
+          console.error(`KRITICNO: preklica narocnine za org ${orgId} NI bilo mogoce zabeleziti - organizacija ostaja na placljivem planu:`, cancelErr)
+          return NextResponse.json({ error: 'Preklic naročnine ni uspel' }, { status: 500 })
+        }
         console.log(`⬇️ Subscription cancelled -> free: ${orgId}`)
       }
       break

@@ -132,8 +132,17 @@ export async function POST(req: NextRequest) {
     try {
       const res = await confirmWithFurs(config, data)
       if (res.success && res.eor) {
-        await admin.from('payments').update({ furs_eor: res.eor, furs_sent_at: new Date().toISOString() }).eq('id', inv.paymentId)
-        results.push({ ...inv, status: 'OK', noviEor: res.eor })
+        // POPRAVLJENO (16.8.2026): prej brez preverbe napake. FURS je racun
+        // POTRDIL, EOR pa se ni shranil - ob naslednjem zagonu bi bil isti
+        // racun poslan SE ENKRAT, zato bi FURS imel dva zapisa za isti racun.
+        // Zdaj se to jasno oznaci, da je mogoc rocni popravek.
+        const { error: saveErr } = await admin.from('payments').update({ furs_eor: res.eor, furs_sent_at: new Date().toISOString() }).eq('id', inv.paymentId)
+        if (saveErr) {
+          console.error('FURS resubmit: racun je POTRJEN (EOR', res.eor, '), shranjevanje pa NI uspelo:', inv.paymentId, saveErr)
+          results.push({ ...inv, status: 'POTRJEN, NI SHRANJEN', noviEor: res.eor, napaka: `FURS je račun potrdil (EOR ${res.eor}), shranjevanje v bazo pa ni uspelo: ${saveErr.message}. EOR vnesite ročno — NE pošiljajte znova.` })
+        } else {
+          results.push({ ...inv, status: 'OK', noviEor: res.eor })
+        }
       } else {
         results.push({ ...inv, status: 'NAPAKA', napaka: res.errorMessage })
       }

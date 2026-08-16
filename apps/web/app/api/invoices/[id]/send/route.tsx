@@ -126,6 +126,8 @@ export async function POST(
     if (resendError) {
       console.error('Resend napaka:', resendError)
 
+      // Zapis neuspesnega posiljanja v dnevnik - napake tu namenoma ne
+      // preverjamo, ker smo ze v obravnavi druge napake.
       await supabase.from('invoice_emails').insert({
         invoice_id: invoiceId,
         org_id: org.id,
@@ -141,7 +143,10 @@ export async function POST(
     }
 
     // Zabeležimo uspešno pošiljanje
-    await supabase.from('invoice_emails').insert({
+    // POPRAVLJENO (16.8.2026): prej brez preverbe - e-posta je bila poslana,
+    // zapis o tem pa ne, zato racun ne bi bil oznacen kot poslan in bi ga
+    // uporabnik poslal se enkrat (stranka prejme dva enaka racuna).
+    const { error: logErr } = await supabase.from('invoice_emails').insert({
       invoice_id: invoiceId,
       org_id: org.id,
       to_email: to,
@@ -151,15 +156,19 @@ export async function POST(
       status: 'sent',
       resend_email_id: resendData?.id,
     })
+    if (logErr) console.error('Racun', invoiceId, 'je bil poslan, zapisa v dnevnik pa NI bilo mogoce shraniti:', logErr)
 
     // Posodobi status računa
-    await supabase
+    // POPRAVLJENO (16.8.2026): prej brez preverbe - racun je ostal v statusu
+    // "osnutek", ceprav je bil poslan stranki.
+    const { error: statusErr } = await supabase
       .from('issued_invoices')
       .update({
         last_email_sent_at: new Date().toISOString(),
         status: invoice.status === 'draft' ? 'sent' : invoice.status,
       })
       .eq('id', invoiceId)
+    if (statusErr) console.error('Racun', invoiceId, 'je bil poslan, statusa pa NI bilo mogoce posodobiti:', statusErr)
 
     return NextResponse.json({
       success: true,

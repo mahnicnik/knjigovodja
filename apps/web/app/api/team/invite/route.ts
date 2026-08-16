@@ -127,9 +127,19 @@ export async function POST(req: NextRequest) {
         .eq('user_id', newUserId)
         .maybeSingle()
       if (orphanMember) {
-        await admin.from('org_members').delete().eq('id', orphanMember.id)
-        // varno pobrisi tudi osiroteli org zapis (nic drugega se nanj ne sklicuje)
-        await admin.from('organizations').delete().eq('id', orphanMember.org_id)
+        // POPRAVLJENO (16.8.2026): prej brez preverbe napak. Ce brisanje clanstva
+        // spodleti, brisanje organizacije pa uspe, ostane clanstvo, ki kaze na
+        // neobstojeco organizacijo - povabljeni uporabnik bi ob prijavi videl
+        // pokvarjeno stanje. Napake zabelezimo, a povabila ne ustavimo (gre le
+        // za ciscenje osirotelega zapisa).
+        const { error: omErr } = await admin.from('org_members').delete().eq('id', orphanMember.id)
+        if (omErr) {
+          console.error('team/invite: osirotelega clanstva ni bilo mogoce izbrisati:', omErr)
+        } else {
+          // varno pobrisi tudi osiroteli org zapis (nic drugega se nanj ne sklicuje)
+          const { error: orgErr } = await admin.from('organizations').delete().eq('id', orphanMember.org_id)
+          if (orgErr) console.error('team/invite: osirotele organizacije ni bilo mogoce izbrisati:', orgErr)
+        }
       }
     }
 
