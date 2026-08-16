@@ -138,6 +138,21 @@ export async function POST(req: NextRequest) {
     const sequenceNumber = seqData as number
     const invoiceNumberFull = `${premise.premise_id}-${deviceIdCode}-${sequenceNumber}`
 
+    // DODANO (16.8.2026): TAKOJ zabelezimo porabljeno zaporedno stevilko.
+    // Zaporedje (nextval) se ob neuspehu NE vrne nazaj, zato vsak neuspesen
+    // klic na FURS pusti trajno vrzel v stevilcenju. FURS zahteva zaporedno
+    // stevilcenje in vrzeli je treba znati pojasniti - doslej ni bilo nikjer
+    // zapisano, katera stevilka je bila porabljena in zakaj (98 nepojasnjenih
+    // vrzeli). Zapis nastane PRED klicem in se ob uspehu dopolni.
+    await supabase.from('pos_invoice_numbers').insert({
+      business_id: order.business_id,
+      sequence_number: sequenceNumber,
+      invoice_number: invoiceNumberFull,
+      order_id: order.id,
+      status: 'failed',
+      note: 'Stevilka rezervirana, cakanje na odgovor FURS',
+    })
+
     const amountTotal = Number(total ?? order.total)
 
     // DODANO (16.8.2026): razclenitev po stopnjah DDV za pravilno prijavo FURS-u.
@@ -229,6 +244,24 @@ export async function POST(req: NextRequest) {
           .update({ invoice_number: invoiceNumberFull })
           .eq('id', order_id)
       } catch {}
+
+      // DODANO (16.8.2026): stevilka je bila USPESNO uporabljena - dopolni zapis.
+      await supabase.from('pos_invoice_numbers')
+        .update({ status: 'issued', note: null })
+        .eq('business_id', order.business_id)
+        .eq('sequence_number', sequenceNumber)
+    } else {
+      // Neuspeh: zabelezi razlog, da bo vrzel v stevilcenju pojasnjena.
+      await supabase.from('pos_invoice_numbers')
+        .update({
+          status: 'failed',
+          note: 'FURS ni potrdil racuna: ' + (result.errorMessage || 'neznana napaka'),
+        })
+        .eq('business_id', order.business_id)
+        .eq('sequence_number', sequenceNumber)
+    }
+
+    if (result.success && result.zoi && result.eor) {
 
       return NextResponse.json({
         success: true,
