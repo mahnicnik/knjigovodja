@@ -40,7 +40,10 @@ export default function InvoicesPage() {
 
   async function markPaid(inv: any) {
     setActionLoading('paid_' + inv.id)
-    await supabase.from('issued_invoices').update({ status: 'paid' }).eq('id', inv.id)
+    // POPRAVLJENO (16.8.2026): prej brez preverbe napake - racun je ostal
+    // neplacan, uporabnik pa je videl, da je oznacen kot placan.
+    const { error: paidErr } = await supabase.from('issued_invoices').update({ status: 'paid' }).eq('id', inv.id)
+    if (paidErr) { alert('Računa ni bilo mogoče označiti kot plačanega: ' + paidErr.message); setActionLoading(''); return }
     await load()
     setActionLoading('')
     setActionInv(null)
@@ -48,14 +51,16 @@ export default function InvoicesPage() {
 
   async function markSent(inv: any) {
     setActionLoading('sent_' + inv.id)
-    await supabase.from('issued_invoices').update({ status: 'sent' }).eq('id', inv.id)
+    const { error: sentErr } = await supabase.from('issued_invoices').update({ status: 'sent' }).eq('id', inv.id)
+    if (sentErr) { alert('Računa ni bilo mogoče označiti kot poslanega: ' + sentErr.message); setActionLoading(''); return }
     await load()
     setActionLoading('')
     setActionInv(null)
   }
 
   async function toggleArchive(inv: any, archive: boolean) {
-    await supabase.from('issued_invoices').update({ archived: archive }).eq('id', inv.id)
+    const { error: arcErr } = await supabase.from('issued_invoices').update({ archived: archive }).eq('id', inv.id)
+    if (arcErr) { alert('Računa ni bilo mogoče arhivirati: ' + arcErr.message); return }
     await load()
   }
 
@@ -66,7 +71,10 @@ export default function InvoicesPage() {
       ...item,
       unit_price: -Math.abs(item.unit_price),
     }))
-    await supabase.from('issued_invoices').insert({
+    // POPRAVLJENO (16.8.2026): prej brez preverbe napake - ce vstavljanje
+    // kreditnega zapisa spodleti, se je izvirni racun VSEENO preklical, kar
+    // pusti davcno evidenco v neskladju (preklican racun brez dobropisa).
+    const { error: stornoInsErr } = await supabase.from('issued_invoices').insert({
       org_id: inv.org_id,
       invoice_number: stornoNumber,
       client_name: inv.client_name,
@@ -85,7 +93,12 @@ export default function InvoicesPage() {
       notes: `Storno računa ${inv.invoice_number}`,
       reference: `SI00 ${stornoNumber}`,
     })
-    await supabase.from('issued_invoices').update({ status: 'cancelled' }).eq('id', inv.id) // POPRAVLJENO 11.8.2026 (NUJNO)
+    if (stornoInsErr) {
+      alert('Storna ni bilo mogoče izvesti: ' + stornoInsErr.message + '\n\nIzvirni račun ostaja nespremenjen.')
+      setActionLoading(''); return
+    }
+    const { error: stornoUpdErr } = await supabase.from('issued_invoices').update({ status: 'cancelled' }).eq('id', inv.id) // POPRAVLJENO 11.8.2026 (NUJNO)
+    if (stornoUpdErr) alert('Kreditni zapis je nastal, izvirnega računa pa ni bilo mogoče preklicati: ' + stornoUpdErr.message)
     await load()
     setActionLoading('')
     setActionInv(null)
@@ -94,7 +107,7 @@ export default function InvoicesPage() {
   async function dobropis(inv: any) {
     setActionLoading('dobropis_' + inv.id)
     const dobNumber = `${inv.invoice_number}-D`
-    await supabase.from('issued_invoices').insert({
+    const { error: dobErr } = await supabase.from('issued_invoices').insert({
       org_id: inv.org_id,
       invoice_number: dobNumber,
       client_name: inv.client_name,
@@ -113,6 +126,8 @@ export default function InvoicesPage() {
       notes: `Dobropis za račun ${inv.invoice_number}`,
       reference: `SI00 ${dobNumber}`,
     })
+    // POPRAVLJENO (16.8.2026): prej brez preverbe napake.
+    if (dobErr) { alert('Dobropisa ni bilo mogoče izdati: ' + dobErr.message); setActionLoading(''); return }
     await load()
     setActionLoading('')
     setActionInv(null)
@@ -127,7 +142,9 @@ export default function InvoicesPage() {
       p_org_id: inv.org_id, p_year: new Date().getFullYear(),
     })
     const newNum = nextNumber || `${new Date().getFullYear()}-001`
-    await supabase.from('issued_invoices').insert({
+    // POPRAVLJENO (16.8.2026): prej brez preverbe napake - podvojen racun ni
+    // nastal, uporabnik pa je videl, da je operacija uspela.
+    const { error: podvErr } = await supabase.from('issued_invoices').insert({
       org_id: inv.org_id,
       invoice_number: newNum,
       client_name: inv.client_name,
@@ -143,6 +160,7 @@ export default function InvoicesPage() {
       notes: inv.notes,
       reference: `SI00 ${newNum}`,
     })
+    if (podvErr) { alert('Računa ni bilo mogoče podvojiti: ' + podvErr.message); setActionLoading(''); return }
     await load()
     setActionLoading('')
     setActionInv(null)
@@ -423,7 +441,29 @@ export default function InvoicesPage() {
                                 if (!confirm(`Resnično izbrišem ${label}? To dejanje je nepovrnjivo.`)) return
                                 // Pocisti tudi povezan par (-S/-D <-> original), ce obstaja
                                 const base = inv.invoice_number?.replace(/-S$|-D$/, '')
-                                await supabase.from('issued_invoices').delete().eq('org_id', inv.org_id).or(`invoice_number.eq.${base},invoice_number.eq.${base}-S,invoice_number.eq.${base}-D`)
+                                if (!base) { alert('Računa brez številke ni mogoče izbrisati.'); return }
+                                // POPRAVLJENO (16.8.2026, PRAVNO): brisanje je odstranilo VSE
+                                // tri zapise (izvirnik + -S + -D) na podlagi preverbe SAMO
+                                // kliknjenega. Ce si kliknil kreditni zapis (nikoli
+                                // fiskaliziran), se je izbrisal tudi IZVIRNIK, ki je lahko
+                                // DAVCNO POTRJEN - te po zakonu ni dovoljeno brisati (hramba
+                                // 10 let). Zdaj preverimo vsak zapis posebej.
+                                const { data: povezani, error: fetchErr } = await supabase
+                                  .from('issued_invoices')
+                                  .select('id, invoice_number, zoi')
+                                  .eq('org_id', inv.org_id)
+                                  .or(`invoice_number.eq.${base},invoice_number.eq.${base}-S,invoice_number.eq.${base}-D`)
+                                if (fetchErr) { alert('Napaka pri branju povezanih računov: ' + fetchErr.message); return }
+                                const fiskalizirani = (povezani || []).filter((r: any) => r.zoi && !String(r.zoi).startsWith('DEMO-'))
+                                if (fiskalizirani.length > 0) {
+                                  alert(`Brisanje ni mogoče: račun ${fiskalizirani.map((r: any) => r.invoice_number).join(', ')} je davčno potrjen pri FURS (zakonska hramba 10 let).`)
+                                  return
+                                }
+                                const { error: delErr } = await supabase
+                                  .from('issued_invoices')
+                                  .delete()
+                                  .in('id', (povezani || []).map((r: any) => r.id))
+                                if (delErr) { alert('Računa ni bilo mogoče izbrisati: ' + delErr.message); return }
                                 setActionInv(null)
                                 load()
                               }}
