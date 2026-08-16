@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
       .eq('org_id', org.id)
       .gte('issue_date', periodFrom)
       .lte('issue_date', periodTo)
-      .neq('status', 'draft')
+      .neq('status', 'draft').or('zoi.is.null,zoi.not.like.DEMO-%')
       .order('issue_date', { ascending: true })
 
     if (invErr) {

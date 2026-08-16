@@ -42,7 +42,7 @@ export default function DDVEvidencaPage() {
 
     const [invoicesRes, receiptsRes] = await Promise.all([
       supabase.from('issued_invoices').select('*').eq('org_id', org.id)
-        .neq('status', 'draft').gte('issue_date', from).lte('issue_date', to),
+        .neq('status', 'draft').or('zoi.is.null,zoi.not.like.DEMO-%').gte('issue_date', from).lte('issue_date', to),
       supabase.from('receipts').select('*').eq('org_id', org.id)
         .gte('receipt_date', from).lte('receipt_date', to),
     ])

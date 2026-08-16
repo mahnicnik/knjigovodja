@@ -52,7 +52,7 @@ export default function PoslovnaPorocila() {
       const yearEnd = `${year}-12-31`
 
       const [invRes, expRes, kpoRes, kpoExpRes] = await Promise.all([
-        supabase.from('issued_invoices').select('*').eq('org_id', member.org_id).gte('issue_date', yearStart).lte('issue_date', yearEnd).neq('status', 'draft'),
+        supabase.from('issued_invoices').select('*').eq('org_id', member.org_id).gte('issue_date', yearStart).lte('issue_date', yearEnd).neq('status', 'draft').or('zoi.is.null,zoi.not.like.DEMO-%'),
         supabase.from('receipts').select('*').eq('org_id', member.org_id).gte('receipt_date', yearStart).lte('receipt_date', yearEnd),
         // DODANO (30.7.2026): KPO prihodki (POS promet, banka, kartice...)
         // - SAMO brez invoice_id, da se placila ze prestetih racunov ne

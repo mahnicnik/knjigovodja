@@ -22,7 +22,7 @@ export default function EslogPage() {
       setOrg(o)
       const { data } = await supabase
         .from('issued_invoices').select('*')
-        .eq('org_id', o.id).neq('status', 'draft')
+        .eq('org_id', o.id).neq('status', 'draft').or('zoi.is.null,zoi.not.like.DEMO-%')
         .order('created_at', { ascending: false })
       setInvoices(data || [])
     }

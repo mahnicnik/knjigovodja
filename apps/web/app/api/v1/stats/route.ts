@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
       .eq('org_id', orgId)
       .gte('issue_date', from)
       .lte('issue_date', to)
-      .neq('status', 'draft'),
+      .neq('status', 'draft').or('zoi.is.null,zoi.not.like.DEMO-%'),
     supabase
       .from('receipts')
       .select('amount_total, amount_net, vat_amount')

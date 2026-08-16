@@ -58,7 +58,7 @@ export default function KPOPage() {
       .from('issued_invoices')
       .select('*')
       .eq('org_id', org.id)
-      .neq('status', 'draft')
+      .neq('status', 'draft').or('zoi.is.null,zoi.not.like.DEMO-%')
       .gte('issue_date', from)
       .lte('issue_date', to)
       .order('issue_date', { ascending: false })

@@ -10,6 +10,7 @@ import {
   GENERAL_RELIEF_YEAR,
   calcProgressiveTax,
   SP_MIN_CONTRIBUTIONS_YEAR,
+  calcNormiraniDeduction,
 } from '@/lib/tax-constants'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
@@ -106,7 +107,7 @@ export default function DohodninaPage() {
           .from('issued_invoices')
           .select('amount_net')
           .eq('org_id', o.id)
-          .neq('status', 'draft')
+          .neq('status', 'draft').or('zoi.is.null,zoi.not.like.DEMO-%')
         const { data: receipts } = await supabase
           .from('receipts')
           .select('amount_net')
@@ -136,7 +137,17 @@ export default function DohodninaPage() {
   const annualExpenses = month < 12 ? (exp / month) * 12 : exp
 
   // Davčna osnova
-  const taxableBase = Math.max(0, annualRevenue - annualExpenses - annualContributions)
+  // POPRAVLJENO (16.8.2026): prej so se VEDNO odstevali DEJANSKI stroski.
+  // Za NORMIRANCA je to napacno - njemu se priznajo NORMIRANI odhodki
+  // (80% do 60.000 EUR letnih prihodkov, nad tem 0% - sistem ZPZR od 1.1.2026),
+  // dejanski stroski pa se NE upostevajo. Ker so dejanski stroski normiranca
+  // obicajno bistveno nizji od normiranih, je stran kazala PREVISOKO davcno
+  // osnovo in s tem previsoko dohodnino.
+  const jeNormiranec = org?.tax_system === 'normirani_80' || org?.tax_system === 'normirani_40'
+  const priznaniOdhodki = jeNormiranec
+    ? calcNormiraniDeduction(annualRevenue)
+    : annualExpenses
+  const taxableBase = Math.max(0, annualRevenue - priznaniOdhodki - annualContributions)
 
   // Olajšave
   const dependentRelief = dependents === 0 ? 0 : dependents === 1 ? 2697 : dependents === 2 ? 4120 : 7780
@@ -147,6 +158,8 @@ export default function DohodninaPage() {
   const monthlyTax = annualTax / 12
 
   // "Koliko je moje?"
+  // Cisti prihodek racunamo z DEJANSKIMI stroski - ti denar dejansko odnesejo,
+  // ne glede na to, kaj davcno priznava drzava.
   const annualNet = annualRevenue - annualExpenses - annualContributions - annualTax
   const monthlyNet = annualNet / 12
 

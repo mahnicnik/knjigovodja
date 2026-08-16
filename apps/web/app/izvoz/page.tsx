@@ -80,7 +80,7 @@ export default function IzvozPage() {
       }
 
       const [invRes, recRes, kpoIncRes, kpoExpRes] = await Promise.all([
-        supabase.from('issued_invoices').select('amount_net,amount_total').eq('org_id', member.org_id).gte('issue_date', periodFrom).lte('issue_date', periodTo).neq('status', 'draft'),
+        supabase.from('issued_invoices').select('amount_net,amount_total').eq('org_id', member.org_id).gte('issue_date', periodFrom).lte('issue_date', periodTo).neq('status', 'draft').or('zoi.is.null,zoi.not.like.DEMO-%'),
         supabase.from('receipts').select('amount_net,amount_total').eq('org_id', member.org_id).gte('receipt_date', periodFrom).lte('receipt_date', periodTo),
         // DODANO (30.7.2026): predogled naj odraza dejansko slikovito
         // stanje - ista varovalka proti dvojnemu stetju kot povsod drugod.
