@@ -9,6 +9,7 @@ import { pos, BUSINESS_ID, resolveBusinessId } from '@/lib/pos-client'
 import { buildReceiptHTML } from '@/lib/receipt'
 import { WorkStatusBar, ClockInModal } from '@/lib/work-session-components'
 import { getCurrentSession, openSession, getSessionStats, closeSession, getLastCarryOver, type CashSession, type SessionStats } from '@/lib/cash-session'
+import { getActiveMembership } from '@/lib/active-org'
 import { buildOpeningReceipt, buildXReportReceipt, buildZReportReceipt } from '@/lib/cash-session-receipt'
 
 // ================================================================
@@ -2370,9 +2371,12 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
   }
 
   async function markStatus(status) {
+    // POPRAVLJENO (16.8.2026): brez te varovalke je dvojni klik na "Prišel"
+    // odstel obisk DVAKRAT - stranki je izginil obisk s kartice po krivem.
+    const alreadyArrived = booking.status === 'arrived'
     await createClient().from('bookings').update({ status }).eq('id', booking.id)
     // Če "arrived" in ima paket → odštej obisk
-    if (status === 'arrived' && selectedPkg) {
+    if (status === 'arrived' && selectedPkg && !alreadyArrived) {
       const pkg = activePkgs.find(p => p.id === selectedPkg)
       if (pkg && pkg.remaining > 0) {
         const updates: any = { remaining: pkg.remaining - 1 }
@@ -5255,7 +5259,11 @@ function VoidModal({ order, lines, payment, posData, auth, onClose, onVoided }) 
       if (!user) throw new Error('Niste prijavljeni')
 
       // 1. Pridobi org podatke za FURS klic
-      const { data: member } = await createClient().from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+      // POPRAVLJENO (16.8.2026): maybeSingle() na org_members vrze napako, ce
+      // je uporabnik clan VEC organizacij (npr. racunovodja) - uporabimo
+      // uveljavljeno pomozno funkcijo, ki upostevaje izbrano aktivno org.
+      const activeMembership = await getActiveMembership()
+      const member = activeMembership ? { org_id: activeMembership.org_id } : null
       if (!member) throw new Error('Org ni najdena')
 
       // 2. Kliči FURS kredit nota (storno)
@@ -5274,7 +5282,10 @@ function VoidModal({ order, lines, payment, posData, auth, onClose, onVoided }) 
       // 3. Označi order kot storniran
       await createClient().from('orders').update({
         voided_at: new Date().toISOString(),
-        voided_by: user.id,
+        // POPRAVLJENO (16.8.2026): voided_by je uporabljal Supabase identiteto
+        // NAPRAVE (na skupnem terminalu vedno ista oseba), ne PIN-preverjene
+        // identitete blagajnika - storno je bil vedno pripisan napacni osebi.
+        voided_by: auth?.user?.id || null,
         void_reason: reason || 'Storno',
         void_furs_eor: fursData.eor || null,
         void_furs_zoi: fursData.zoi || null,
@@ -5387,15 +5398,26 @@ function RefundModal({ order, lines, payment, auth, onClose, onRefunded }) {
       const db = createClient()
       const { data: { user } } = await createClient().auth.getUser()
       if (!user) throw new Error('Niste prijavljeni')
+      // DODANO (16.8.2026): brez PIN-preverjene identitete blagajnika vracila
+      // ni mogoce zabeleziti (cashier_id je obvezen tuji kljuc na staff).
+      if (!auth?.user?.id) throw new Error('Prijavite se s PIN kodo za vračilo')
 
-      await createClient().from('refunds').insert({
+      const { error: refundErr } = await createClient().from('refunds').insert({
         business_id: BUSINESS_ID,
         original_order_id: order.id,
         amount: refundAmount,
         reason: reason || 'Delno vračilo',
-        cashier_id: user.id,
+        // POPRAVLJENO (16.8.2026, KRITICNO): cashier_id je TUJI KLJUC na
+        // staff(id), koda pa je vpisovala user.id (Supabase racun naprave) -
+        // vsak poskus vracila je spodletel s krsitvijo tujega kljuca. Zdaj
+        // uporabimo PIN-preverjeno identiteto blagajnika (auth.user je zapis
+        // iz staff tabele).
+        cashier_id: auth?.user?.id,
         refunded_at: new Date().toISOString(),
       })
+      // DODANO (16.8.2026): prej se napaka pri vpisu ni preverjala - vracilo
+      // je tiho spodletelo, uporabnik pa je videl potrdilo o uspehu.
+      if (refundErr) throw new Error('Vračila ni bilo mogoče zabeležiti: ' + refundErr.message)
 
       // Natisni vračilo
       const html = buildRefundReceiptHTML({
