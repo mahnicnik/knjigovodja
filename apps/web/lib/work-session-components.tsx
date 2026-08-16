@@ -107,19 +107,24 @@ export function WorkStatusBar({ posData, onRequestClockIn }: {
 
   async function toggleBreak(session: WorkSession) {
     const db = createClient()
+    // POPRAVLJENO (16.8.2026): prej brez preverbe napake - delavec je mislil,
+    // da je zacel/koncal odmor, cas pa se ni zabelezil. To vpliva na obracun
+    // delovnih minut in s tem na placo.
     if (session.status === 'on_break') {
       const breakMin = (session.break_minutes || 0) +
         Math.floor((Date.now() - new Date(session.break_start!).getTime()) / 60000)
-      await db.from('work_sessions').update({
+      const { error } = await db.from('work_sessions').update({
         status: 'active',
         break_end: new Date().toISOString(),
         break_minutes: breakMin,
       }).eq('id', session.id)
+      if (error) { alert('Konca odmora ni bilo mogoče zabeležiti: ' + error.message); return }
     } else {
-      await db.from('work_sessions').update({
+      const { error } = await db.from('work_sessions').update({
         status: 'on_break',
         break_start: new Date().toISOString(),
       }).eq('id', session.id)
+      if (error) { alert('Začetka odmora ni bilo mogoče zabeležiti: ' + error.message); return }
     }
     loadSessions()
   }
@@ -212,20 +217,26 @@ export function ClockInModal({ posData, onClose, onClockedIn }: {
     try {
       const db = createClient()
       // Preveri da ni že prijavljen
-      const { data: existing } = await db
+      // POPRAVLJENO (16.8.2026): maybeSingle() vrze napako, ce ima delavec
+      // (zaradi podatkovne nepravilnosti) dve odprti izmeni - prijava bi se
+      // podrla z nerazumljivo napako namesto s smiselnim sporocilom.
+      const { data: existingRows } = await db
         .from('work_sessions')
         .select('id')
         .eq('staff_id', selected.id)
         .in('status', ['active', 'on_break'])
-        .maybeSingle()
-      if (existing) throw new Error(`${selected.name} je že prijavljen na delo`)
+        .limit(1)
+      if (existingRows?.length) throw new Error(`${selected.name} je že prijavljen na delo`)
 
-      await db.from('work_sessions').insert({
+      // POPRAVLJENO (16.8.2026): prej brez preverbe napake - delavec je videl
+      // potrditev, izmena pa se ni zacela.
+      const { error: inErr } = await db.from('work_sessions').insert({
         business_id: BUSINESS_ID,
         staff_id: selected.id,
         clock_in: new Date().toISOString(),
         status: 'active',
       })
+      if (inErr) throw inErr
       onClockedIn()
       onClose()
     } catch (e: any) { setError(e.message) }
@@ -343,28 +354,45 @@ export function ClockOutModal({ session, staffMember, onClose, onClockedOut }: {
     setSaving(true); setError('')
     try {
       const db = createClient()
-      await db.from('work_sessions').update({
-        clock_out: now.toISOString(),
-        total_minutes: workMin,
-        overtime_minutes: overtimeMin,
+      // POPRAVLJENO (16.8.2026): cas odjave se je racunal ob IZRISU okna, ne ob
+      // kliku - ce je okno ostalo odprto nekaj minut, je bila zabelezena
+      // napacna ura in napacno stevilo delovnih minut (podlaga za placo).
+      const konec = new Date()
+      const dejanskeMin = Math.floor((konec.getTime() - clockIn.getTime() - breakMs) / 60000)
+      const dejanskeNadure = Math.max(0, dejanskeMin - 480)
+      // POPRAVLJENO (16.8.2026): prej brez preverbe napake - izmena je ostala
+      // odprta, delavec pa je videl potrditev o odjavi.
+      const { error: outErr } = await db.from('work_sessions').update({
+        clock_out: konec.toISOString(),
+        total_minutes: dejanskeMin,
+        overtime_minutes: dejanskeNadure,
         note: note || null,
         status: 'closed',
       }).eq('id', session.id)
+      if (outErr) throw outErr
 
       // Sync v Računko.si (time_entries)
       try {
         const { data: { user } } = await db.auth.getUser()
         if (user) {
-          const { data: member } = await db.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+          // POPRAVLJENO (16.8.2026): maybeSingle() bi vrgel napako pri
+          // uporabniku, ki je clan vec organizacij.
+          const { data: memberRows } = await db.from('org_members').select('org_id').eq('user_id', user.id).limit(1)
+          const member = memberRows?.[0]
           if (member) {
+            // POPRAVLJENO (16.8.2026): datum se je racunal po UTC - izmena, ki
+            // se je zacela po polnoci po lokalnem casu, je bila zabelezena na
+            // prejsnji dan.
+            const d = clockIn
+            const lokalniDatum = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
             await db.from('time_entries').insert({
               org_id: member.org_id,
               user_id: user.id,
               client_name: staffMember?.name || 'Delavec',
               project: 'Delo v ŠIRM',
-              description: note || `${clockIn.toLocaleDateString('sl-SI')} ${fmtTime(clockIn)}–${fmtTime(now)}`,
-              date: clockIn.toISOString().slice(0, 10),
-              hours: parseFloat((workMin / 60).toFixed(2)),
+              description: note || `${clockIn.toLocaleDateString('sl-SI')} ${fmtTime(clockIn)}–${fmtTime(konec)}`,
+              date: lokalniDatum,
+              hours: parseFloat((dejanskeMin / 60).toFixed(2)),
               is_billable: false,
             })
           }
