@@ -25,20 +25,20 @@ function getDeadlines(year: number, month: number, isVatRegistered: boolean, has
   const nextYear = month === 12 ? year + 1 : year
   const nm = String(nextMonth).padStart(2, '0')
 
-  // Prispevki s.p. — do 15. vsak mesec
+  // Prispevki s.p. — do 20. v NASLEDNJEM mesecu (POPRAVLJENO 16.8.2026)
   deadlines.push({
     id: `prispevki-${year}-${m}`,
-    date: `${year}-${m}-15`,
+    date: `${year}-${m}-20`,
     title: 'Prispevki s.p.',
-    description: 'Plačilo ZPIZ + ZZZS prispevkov do 15. v mesecu',
+    description: 'Plačilo ZPIZ + ZZZS prispevkov do 20. v naslednjem mesecu',
     category: 'prispevki',
     link: '/prispevki',
   })
 
-  // Akontacija dohodnine — do 15. vsak mesec
+  // Akontacija dohodnine — do 20. v NASLEDNJEM mesecu (POPRAVLJENO 16.8.2026)
   deadlines.push({
     id: `akontacija-${year}-${m}`,
-    date: `${year}-${m}-15`,
+    date: `${year}-${m}-20`,
     title: 'Akontacija dohodnine',
     description: 'Mesečna akontacija dohodnine (če je določena v odločbi)',
     category: 'dohodnina',

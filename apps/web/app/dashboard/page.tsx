@@ -219,7 +219,10 @@ export default function DashboardPage() {
   const monthStart = `${year}-${String(month+1).padStart(2,'0')}-01`
   const monthEnd = `${year}-${String(month+1).padStart(2,'0')}-${new Date(year,month+1,0).getDate()}`
   const yearStart = `${year}-01-01`
-  const daysUntil15 = 15 - dayOfMonth
+  // POPRAVLJENO (16.8.2026): prispevki in akontacija zapadejo 20. v mesecu,
+  // ne 15. Preverjeno z dejanskimi placilnimi nalogi FURS. Ime spremenljivke
+  // ohranjeno, da se popravek ne razlije po celotni datoteki.
+  const daysUntil15 = 20 - dayOfMonth
   const daysUntil25 = 25 - dayOfMonth
   const daysUntilEndMonth = new Date(year,month+1,0).getDate() - dayOfMonth
   const ddvMonths = [4,7,10,1] // jan, apr, jul, oct (kvartal sledeč mesec)
@@ -604,8 +607,8 @@ export default function DashboardPage() {
   /* ============ COMPUTED: SMART FOCUS BANNER (najbližji rok) ============ */
   const focus = useMemo(() => {
     const candidates = [
-      { name: 'Prispevki za s.p.', amount: Number(org?.contrib_piz||0)+Number(org?.contrib_zzzs||0)+Number(org?.contrib_zaposlovanje||3.04)+Number(org?.contrib_starsevstvo||3.04), days: daysUntil15, day: 15, href: '/prispevki', emoji: '⏰' },
-      { name: 'Akontacija dohodnine', amount: Number(org?.contrib_akontacija || 0), days: daysUntil15, day: 15, href: '/dohodnina', emoji: '📋' }, // POPRAVLJENO 30.7.2026: prej trdo kodirano 84
+      { name: 'Prispevki za s.p.', amount: Number(org?.contrib_piz||0)+Number(org?.contrib_zzzs||0)+Number(org?.contrib_zaposlovanje||3.04)+Number(org?.contrib_starsevstvo||3.04), days: daysUntil15, day: 20, href: '/prispevki', emoji: '⏰' },
+      { name: 'Akontacija dohodnine', amount: Number(org?.contrib_akontacija || 0), days: daysUntil15, day: 20, href: '/dohodnina', emoji: '📋' }, // POPRAVLJENO 30.7.2026: prej trdo kodirano 84
     ]
     if (data.hasEmployees) {
       candidates.push({ name: 'REK-1 + plača', amount: 0, days: daysUntil25, day: 25, href: '/rek1', emoji: '👥' })
@@ -620,8 +623,8 @@ export default function DashboardPage() {
   /* ============ DEADLINES (right panel) ============ */
   const deadlines = useMemo(() => {
     const list = [
-      { name: 'Prispevki s.p.',       date: `15. ${MONTHS_SHORT[month]}`, amount: Number(org?.contrib_piz||0)+Number(org?.contrib_zzzs||0)+Number(org?.contrib_zaposlovanje||3.04)+Number(org?.contrib_starsevstvo||3.04), days: daysUntil15, href: '/prispevki', urgent: daysUntil15 <= 7 && daysUntil15 >= 0 },
-      { name: 'Akontacija dohodnine', date: `15. ${MONTHS_SHORT[month]}`, amount: Number(org?.contrib_akontacija || 0), days: daysUntil15, href: '/dohodnina', urgent: false }, // POPRAVLJENO 30.7.2026: prej trdo kodirano 84
+      { name: 'Prispevki s.p.',       date: `20. ${MONTHS_SHORT[month]}`, amount: Number(org?.contrib_piz||0)+Number(org?.contrib_zzzs||0)+Number(org?.contrib_zaposlovanje||3.04)+Number(org?.contrib_starsevstvo||3.04), days: daysUntil15, href: '/prispevki', urgent: daysUntil15 <= 7 && daysUntil15 >= 0 },
+      { name: 'Akontacija dohodnine', date: `20. ${MONTHS_SHORT[month]}`, amount: Number(org?.contrib_akontacija || 0), days: daysUntil15, href: '/dohodnina', urgent: false }, // POPRAVLJENO 30.7.2026: prej trdo kodirano 84
     ]
     if (data.hasEmployees) {
       list.push({ name: 'REK-1 + plača', date: `25. ${MONTHS_SHORT[month]}`, amount: 0, days: daysUntil25, href: '/rek1', urgent: daysUntil25 <= 7 && daysUntil25 >= 0 })

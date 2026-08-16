@@ -84,7 +84,15 @@ export default function PrispevkiPage() {
     if (!org) return
     const contrib = rates || { piz: 0, zzzs: 0, zaposlovanje: 3.04, 'starševo': 3.04 }
     const monthStr = String(selectedMonth + 1).padStart(2, '0')
-    const dueDate = `${selectedYear}-${monthStr}-15`
+    // POPRAVLJENO (16.8.2026): rok je bil 15. dan ISTEGA meseca kot obracunsko
+    // obdobje. Po ZPSV se prispevki placujejo do 20. dne v NASLEDNJEM mesecu -
+    // prispevki za julij zapadejo 20. avgusta. Aplikacija je torej kazala rok
+    // pet dni PRED zacetkom pravega roka in v napacnem mesecu; kdor bi se
+    // ravnal po njej, bi lahko placal prezgodaj ali napacno razumel obveznost.
+    // Preverjeno z dejanskimi placilnimi nalogi FURS (julij 2026 -> 20.08.2026).
+    const rokMesec = selectedMonth + 1 > 11 ? 0 : selectedMonth + 1
+    const rokLeto = selectedMonth + 1 > 11 ? selectedYear + 1 : selectedYear
+    const dueDate = `${rokLeto}-${String(rokMesec + 1).padStart(2, '0')}-20`
     const taxNum = (org.tax_number || '').replace('SI', '')
     const monthLabel = `${MONTHS_FULL[selectedMonth]} ${selectedYear}`
     const payer = {
