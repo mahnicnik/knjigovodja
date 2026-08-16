@@ -7,6 +7,7 @@ import posthog from 'posthog-js'
 import UpgradeButton from '@/components/UpgradeButton'
 import ManageSubscriptionButton from '@/components/ManageSubscriptionButton'
 import { getActiveMembership } from '@/lib/active-org'
+import { SP_MIN_CONTRIBUTIONS_MONTH } from '@/lib/tax-constants'
 import AppLayout from '@/components/AppLayout'
 
 const SP_CONTRIBUTIONS: Record<number, number> = {
@@ -291,6 +292,30 @@ export default function NastavitevPage() {
                   <div>
                     <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Starševsko varstvo (€/mes)</label>
                     <input type="number" step="0.01" value={form.contrib_starsevstvo || ''} onChange={e => setForm({...form, contrib_starsevstvo: parseFloat(e.target.value) || 0})} placeholder="3.04" className={inp} />
+                  </div>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    {/* DODANO (16.8.2026): opozorilo, ce je vsota prispevkov nizja od
+                        zakonskega minimuma. Napacno vnesena vrednost (npr. prestavljeni
+                        stevki) tiho popaci VSE davcne napovedi - Dashboard, dohodnino,
+                        pretok denarja - in tega ni bilo nikjer videti. */}
+                    {(() => {
+                      const vsota = Number(form.contrib_piz || 0) + Number(form.contrib_zzzs || 0)
+                        + Number(form.contrib_zaposlovanje || 0) + Number(form.contrib_starsevstvo || 0)
+                      if (vsota === 0) return null
+                      const razlika = SP_MIN_CONTRIBUTIONS_MONTH - vsota
+                      if (razlika > 0.5) return (
+                        <div style={{ background: '#FCEBEB', border: '0.5px solid #F7C1C1', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#A32D2D', lineHeight: 1.5 }}>
+                          <b>Vsota prispevkov je nižja od zakonskega minimuma.</b><br/>
+                          Vpisano: €{vsota.toFixed(2)} · minimum 2026: €{SP_MIN_CONTRIBUTIONS_MONTH.toFixed(2)} · manjka €{razlika.toFixed(2)} na mesec (€{(razlika * 12).toFixed(2)} letno).<br/>
+                          Preverite zneske na plačilnih nalogih FURS — napačna vrednost popači vse davčne napovedi.
+                        </div>
+                      )
+                      return (
+                        <div style={{ background: '#EAF3DE', border: '0.5px solid #C8E0A8', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#27500A' }}>
+                          ✓ Prispevki skupaj: <b>€{vsota.toFixed(2)}</b> na mesec (€{(vsota * 12).toFixed(2)} letno)
+                        </div>
+                      )
+                    })()}
                   </div>
                   <div>
                     <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Akontacija dohodnine (€/mes)</label>
