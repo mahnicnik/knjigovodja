@@ -18,9 +18,51 @@ const URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const BUSINESS_ID = '00000000-0000-0000-0000-000000000001'
 
-const db = URL && KEY ? createClient(URL, KEY) : null
+/**
+ * Preverimo, da sta spremenljivki VELJAVNI, ne le prisotni. Brez tega se je
+ * test podrl z nerazumljivo napako iz knjiznice, ce je bila vrednost napacna
+ * (npr. ce si v ukaz pomotoma prekopiral "..." namesto prave vrednosti).
+ */
+const razlogPreskoka = (() => {
+  if (!URL || !KEY) {
+    return 'Nastavi NEXT_PUBLIC_SUPABASE_URL in SUPABASE_SERVICE_ROLE_KEY, npr.:\n' +
+      '  NEXT_PUBLIC_SUPABASE_URL="https://<projekt>.supabase.co" \\\n' +
+      '  SUPABASE_SERVICE_ROLE_KEY="<kljuc>" \\\n' +
+      '  npx playwright test tests/baza.spec.ts'
+  }
+  if (!/^https?:\/\/.+/.test(URL)) {
+    return `NEXT_PUBLIC_SUPABASE_URL ni veljaven naslov: "${URL}". Pricakovana oblika: https://<projekt>.supabase.co`
+  }
+  if (/^<.*>$/.test(KEY) || /^<.*>$/.test(URL)) {
+    return 'V ukazu je ostala oznaka tipa <tvoj_kljuc> - nadomesti jo z DEJANSKO vrednostjo (Supabase: Settings -> API -> service_role).'
+  }
+  if (KEY.length < 40) {
+    return 'SUPABASE_SERVICE_ROLE_KEY je videti prekratek - preveri, da si prekopiral celoten kljuc (Supabase: Settings -> API -> service_role).'
+  }
+  return null
+})()
 
-test.skip(!db, 'Manjkata NEXT_PUBLIC_SUPABASE_URL in SUPABASE_SERVICE_ROLE_KEY')
+const db = razlogPreskoka ? null : createClient(URL!, KEY!)
+
+test.skip(!!razlogPreskoka, razlogPreskoka ?? '')
+
+/**
+ * Preverba povezave PRED vsemi testi.
+ *
+ * Brez tega so testi, ki iscejo "nobenega neskladja", ob nedosegljivi bazi
+ * dobili prazen rezultat in PRESTALI - lazno. Test, ki prestane, ko baza ni
+ * dosegljiva, je slabsi od tistega, ki pade, ker daje obcutek varnosti.
+ */
+test.beforeAll(async () => {
+  if (!db) return
+  const { error } = await db.from('organizations').select('id').limit(1)
+  if (error) {
+    throw new Error(
+      `Povezava s Supabase ni uspela: ${error.message}\n` +
+      'Preveri NEXT_PUBLIC_SUPABASE_URL in SUPABASE_SERVICE_ROLE_KEY.',
+    )
+  }
+})
 
 /** Testni artikel z znano zalogo; vrne id in funkcijo za pospravljanje. */
 async function testniArtikel(zaloga: number) {
@@ -150,9 +192,13 @@ test('vsota narocila: ob prenosu vrstic se preracunata OBE narocili', async () =
 test('predplacilo: odsteje se od stanja stranke', async () => {
   // NAPAKA (popravljeno 16.8.2026): predplacilo se NIKOLI ni odstelo - isto
   // stanje bi bilo mogoce porabiti neomejeno mnogokrat.
-  const { data: c } = await db!.from('customers')
+  const { data: c, error: insErr } = await db!.from('customers')
     .insert({ business_id: BUSINESS_ID, name: `__TEST__ ${Date.now()}`, prepaid: 50 })
     .select('id').single()
+  // Brez te preverbe je 'c' ob neuspehu null in cistilni blok se podre z
+  // nerazumljivo napako, ki zakrije PRAVI vzrok.
+  expect(insErr, `Testne stranke ni bilo mogoce ustvariti: ${insErr?.message}`).toBeNull()
+  expect(c).not.toBeNull()
   try {
     await db!.rpc('use_prepaid', { p_customer_id: c!.id, p_amount: 12 })
     const { data: po } = await db!.from('customers').select('prepaid').eq('id', c!.id).single()
@@ -161,9 +207,13 @@ test('predplacilo: odsteje se od stanja stranke', async () => {
 })
 
 test('predplacilo: placilo brez kritja je ZAVRNJENO', async () => {
-  const { data: c } = await db!.from('customers')
+  const { data: c, error: insErr } = await db!.from('customers')
     .insert({ business_id: BUSINESS_ID, name: `__TEST__ ${Date.now()}`, prepaid: 20 })
     .select('id').single()
+  // Brez te preverbe je 'c' ob neuspehu null in cistilni blok se podre z
+  // nerazumljivo napako, ki zakrije PRAVI vzrok.
+  expect(insErr, `Testne stranke ni bilo mogoce ustvariti: ${insErr?.message}`).toBeNull()
+  expect(c).not.toBeNull()
   try {
     const { error } = await db!.rpc('use_prepaid', { p_customer_id: c!.id, p_amount: 100 })
     expect(error).not.toBeNull()
@@ -173,9 +223,13 @@ test('predplacilo: placilo brez kritja je ZAVRNJENO', async () => {
 })
 
 test('predplacilo: storno ga vrne stranki', async () => {
-  const { data: c } = await db!.from('customers')
+  const { data: c, error: insErr } = await db!.from('customers')
     .insert({ business_id: BUSINESS_ID, name: `__TEST__ ${Date.now()}`, prepaid: 50 })
     .select('id').single()
+  // Brez te preverbe je 'c' ob neuspehu null in cistilni blok se podre z
+  // nerazumljivo napako, ki zakrije PRAVI vzrok.
+  expect(insErr, `Testne stranke ni bilo mogoce ustvariti: ${insErr?.message}`).toBeNull()
+  expect(c).not.toBeNull()
   try {
     await db!.rpc('use_prepaid', { p_customer_id: c!.id, p_amount: 12 })
     await db!.rpc('refund_prepaid', { p_customer_id: c!.id, p_amount: 12 })
@@ -194,7 +248,9 @@ test('obvestila: zavrnjeno se NE ustvari znova', async () => {
     .eq('business_id', BUSINESS_ID)
     .eq('dismissed', false)
 
-  const { data: ustvarjenih } = await db!.rpc('generate_pos_notifications', { p_business_id: BUSINESS_ID })
+  const { data: ustvarjenih, error } = await db!.rpc('generate_pos_notifications', { p_business_id: BUSINESS_ID })
+  // Napako preverimo IZRECNO - sicer bi null pomenil 0 in test bi lazno prestal.
+  expect(error, `Klic ni uspel: ${error?.message}`).toBeNull()
   expect(Number(ustvarjenih)).toBe(0)
 })
 
@@ -203,12 +259,15 @@ test('obvestila: zavrnjeno se NE ustvari znova', async () => {
 test('stevilcenje: vsaka porabljena stevilka ima zapis', async () => {
   // NAPAKA (popravljeno 16.8.2026): neuspesen klic na FURS je porabil stevilko
   // in pustil NEPOJASNJENO vrzel (98 takih).
-  const { data: zapisi } = await db!.from('pos_invoice_numbers')
+  const { data: zapisi, error } = await db!.from('pos_invoice_numbers')
     .select('sequence_number')
     .eq('business_id', BUSINESS_ID)
     .order('sequence_number')
 
-  if (!zapisi || zapisi.length === 0) return  // se ni podatkov
+  expect(error, `Poizvedba ni uspela: ${error?.message}`).toBeNull()
+  // Prazna tabela pomeni, da evidenca se ni napolnjena - to je stanje, ki ga
+  // je treba VIDETI, ne tiho preskociti.
+  expect(zapisi, 'Evidenca porabljenih stevilk je prazna').not.toHaveLength(0)
 
   const st = zapisi.map(z => Number(z.sequence_number))
   const manjka: number[] = []
@@ -221,8 +280,11 @@ test('stevilcenje: vsaka porabljena stevilka ima zapis', async () => {
 // ─────────────── DAVCNA SKLADNOST PODATKOV ───────────────
 
 test('racuni: osnova + DDV se ujema s skupnim zneskom', async () => {
-  const { data: racuni } = await db!.from('issued_invoices')
+  const { data: racuni, error } = await db!.from('issued_invoices')
     .select('invoice_number, amount_net, vat_amount, amount_total')
+
+  expect(error, `Poizvedba ni uspela: ${error?.message}`).toBeNull()
+  expect(racuni, 'Ni nobenega racuna - test ne bi imel kaj preveriti').not.toHaveLength(0)
 
   const neskladni = (racuni || []).filter(r =>
     Math.abs(Number(r.amount_total) - (Number(r.amount_net) + Number(r.vat_amount))) > 0.005)
@@ -233,10 +295,12 @@ test('racuni: osnova + DDV se ujema s skupnim zneskom', async () => {
 test('knjiga: vnosi z DDV imajo zapisano stopnjo', async () => {
   // NAPAKA (popravljeno 16.8.2026): promet po 22% in 9,5% se je sestel v en
   // zapis - obrazec DDV-O bi imel napacno razporeditev po vrsticah.
-  const { data: vnosi } = await db!.from('kpo_entries')
+  const { data: vnosi, error } = await db!.from('kpo_entries')
     .select('id, vat_out, vat_rate')
     .eq('entry_type', 'income')
     .gt('vat_out', 0)
+
+  expect(error, `Poizvedba ni uspela: ${error?.message}`).toBeNull()
 
   const brezStopnje = (vnosi || []).filter(v => v.vat_rate == null)
   expect(brezStopnje).toHaveLength(0)
