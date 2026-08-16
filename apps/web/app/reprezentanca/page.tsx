@@ -74,7 +74,9 @@ export default function ReprezentancaPage() {
     }
 
     // Vpiši v KPO kot strošek (samo davčno priznavni del)
-    await supabase.from('kpo_entries').insert({
+    // POPRAVLJENO (16.8.2026): prej brez preverbe napake - vnos v davcno evidenco
+    // se ni shranil, uporabnik pa je videl potrditev.
+    const { error: repErr } = await supabase.from('kpo_entries').insert({
       org_id: org.id,
       entry_date: form.date,
       description: `Reprezentanca: ${form.description} (${cat.deductible}% priznavno)`,
@@ -85,6 +87,7 @@ export default function ReprezentancaPage() {
       vat_out: 0,
       category: 'Reprezentanca',
     })
+    if (repErr) { alert('Reprezentance ni bilo mogoče poknjižiti: ' + repErr.message); return }
 
     save([entry, ...entries])
     setForm({

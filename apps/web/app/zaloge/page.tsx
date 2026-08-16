@@ -118,11 +118,12 @@ export default function ZalogePage() {
 
         // Če je začetna zaloga > 0, dodaj movement
         if ((itemModal.current_stock ?? 0) > 0 && newItem) {
-          await supabase.from('inventory_movements').insert({
+          const { error: initErr } = await supabase.from('inventory_movements').insert({
             org_id: orgId, item_id: newItem.id, type: 'in',
             quantity: itemModal.current_stock, unit_price: itemModal.purchase_price ?? 0,
             reference: 'Začetna zaloga',
           })
+          if (initErr) showToast('Artikel je shranjen, začetne zaloge pa ni bilo mogoče zabeležiti: ' + initErr.message)
         }
       }
 
@@ -138,17 +139,25 @@ export default function ZalogePage() {
     if (!orgId || !movModal || movQty <= 0) { showToast('Količina mora biti večja od 0'); return }
     setSavingMov(true)
     try {
-      await supabase.from('inventory_movements').insert({
+      // POPRAVLJENO (16.8.2026): prej brez preverbe napake - gibanje se ni
+      // zapisalo, zaloga pa se je vseeno spremenila (ali obratno).
+      const { error: movErr } = await supabase.from('inventory_movements').insert({
         org_id: orgId, item_id: movModal.itemId, type: movModal.type,
         quantity: movQty, unit_price: movPrice || null, reference: movRef.trim() || null,
       })
+      if (movErr) throw new Error('Gibanja zaloge ni bilo mogoče zapisati: ' + movErr.message)
 
       // Posodobi zalogo
+      // POPRAVLJENO (16.8.2026): prej branje zaloge iz ZASTARELEGA posnetka in
+      // zapis ABSOLUTNE vrednosti - ce je vmes kdo drug spremenil zalogo (druga
+      // seja, POS prodaja), se je tista sprememba izgubila. Zdaj atomarno v bazi.
       const item = items.find(i => i.id === movModal.itemId)
       if (item) {
-        const delta = movModal.type === 'in' ? movQty : movModal.type === 'out' ? -movQty : movQty - item.current_stock
-        const newStock = Math.max(0, item.current_stock + (movModal.type === 'adjustment' ? movQty - item.current_stock : (movModal.type === 'in' ? movQty : -movQty)))
-        await supabase.from('inventory_items').update({ current_stock: newStock }).eq('id', item.id)
+        const { data: novaZaloga, error: stockErr } = movModal.type === 'adjustment'
+          ? await supabase.rpc('set_inventory_stock', { p_item_id: item.id, p_value: movQty })
+          : await supabase.rpc('adjust_inventory_stock', { p_item_id: item.id, p_delta: movModal.type === 'in' ? movQty : -movQty })
+        if (stockErr) throw new Error('Zaloge ni bilo mogoče posodobiti: ' + stockErr.message)
+        const newStock = Number(novaZaloga ?? item.current_stock)
         setItems(prev => prev.map(i => i.id === item.id ? { ...i, current_stock: newStock } : i))
       }
 
@@ -161,7 +170,8 @@ export default function ZalogePage() {
   }
 
   async function toggleItem(id: string, is_active: boolean) {
-    await supabase.from('inventory_items').update({ is_active: !is_active }).eq('id', id)
+    const { error: togErr } = await supabase.from('inventory_items').update({ is_active: !is_active }).eq('id', id)
+    if (togErr) { showToast('Stanja ni bilo mogoče spremeniti: ' + togErr.message); return }
     setItems(prev => prev.map(i => i.id === id ? { ...i, is_active: !is_active } : i))
   }
 

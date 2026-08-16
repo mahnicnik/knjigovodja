@@ -112,7 +112,9 @@ export default function AmortizacijaPage() {
     // (samodejno letno obnavljanje ni del tega popravka).
     const currentYearEntry = schedule.find(e => e.year === currentYear)
     if (currentYearEntry && currentYearEntry.amount > 0) {
-      await supabase.from('kpo_entries').insert({
+      // POPRAVLJENO (16.8.2026): prej brez preverbe napake - vnos v davcno evidenco
+    // se ni shranil, uporabnik pa je videl potrditev.
+    const { error: amortErr } = await supabase.from('kpo_entries').insert({
         org_id: org.id,
         entry_date: purchaseYear === currentYear ? form.purchase_date : `${currentYear}-01-01`,
         description: `Amortizacija ${currentYear}: ${form.name}`,
@@ -124,6 +126,7 @@ export default function AmortizacijaPage() {
         category: 'Amortizacija',
         notes: `${cat.label} · stopnja ${cat.rate}%/leto`,
       })
+      if (amortErr) { alert('Amortizacije ni bilo mogoče poknjižiti: ' + amortErr.message); return }
     }
 
     setForm({ name: '', category: 'racunalnik', purchase_price: '', purchase_date: new Date().toISOString().split('T')[0], description: '' })

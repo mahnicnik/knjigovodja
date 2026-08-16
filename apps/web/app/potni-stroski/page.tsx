@@ -125,7 +125,9 @@ export default function PotniStroskiPage() {
     }
 
     // Vpiši v KPO
-    await supabase.from('kpo_entries').insert({
+    // POPRAVLJENO (16.8.2026): prej brez preverbe napake - vnos v davcno evidenco
+    // se ni shranil, uporabnik pa je videl potrditev.
+    const { error: potErr } = await supabase.from('kpo_entries').insert({
       org_id: org.id,
       entry_date: form.date_from,
       description: `Potni stroški ${emp?.full_name} — ${form.destination} (${expType.label})`,
@@ -136,6 +138,7 @@ export default function PotniStroskiPage() {
       vat_out: 0,
       category: 'Transport',
     })
+    if (potErr) { alert('Potnega stroška ni bilo mogoče poknjižiti: ' + potErr.message); return }
 
     saveEntries([entry, ...entries])
     setForm({

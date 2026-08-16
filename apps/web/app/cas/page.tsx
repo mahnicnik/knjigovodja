@@ -88,7 +88,8 @@ export default function CasPage() {
 
   async function deleteEntry(id: string) {
     if (!confirm('Izbrišem vnos?')) return
-    await supabase.from('time_entries').delete().eq('id', id)
+    const { error: delTErr } = await supabase.from('time_entries').delete().eq('id', id)
+    if (delTErr) { alert('Vnosa ni bilo mogoče izbrisati: ' + delTErr.message); return }
     setEntries(prev => prev.filter(e => e.id !== id))
     showToast('Vnos izbrisan')
   }
@@ -113,7 +114,10 @@ export default function CasPage() {
       notes: `Evidenca časa: ${entry.date}`,
     }).select('id').single()
     if (inv) {
-      await supabase.from('time_entries').update({ invoice_id: inv.id }).eq('id', entry.id)
+      // POPRAVLJENO (16.8.2026): prej brez preverbe - racun je nastal, vnos casa
+    // pa je ostal nepovezan, zato bi ga bilo mogoce zaracunati SE ENKRAT.
+    const { error: linkErr } = await supabase.from('time_entries').update({ invoice_id: inv.id }).eq('id', entry.id)
+    if (linkErr) alert('Račun je izdan, vnosa časa pa ni bilo mogoče označiti kot zaračunanega: ' + linkErr.message)
       setEntries(prev => prev.map(e => e.id === entry.id ? { ...e, invoice_id: inv.id } : e))
       showToast(`Račun ${year}-${seq} ustvarjen`)
     }

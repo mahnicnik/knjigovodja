@@ -99,7 +99,9 @@ export default function PredracuniPage() {
       }
 
       // Posodobi predračun
-      await supabase.from('quotes').update({ status: 'accepted', converted_to_invoice_id: invoice.id }).eq('id', quote.id)
+      // POPRAVLJENO (16.8.2026): prej brez preverbe - racun je nastal, predracun
+    // pa je ostal odprt, zato bi ga bilo mogoce pretvoriti SE ENKRAT (podvojen racun).
+    const { error: convErr } = await supabase.from('quotes').update({ status: 'accepted', converted_to_invoice_id: invoice.id }).eq('id', quote.id)
       setQuotes(prev => prev.map(q => q.id === quote.id ? { ...q, status: 'accepted', converted_to_invoice_id: invoice.id } : q))
       showToast(`Račun ${invoiceNumber} ustvarjen`)
       router.push('/invoices')
@@ -108,13 +110,15 @@ export default function PredracuniPage() {
 
   async function deleteQuote(id: string) {
     if (!confirm('Izbrišem predračun?')) return
-    await supabase.from('quotes').delete().eq('id', id)
+    const { error: delQErr } = await supabase.from('quotes').delete().eq('id', id)
+    if (delQErr) { alert('Predračuna ni bilo mogoče izbrisati: ' + delQErr.message); return }
     setQuotes(prev => prev.filter(q => q.id !== id))
     showToast('Predračun izbrisan')
   }
 
   async function updateStatus(id: string, status: string) {
-    await supabase.from('quotes').update({ status }).eq('id', id)
+    const { error: stQErr } = await supabase.from('quotes').update({ status }).eq('id', id)
+    if (stQErr) { alert('Statusa ni bilo mogoče spremeniti: ' + stQErr.message); return }
     setQuotes(prev => prev.map(q => q.id === id ? { ...q, status: status as Quote['status'] } : q))
   }
 

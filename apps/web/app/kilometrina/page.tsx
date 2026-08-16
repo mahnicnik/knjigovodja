@@ -66,7 +66,9 @@ export default function KilometrinaPage() {
     const description = `${typeLabel}: ${form.from_location} → ${form.to_location}${form.return_trip ? ' (povratno)' : ''} — ${km} km — ${form.purpose}`
 
     // Vpiši v KPO kot strošek
-    await supabase.from('kpo_entries').insert({
+    // POPRAVLJENO (16.8.2026): prej brez preverbe napake - vnos v davcno evidenco
+    // se ni shranil, uporabnik pa je videl potrditev.
+    const { error: kmErr } = await supabase.from('kpo_entries').insert({
       org_id: org.id,
       entry_date: form.date,
       description,
@@ -78,6 +80,7 @@ export default function KilometrinaPage() {
       category: 'Kilometrina',
       notes: `${typeLabel} · ${km} km × €${rate}/km`,
     })
+    if (kmErr) { alert('Kilometrine ni bilo mogoče poknjižiti: ' + kmErr.message); return }
 
     setForm({
       date: new Date().toISOString().split('T')[0],
