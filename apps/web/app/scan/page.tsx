@@ -205,7 +205,9 @@ export default function ScanPage() {
     const vatAmount = amountNet * (vatRate / 100)
     const amountTotal = amountNet + vatAmount
 
-    await supabase.from('receipts').insert({
+    // POPRAVLJENO (16.8.2026): prej brez preverbe - skeniran racun se ni shranil,
+      // uporabnik pa je videl potrditev in dokumenta ne bi skeniral znova.
+      const { error: rcpErr } = await supabase.from('receipts').insert({
       org_id: org.id,
       vendor: form.vendor,
       receipt_date: form.receipt_date,
@@ -220,8 +222,9 @@ export default function ScanPage() {
       attachment_base64: (window as any).__pdfBase64 || image || null,
       attachment_type: (window as any).__pdfBase64 ? 'pdf' : (image ? 'image' : null),
     })
+    if (rcpErr) { alert('Računa ni bilo mogoče shraniti: ' + rcpErr.message); return }
 
-    await supabase.from('kpo_entries').insert({
+    const { error: kpoErr } = await supabase.from('kpo_entries').insert({
       org_id: org.id,
       entry_date: form.receipt_date,
       description: `${form.vendor} — ${form.category}`,
@@ -232,6 +235,7 @@ export default function ScanPage() {
       vat_out: 0,
       category: form.category,
     })
+    if (kpoErr) { alert('Vnosa v knjigo ni bilo mogoče shraniti: ' + kpoErr.message); return }
 
     posthog.capture('receipt_saved', {
       category: form.category,

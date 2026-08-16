@@ -95,19 +95,24 @@ export default function IntegrationPage() {
       const settings = type === 'stripe' ? {} : { shop_url: shopUrl.trim() }
 
       if (existing) {
-        await supabase.from('integrations').update({
+        // POPRAVLJENO (16.8.2026): prej brez preverbe - nastavitve integracije se
+      // niso shranile, uporabnik pa je videl potrditev. Webhook bi zavracal
+      // zahteve zaradi napacne skrivnosti.
+      const { error: intUpdErr } = await supabase.from('integrations').update({
           settings,
           webhook_secret: secret,
           is_active: true,
         }).eq('id', existing.id)
+        if (intUpdErr) { alert('Integracije ni bilo mogoče posodobiti: ' + intUpdErr.message); return }
       } else {
-        await supabase.from('integrations').insert({
+        const { error: intInsErr } = await supabase.from('integrations').insert({
           org_id: orgId,
           type,
           settings,
           webhook_secret: secret,
           is_active: true,
         })
+        if (intInsErr) { alert('Integracije ni bilo mogoče shraniti: ' + intInsErr.message); return }
       }
 
       const { data } = await supabase
@@ -126,13 +131,15 @@ export default function IntegrationPage() {
   }
 
   async function toggleIntegration(id: string, isActive: boolean) {
-    await supabase.from('integrations').update({ is_active: !isActive }).eq('id', id)
+    const { error: togIntErr } = await supabase.from('integrations').update({ is_active: !isActive }).eq('id', id)
+    if (togIntErr) { alert('Stanja integracije ni bilo mogoče spremeniti: ' + togIntErr.message); return }
     setIntegrations(prev => prev.map(i => i.id === id ? { ...i, is_active: !isActive } : i))
   }
 
   async function deleteIntegration(id: string, type: string) {
     if (!confirm(`Izbrišem ${type} integracijo?`)) return
-    await supabase.from('integrations').delete().eq('id', id)
+    const { error: delIntErr } = await supabase.from('integrations').delete().eq('id', id)
+    if (delIntErr) { alert('Integracije ni bilo mogoče izbrisati: ' + delIntErr.message); return }
     setIntegrations(prev => prev.filter(i => i.id !== id))
     showToast('success', 'Integracija izbrisana')
   }

@@ -84,7 +84,7 @@ export default function AvansniRacuniPage() {
       const { count } = await supabase.from('issued_invoices').select('*', { count: 'exact', head: true }).eq('org_id', orgId).like('invoice_number', `AVA-${year}-%`)
       const seq = String((count ?? 0) + 1).padStart(3, '0')
 
-      const { data: inv } = await supabase.from('issued_invoices').insert({
+      const { data: inv, error: invErr } = await supabase.from('issued_invoices').insert({
         org_id: orgId,
         invoice_number: `AVA-${year}-${seq}`,
         invoice_type: 'invoice',
@@ -102,8 +102,11 @@ export default function AvansniRacuniPage() {
         status: 'draft',
         notes: `Avansni račun ${advancePct}% od skupne vrednosti ${fmt(totalAmount)}`,
       }).select().single()
+      // POPRAVLJENO (16.8.2026): prej brez preverbe - ce racun ni nastal, je
+      // "inv" null, seznam pa je dobil prazen zapis, uporabnik pa potrditev.
+      if (invErr || !inv) throw new Error('Avansnega računa ni bilo mogoče izdati: ' + (invErr?.message || 'neznana napaka'))
 
-      setInvoices(prev => [inv!, ...prev])
+      setInvoices(prev => [inv, ...prev])
       setModal(null)
       setClientName(''); setClientEmail(''); setDescription(''); setTotalAmount(0); setAdvancePct(50)
       showToast(`Avansni račun AVA-${year}-${seq} ustvarjen`)
@@ -129,7 +132,7 @@ export default function AvansniRacuniPage() {
       const finalInvoiceNumber = nextNumber || `${year}-001`
       const today = new Date().toISOString().split('T')[0]
 
-      const { data: inv } = await supabase.from('issued_invoices').insert({
+      const { data: inv, error: invErr } = await supabase.from('issued_invoices').insert({
         org_id: orgId,
         invoice_number: finalInvoiceNumber,
         invoice_type: 'invoice',
@@ -149,8 +152,11 @@ export default function AvansniRacuniPage() {
         status: 'draft',
         notes: `Finalni račun — odbitek avansa ${advance.invoice_number} (${fmt(advance.advance_amount ?? 0)})`,
       }).select().single()
+      // POPRAVLJENO (16.8.2026): prej brez preverbe - ce racun ni nastal, je
+      // "inv" null, seznam pa je dobil prazen zapis, uporabnik pa potrditev.
+      if (invErr || !inv) throw new Error('Finalnega računa ni bilo mogoče izdati: ' + (invErr?.message || 'neznana napaka'))
 
-      setInvoices(prev => [inv!, ...prev])
+      setInvoices(prev => [inv, ...prev])
       setSelectedAdvance(null)
       setModal(null)
       showToast(`Finalni račun ${finalInvoiceNumber} ustvarjen`)

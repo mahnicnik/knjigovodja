@@ -111,15 +111,19 @@ export default function NewInvoicePage() {
     setSavingPartner(true)
     const existing = partners.find(p => p.name === clientName)
     if (existing) {
-      await supabase.from('invoice_partners').update({
+      // POPRAVLJENO (16.8.2026): prej brez preverbe - partner se ni shranil,
+      // uporabnik pa je videl potrditev in bi ga vnasal znova.
+      const { error: pUpdErr } = await supabase.from('invoice_partners').update({
         email: clientEmail, tax_number: clientTaxNumber,
         address: clientAddress, iban: clientIban,
       }).eq('id', existing.id)
+      if (pUpdErr) { alert('Partnerja ni bilo mogoče posodobiti: ' + pUpdErr.message); setSavingPartner(false); return }
     } else {
-      await supabase.from('invoice_partners').insert({
+      const { error: pInsErr } = await supabase.from('invoice_partners').insert({
         org_id: org.id, name: clientName, email: clientEmail,
         tax_number: clientTaxNumber, address: clientAddress, iban: clientIban,
       })
+      if (pInsErr) { alert('Partnerja ni bilo mogoče shraniti: ' + pInsErr.message); setSavingPartner(false); return }
     }
     const { data: pts } = await supabase.from('invoice_partners').select('*').eq('org_id', org.id).order('name')
     setPartners(pts || [])

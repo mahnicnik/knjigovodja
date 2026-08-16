@@ -90,7 +90,9 @@ export default function NewQuotePage() {
       const seq = String((count ?? 0) + 1).padStart(4, '0')
       const quoteNumber = `PRE-${year}-${seq}`
 
-      await supabase.from('quotes').insert({
+      // POPRAVLJENO (16.8.2026): prej brez preverbe - predracun se ni shranil,
+    // uporabnik pa je bil preusmerjen, kot da je uspelo.
+    const { error: quoteErr } = await supabase.from('quotes').insert({
         org_id: orgId,
         quote_number: quoteNumber,
         client_name: clientName.trim(),
@@ -106,6 +108,7 @@ export default function NewQuotePage() {
         notes: notes.trim() || null,
         status: 'draft',
       })
+      if (quoteErr) throw new Error('Predračuna ni bilo mogoče shraniti: ' + quoteErr.message)
       router.push('/predracuni')
     } catch (e: any) {
       alert(e.message)

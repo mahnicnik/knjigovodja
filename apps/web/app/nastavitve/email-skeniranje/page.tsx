@@ -35,14 +35,16 @@ function EmailSkeniranjeContent() {
 
   async function updateConnection(id: string, updates: any) {
     setSavingId(id)
-    await supabase.from('email_connections').update(updates).eq('id', id)
+    const { error: connErr } = await supabase.from('email_connections').update(updates).eq('id', id)
+    if (connErr) { alert('Nastavitve ni bilo mogoče shraniti: ' + connErr.message); return }
     setConnections(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c))
     setSavingId(null)
   }
 
   async function disconnectEmail(id: string) {
     if (!confirm('Prekiniti povezavo s tem e-mail racunom?')) return
-    await supabase.from('email_connections').delete().eq('id', id)
+    const { error: disErr } = await supabase.from('email_connections').delete().eq('id', id)
+    if (disErr) { alert('Povezave ni bilo mogoče odstraniti: ' + disErr.message); return }
     setConnections(prev => prev.filter(c => c.id !== id))
   }
 
@@ -82,7 +84,9 @@ function EmailSkeniranjeContent() {
     const vatRate = Number(d.vat_rate || 0)
     const vatAmount = amountNet * (vatRate / 100)
     const amountTotal = amountNet + vatAmount
-    await supabase.from('receipts').insert({
+    // POPRAVLJENO (16.8.2026): prej brez preverbe - potrjen racun iz e-poste se
+    // ni shranil, predlog pa se je oznacil kot obdelan, zato bi bil izgubljen.
+    const { error: rcpErr } = await supabase.from('receipts').insert({
       org_id: org.id,
       vendor: d.vendor || '',
       receipt_date: d.date || new Date().toISOString().split('T')[0],
@@ -97,7 +101,8 @@ function EmailSkeniranjeContent() {
       attachment_base64: item.pdf_base64 || null,
       attachment_type: 'pdf',
     })
-    await supabase.from('kpo_entries').insert({
+    if (rcpErr) { alert('Računa ni bilo mogoče shraniti: ' + rcpErr.message); return }
+    const { error: kpoErr } = await supabase.from('kpo_entries').insert({
       org_id: org.id,
       entry_date: d.date || new Date().toISOString().split('T')[0],
       description: `${d.vendor || ''} — ${d.category || 'Drugo'}`,
@@ -108,12 +113,16 @@ function EmailSkeniranjeContent() {
       vat_out: 0,
       category: d.category || 'Drugo',
     })
+    if (kpoErr) { alert('Vnosa v knjigo ni bilo mogoče shraniti: ' + kpoErr.message); return }
     await supabase.from('email_scan_pending').update({ status: 'confirmed', reviewed_at: new Date().toISOString() }).eq('id', item.id)
     setPending(prev => prev.filter(p => p.id !== item.id))
   }
 
   async function rejectPending(id: string) {
-    await supabase.from('email_scan_pending').update({ status: 'rejected', reviewed_at: new Date().toISOString() }).eq('id', id)
+    const { error: rejErr } = await supabase.from('email_scan_pending').update({ status: 'rejected', reviewed_at: new Date().toISOString() }).eq('id', id)
+    // POPRAVLJENO (16.8.2026): prej brez preverbe - predlog je izginil s
+    // seznama, v bazi pa ostal, zato bi se ob osvezitvi znova pojavil.
+    if (rejErr) { alert('Predloga ni bilo mogoče zavrniti: ' + rejErr.message); return }
     setPending(prev => prev.filter(p => p.id !== id))
   }
 
