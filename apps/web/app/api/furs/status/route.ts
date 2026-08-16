@@ -19,7 +19,18 @@ export async function GET(req: NextRequest) {
     },
   )
   const { data: { user } } = await authClient.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })
+
+  // POPRAVLJENO (16.8.2026): prej je neprijavljena zahteva dobila 401, kar je
+  // pokvarilo nadzorni sistem (klice ta naslov vsakih 5 minut in je odslej
+  // vedno javljal napako).
+  //
+  // Podatki tu niso obcutljivi - povedo le, ali je certifikat nalozen in ali je
+  // vklopljen testni nacin, nic o uporabnikih ali prometu. Skrb je bila drugje:
+  // vsak klic je sprozil ODHODNO zahtevo na FURS, kar bi kdo lahko zlorabil.
+  //
+  // Zato zdaj: neprijavljeni dobijo stanje iz nastavitev BREZ klica na FURS,
+  // prijavljeni pa tudi zivo preverbo povezave.
+  const zivaPreverba = !!user
 
   const testMode = process.env.FURS_TEST_MODE === 'true'
   const hasCert = !!(process.env.FURS_CERT_B64 || process.env.FURS_CERT_PATH)
@@ -28,7 +39,7 @@ export async function GET(req: NextRequest) {
   let connected = false
   let lastSync = null
 
-  if (hasCert) {
+  if (hasCert && zivaPreverba) {
     try {
       // Poskusi ping FURS endpoint
       const fursUrl = testMode
@@ -52,7 +63,8 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({
-    connected: hasCert && connected,
+    connected: zivaPreverba ? (hasCert && connected) : hasCert,
+    live: zivaPreverba,
     testMode,
     hasCert,
     lastSync,
