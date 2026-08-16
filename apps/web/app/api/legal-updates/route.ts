@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -69,7 +71,29 @@ const STATIC_UPDATES = [
   },
 ]
 
+/**
+ * POPRAVLJENO (16.8.2026, VARNOST): endpoint je bil ODPRT - klical ga je lahko
+ * kdorkoli brez prijave, pri tem pa uporablja kljuc s POLNIMI pravicami in
+ * IZBRISE ter znova napolni tabelo legal_updates. Vsak zunanji klic je torej
+ * lahko sprozil brisanje. Zdaj zahteva prijavo.
+ */
 export async function GET() {
+  const cookieStore = await cookies()
+  const authClient = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) { return cookieStore.get(name)?.value },
+        set() {}, remove() {},
+      },
+    },
+  )
+  const { data: { user } } = await authClient.auth.getUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })
+  }
+
   try {
     // Preveri ali so že novosti v bazi
     const { data: existing } = await supabase

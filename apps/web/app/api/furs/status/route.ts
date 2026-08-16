@@ -1,7 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'
 
 export async function GET(req: NextRequest) {
+  // POPRAVLJENO (16.8.2026): endpoint je bil odprt in ob vsakem klicu sprozil
+  // odhodno zahtevo na FURS - kdorkoli ga je lahko klical v zanki. Zdaj
+  // zahteva prijavo (prikazuje se v nastavitvah blagajne).
+  const cookieStore = await cookies()
+  const authClient = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) { return cookieStore.get(name)?.value },
+        set() {}, remove() {},
+      },
+    },
+  )
+  const { data: { user } } = await authClient.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })
+
   const testMode = process.env.FURS_TEST_MODE === 'true'
   const hasCert = !!(process.env.FURS_CERT_B64 || process.env.FURS_CERT_PATH)
 
