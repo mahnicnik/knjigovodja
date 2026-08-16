@@ -3593,13 +3593,28 @@ function DobavnicaImportModal({ posData, onClose, onImported }) {
       if (!selected[idx]) continue
       try {
         if (artikel.ujemanje_id) {
-          const item = posData.items.find(i => i.id === artikel.ujemanje_id)
-          const newStock = (item?.stock || 0) + Number(artikel.kolicina || 0)
-          await sb.from('items').update({
-            stock: newStock,
-            cost_price: artikel.neto_cena_brez_ddv || null,
-            barcode: artikel.ean || undefined,
-          }).eq('id', artikel.ujemanje_id)
+          // POPRAVLJENO (16.8.2026): prej branje zaloge iz ZASTARELEGA posnetka
+          // + zapis absolutne vrednosti - ce je vmes tekla prodaja, je uvoz
+          // povozil odstete kolicine. Zdaj atomarno pristevanje v bazi.
+          const qty = Number(artikel.kolicina || 0)
+          const { error: stockErr } = await sb.rpc('increment_stock', {
+            p_item_id: artikel.ujemanje_id,
+            p_qty: qty,
+          })
+          if (stockErr) throw stockErr
+
+          // POPRAVLJENO (16.8.2026): nabavna cena in EAN se posodobita SAMO,
+          // ce ju je AI dejansko prepoznal - prej je "|| null" IZBRISAL
+          // obstojeco nabavno ceno, kadar je AI ni razbral iz PDF-ja.
+          const patch: any = {}
+          if (artikel.neto_cena_brez_ddv) patch.cost_price = artikel.neto_cena_brez_ddv
+          if (artikel.ean) patch.barcode = artikel.ean
+          if (Object.keys(patch).length > 0) {
+            // POPRAVLJENO (16.8.2026): prej se napaka ni preverjala - uporabnik
+            // je videl "+X kos" tudi, ce posodobitev sploh ni uspela.
+            const { error: patchErr } = await sb.from('items').update(patch).eq('id', artikel.ujemanje_id)
+            if (patchErr) throw patchErr
+          }
           newLog.push({ name: artikel.naziv, ok: true, msg: '+' + artikel.kolicina + ' kos' })
         } else {
           newLog.push({ name: artikel.naziv, ok: false, msg: 'Nov artikel - dodaj rocno' })
@@ -7292,6 +7307,20 @@ function CenikImportModal({ onClose, posData }) {
         setSaving(false)
         return
       }
+      // DODANO (16.8.2026): opozorilo pred podvojitvijo - dvakraten uvoz istega
+      // cenika je prej tiho ustvaril podvojene artikle z istim imenom, kar
+      // zmede blagajnika pri prodaji in popaci porocila po artiklih.
+      const obstojeca = new Set((posData.items || []).filter((i:any) => !i.archived).map((i:any) => (i.name || '').trim().toLowerCase()))
+      const podvojeni = toInsert.filter(it => obstojeca.has(it.name.trim().toLowerCase()))
+      if (podvojeni.length > 0) {
+        const seznam = podvojeni.slice(0, 5).map(it => '• ' + it.name.trim()).join('\n')
+        const vec = podvojeni.length > 5 ? `\n… in še ${podvojeni.length - 5}` : ''
+        if (!confirm(`${podvojeni.length} izdelkov s tem imenom že obstaja:\n\n${seznam}${vec}\n\nČe nadaljujete, bodo dodani še enkrat (podvojeni). Nadaljujem?`)) {
+          setSaving(false)
+          return
+        }
+      }
+
       // Poiščemo ali ustvarimo kategorije po imenu
       const sb = createClient()
       const categoryNames = [...new Set(toInsert.map(it => it.category.trim()).filter(Boolean))]
