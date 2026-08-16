@@ -92,7 +92,9 @@ export default function KarticeePage() {
     const dateTo = form.period_to || form.period_from
 
     // Knjižimo BRUTO prihodek v KPO
-    await supabase.from('kpo_entries').insert({
+    // POPRAVLJENO (16.8.2026): prej brez preverbe napake. Ce se prihodek
+    // poknjizi, provizija pa ne, je dobicek PRECENJEN in davcna osnova napacna.
+    const { error: incErr } = await supabase.from('kpo_entries').insert({
       org_id: org.id,
       entry_date: dateTo,
       description: `Kartično poslovanje ${selectedProcessor.label} — ${dateFrom} do ${dateTo}`,
@@ -104,10 +106,11 @@ export default function KarticeePage() {
       category: 'Kartično poslovanje',
       notes: `${form.transactions || '?'} transakcij · provizija ${feePct}%`,
     })
+    if (incErr) { alert('Prihodka ni bilo mogoče poknjižiti: ' + incErr.message); setSaving(false); return }
 
     // Knjižimo PROVIZIJO kot strošek
     if (feeAmt > 0) {
-      await supabase.from('kpo_entries').insert({
+      const { error: feeErr } = await supabase.from('kpo_entries').insert({
         org_id: org.id,
         entry_date: dateTo,
         description: `Provizija ${selectedProcessor.label} — ${feePct}%`,
@@ -119,6 +122,7 @@ export default function KarticeePage() {
         category: 'Bančne provizije',
         notes: `Provizija od €${grossAmt} kartičnih plačil`,
       })
+      if (feeErr) alert('POZOR: prihodek je poknjižen, provizije pa NI bilo mogoče poknjižiti: ' + feeErr.message + '\n\nDobiček bo precenjen — provizijo vnesite ročno.')
     }
 
     // Shranimo obračun
@@ -194,6 +198,8 @@ export default function KarticeePage() {
     if (!org) return
     setBatchProcessing(true)
     const newSettlements: any[] = []
+    // DODANO (16.8.2026): zbiranje napak pri paketnem uvozu
+    const napake: string[] = []
 
     for (let i = 0; i < batchFiles.length; i++) {
       const item = batchFiles[i]
@@ -225,7 +231,10 @@ export default function KarticeePage() {
         const dateFrom = s.period_from
         const dateTo = s.period_to || s.period_from
 
-        await supabase.from('kpo_entries').insert({
+        // POPRAVLJENO (16.8.2026): prej brez preverbe napake - pri paketnem
+        // uvozu vec izpiskov je posamezen neuspesen vnos ostal neopazen,
+        // uporabnik pa je videl, da so vsi uvozeni.
+        const { error: bIncErr } = await supabase.from('kpo_entries').insert({
           org_id: org.id,
           entry_date: dateTo,
           description: `Kartično poslovanje ${proc.label} — ${dateFrom} do ${dateTo}`,
@@ -237,8 +246,9 @@ export default function KarticeePage() {
           category: 'Kartično poslovanje',
           notes: `${s.transactions ?? '?'} transakcij · provizija ${feePct}% · paketni uvoz`,
         })
+        if (bIncErr) { napake.push(`${proc.label} ${dateFrom}: ${bIncErr.message}`); continue }
         if (feeAmt > 0) {
-          await supabase.from('kpo_entries').insert({
+          const { error: bFeeErr } = await supabase.from('kpo_entries').insert({
             org_id: org.id,
             entry_date: dateTo,
             description: `Provizija ${proc.label} — ${feePct}%`,
@@ -250,6 +260,7 @@ export default function KarticeePage() {
             category: 'Bančne provizije',
             notes: `Provizija od €${grossAmt} kartičnih plačil · paketni uvoz`,
           })
+          if (bFeeErr) napake.push(`${proc.label} ${dateFrom}: prihodek poknjižen, provizija NE (${bFeeErr.message})`)
         }
 
         const settlement = {
@@ -276,6 +287,11 @@ export default function KarticeePage() {
 
     if (newSettlements.length > 0) {
       saveSettlements([...newSettlements, ...settlements])
+    }
+    // DODANO (16.8.2026): prikaz napak - prej so posamezni neuspesni izpiski
+    // ostali neopazeni, uporabnik pa je mislil, da so vsi uvozeni.
+    if (napake.length > 0) {
+      alert(`Uvoženih ${newSettlements.length} izpiskov, ${napake.length} pa NI uspelo:\n\n${napake.slice(0, 8).join('\n')}${napake.length > 8 ? `\n… in še ${napake.length - 8}` : ''}\n\nTe vnesite ročno.`)
     }
     setBatchProcessing(false)
   }

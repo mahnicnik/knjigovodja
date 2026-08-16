@@ -105,7 +105,10 @@ export default function ExpensesPage() {
     if (!confirm('Res želite izbrisati ta strošek? To dejanje je nepovratno.')) return
     setSaving(true)
     // Najprej pocisti povezan KPO vnos (ce obstaja), da ne ostane osirotel
-    await supabase.from('kpo_entries').delete().eq('receipt_id', id)
+    // POPRAVLJENO (16.8.2026): prej brez preverbe - ce vnos v knjigi ostane,
+    // strosek pa se izbrise, ostane osirotel zapis v davcni evidenci.
+    const { error: kpoDelErr } = await supabase.from('kpo_entries').delete().eq('receipt_id', id)
+    if (kpoDelErr) { alert('Vnosa v knjigi ni bilo mogoče izbrisati: ' + kpoDelErr.message); return }
     const { error } = await supabase.from('receipts').delete().eq('id', id)
     if (error) {
       alert('Napaka pri brisanju: ' + error.message)
@@ -178,7 +181,8 @@ export default function ExpensesPage() {
         .maybeSingle()
 
       if (existingKpo) {
-        await supabase.from('kpo_entries').update(kpoPayload).eq('id', existingKpo.id)
+        const { error: kpoUpdErr } = await supabase.from('kpo_entries').update(kpoPayload).eq('id', existingKpo.id)
+        if (kpoUpdErr) throw new Error('Vnosa v knjigi ni bilo mogoče posodobiti: ' + kpoUpdErr.message)
       } else {
         // Star vnos brez povezave (pred tem popravkom) - ustvari novega
         await supabase.from('kpo_entries').insert(kpoPayload)

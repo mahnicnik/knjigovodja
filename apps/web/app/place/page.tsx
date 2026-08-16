@@ -137,7 +137,8 @@ export default function PlacePage() {
 
   async function deleteEmployee(emp: any) {
     if (!confirm(`Izbrišem zaposlenega "${emp.full_name}"? Zgodovina plač/regresa ostane ohranjena, a se oseba ne bo več prikazovala v seznamu.`)) return
-    await supabase.from('employees').update({ status: 'inactive' }).eq('id', emp.id)
+    const { error: empErr } = await supabase.from('employees').update({ status: 'inactive' }).eq('id', emp.id)
+    if (empErr) { alert('Zaposlenega ni bilo mogoče deaktivirati: ' + empErr.message); return }
     load()
   }
 
@@ -253,7 +254,9 @@ export default function PlacePage() {
 
     // Poknjizi v KPO - uporabi employer_total_cost (DEJANSKI strosek), ne
     // samo bruto placo.
-    await supabase.from('kpo_entries').insert({
+    // POPRAVLJENO (16.8.2026): prej brez preverbe - strosek place se ni
+    // poknjizil, uporabnik pa je videl potrditev. To popaci davcno osnovo.
+    const { error: placaKpoErr } = await supabase.from('kpo_entries').insert({
       org_id: org.id,
       entry_date: p.period_end,
       description: `Plača ${p.employee_name || ''} — ${p.period_start} do ${p.period_end}`,
@@ -267,6 +270,7 @@ export default function PlacePage() {
         ? `Nalozena plac. lista - OPOZORILO: "Skupaj strosek v breme podjetja" ni bil zaznan, uporabljena bruto placa namesto tega - preveri rocno!`
         : `Naložena plačilna lista (skupaj strošek v breme podjetja)`,
     })
+    if (placaKpoErr) { alert('Stroška plače ni bilo mogoče poknjižiti: ' + placaKpoErr.message); return }
 
     setUploadSaving(false)
     setShowUpload(false)
@@ -343,7 +347,7 @@ export default function PlacePage() {
     if (!org) return
     const regres = calcRegres(Number(emp.gross_salary))
     // POPRAVLJENO 26.7.2026: prava imena stolpcev
-    await supabase.from('payslips').insert({
+    const { error: payslipErr } = await supabase.from('payslips').insert({
       org_id: org.id,
       employee_id: emp.id,
       type: 'regres',
@@ -355,6 +359,7 @@ export default function PlacePage() {
       status: 'paid',
       paid_at: new Date().toISOString(),
     })
+    if (payslipErr) { alert('Plačilne liste za regres ni bilo mogoče shraniti: ' + payslipErr.message); return }
     setRegresModal(null)
     load()
   }

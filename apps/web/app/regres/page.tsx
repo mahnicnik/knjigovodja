@@ -113,7 +113,8 @@ export default function RegresPage() {
         const calc = calcRegres(emp, amount)
 
         if (existing) {
-          await supabase.from('regres_entries').update({ amount: calc.amount }).eq('id', existing.id)
+          const { error: regUpdErr } = await supabase.from('regres_entries').update({ amount: calc.amount }).eq('id', existing.id)
+        if (regUpdErr) throw new Error('Regresa ni bilo mogoče posodobiti: ' + regUpdErr.message)
         } else {
           await supabase.from('regres_entries').insert({
             org_id: orgId,
@@ -135,7 +136,10 @@ export default function RegresPage() {
   async function markPaid(employeeId: string) {
     const entry = entries.find(e => e.employee_id === employeeId)
     if (!entry) return
-    await supabase.from('regres_entries').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', entry.id)
+    const { error: regPaidErr } = await supabase.from('regres_entries').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', entry.id)
+    // POPRAVLJENO (16.8.2026): prej brez preverbe - regres je ostal neplacan,
+    // na zaslonu pa je pisalo, da je placan.
+    if (regPaidErr) { showToast('Regresa ni bilo mogoče označiti kot plačanega: ' + regPaidErr.message); return }
     setEntries(prev => prev.map(e => e.id === entry.id ? { ...e, status: 'paid', paid_at: new Date().toISOString() } : e))
     showToast('Regres označen kot plačan')
   }

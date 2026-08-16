@@ -132,13 +132,15 @@ export default function PotniNalogiPage() {
   }
 
   async function updateStatus(id: string, status: string) {
-    await supabase.from('travel_orders').update({ status }).eq('id', id)
+    const { error: statErr } = await supabase.from('travel_orders').update({ status }).eq('id', id)
+    if (statErr) { alert('Statusa ni bilo mogoče spremeniti: ' + statErr.message); return }
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status: status as TravelOrder['status'] } : o))
   }
 
   async function deleteOrder(id: string, num: string) {
     if (!confirm(`Izbrišem potni nalog ${num}?`)) return
-    await supabase.from('travel_orders').delete().eq('id', id)
+    const { error: delErr } = await supabase.from('travel_orders').delete().eq('id', id)
+    if (delErr) { alert('Potnega naloga ni bilo mogoče izbrisati: ' + delErr.message); return }
     setOrders(prev => prev.filter(o => o.id !== id))
     showToast('Potni nalog izbrisan')
   }
