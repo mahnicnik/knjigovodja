@@ -95,12 +95,33 @@ export async function POST(req: NextRequest) {
     // vzorcem - enak razred napake, ki je povzrocil prvotni FURS incident.
     // Po ZDavPR mora kredit nota deliti ISTO zaporedje kot navadni racuni
     // znotraj istega prostora+naprave, zato uporabimo isti atomaren RPC.
+    // DODANO (16.8.2026): business_id potrebujemo ze pri evidentiranju
+    // porabljene zaporedne stevilke, zato ga preberemo PRED dodelitvijo.
+    const { data: stornoOrder } = await supabase
+      .from('orders')
+      .select('business_id')
+      .eq('id', order_id)
+      .maybeSingle()
+    const stornoBusinessId = stornoOrder?.business_id
+
     const { data: seqData, error: seqError } = await supabase.rpc('get_next_pos_invoice_number')
     if (seqError) {
       return NextResponse.json({ error: 'Napaka pri generiranju številke kredit note: ' + seqError.message }, { status: 500 })
     }
     const sequenceNumber = seqData as number
     const invoiceNumberFull = `${premise.premise_id}-${deviceIdCode}-${sequenceNumber}`
+
+    // DODANO (16.8.2026): storno porablja ISTO zaporedje kot navadni racuni,
+    // zato neuspesen klic na FURS prav tako pusti trajno vrzel v stevilcenju.
+    // Zabelezimo porabljeno stevilko, da bo vrzel pojasnjena.
+    await supabase.from('pos_invoice_numbers').insert({
+      business_id: stornoBusinessId,
+      sequence_number: sequenceNumber,
+      invoice_number: invoiceNumberFull,
+      order_id: order_id,
+      status: 'failed',
+      note: 'Storno: stevilka rezervirana, cakanje na odgovor FURS',
+    })
 
     // Razpakiraj .p12 v PEM
     const p12Buffer = Buffer.from(cert.certificate_data, 'base64')
@@ -191,6 +212,14 @@ export async function POST(req: NextRequest) {
         response_at: result.responseTime?.toISOString(),
       })
       .eq('id', logEntry?.id)
+
+    // DODANO (16.8.2026): dopolni zapis glede na izid.
+    await supabase.from('pos_invoice_numbers')
+      .update(result.success
+        ? { status: 'issued', note: 'Storno racuna' }
+        : { status: 'failed', note: 'Storno: FURS ni potrdil - ' + (result.errorMessage || 'neznana napaka') })
+      .eq('business_id', stornoBusinessId)
+      .eq('sequence_number', sequenceNumber)
 
     if (result.success) {
       return NextResponse.json({
