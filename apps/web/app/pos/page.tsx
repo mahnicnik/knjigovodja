@@ -583,15 +583,13 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         fursZoi,
       })
 
-      // Odštej zalogo za simple artikle
-      try {
-        for (const line of cart) {
-          if (line.item_type !== 'recipe' && line.stock !== null) {
-            const newStock = Math.max(0, (line.stock || 0) - line.qty)
-            await createClient().from('items').update({ stock: newStock }).eq('id', line.id)
-          }
-        }
-      } catch(stockErr) { console.warn('Zaloga odštevanje ni uspelo:', stockErr) }
+      // ODSTRANJENO (16.8.2026, KRITICNO): tu je bilo DRUGO odstevanje zaloge -
+      // zaloga se ze odsteje s sprozilcem trg_order_line_stock v bazi (ob
+      // shranjevanju vrstic narocila). Ta koda je odstevala se enkrat, povrh
+      // tega pa je uporabljala ZASTAREL posnetek line.stock (iz trenutka, ko je
+      // bil artikel dodan v kosarico) in zapisala ABSOLUTNO vrednost - pri dveh
+      // hkratnih blagajnah je to povozilo tuje spremembe (lost update).
+      // Odstevanje zdaj v celoti opravi baza: atomarno, brez zastarelih vrednosti.
       // Odštej surovine za recipe artikle
       try {
         for (const line of cart) {
@@ -599,11 +597,13 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
             const {data: normLines} = await createClient().from('item_ingredients').select('ingredient_id, qty_used').eq('item_id', line.id)
             if (normLines && normLines.length > 0) {
               for (const nl of normLines) {
-                const {data: ig} = await createClient().from('ingredients').select('stock_qty').eq('id', nl.ingredient_id).single()
-                if (ig) {
-                  const newQty = Math.max(0, (ig.stock_qty || 0) - (nl.qty_used * line.qty))
-                  await createClient().from('ingredients').update({ stock_qty: newQty }).eq('id', nl.ingredient_id)
-                }
+                // POPRAVLJENO (16.8.2026): prej SELECT + izracun + UPDATE - pri
+                // dveh hkratnih blagajnah je druga povozila prvo (lost update).
+                // Zdaj atomarno v bazi, v enem koraku.
+                await createClient().rpc('decrement_ingredient_stock', {
+                  p_ingredient_id: nl.ingredient_id,
+                  p_qty: nl.qty_used * line.qty,
+                })
               }
             }
           }
