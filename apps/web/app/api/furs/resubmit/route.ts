@@ -54,7 +54,10 @@ export async function POST(req: NextRequest) {
   // Racuni z natisnjenim ZOI v obdobju (lazni ali manjkajoci EOR)
   let query = admin
     .from('payments')
-    .select('id, order_id, amount, furs_zoi, furs_eor, paid_at, orders!inner(id, number, invoice_number, total, vat_amount, business_id)')
+    // DODANO (16.8.2026): order_lines s stopnjami DDV - brez njih se je naknadno
+    // fiskaliziran racun prijavil v celoti po 22%, tudi ce je vseboval hrano po
+    // 9,5%. To bi pomenilo, da se NAKNADNA prijava ne ujema z natisnjenim racunom.
+    .select('id, order_id, amount, furs_zoi, furs_eor, paid_at, orders!inner(id, number, invoice_number, total, vat_amount, business_id, order_lines(total, qty, unit_price, vat_rate, voided))')
     .not('furs_zoi', 'is', null)
     .gte('paid_at', from)
     .lt('paid_at', toEffective)
@@ -81,12 +84,31 @@ export async function POST(req: NextRequest) {
   const preview = (rows || []).map((r: any) => {
     const o = Array.isArray(r.orders) ? r.orders[0] : r.orders
     const ids = parseInvoiceNumber(o, r)
+    // DODANO (16.8.2026): razclenitev po stopnjah DDV iz vrstic narocila.
+    const linije = (o?.order_lines || []).filter((l: any) => !l.voided)
+    let vatBreakdown: { rate: number; net: number; vat: number }[] | undefined
+    if (linije.length > 0) {
+      const vsotaVrstic = linije.reduce((s: number, l: any) =>
+        s + Number(l.total ?? (Number(l.qty || 0) * Number(l.unit_price || 0))), 0)
+      const faktor = vsotaVrstic > 0 ? Number(r.amount) / vsotaVrstic : 1
+      const poStopnji = new Map<number, number>()
+      for (const l of linije) {
+        const bruto = Number(l.total ?? (Number(l.qty || 0) * Number(l.unit_price || 0))) * faktor
+        const stopnja = Number(l.vat_rate ?? 22)
+        poStopnji.set(stopnja, (poStopnji.get(stopnja) || 0) + bruto)
+      }
+      vatBreakdown = Array.from(poStopnji.entries()).map(([rate, bruto]) => {
+        const net = rate > 0 ? bruto / (1 + rate / 100) : bruto
+        return { rate, net: Math.round(net * 100) / 100, vat: Math.round((bruto - net) * 100) / 100 }
+      }).sort((a, b) => b.rate - a.rate)
+    }
     return {
       paymentId: r.id,
       paidAt: r.paid_at,
       amount: Number(r.amount),
       zoi: r.furs_zoi,
       staryEor: r.furs_eor,
+      vatBreakdown,
       ...ids,
     }
   })
@@ -125,6 +147,7 @@ export async function POST(req: NextRequest) {
     const data: FursInvoiceData = {
       invoiceNumber: inv.invoiceNumber,
       amountTotal: inv.amount,
+      vatBreakdown: inv.vatBreakdown,
       issueDateTime: new Date(inv.paidAt),
       presetZoi: inv.zoi,          // SHRANJENI ZOI z natisnjenega racuna!
       subsequentSubmit: true,      // uradna oznaka naknadnega posredovanja

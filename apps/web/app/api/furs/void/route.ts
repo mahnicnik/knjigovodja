@@ -118,11 +118,44 @@ export async function POST(req: NextRequest) {
       isTest: process.env.FURS_TEST_MODE !== 'false',
     }
 
+    // DODANO (16.8.2026): razclenitev po stopnjah DDV tudi za STORNO. Prej se
+    // je celoten negativni znesek prijavil po 22%, tudi ce je izvirni racun
+    // vseboval hrano po 9,5% - storno se torej ni ujemal z izvirnikom, kar bi
+    // pri davcnem nadzoru pomenilo neskladje med izdanim in storniranim racunom.
+    const znesekStorno = -Math.abs(Number(total))
+    const { data: stornoLines } = await supabase
+      .from('order_lines')
+      .select('total, qty, unit_price, vat_rate, voided')
+      .eq('order_id', order_id)
+    const veljavne = (stornoLines || []).filter((l: any) => !l.voided)
+    let vatBreakdown: { rate: number; net: number; vat: number }[] | undefined
+    if (veljavne.length > 0) {
+      const vsotaVrstic = veljavne.reduce((s: number, l: any) =>
+        s + Number(l.total ?? (Number(l.qty || 0) * Number(l.unit_price || 0))), 0)
+      const faktor = vsotaVrstic > 0 ? Math.abs(znesekStorno) / vsotaVrstic : 1
+      const poStopnji = new Map<number, number>()
+      for (const l of veljavne) {
+        const bruto = Number(l.total ?? (Number(l.qty || 0) * Number(l.unit_price || 0))) * faktor
+        const stopnja = Number(l.vat_rate ?? 22)
+        poStopnji.set(stopnja, (poStopnji.get(stopnja) || 0) + bruto)
+      }
+      vatBreakdown = Array.from(poStopnji.entries()).map(([rate, bruto]) => {
+        const net = rate > 0 ? bruto / (1 + rate / 100) : bruto
+        // Pri stornu so vsi zneski NEGATIVNI, enako kot skupni znesek.
+        return {
+          rate,
+          net: -Math.round(net * 100) / 100,
+          vat: -Math.round((bruto - net) * 100) / 100,
+        }
+      }).sort((a, b) => b.rate - a.rate)
+    }
+
     // Kredit nota = negativni znesek, tip 'credit_note'
     const fursData: FursInvoiceData = {
       invoiceNumber: sequenceNumber,
       issueDateTime: new Date(),
-      amountTotal: -Math.abs(Number(total)), // negativen!
+      amountTotal: znesekStorno, // negativen!
+      vatBreakdown,
       paymentType: 'cash',
       invoiceType: 'credit_note',
     }
