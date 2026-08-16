@@ -552,7 +552,12 @@ export default function DashboardPage() {
       taxSystem: data.taxSystem,
       isVatRegistered: !!org?.vat_registered,
       hasEmployees: data.hasEmployees,
-      monthlyVatLiability: taxResult.details.vatLiability,
+      // POPRAVLJENO (16.8.2026): prej groba ocena iz davcnega kalkulatorja
+      // (promet x 22%, BREZ vstopnega DDV), ceprav Dashboard ze ima natancen
+      // izracun iz dejanskih evidenc (izhodni DDV minus vstopni). Napoved
+      // pretoka denarja je zato precenjevala obveznost za DDV - pri 10.000 EUR
+      // prometa in 3.000 EUR vstopnega DDV za priblizno 660 EUR mesecno.
+      monthlyVatLiability: data.vatDue,
       monthlyIncomeTax: taxResult.details.incomeTax,
       monthlyContributions: taxResult.details.contributions,
       monthlyPayrollCost: data.monthlyPayrollCost, // DODANO 11.8.2026

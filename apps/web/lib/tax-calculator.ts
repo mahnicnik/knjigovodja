@@ -14,7 +14,7 @@
  * - ZPIZ-2 (Zakon o pokojninskem zavarovanju) — contribution rates
  * - Furs.si — 2025 minimum/average wage thresholds
  */
-import { INCOME_TAX_BRACKETS as TC_BRACKETS, GENERAL_RELIEF_YEAR, MIN_WAGE as TC_MIN_WAGE } from './tax-constants'
+import { INCOME_TAX_BRACKETS as TC_BRACKETS, GENERAL_RELIEF_YEAR, MIN_WAGE as TC_MIN_WAGE, SP_MIN_CONTRIBUTIONS_MONTH, calcNormiraniDeduction } from './tax-constants'
 
 export type LegalForm = 'sp' | 'doo' | 'zavod'
 export type TaxSystem = 'normirani_80' | 'normirani_40' | 'dejanski' | 'doo_obdavcitev'
@@ -74,13 +74,19 @@ const MIN_WAGE_2025 = TC_MIN_WAGE // iz lib/tax-constants.ts
 const AVG_WAGE_2025 = 2280.30
 
 /** Prispevki s.p. — približno ~33% bruto osnove (najnižja osnova) */
-const SP_CONTRIBUTIONS_MIN = 522.13 // dejansko ~€522 na mesec (ZPIZ + ZZZS + zaposlovanje)
+// POPRAVLJENO (16.8.2026): prej trdo kodiranih 522,13 EUR - zastarela vrednost.
+// lib/tax-constants.ts (posodobljen za 2026) navaja 651,04 EUR. Razlika 129 EUR
+// mesecno je popacila vse napovedi na Dashboardu in v pretoku denarja.
+const SP_CONTRIBUTIONS_MIN = SP_MIN_CONTRIBUTIONS_MONTH
 
 /** DDV standardna stopnja Slovenija */
 const VAT_RATE = 0.22
 
 /** Davek od dobička pravnih oseb (d.o.o.) */
 const CIT_RATE = 0.19
+
+/** Rezervni delez normiranih odhodkov, ce prihodka se ni (nov s.p. brez prometa). */
+const NORMIRANCI_DEDUCTION_FALLBACK = 0.80
 
 /** Dohodnina — progresivna lestvica 2026 (mesečno, /12)
  *  POSODOBLJENO 30.7.2026: prej lestvica 2025
@@ -166,10 +172,19 @@ export function calculateNetIncome(input: TaxInput): TaxBreakdown {
 
   // ===== PRIZNANI ODHODKI =====
   switch (system) {
-    case 'normirani_80':
-      recognizedExpenses = monthlyRevenue * 0.80
-      taxBase = monthlyRevenue * 0.20
+    case 'normirani_80': {
+      // POPRAVLJENO (16.8.2026): prej ravnih 80% CELOTNEGA prihodka. Po ZPZR
+      // (od 1.1.2026) se 80% normiranih odhodkov prizna SAMO do 60.000 EUR
+      // letnih prihodkov, nad tem pa 0%. Stran /normirani je to ze racunala
+      // pravilno, Dashboard pa ne - obe strani sta kazali razlicne stevilke.
+      // Prag je LETNI, zato ga preracunamo na mesecni delez.
+      const letniPrihodek = Math.max(yearlyRevenueToDate, monthlyRevenue * 12)
+      const letniOdbitek = calcNormiraniDeduction(letniPrihodek)
+      const delezOdbitka = letniPrihodek > 0 ? letniOdbitek / letniPrihodek : NORMIRANCI_DEDUCTION_FALLBACK
+      recognizedExpenses = monthlyRevenue * delezOdbitka
+      taxBase = monthlyRevenue - recognizedExpenses
       break
+    }
     case 'normirani_40':
       recognizedExpenses = monthlyRevenue * 0.40
       taxBase = monthlyRevenue * 0.60
@@ -184,22 +199,25 @@ export function calculateNetIncome(input: TaxInput): TaxBreakdown {
       break
   }
 
+  // ===== PRISPEVKI =====
+  // (izracunani PRED dohodnino, ker so davcno priznan odhodek)
+  if (legalForm === 'sp') {
+    contributions = SP_CONTRIBUTIONS_MIN
+  } else if (legalForm === 'doo') {
+    // d.o.o. nima prispevkov na ravni podjetja (direktor jih plača posebej)
+    contributions = 0
+  }
+
   // ===== DOHODNINA / DAVEK OD DOBIČKA =====
   if (system === 'doo_obdavcitev') {
     // d.o.o. — 19% davek od dobička (CIT)
     incomeTax = taxBase * CIT_RATE
   } else {
-    // s.p. — progresivna dohodnina
-    incomeTax = calculateProgressiveTax(taxBase)
-  }
-
-  // ===== PRISPEVKI =====
-  if (legalForm === 'sp') {
-    // s.p. plača €522/mes prispevkov (ne glede na revenue)
-    contributions = SP_CONTRIBUTIONS_MIN
-  } else if (legalForm === 'doo') {
-    // d.o.o. nima prispevkov na ravni podjetja (direktor jih plača posebej)
-    contributions = 0
+    // POPRAVLJENO (16.8.2026): prispevki so pri s.p. DAVCNO PRIZNAN ODHODEK -
+    // odsteti jih je treba OD DAVCNE OSNOVE, ne sele od cistega prihodka. Prej
+    // je Dashboard racunal dohodnino od previsoke osnove in kazal previsok davek.
+    // Stran /normirani je to ze delala pravilno.
+    incomeTax = calculateProgressiveTax(Math.max(0, taxBase - contributions))
   }
 
   // ===== DDV =====
