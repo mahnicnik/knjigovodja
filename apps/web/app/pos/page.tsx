@@ -6125,6 +6125,21 @@ function InventuraScreen({ posData, auth }) {
     }
     setSaving(true)
     try {
+      // DODANO (16.8.2026): brez te preverbe je bilo mogoce odpreti VEC
+      // inventur hkrati - vsaka bi ob zakljucku prepisala zalogo s svojimi
+      // (starimi) stetji, kar bi izbrisalo rezultat prejsnje.
+      const { data: openSess } = await createClient()
+        .from('inventory_sessions')
+        .select('id')
+        .eq('business_id', BUSINESS_ID)
+        .eq('status', 'open')
+        .limit(1)
+      if (openSess?.length) {
+        showToast('Ena inventura je že odprta. Najprej jo zaključite ali izbrišite.', false)
+        setSaving(false)
+        return
+      }
+
       // Ustvari novo sejo
       const { data: sess, error } = await createClient()
         .from('inventory_sessions')
@@ -6212,11 +6227,13 @@ function InventuraScreen({ posData, auth }) {
         const diff = line.actual_qty - line.expected_qty
         if (Math.abs(diff) > 0.001) diffs++
         // Posodobi zalogo
-        if (line.item_type === 'item') {
-          await db.from('items').update({ stock: line.actual_qty }).eq('id', line.item_id)
-        } else {
-          await db.from('ingredients').update({ stock_qty: line.actual_qty }).eq('id', line.item_id)
-        }
+        // POPRAVLJENO (16.8.2026): prej se napake niso preverjale - ce je
+        // posodobitev spodletela, je uporabnik vseeno dobil sporocilo
+        // "zaloga posodobljena", inventura pa je bila oznacena kot zakljucena.
+        const { error: upErr } = line.item_type === 'item'
+          ? await db.from('items').update({ stock: line.actual_qty }).eq('id', line.item_id)
+          : await db.from('ingredients').update({ stock_qty: line.actual_qty }).eq('id', line.item_id)
+        if (upErr) throw new Error(`Napaka pri posodabljanju "${line.item_name}": ${upErr.message}`)
       }
 
       await db.from('inventory_sessions').update({
