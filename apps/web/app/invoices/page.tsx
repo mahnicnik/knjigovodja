@@ -218,12 +218,38 @@ export default function InvoicesPage() {
   const atLimit = isFree && invoiceCount >= 5
   const totalUnpaid = invoices.filter(i => i.status === 'sent' || i.status === 'overdue').reduce((s, i) => s + Number(i.amount_total), 0)
 
+  // DODANO (16.8.2026): zaznavanje VRZELI v zaporedju stevilk racunov.
+  // Stevilcenje mora biti zaporedno in brez vrzeli; manjkajoca stevilka je
+  // lahko posledica izbrisanega osnutka ali neuspesne izdaje. Vrzel sama po
+  // sebi ni prekrsek, a jo je treba znati pojasniti - zato naj bo vidna
+  // TAKOJ, ne sele ob davcnem pregledu.
+  const vrzeli = (() => {
+    const leto = new Date().getFullYear()
+    const stevilke = invoices
+      .map(i => String(i.invoice_number || ''))
+      .filter(s => new RegExp(`^${leto}-[0-9]+$`).test(s))
+      .map(s => parseInt(s.split('-')[1], 10))
+      .sort((a, b) => a - b)
+    if (stevilke.length < 2) return []
+    const manjka: number[] = []
+    for (let x = stevilke[0]; x <= stevilke[stevilke.length - 1]; x++) {
+      if (!stevilke.includes(x)) manjka.push(x)
+    }
+    return manjka
+  })()
+
   return (
     <AppLayout org={org}>
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
         <div>
           <h1 className="font-semibold text-gray-900 mt-0.5">Izdani računi</h1>
+          {vrzeli.length > 0 && (
+            <div style={{ fontSize: 12, color: '#8a6d1f', background: '#FDF6E3', border: '0.5px solid #E8D9A8', borderRadius: 8, padding: '6px 10px', marginTop: 6, lineHeight: 1.5 }}>
+              V zaporedju številk manjka {vrzeli.length === 1 ? 'številka' : 'jih'}: <b>{vrzeli.map(v => `${new Date().getFullYear()}-${String(v).padStart(3, '0')}`).join(', ')}</b>
+              {' · '}Vrzel je običajno posledica izbrisanega osnutka. Za davčni pregled jo je dobro znati pojasniti.
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {isFree && (
