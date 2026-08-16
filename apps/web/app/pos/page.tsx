@@ -2416,7 +2416,11 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
     // Če "arrived" in ima paket → odštej obisk
     if (status === 'arrived' && selectedPkg && !alreadyArrived) {
       const pkg = activePkgs.find(p => p.id === selectedPkg)
-      if (pkg && pkg.remaining > 0) {
+      // DODANO (16.8.2026): tudi tu (prihod na termin) se je obisk odstel z
+      // ZAMRZNJENE kartice - enako kot pri rocni uporabi obiska.
+      if (pkg?.frozen_at) {
+        showToast('Kartica je zamrznjena — obisk ni bil odštet.', false)
+      } else if (pkg && pkg.remaining > 0) {
         const updates: any = { remaining: pkg.remaining - 1 }
         if (updates.remaining === 0) updates.active = false
         if (!pkg.activated_at && pkg.activation_type === 'first_use') {
@@ -3176,6 +3180,10 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
 
   async function useVisit(pkg) {
     if (pkg.remaining !== null && pkg.remaining <= 0) { showToast('Ni več obiskov!', false); return }
+    // DODANO (16.8.2026): zamrznjene kartice ni bilo mogoce lociti od aktivne -
+    // obisk se je odstel tudi, ko je stranka clanarino zamrznila (npr. dopust),
+    // ceprav ji je bila veljavnost ob odmrznitvi podaljsana za iste dneve.
+    if (pkg.frozen_at) { showToast('Kartica je zamrznjena. Najprej jo odmrznite.', false); return }
     setActionLoading(pkg.id+'_use')
     try {
       const updates: any = {}
@@ -3209,10 +3217,14 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
           exp.setDate(exp.getDate()+frozenDays)
           newExpires = exp.toISOString().split('T')[0]
         }
-        await createClient().from('customer_packages').update({ frozen_at:null, frozen_until:null, expires:newExpires }).eq('id', pkg.id)
+        // POPRAVLJENO (16.8.2026): prej brez preverbe napake - uporabnik je videl
+        // "odmrznjena", tudi ce se v bazi ni nic spremenilo.
+        const { error: unfreezeErr } = await createClient().from('customer_packages').update({ frozen_at:null, frozen_until:null, expires:newExpires }).eq('id', pkg.id)
+        if (unfreezeErr) throw unfreezeErr
         showToast('Kartica odmrznjena. +'+frozenDays+' dni.')
       } else {
-        await createClient().from('customer_packages').update({ frozen_at: new Date().toISOString() }).eq('id', pkg.id)
+        const { error: freezeErr } = await createClient().from('customer_packages').update({ frozen_at: new Date().toISOString() }).eq('id', pkg.id)
+        if (freezeErr) throw freezeErr
         showToast('Kartica zamrznjena.')
       }
       onRefresh()
@@ -3222,7 +3234,10 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
 
   async function deactivate(pkg) {
     if (!confirm(`Deaktiviram kartico "${pkg.name}"?`)) return
-    await createClient().from('customer_packages').update({ active:false }).eq('id', pkg.id)
+    // POPRAVLJENO (16.8.2026): prej brez preverbe napake - uporabnik je videl
+    // "deaktivirana", tudi ce se v bazi ni nic spremenilo.
+    const { error: deactErr } = await createClient().from('customer_packages').update({ active:false }).eq('id', pkg.id)
+    if (deactErr) { showToast(deactErr.message, false); return }
     showToast('Kartica deaktivirana')
     onRefresh()
   }
