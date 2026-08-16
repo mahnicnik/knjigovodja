@@ -410,25 +410,39 @@ export const pos = {
       if (error) throw error
       return data && data.length > 0 ? data[0] : null
     },
-    async syncSessionToKPO(orgId: string, sessionFrom: string, sessionTo: string): Promise<{ productIncome: number; serviceIncome: number } | null> {
+    // POPRAVLJENO (16.8.2026, KRITICNO): odkar ima vsak blagajnik SVOJO sejo,
+    // lahko vec sej tece hkrati. Ta funkcija je filtrirala narocila SAMO po
+    // casovnem oknu seje, zato bi ob zakljucku dveh prekrivajocih se sej ISTI
+    // promet knjizila DVAKRAT v knjigo prihodkov. Zdaj filtrira tudi po
+    // blagajniku (orders.cashier_id), tako da vsaka seja knjizi le svoj del.
+    async syncSessionToKPO(orgId: string, sessionFrom: string, sessionTo: string, staffId?: string | null): Promise<{ productIncome: number; serviceIncome: number } | null> {
       const db = sb()
       // Pridobi vse plačane naročitve v tem sessionu, z vrsticami in tipom artikla
       const { data: orders } = await db
         .from('orders')
-        .select('id, closed_at, order_lines(qty, unit_price, vat_rate, voided, item_id, service_id)')
+        .select('id, closed_at, cashier_id, order_lines(qty, unit_price, total, vat_rate, voided, item_id, service_id)')
         .eq('business_id', BUSINESS_ID)
         .eq('status', 'paid')
         .gte('closed_at', sessionFrom)
         .lte('closed_at', sessionTo)
       if (!orders || orders.length === 0) return null
 
+      // Filtriraj na narocila TE seje (tega blagajnika). Ce staffId ni podan
+      // (stare seje brez staff_id), obdrzimo staro obnasanje - vsa narocila.
+      const mojaNarocila = staffId
+        ? (orders as any[]).filter(o => o.cashier_id === staffId)
+        : (orders as any[])
+      if (mojaNarocila.length === 0) return null
+
       let productNet = 0, productVat = 0
       let serviceNet = 0, serviceVat = 0
 
-      for (const o of orders as any[]) {
+      for (const o of mojaNarocila) {
         for (const l of o.order_lines || []) {
           if (l.voided) continue
-          const lineTotal = Number(l.qty || 0) * Number(l.unit_price || 0)
+          // POPRAVLJENO (16.8.2026): prej brez doplacil modifikatorjev - prihodek
+          // v knjigi bi bil prenizek. Stolpec total jih ze vsebuje.
+          const lineTotal = l.total != null ? Number(l.total) : Number(l.qty || 0) * Number(l.unit_price || 0)
           const rate = Number(l.vat_rate || 22)
           const net = rate > 0 ? lineTotal / (1 + rate / 100) : lineTotal
           const vat = lineTotal - net

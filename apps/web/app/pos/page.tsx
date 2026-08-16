@@ -4757,6 +4757,24 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
       const { data: { user } } = await createClient().auth.getUser()
       if (!user) throw new Error('Niste prijavljeni')
 
+      // DODANO (16.8.2026): opozorilo na ODPRTE racune. Prej je bilo mogoce
+      // zakljuciti dan z odprto mizo - racun je ostal neplacan in nevidoma
+      // visel naprej, promet pa ni bil zajet v Z-porocilu.
+      const { data: odprti } = await createClient()
+        .from('orders')
+        .select('id, total, tables(name)')
+        .eq('business_id', BUSINESS_ID)
+        .in('status', ['open','on_hold'])
+      if (odprti?.length) {
+        const skupaj = odprti.reduce((s: number, o: any) => s + Number(o.total || 0), 0)
+        const seznam = odprti.slice(0, 5).map((o: any) => '• ' + (o.tables?.name || 'brez mize') + ' — €' + Number(o.total || 0).toFixed(2)).join('\n')
+        const vec = odprti.length > 5 ? `\n… in še ${odprti.length - 5}` : ''
+        if (!confirm(`Pozor: ${odprti.length} računov je še odprtih (skupaj €${skupaj.toFixed(2)}):\n\n${seznam}${vec}\n\nTi računi NE bodo zajeti v Z-poročilu. Vseeno zaključim blagajno?`)) {
+          setSaving(false)
+          return
+        }
+      }
+
       // POPRAVLJENO (13.8.2026, KRITICNO): closedBy uporablja PRAVO PIN
       // identiteto (auth.user) za Z-porocilo staff_id - prej Supabase auth
       // uporabnika naprave, zato je Z-porocilo vedno beleZilo napacno osebo
@@ -4775,7 +4793,9 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
       // Prenesi dnevni promet POS blagajne v KPO knjigo (izdelki/storitve loceno)
       if (member) {
         try {
-          await pos.orders.syncSessionToKPO(member.org_id, session.opened_at, updatedSession.closed_at)
+          // POPRAVLJENO (16.8.2026): posredujemo blagajnika seje, da se ob
+          // hkratnih sejah vec blagajnikov isti promet ne knjizi veckrat.
+          await pos.orders.syncSessionToKPO(member.org_id, session.opened_at, updatedSession.closed_at, session.staff_id)
         } catch (kpoErr) {
           console.warn('KPO sinhronizacija ni uspela:', kpoErr)
         }
