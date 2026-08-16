@@ -266,23 +266,50 @@ export default function DohodninaPage() {
                 <p className="text-xs text-gray-400 mt-1">Za ekstrapolacijo na celo leto</p>
               </div>
 
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Prispevni razred</label>
-                <select
-                  value={contributionClass}
-                  onChange={e => setContributionClass(parseInt(e.target.value))}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none"
-                >
-                  {Array.from({length: 15}, (_, i) => i+1).map(c => (
-                    <option key={c} value={c}>
-                      Razred {c} — €{(SP_CONTRIBUTIONS[c]/12).toFixed(0)}/mes
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-400 mt-1">
-                  Letno: €{annualContributions.toFixed(2)}
-                </p>
-              </div>
+              {/* POPRAVLJENO (16.8.2026): meni je ponujal prispevne razrede in
+                  kazal npr. "Razred 1 — €215/mes", izracun pa je uporabljal
+                  DEJANSKE prispevke iz nastavitev (651,04 EUR). Dva razlicna
+                  vira sta zavajala. Zdaj: ce so prispevki vneseni, se pokaze
+                  njihova vrednost in povezava do nastavitev; meni z razredi je
+                  na voljo LE, ce prispevkov se ni. */}
+              {(() => {
+                const imaVnesene =
+                  Number(org?.contrib_piz ?? 0) + Number(org?.contrib_zzzs ?? 0) +
+                  Number(org?.contrib_zaposlovanje ?? 0) + Number(org?.contrib_starsevstvo ?? 0) > 0
+
+                if (imaVnesene) return (
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Prispevki s.p.</label>
+                    <div className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-gray-50">
+                      {new Intl.NumberFormat('sl-SI', { style: 'currency', currency: 'EUR' }).format(annualContributions / 12)} na mesec
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Iz vaših nastavitev · letno {new Intl.NumberFormat('sl-SI', { style: 'currency', currency: 'EUR' }).format(annualContributions)}
+                      {' · '}<Link href="/nastavitve" className="underline">spremeni</Link>
+                    </p>
+                  </div>
+                )
+
+                return (
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Prispevni razred</label>
+                    <select
+                      value={contributionClass}
+                      onChange={e => setContributionClass(parseInt(e.target.value))}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none"
+                    >
+                      {Array.from({length: 15}, (_, i) => i+1).map(c => (
+                        <option key={c} value={c}>
+                          Razred {c} — €{(SP_CONTRIBUTIONS[c]/12).toFixed(0)}/mes
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Ocena · natančneje bo, ko v <Link href="/nastavitve" className="underline">nastavitvah</Link> vnesete dejanske prispevke
+                    </p>
+                  </div>
+                )
+              })()}
 
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Vzdrževani otroci</label>

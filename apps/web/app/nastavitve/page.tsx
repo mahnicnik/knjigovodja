@@ -8,6 +8,20 @@ import UpgradeButton from '@/components/UpgradeButton'
 import ManageSubscriptionButton from '@/components/ManageSubscriptionButton'
 import { getActiveMembership } from '@/lib/active-org'
 import { SP_MIN_CONTRIBUTIONS_MONTH } from '@/lib/tax-constants'
+
+/**
+ * Slovenski zapis zneska: 7.812,48 € (vejica decimalno, pika tisocice, valuta
+ * ZADAJ). DODANO 16.8.2026 - prej "€7812.48", kar je angleska oblika.
+ */
+function eur(n: number): string {
+  return new Intl.NumberFormat('sl-SI', { style: 'currency', currency: 'EUR' }).format(n)
+}
+
+/** Pretvori vneseno besedilo v stevilo; sprejme vejico kot decimalno locilo. */
+function stStevilo(v: any): number {
+  if (v === null || v === undefined || v === '') return 0
+  return parseFloat(String(v).replace(',', '.')) || 0
+}
 import AppLayout from '@/components/AppLayout'
 
 const SP_CONTRIBUTIONS: Record<number, number> = {
@@ -116,7 +130,10 @@ export default function NastavitevPage() {
       name: form.name, tax_number: form.tax_number, vat_number: form.vat_number,
       vat_registered: form.vat_registered, iban: form.iban, bic: form.bic,
       address: form.address, post_code: form.post_code, city: form.city,
-      phone: form.phone, email: form.email, contribution_class: form.contribution_class, contrib_piz: form.contrib_piz, contrib_zzzs: form.contrib_zzzs, contrib_zaposlovanje: form.contrib_zaposlovanje, contrib_starsevstvo: form.contrib_starsevstvo, contrib_akontacija: form.contrib_akontacija,
+      phone: form.phone, email: form.email, contribution_class: form.contribution_class, // POPRAVLJENO (16.8.2026): polja med tipkanjem hranijo BESEDILO, sicer
+      // pretvorba ob vsakem znaku poje decimalno piko ("274.45" -> "27445").
+      // V stevilo pretvorimo sele tu; sprejmemo tudi vejico kot decimalno locilo.
+      contrib_piz: stStevilo(form.contrib_piz), contrib_zzzs: stStevilo(form.contrib_zzzs), contrib_zaposlovanje: stStevilo(form.contrib_zaposlovanje), contrib_starsevstvo: stStevilo(form.contrib_starsevstvo), contrib_akontacija: stStevilo(form.contrib_akontacija),
     }).eq('id', org.id)
     // POPRAVLJENO (30.7.2026, KRITICNA najdba): prej se ob napaki ni
     // zgodilo NICESAR - shranjevanje je lahko tiho spodletelo (npr.
@@ -279,19 +296,19 @@ export default function NastavitevPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
                     <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>PIZ — pokojninsko (€/mes)</label>
-                    <input type="number" step="0.01" value={form.contrib_piz || ''} onChange={e => setForm({...form, contrib_piz: parseFloat(e.target.value) || 0})} placeholder="370.51" className={inp} />
+                    <input type="number" step="0.01" value={form.contrib_piz ?? ''} onFocus={e => e.target.select()} onChange={e => setForm({...form, contrib_piz: e.target.value})} placeholder="370.51" className={inp} />
                   </div>
                   <div>
                     <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>ZZZS — zdravstveno (€/mes)</label>
-                    <input type="number" step="0.01" value={form.contrib_zzzs || ''} onChange={e => setForm({...form, contrib_zzzs: parseFloat(e.target.value) || 0})} placeholder="274.45" className={inp} />
+                    <input type="number" step="0.01" value={form.contrib_zzzs ?? ''} onFocus={e => e.target.select()} onChange={e => setForm({...form, contrib_zzzs: e.target.value})} placeholder="274.45" className={inp} />
                   </div>
                   <div>
                     <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Zaposlovanje (€/mes)</label>
-                    <input type="number" step="0.01" value={form.contrib_zaposlovanje || ''} onChange={e => setForm({...form, contrib_zaposlovanje: parseFloat(e.target.value) || 0})} placeholder="3.04" className={inp} />
+                    <input type="number" step="0.01" value={form.contrib_zaposlovanje ?? ''} onFocus={e => e.target.select()} onChange={e => setForm({...form, contrib_zaposlovanje: e.target.value})} placeholder="3.04" className={inp} />
                   </div>
                   <div>
                     <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Starševsko varstvo (€/mes)</label>
-                    <input type="number" step="0.01" value={form.contrib_starsevstvo || ''} onChange={e => setForm({...form, contrib_starsevstvo: parseFloat(e.target.value) || 0})} placeholder="3.04" className={inp} />
+                    <input type="number" step="0.01" value={form.contrib_starsevstvo ?? ''} onFocus={e => e.target.select()} onChange={e => setForm({...form, contrib_starsevstvo: e.target.value})} placeholder="3.04" className={inp} />
                   </div>
                   <div style={{ gridColumn: '1 / -1' }}>
                     {/* DODANO (16.8.2026): opozorilo, ce je vsota prispevkov nizja od
@@ -299,27 +316,54 @@ export default function NastavitevPage() {
                         stevki) tiho popaci VSE davcne napovedi - Dashboard, dohodnino,
                         pretok denarja - in tega ni bilo nikjer videti. */}
                     {(() => {
-                      const vsota = Number(form.contrib_piz || 0) + Number(form.contrib_zzzs || 0)
-                        + Number(form.contrib_zaposlovanje || 0) + Number(form.contrib_starsevstvo || 0)
-                      if (vsota === 0) return null
+                      const vsota = stStevilo(form.contrib_piz) + stStevilo(form.contrib_zzzs)
+                        + stStevilo(form.contrib_zaposlovanje) + stStevilo(form.contrib_starsevstvo)
+
+                      // DODANO (16.8.2026): ce polja se niso izpolnjena, ponudimo
+                      // vnos zakonskega minimuma. Prej so bile privzete vrednosti
+                      // samo namig (sivo besedilo) - uporabnik je lahko mislil, da
+                      // je vse nastavljeno, in odsel s praznimi prispevki.
+                      if (vsota === 0) return (
+                        <div style={{ background: '#FDF6E3', border: '0.5px solid #E8D9A8', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#8a6d1f', lineHeight: 1.6 }}>
+                          <b>Prispevki še niso vneseni.</b> Sive številke v poljih so samo primer, ne vnesena vrednost.<br/>
+                          Vnesite zneske s plačilnih nalogov FURS, ali začnite z zakonskim minimumom:
+                          <button type="button" onClick={() => setForm({ ...form, contrib_piz: '370.51', contrib_zzzs: '274.45', contrib_zaposlovanje: '3.04', contrib_starsevstvo: '3.04' })}
+                            style={{ display: 'block', marginTop: 8, padding: '6px 12px', borderRadius: 6, border: '0.5px solid #C9A227', background: '#fff', color: '#8a6d1f', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                            Vnesi zakonski minimum ({eur(SP_MIN_CONTRIBUTIONS_MONTH)})
+                          </button>
+                        </div>
+                      )
+
+                      // DODANO (16.8.2026): ZGORNJA meja. Prej se je preverjala samo
+                      // spodnja, zato je tipkarska napaka (2.474.951 EUR na mesec)
+                      // dobila zeleno potrditev. Zakonski maksimum je 3.607,57 EUR.
+                      const MAKSIMUM = 3607.57
+                      if (vsota > MAKSIMUM) return (
+                        <div style={{ background: '#FCEBEB', border: '0.5px solid #F7C1C1', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#A32D2D', lineHeight: 1.5 }}>
+                          <b>Vsota prispevkov presega zakonski maksimum.</b><br/>
+                          Vpisano: {eur(vsota)} · najvišji možni mesečni prispevek 2026: {eur(MAKSIMUM)}.<br/>
+                          Preverite, ali ni prišlo do tipkarske napake.
+                        </div>
+                      )
+
                       const razlika = SP_MIN_CONTRIBUTIONS_MONTH - vsota
                       if (razlika > 0.5) return (
                         <div style={{ background: '#FCEBEB', border: '0.5px solid #F7C1C1', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#A32D2D', lineHeight: 1.5 }}>
                           <b>Vsota prispevkov je nižja od zakonskega minimuma.</b><br/>
-                          Vpisano: €{vsota.toFixed(2)} · minimum 2026: €{SP_MIN_CONTRIBUTIONS_MONTH.toFixed(2)} · manjka €{razlika.toFixed(2)} na mesec (€{(razlika * 12).toFixed(2)} letno).<br/>
+                          Vpisano: {eur(vsota)} · minimum 2026: {eur(SP_MIN_CONTRIBUTIONS_MONTH)} · manjka {eur(razlika)} na mesec ({eur(razlika * 12)} letno).<br/>
                           Preverite zneske na plačilnih nalogih FURS — napačna vrednost popači vse davčne napovedi.
                         </div>
                       )
                       return (
                         <div style={{ background: '#EAF3DE', border: '0.5px solid #C8E0A8', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#27500A' }}>
-                          ✓ Prispevki skupaj: <b>€{vsota.toFixed(2)}</b> na mesec (€{(vsota * 12).toFixed(2)} letno)
+                          ✓ Prispevki skupaj: <b>{eur(vsota)}</b> na mesec ({eur(vsota * 12)} letno)
                         </div>
                       )
                     })()}
                   </div>
                   <div>
                     <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Akontacija dohodnine (€/mes)</label>
-                    <input type="number" step="0.01" value={form.contrib_akontacija || ''} onChange={e => setForm({...form, contrib_akontacija: parseFloat(e.target.value) || 0})} placeholder="105.70" className={inp} />
+                    <input type="number" step="0.01" value={form.contrib_akontacija ?? ''} onFocus={e => e.target.select()} onChange={e => setForm({...form, contrib_akontacija: e.target.value})} placeholder="105.70" className={inp} />
                   </div>
                   <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 4 }}>
                     <div style={{ fontSize: 12, color: '#555' }}>

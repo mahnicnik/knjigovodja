@@ -590,7 +590,10 @@ export default function DashboardPage() {
   }
 
   const onboardingSteps = useMemo(() => {
-    const profileDone = !!(org?.name && org?.tax_number && org?.iban)
+    // POPRAVLJENO (16.8.2026): korak je zahteval tudi IBAN, ki pa ni nujen -
+    // s.p. lahko posluje brez izdajanja racunov s placilom na TRR. Uporabnik je
+    // izpolnil profil, korak pa je ostal neoznacen brez pojasnila, zakaj.
+    const profileDone = !!(org?.name && org?.tax_number)
     return [
       { id: 1, label: 'Profil podjetja',       done: profileDone,         href: '/nastavitve',         optional: false },
       { id: 2, label: 'Prvi račun',             done: data.hasInvoices,    href: '/invoices/new',       optional: false },
@@ -607,7 +610,10 @@ export default function DashboardPage() {
   /* ============ COMPUTED: SMART FOCUS BANNER (najbližji rok) ============ */
   const focus = useMemo(() => {
     const candidates = [
-      { name: 'Prispevki za s.p.', amount: Number(org?.contrib_piz||0)+Number(org?.contrib_zzzs||0)+Number(org?.contrib_zaposlovanje||3.04)+Number(org?.contrib_starsevstvo||3.04), days: daysUntil15, day: 20, href: '/prispevki', emoji: '⏰' },
+      // POPRAVLJENO (16.8.2026): privzeti vrednosti 3.04 sta na praznem racunu dali
+      // znesek 6,08 EUR, cetudi prispevki se niso bili vneseni - uporabnik je videl
+      // konkreten znesek za nekaj, cesar ni nastavil. Zdaj brez privzetih.
+      { name: 'Prispevki za s.p.', amount: Number(org?.contrib_piz||0)+Number(org?.contrib_zzzs||0)+Number(org?.contrib_zaposlovanje||0)+Number(org?.contrib_starsevstvo||0), days: daysUntil15, day: 20, href: '/prispevki', emoji: '⏰' },
       { name: 'Akontacija dohodnine', amount: Number(org?.contrib_akontacija || 0), days: daysUntil15, day: 20, href: '/dohodnina', emoji: '📋' }, // POPRAVLJENO 30.7.2026: prej trdo kodirano 84
     ]
     if (data.hasEmployees) {
@@ -623,7 +629,7 @@ export default function DashboardPage() {
   /* ============ DEADLINES (right panel) ============ */
   const deadlines = useMemo(() => {
     const list = [
-      { name: 'Prispevki s.p.',       date: `20. ${MONTHS_SHORT[month]}`, amount: Number(org?.contrib_piz||0)+Number(org?.contrib_zzzs||0)+Number(org?.contrib_zaposlovanje||3.04)+Number(org?.contrib_starsevstvo||3.04), days: daysUntil15, href: '/prispevki', urgent: daysUntil15 <= 7 && daysUntil15 >= 0 },
+      { name: 'Prispevki s.p.',       date: `20. ${MONTHS_SHORT[month]}`, amount: Number(org?.contrib_piz||0)+Number(org?.contrib_zzzs||0)+Number(org?.contrib_zaposlovanje||0)+Number(org?.contrib_starsevstvo||0), days: daysUntil15, href: '/prispevki', urgent: daysUntil15 <= 7 && daysUntil15 >= 0 },
       { name: 'Akontacija dohodnine', date: `20. ${MONTHS_SHORT[month]}`, amount: Number(org?.contrib_akontacija || 0), days: daysUntil15, href: '/dohodnina', urgent: false }, // POPRAVLJENO 30.7.2026: prej trdo kodirano 84
     ]
     if (data.hasEmployees) {
@@ -990,7 +996,11 @@ export default function DashboardPage() {
                           preveri last_email_sent_at. */}
                       <div className="rk-act-sub">#{inv.invoice_number} · {isPaid ? 'plačano' : isOverdue ? 'zapadel' : inv.last_email_sent_at ? 'poslano' : 'izdano'} {dateStr}</div>
                       </div>
-                      <div className={`rk-act-amt ${isOverdue ? 'neg' : 'in'}`}>+€{Math.round(Number(inv.amount_total))}</div>
+                      {/* POPRAVLJENO (16.8.2026): storno ima NEGATIVEN znesek, predznak
+                          pa je bil trdo vpisan kot "+" - izpisalo se je "+€-122". */}
+                      <div className={`rk-act-amt ${isOverdue ? 'neg' : Number(inv.amount_total) < 0 ? 'neg' : 'in'}`}>
+                        {Number(inv.amount_total) < 0 ? '−' : '+'}€{Math.abs(Math.round(Number(inv.amount_total)))}
+                      </div>
                       <div className={`rk-pill ${isPaid ? 'paid' : isOverdue ? 'late' : 'sent'}`}>
                         {isPaid ? 'Plačano' : isOverdue ? 'Zamuda' : inv.last_email_sent_at ? 'Poslano' : 'Izdano'}
                       </div>
@@ -998,15 +1008,20 @@ export default function DashboardPage() {
                   )
                 } else {
                   const exp = item.data
-                  const initial = (exp.vendor_name || exp.supplier_name || '?').charAt(0).toUpperCase()
+                  // POPRAVLJENO (16.8.2026): brala sta se stolpca "vendor_name" in
+                  // "supplier_name", ki v tabeli receipts NE obstajata - pravi je
+                  // "vendor". Zato je strosek prikazoval vprasaj in besedo "Strosek"
+                  // namesto imena dobavitelja.
+                  const nazivStroska = exp.vendor || exp.description || 'Strošek'
+                  const initial = nazivStroska.charAt(0).toUpperCase()
                   const d = new Date(exp.receipt_date)
                   const dateStr = `${d.getDate()}. ${MONTHS_SHORT[d.getMonth()]}`
                   return (
                     <Link key={exp.id} href="/expenses" className="rk-act-row">
                       <div className="rk-act-ico">{initial}</div>
                       <div>
-                        <div className="rk-act-name">{exp.vendor_name || exp.supplier_name || 'Strošek'}</div>
-                        <div className="rk-act-sub">strošek · {dateStr}</div>
+                        <div className="rk-act-name">{nazivStroska}</div>
+                        <div className="rk-act-sub">{exp.vendor && exp.description ? exp.description : 'strošek'} · {dateStr}</div>
                       </div>
                       <div className="rk-act-amt neg">−€{Math.round(Number(exp.amount_net || exp.amount_total || 0))}</div>
                       <div className="rk-pill">Strošek</div>
