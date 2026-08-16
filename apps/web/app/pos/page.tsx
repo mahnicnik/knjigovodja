@@ -742,7 +742,18 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             // premise_id eksplicitno iz uporabnikove izbire ob prijavi (21.7.2026 popravek)
-            body: JSON.stringify({ order_id: orderId, total: finalTotal, premise_id: activePremise?.id }),
+            // POPRAVLJENO (16.8.2026, KRITICNO): tu je bila spremenljivka
+            // "activePremise", ki v TEJ komponenti NE OBSTAJA - definirana je v
+            // glavni komponenti. Vsak klic je zato vrgel ReferenceError, izjema
+            // se je ujela, racun pa se je shranil BREZ ZOI in BREZ EOR.
+            //
+            // Uporabnik ni videl nicesar: prodaja se je zakljucila normalno, na
+            // zaslonu ni bilo opozorila, v furs_log ni bilo zapisa (ker do FURS
+            // sploh ni prislo), zvonec pa takih racunov ne lovi.
+            //
+            // Zdaj beremo isti podatek prek pomozne funkcije, ki je dosegljiva
+            // povsod.
+            body: JSON.stringify({ order_id: orderId, total: finalTotal, premise_id: getActivePremise()?.id }),
           })
           // 200 = success, 503 = FURS napaka ampak še vedno imamo ZOI + tridelno
           const fursData = await fursRes.json().catch(() => ({}))
@@ -1484,6 +1495,13 @@ function WriteoffModal({ cart, auth, onClose, onDone }) {
     try {
       const { data: { user } } = await createClient().auth.getUser()
       if (!user) throw new Error('Niste prijavljeni')
+      // POPRAVLJENO (16.8.2026, KRITICNO): spodaj se je uporabljal
+      // "updatedSession", ki je bil definiran SELE 10 vrstic nizje. JavaScript
+      // to zavrne z napako "Cannot access before initialization", zato prenos
+      // prometa v knjigo prihodkov NIKOLI ni uspel - napaka se je ujela in
+      // zapisala samo v konzolo.
+      const casZakljucka = new Date().toISOString()
+
       const member = await getActiveMembership().then(m => m ? { org_id: m.org_id } : null) // POPRAVLJENO 16.8.2026: vec-org varno
       const { error: err } = await createClient().from('stock_writeoffs').insert({
         business_id: BUSINESS_ID,
@@ -4973,7 +4991,7 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
         try {
           // POPRAVLJENO (16.8.2026): posredujemo blagajnika seje, da se ob
           // hkratnih sejah vec blagajnikov isti promet ne knjizi veckrat.
-          await pos.orders.syncSessionToKPO(member.org_id, session.opened_at, updatedSession.closed_at, session.staff_id)
+          await pos.orders.syncSessionToKPO(member.org_id, session.opened_at, casZakljucka, session.staff_id)
         } catch (kpoErr) {
           console.warn('KPO sinhronizacija ni uspela:', kpoErr)
         }
@@ -4983,7 +5001,7 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
       const cashierName = auth?.user?.name || user.email?.split('@')[0] || ''
 
       // Natisni Z-poročilo
-      const updatedSession = { ...session, closed_at: new Date().toISOString(), closing_note: note }
+      const updatedSession = { ...session, closed_at: casZakljucka, closing_note: note }
       const html = buildZReportReceipt({
         session: updatedSession as any,
         stats,
@@ -6433,7 +6451,7 @@ function OrdersScreen({ posData, auth }) {
             {selectedOrder.furs_required && !orderPayment?.furs_eor && (
               <button onClick={async()=>{
                 try {
-                  const res = await fetch('/api/furs/invoice', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ order_id: selectedOrder.id, total: selectedOrder.total, premise_id: activePremise?.id }) })
+                  const res = await fetch('/api/furs/invoice', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ order_id: selectedOrder.id, total: selectedOrder.total, premise_id: getActivePremise()?.id }) })
                   if (res.ok) { const d = await res.json(); alert('FURS potrjen! EOR: ' + d.eor); loadOrders() }
                   else alert('FURS napaka: ' + (await res.text()))
                 } catch(e) { alert('FURS napaka: ' + e.message) }
@@ -9728,10 +9746,18 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
     // brez vrednosti). To je bila zadnja od treh takih poizvedb.
     if (!BUSINESS_ID) return
     try {
+      // POPRAVLJENO (16.8.2026, KRITICNO): filter je iskal racune, ki IMAJO ZOI
+      // in NIMAJO EOR - torej samo tiste, kjer je poskus stekel do FURS in bil
+      // zavrnjen. Racunov, pri katerih se fiskalizacija sploh NI sprozila
+      // (nimajo ne ZOI ne EOR), opozorilo ni zaznalo - in prav takih je bilo
+      // 25. Napaka je bila torej dvojno skrita: racun ni fiskaliziran, blagajna
+      // pa tega ne pove.
+      //
+      // Zdaj lovi VSE racune brez potrditve, ne glede na to, kako dalec je
+      // poskus prisel.
       const { count } = await createClient()
         .from('payments')
         .select('id, orders!inner(business_id)', { count: 'exact', head: true })
-        .not('furs_zoi', 'is', null)
         .is('furs_eor', null)
         .eq('orders.business_id', BUSINESS_ID)
       setUnconfirmed(count || 0)
