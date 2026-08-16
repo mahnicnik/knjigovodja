@@ -119,7 +119,10 @@ export default function PonavljajoceRacunePage() {
       const today = new Date().toISOString().split('T')[0]
       const due = new Date(Date.now() + 30 * 864e5).toISOString().split('T')[0]
 
-      await supabase.from('issued_invoices').insert({
+      // POPRAVLJENO (16.8.2026): prej brez preverbe napake - ce racun ni nastal,
+      // se je datum naslednje izdaje VSEENO premaknil naprej, zato stranka tega
+      // obdobja ne bi nikoli dobila zaracunanega (izgubljen prihodek).
+      const { error: issueErr } = await supabase.from('issued_invoices').insert({
         org_id: orgId,
         invoice_number: invoiceNumber,
         invoice_type: 'invoice',
@@ -134,11 +137,13 @@ export default function PonavljajoceRacunePage() {
         status: 'draft',
         notes: `Ponavljajoč račun — ${FREQ[rec.frequency].label}`,
       })
+      if (issueErr) throw new Error('Računa ni bilo mogoče izdati: ' + issueErr.message)
 
       // Nastavi naslednji datum
       const nextDays = FREQ[rec.frequency].days
       const nextDate = new Date(Date.now() + nextDays * 864e5).toISOString().split('T')[0]
-      await supabase.from('recurring_invoices').update({ last_issued_at: new Date().toISOString(), next_issue_date: nextDate }).eq('id', rec.id)
+      const { error: nextErr } = await supabase.from('recurring_invoices').update({ last_issued_at: new Date().toISOString(), next_issue_date: nextDate }).eq('id', rec.id)
+      if (nextErr) showToast('Račun je izdan, datuma naslednje izdaje pa ni bilo mogoče posodobiti: ' + nextErr.message)
       setRecurring(prev => prev.map(r => r.id === rec.id ? { ...r, last_issued_at: new Date().toISOString(), next_issue_date: nextDate } : r))
       showToast(`Račun ${invoiceNumber} izdan`)
     } catch (e: any) { showToast(e.message) }
@@ -146,13 +151,15 @@ export default function PonavljajoceRacunePage() {
   }
 
   async function toggleActive(id: string, is_active: boolean) {
-    await supabase.from('recurring_invoices').update({ is_active: !is_active }).eq('id', id)
+    const { error: togErr } = await supabase.from('recurring_invoices').update({ is_active: !is_active }).eq('id', id)
+    if (togErr) { showToast('Stanja ni bilo mogoče spremeniti: ' + togErr.message); return }
     setRecurring(prev => prev.map(r => r.id === id ? { ...r, is_active: !is_active } : r))
   }
 
   async function deleteRecurring(id: string) {
     if (!confirm('Izbrišem ponavljajoč račun?')) return
-    await supabase.from('recurring_invoices').delete().eq('id', id)
+    const { error: delErr } = await supabase.from('recurring_invoices').delete().eq('id', id)
+    if (delErr) { showToast('Ponavljajočega računa ni bilo mogoče izbrisati: ' + delErr.message); return }
     setRecurring(prev => prev.filter(r => r.id !== id))
   }
 

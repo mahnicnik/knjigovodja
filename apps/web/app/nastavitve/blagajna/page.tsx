@@ -152,7 +152,11 @@ export default function BlagajnaPage() {
       if (!user) return
       const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
       if (!member) return
-      await createClient().from('organizations').update({ furs_test_mode: updated.testMode }).eq('id', member.org_id)
+      const { error: tmErr } = await createClient().from('organizations').update({ furs_test_mode: updated.testMode }).eq('id', member.org_id)
+      // POPRAVLJENO (16.8.2026): prej brez preverbe - preklop med TESTNIM in
+      // PRODUKCIJSKIM FURS okoljem se ni shranil, uporabnik pa je mislil, da je.
+      // Racuni bi sli v napacno okolje (testni namesto pravih ali obratno).
+      if (tmErr) showToast('Testnega načina ni bilo mogoče shraniti: ' + tmErr.message, false)
     } catch (e) {
       console.error('Napaka pri shranjevanju test načina:', e)
     }
@@ -225,9 +229,13 @@ export default function BlagajnaPage() {
       const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
       if (!member) throw new Error('Org ni najdena')
 
+      // POPRAVLJENO (16.8.2026): prej brez preverbe napake - poslovni prostor
+      // je podlaga za FURS fiskalizacijo. Ce se ni shranil, je uporabnik videl
+      // potrditev, FURS pa bi kasneje zavracal racune.
+      let premiseErr: any = null
       if (premiseModal.id) {
         // Update obstoječega
-        await supabase.from('business_premises').update({
+        const r = await supabase.from('business_premises').update({
           premise_id: premiseModal.businessPremiseId,
           address: premiseModal.address,
           postal_code: premiseModal.postalCode || '',
@@ -237,9 +245,10 @@ export default function BlagajnaPage() {
           building_section_number: premiseModal.buildingSectionNumber || null,
           channel: premiseModal.channel || 'both',
         }).eq('id', premiseModal.id)
+        premiseErr = r.error
       } else {
         // Vstavi novega
-        await supabase.from('business_premises').insert({
+        const r = await supabase.from('business_premises').insert({
           org_id: member.org_id,
           premise_id: premiseModal.businessPremiseId,
           premise_type: 'static',
@@ -252,7 +261,9 @@ export default function BlagajnaPage() {
           is_active: true,
           channel: premiseModal.channel || 'both',
         })
+        premiseErr = r.error
       }
+      if (premiseErr) { showToast('Poslovnega prostora ni bilo mogoče shraniti: ' + premiseErr.message, false); return }
 
       showToast('Poslovni prostor shranjen')
       setPremiseModal(null)
@@ -265,7 +276,8 @@ export default function BlagajnaPage() {
 
   async function deletePremise(id: string) {
     if (!confirm('Izbrišem ta poslovni prostor?')) return
-    await supabase.from('business_premises').update({ is_active: false }).eq('id', id)
+    const { error: dpErr } = await supabase.from('business_premises').update({ is_active: false }).eq('id', id)
+    if (dpErr) { alert('Poslovnega prostora ni bilo mogoče odstraniti: ' + dpErr.message); return }
     showToast('Poslovni prostor izbrisan')
     window.location.reload()
   }
@@ -330,21 +342,28 @@ export default function BlagajnaPage() {
           return
         }
       }
+      // POPRAVLJENO (16.8.2026): prej brez preverbe napake - elektronska naprava
+      // je obvezen del FURS fiskalizacije. Ce se ni shranila, je uporabnik videl
+      // potrditev, racuni pa bi bili zavrnjeni.
+      let deviceErr: any = null
       if (deviceModal.id) {
-        await supabase.from('electronic_devices').update({
+        const r = await supabase.from('electronic_devices').update({
           device_id: deviceModal.electronicDeviceId,
           premise_id: deviceModal.premiseId,
           channel: deviceModal.channel || 'both',
         }).eq('id', deviceModal.id)
+        deviceErr = r.error
       } else {
-        await supabase.from('electronic_devices').insert({
+        const r = await supabase.from('electronic_devices').insert({
           org_id: member.org_id,
           premise_id: deviceModal.premiseId,
           device_id: deviceModal.electronicDeviceId,
           is_active: true,
           channel: deviceModal.channel || 'both',
         })
+        deviceErr = r.error
       }
+      if (deviceErr) { showToast('Naprave ni bilo mogoče shraniti: ' + deviceErr.message, false); return }
 
       showToast('Naprava shranjena')
       setDeviceModal(null)
@@ -356,7 +375,8 @@ export default function BlagajnaPage() {
 
   async function deleteDevice(id: string) {
     if (!confirm('Izbrišem to napravo?')) return
-    await supabase.from('electronic_devices').update({ is_active: false }).eq('id', id)
+    const { error: ddErr } = await supabase.from('electronic_devices').update({ is_active: false }).eq('id', id)
+    if (ddErr) { alert('Naprave ni bilo mogoče odstraniti: ' + ddErr.message); return }
     showToast('Naprava izbrisana')
     window.location.reload()
   }
@@ -398,7 +418,8 @@ export default function BlagajnaPage() {
                 if (next && !confirm('Vklopiti DEMO nacin? Vsi novi racuni bodo imeli LAZNE fiskalizacijske kode (DEMO-...), NE bodo davcno potrjeni pri FURS. Uporabljajte SAMO za testiranje/predstavitev aplikacije.')) return
                 setDemoMode(next)
                 if (orgIdForDemo) {
-                  await supabase.from('organizations').update({ furs_demo_mode: next }).eq('id', orgIdForDemo)
+                  const { error: dmErr } = await supabase.from('organizations').update({ furs_demo_mode: next }).eq('id', orgIdForDemo)
+                  if (dmErr) { alert('Demo načina ni bilo mogoče shraniti: ' + dmErr.message); setDemoMode(!next); return }
                 }
               }}
               style={{ accentColor: '#c02828', width: 16, height: 16 }} />

@@ -79,11 +79,22 @@ export async function GET(request: NextRequest) {
         continue
       }
 
-      const nextDate = new Date(Date.now() + (FREQ_DAYS[rec.frequency] || 30) * 864e5).toISOString().split('T')[0]
-      await supabase.from('recurring_invoices').update({
+      // POPRAVLJENO (16.8.2026): naslednji datum se je racunal od DANES, ne od
+      // NACRTOVANEGA datuma. Ce je cron zamujal (izpad, praznik), se je urnik
+      // trajno zamaknil - mesecni racun bi cez leto zdrsnil za vec dni.
+      const osnova = rec.next_issue_date ? new Date(rec.next_issue_date) : new Date()
+      const nextDate = new Date(osnova.getTime() + (FREQ_DAYS[rec.frequency] || 30) * 864e5).toISOString().split('T')[0]
+      // POPRAVLJENO (16.8.2026, POMEMBNO): prej brez preverbe napake - ce
+      // posodobitev datuma spodleti, racun ostane izdan, next_issue_date pa v
+      // preteklosti, zato bi NASLEDNJI zagon cron-a izdal SE EN racun za isto
+      // obdobje - stranka bi prejela podvojen racun.
+      const { error: dateErr } = await supabase.from('recurring_invoices').update({
         last_issued_at: new Date().toISOString(),
         next_issue_date: nextDate,
       }).eq('id', rec.id)
+      if (dateErr) {
+        console.error('recurring-invoices cron: KRITICNO - racun', finalNumber, 'je izdan, datuma naslednje izdaje pa NI bilo mogoce posodobiti. Naslednji zagon lahko izda PODVOJEN racun.', rec.id, dateErr)
+      }
 
       created++
       if (!byOrg[rec.org_id]) byOrg[rec.org_id] = { count: 0, names: [] }
