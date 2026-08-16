@@ -100,8 +100,15 @@ const CFG = {
     { id: 'all',      name: 'Vse v enem',       icon: '🌐', nav: ['floor','sale','calendar','customers','packages','inventory','orders','reports','admin'] },
     { id: 'rest',     name: 'Restavracija',      icon: '🍽', nav: ['floor','sale','calendar','customers','inventory','orders','reports','admin'] },
     { id: 'bar',      name: 'Bar / Kavarna',     icon: '🍺', nav: ['floor','sale','customers','inventory','orders','reports','admin'] },
-    { id: 'storitve', name: 'Storitve',           icon: '💆', nav: ['calendar','customers','packages','sale','reports','admin'] },
-    { id: 'trznica',  name: 'Tržnica / Stojnica', icon: '🥕', nav: ['sale','inventory','reports','admin'] },
+    // POPRAVLJENO (16.8.2026): tudi profilu "Storitve" je manjkal zaslon
+    // "orders". Tudi tu se izdajajo racuni in jih je treba znati stornirati.
+    { id: 'storitve', name: 'Storitve',           icon: '💆', nav: ['calendar','customers','packages','sale','orders','reports','admin'] },
+    // POPRAVLJENO (16.8.2026): profilu "Tržnica" je manjkal zaslon "orders"
+    // (Računi). Ker je to PRIVZETI profil za nova podjetja, nov uporabnik ni
+    // imel nobene poti do izdanih računov - torej ne do storna, ne do vračila,
+    // ne do spremembe načina plačila. Vse te funkcije obstajajo in delujejo,
+    // le zaslona, kjer se do njih pride, ni bilo v meniju.
+    { id: 'trznica',  name: 'Tržnica / Stojnica', icon: '🥕', nav: ['sale','inventory','orders','reports','admin'] },
   ],
   permissionGroups: [
     { title: 'Blagajna & Prodaja', items: [['sale','Prodaja'],['openCash','Odpri blagajno'],['voidReceipt','Storno računa'],['refund','Vračilo'],['manualDiscount','Ročni popust'],['dailyClose','Dnevni zaključek']] },
@@ -6904,7 +6911,7 @@ function InventuraScreen({ posData, auth }) {
 // ================================================================
 // REPORTS SCREEN — real DB stats
 // ================================================================
-function ReportsScreen({ posData, auth }) {
+function ReportsScreen({ posData, auth, setScreen }) {
   const [period, setPeriod] = useState('today')
   const [reportData, setReportData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -7206,7 +7213,14 @@ function ReportsScreen({ posData, auth }) {
               <div style={{ fontWeight:800, color:T.danger, fontVariantNumeric:'tabular-nums' }}>−{eur(r.amount)}</div>
             </div>
           ))}
-          <button style={{ ...btnS, width:'100%', marginTop:12, fontSize:12 }}>↩ Novo vračilo</button>
+          {/* POPRAVLJENO (16.8.2026): gumb ni imel nobenega dejanja - klik nanj
+              se ni zgodilo nic, brez okna in brez sporocila. Vracilo se izvede
+              nad KONKRETNIM racunom, zato vodi na zaslon Racuni, kjer se racun
+              izbere in nato vrne. */}
+          <button onClick={()=>setScreen?.('orders')}
+            style={{ ...btnS, width:'100%', marginTop:12, fontSize:12 }}>
+            ↩ Novo vračilo — izberi račun
+          </button>
         </div>
       </div>
 
@@ -10651,7 +10665,7 @@ function KlasikApp() {
           {screen==='inventory' && <InventoryScreen posData={posData}/>}
           {screen==='inventura' && <InventuraScreen posData={posData} auth={auth}/>}
           {screen==='orders'    && <OrdersScreen posData={posData} auth={auth}/>}
-          {screen==='reports'   && <ReportsScreen posData={posData} auth={auth}/>}
+          {screen==='reports'   && <ReportsScreen posData={posData} auth={auth} setScreen={setScreen}/>}
           {screen==='admin'     && <AdminScreen auth={auth} posData={posData}/>}
         </div>
       </div>
