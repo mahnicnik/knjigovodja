@@ -232,7 +232,8 @@ export default function EkipaPage() {
 
   async function revokeInvite(inviteId: string) {
     if (!confirm('Prekliči povabilo?')) return
-    await supabase.from('org_invites').delete().eq('id', inviteId)
+    const { error: revErr } = await supabase.from('org_invites').delete().eq('id', inviteId)
+    if (revErr) { showToast('Povabila ni bilo mogoče preklicati: ' + revErr.message, 'error'); return }
     setInvites(prev => prev.filter(i => i.id !== inviteId))
     showToast('success', 'Povabilo preklicano')
   }

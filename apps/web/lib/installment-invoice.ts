@@ -108,12 +108,20 @@ export async function issueInstallmentInvoice(
   } as any)
   if (resendError) throw new Error(resendError.message)
 
-  await supabase.from('issued_invoices').update({ last_email_sent_at: new Date().toISOString() }).eq('id', newInvoice.id)
-  await supabase.from('installments').update({
+  const { error: sentErr } = await supabase.from('issued_invoices').update({ last_email_sent_at: new Date().toISOString() }).eq('id', newInvoice.id)
+  if (sentErr) console.error('Obrocni racun', newInvoice.invoice_number, 'je poslan, oznake o posiljanju pa NI bilo mogoce shraniti:', sentErr)
+  // POPRAVLJENO (16.8.2026): prej brez preverbe. Ce se obrok ne oznaci kot
+  // zaracunan, bo naslednji zagon izdal ISTI obrok SE ENKRAT - stranka bi
+  // prejela podvojen racun za isti obrok.
+  const { error: instErr } = await supabase.from('installments').update({
     status: 'invoiced',
     invoiced_at: new Date().toISOString(),
     invoice_number: newInvoice.invoice_number,
   }).eq('id', inst.id)
+  if (instErr) {
+    console.error('KRITICNO: obrok', inst.id, 'je zaracunan (racun', newInvoice.invoice_number, '), oznake pa NI bilo mogoce shraniti - naslednji zagon lahko izda PODVOJEN racun:', instErr)
+    return { success: false, reason: `Račun ${newInvoice.invoice_number} je izdan in poslan, obroka pa ni bilo mogoče označiti kot zaračunanega. Preverite ročno, da se ne izda podvojen račun.` }
+  }
 
   return { success: true, invoiceNumber: newInvoice.invoice_number }
 }

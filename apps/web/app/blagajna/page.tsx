@@ -106,7 +106,8 @@ export default function BlagajnaPage() {
     }
 
     if (org) {
-      await supabase.from('kpo_entries').insert({
+      // POPRAVLJENO (16.8.2026): prej brez preverbe - prihodek se ni poknjizil.
+      const { error: kpoErr } = await supabase.from('kpo_entries').insert({
         org_id: org.id,
         entry_date: new Date().toISOString().split('T')[0],
         description: `Blagajna ${receiptNum} — ${cart.map(i => i.name).join(', ')}`,
@@ -117,6 +118,7 @@ export default function BlagajnaPage() {
         vat_out: Math.round((vat22 + vat95) * 100) / 100,
         category: 'Blagajna',
       })
+      if (kpoErr) { alert('Prihodka ni bilo mogoče poknjižiti: ' + kpoErr.message); return }
     }
 
     saveReceipts([receipt, ...receipts])

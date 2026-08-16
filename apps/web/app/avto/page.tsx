@@ -98,7 +98,8 @@ export default function AvtoPage() {
 
   async function deleteEntry(id: string) {
     if (!confirm('Izbrišete ta mesečni vnos?')) return
-    await supabase.from('vehicle_usage').delete().eq('id', id)
+    const { error: delErr } = await supabase.from('vehicle_usage').delete().eq('id', id)
+    if (delErr) { alert('Vnosa ni bilo mogoče izbrisati: ' + delErr.message); return }
     load()
   }
 

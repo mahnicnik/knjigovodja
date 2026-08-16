@@ -84,9 +84,14 @@ export default function StripePage() {
     if (upsertData.webhook_secret) {
       const { data: existingInteg } = await supabase.from('integrations').select('id').eq('org_id', org.id).eq('type', 'stripe').maybeSingle()
       if (existingInteg) {
-        await supabase.from('integrations').update({ webhook_secret: upsertData.webhook_secret, is_active: true }).eq('id', existingInteg.id)
+        const { error: wsUpdErr } = await supabase.from('integrations').update({ webhook_secret: upsertData.webhook_secret, is_active: true }).eq('id', existingInteg.id)
+        // POPRAVLJENO (16.8.2026): prej brez preverbe. Webhook bere skrivnost
+        // IZ TE tabele - ce se ne shrani, bo Stripe zavracal vse zahteve z
+        // napako "Invalid signature", uporabnik pa ne bi vedel zakaj.
+        if (wsUpdErr) alert('Webhook skrivnosti ni bilo mogoče shraniti v integracije: ' + wsUpdErr.message + '\n\nStripe plačila NE bodo delovala, dokler tega ne odpravite.')
       } else {
-        await supabase.from('integrations').insert({ org_id: org.id, type: 'stripe', settings: {}, webhook_secret: upsertData.webhook_secret, is_active: true })
+        const { error: wsInsErr } = await supabase.from('integrations').insert({ org_id: org.id, type: 'stripe', settings: {}, webhook_secret: upsertData.webhook_secret, is_active: true })
+        if (wsInsErr) alert('Webhook skrivnosti ni bilo mogoče shraniti v integracije: ' + wsInsErr.message + '\n\nStripe plačila NE bodo delovala, dokler tega ne odpravite.')
       }
     }
 

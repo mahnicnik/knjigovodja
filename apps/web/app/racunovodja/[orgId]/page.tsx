@@ -230,7 +230,8 @@ export default function RacunovodjaClientPage() {
 
   // Označi komentar kot rešen
   async function resolveComment(commentId: string) {
-    await supabase.from('accountant_comments').update({ is_resolved: true }).eq('id', commentId)
+    const { error: resErr } = await supabase.from('accountant_comments').update({ is_resolved: true }).eq('id', commentId)
+    if (resErr) { alert('Komentarja ni bilo mogoče označiti kot rešenega: ' + resErr.message); return }
     setComments(prev => prev.map(c => c.id === commentId ? { ...c, is_resolved: true } : c))
   }
 
