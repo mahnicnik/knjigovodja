@@ -393,7 +393,7 @@ export function ClockOutModal({ session, staffMember, onClose, onClockedOut }: {
               org_id: member.org_id,
               user_id: user.id,
               client_name: staffMember?.name || 'Delavec',
-              project: 'Delo v ŠIRM',
+              project: 'Delo na blagajni',
               description: note || `${clockIn.toLocaleDateString('sl-SI')} ${fmtTime(clockIn)}–${fmtTime(konec)}`,
               date: lokalniDatum,
               hours: parseFloat((dejanskeMin / 60).toFixed(2)),

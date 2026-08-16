@@ -111,6 +111,26 @@ const CFG = {
   ],
 }
 
+/**
+ * Podatki podjetja za IZPISE (racun, predracun, Z-porocilo, predracun).
+ *
+ * POPRAVLJENO (16.8.2026): na izpisih so bili TRDO ZAPISANI podatki podjetja
+ * SIRM - ime, naslov in celo davcna stevilka. Vsak drug uporabnik bi na svojem
+ * racunu natisnil TUJE podatke, kar je pri davcnem dokumentu resna napaka.
+ * Zdaj se vzamejo iz organizacije; ce podatka ni, se polje preprosto izpusti,
+ * namesto da bi se vpisal tuj.
+ */
+function podatkiPodjetja(org: any) {
+  const naslov = [org?.address, [org?.post_code, org?.city].filter(Boolean).join(' ')]
+    .filter(Boolean).join(', ')
+  return {
+    ime: org?.name || 'Blagajna',
+    naslov,
+    davcna: org?.tax_number ? String(org.tax_number).replace(/^SI/i, '') : '',
+    zavezanec: !!org?.vat_registered,
+  }
+}
+
 // ================================================================
 // HELPERS
 // ================================================================
@@ -205,6 +225,9 @@ function usePosData() {
   const [bizNapaka, setBizNapaka] = useState<string | null>(null)
   // DODANO (16.8.2026): ime podjetja iz organizacije - prej trdo zapisano.
   const [businessName, setBusinessName] = useState('')
+  // DODANO (16.8.2026): celotna organizacija - izpisi potrebujejo tudi naslov
+  // in davcno stevilko, ki sta bila prej TRDO ZAPISANA (SIRM, 91390419).
+  const [org, setOrg] = useState<any>(null)
   // DODANO (16.8.2026): ali blagajna se nima nobenega uporabnika s PIN-om.
   const [potrebujePrvoNastavitev, setPotrebujePrvoNastavitev] = useState(false)
 
@@ -221,8 +244,11 @@ function usePosData() {
           setBizNapaka('Vaš uporabniški račun ni povezan z nobenim podjetjem. Najprej izpolnite profil podjetja v Nastavitvah.')
           return
         }
-        const { data: o } = await sb2.from('organizations').select('name').eq('id', mem.org_id).single()
+        const { data: o } = await sb2.from('organizations')
+          .select('name, address, post_code, city, tax_number, vat_registered')
+          .eq('id', mem.org_id).single()
         setBusinessName(o?.name || '')
+        setOrg(o || null)
         const bizId = await resolveBusinessId(mem.org_id, o?.name || 'Moj biznis', user.id)
         setPotrebujePrvoNastavitev(!(await imaOsebje(bizId)))
         setBizReady(true)
@@ -292,7 +318,7 @@ function usePosData() {
     return [{ id: 'cat-fav', name: 'Priljubljeno', icon: '★', color: '#E9B949' }, ...categories]
   }, [categories])
 
-  return { categories: categoriesWithFav, items, spaces, customers, staffList, packageTemplates, services, ingredients, notifications, setNotifications, todayStats, businessProfile, setBusinessProfile, happyHourRules, loading, itemsIn, refresh, bizNapaka, businessName, potrebujePrvoNastavitev, setPotrebujePrvoNastavitev }
+  return { categories: categoriesWithFav, items, spaces, customers, staffList, packageTemplates, services, ingredients, notifications, setNotifications, todayStats, businessProfile, setBusinessProfile, happyHourRules, loading, itemsIn, refresh, bizNapaka, businessName, org, potrebujePrvoNastavitev, setPotrebujePrvoNastavitev }
 }
 
 // ================================================================
@@ -987,7 +1013,7 @@ async function autoPrint(data) {
   if (typeof window !== 'undefined' && (window as any).electronAPI?.printRaw) {
     try {
       const printData = {
-        business_name: data.org?.name || 'ŠIRM fitness&bar',
+        business_name: data.org?.name || 'Blagajna',
         business_address: [data.org?.address, [data.org?.post_code, data.org?.city].filter(Boolean).join(' ')].filter(Boolean).join(', '),
         tax_number: data.org?.tax_number || '',
         vat_id: data.org?.vat_registered ? 'SI' + (data.org?.tax_number||'') : '',
@@ -1009,7 +1035,7 @@ async function autoPrint(data) {
         furs_zoi: data.zoi,
         furs_eor: data.eor,
         premise_id: data.premiseId || 'SIRBFB01',
-        premise_address: data.premiseAddress || 'Poljanska cesta 87, 4224 Gorenja vas',
+        premise_address: data.premiseAddress || '',
         is_copy: false,
       }
       const result = await (window as any).electronAPI.printRaw(printData)
@@ -1023,7 +1049,7 @@ async function autoPrint(data) {
     const res = await fetch('http://localhost:6789/health', { signal: AbortSignal.timeout(1000) })
     if (res.ok) {
       const printData = {
-        business_name: data.org?.name || 'ŠIRM fitness&bar',
+        business_name: data.org?.name || 'Blagajna',
         business_address: [data.org?.address, [data.org?.post_code, data.org?.city].filter(Boolean).join(' ')].filter(Boolean).join(', '),
         business_tax: data.org?.vat_registered
           ? `Davčna: ${data.org?.tax_number || ''} | ID za DDV: SI${data.org?.tax_number || ''}`
@@ -1059,15 +1085,15 @@ async function autoPrint(data) {
   try {
     const html = await buildReceiptHTML({
       org: data.org || {
-        name: 'ŠIRM fitness&bar',
-        address: 'Poljanska cesta 87',
+        name: posData?.businessName || 'Blagajna',
+        address: '',
         city: 'Gorenja vas',
         post_code: '4224',
         tax_number: '',
         vat_registered: false,
       },
       premiseId: data.premiseId || 'SIRBFB01',
-      premiseAddress: data.premiseAddress || 'Poljanska cesta 87, 4224 Gorenja vas',
+      premiseAddress: data.premiseAddress || '',
       deviceId: data.deviceId || 'RACUNK001',
       invoiceNumber: data.invoiceNumber || (data.orderId?.slice(-6)) || '—',
       issueDate: new Date(),
@@ -1525,6 +1551,8 @@ function WriteoffModal({ cart, auth, onClose, onDone }) {
 }
 
 function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart, addItem, adjustQty, setPaymentOpen, totals, setActiveCustomer, posData, happyHourActive, setHappyHourActive, cashSession, onNeedOpenCash, auth }) {
+  // Podatki podjetja za izpise - prej trdo zapisani (SIRM, naslov, davcna).
+  const pp = podatkiPodjetja(posData.org || { name: posData.businessName })
   const [showWriteoff, setShowWriteoff] = React.useState(false)
   const [cartDiscount, setCartDiscount] = useState(0)
   const [proformaModal, setProformaModal] = useState(false)
@@ -1654,8 +1682,8 @@ function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart
           // ESC/POS (Electron)
           if (typeof window !== 'undefined' && (window as any).electronAPI?.printRaw) {
             const printData = {
-              business_name: 'SIRM fitness&bar',
-              business_address: 'Poljanska cesta 87, 4224 Gorenja vas',
+              business_name: pp.ime,
+              business_address: pp.naslov,
               receipt_number: num,
               cashier: auth?.user?.name || '',
               date: new Date().toLocaleString('sl-SI'),
@@ -1679,8 +1707,8 @@ th{background:#f5f5f5;font-weight:bold}.right{text-align:right}.total-row{font-s
 .stamp{border:2px dashed #999;padding:20px;text-align:center;margin:24px 0;color:#999;font-size:14px}
 </style></head><body>
 <div class="header">
-  <div style="font-size:18px;font-weight:bold">SIRM fitness&bar</div>
-  <div>Poljanska cesta 87, 4224 Gorenja vas</div>
+  <div style="font-size:18px;font-weight:bold">${pp.ime}</div>
+  ${pp.naslov ? `<div>${pp.naslov}</div>` : ''}
 </div>
 <div style="display:flex;justify-content:space-between;margin-bottom:16px">
   <div><div class="title">PREDRACUN</div><div>St. ${num}</div></div>
@@ -1692,7 +1720,7 @@ th{background:#f5f5f5;font-weight:bold}.right{text-align:right}.total-row{font-s
 ${cartDiscount > 0 ? `<div style="text-align:right;color:#666">Popust ${cartDiscount}%: -${eur2(totals.total-total)}</div>` : ''}
 <div class="total-row" style="text-align:right;font-size:18px;margin:12px 0">SKUPAJ: ${eur2(total)}</div>
 <div class="stamp">Predracun ni davčno potrjen. Velja do: ${new Date(Date.now()+7*86400000).toLocaleDateString('sl-SI')}</div>
-<div class="footer">SIRM fitness&bar · www.racunko.si<br>Predracun izdan s sistemom RACUNKO</div>
+<div class="footer">${pp.ime} · www.racunko.si<br>Predracun izdan s sistemom RACUNKO</div>
 <script>window.addEventListener('load',function(){setTimeout(function(){window.print()},300)})</script>
 </body></html>`
           const w = window.open('','_blank','width=800,height=900')
@@ -1756,8 +1784,8 @@ th{background:#f5f5f5;font-weight:bold}.right{text-align:right}
 </style></head><body>
 <div style="display:flex;justify-content:space-between;margin-bottom:24px;border-bottom:2px solid #000;padding-bottom:16px">
   <div>
-    <div style="font-size:20px;font-weight:bold">ŠIRM fitness&bar</div>
-    <div style="color:#666">Poljanska cesta 87, 4224 Gorenja vas</div>
+    <div style="font-size:20px;font-weight:bold">${pp.ime}</div>
+    ${pp.naslov ? `<div style="color:#666">${pp.naslov}</div>` : ''}
     <div style="color:#666">www.racunko.si</div>
   </div>
   <div style="text-align:right">
@@ -1781,7 +1809,7 @@ ${recipientHtml}
   </div>
 </div>
 <div class="stamp">Ta predračun ni davčno potrjen račun.<br>Po plačilu izstavimo uradni davčni račun.</div>
-<div class="footer">ŠIRM fitness&bar · Nik Mahniš s.p. · Davčna: 91390419<br>Izdano s sistemom RAČUNKO · www.racunko.si</div>
+<div class="footer">${pp.ime}${pp.davcna ? ' · Davčna: ' + pp.davcna : ''}<br>Izdano s sistemom RAČUNKO · www.racunko.si</div>
 <script>window.addEventListener('load',function(){setTimeout(function(){window.print()},300)})</script>
 </body></html>`
                 const w = window.open('','_blank','width=820,height=960')
@@ -2563,7 +2591,7 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
                   ${data.duration_min ? ` · ${data.duration_min} min` : ''}
                 </div>
                 <p>V primeru odpovedi nas prosimo obvestite vsaj 24 ur vnaprej.</p>
-                <p>Lep pozdrav,<br/><b>Ekipa ŠIRM</b></p>
+                <p>Lep pozdrav,<br/><b>${pp.ime}</b></p>
               </div>`
             })
           }).catch(()=>{})
@@ -3191,7 +3219,9 @@ function CustomerNotesTab({ customer, onSave }) {
 }
 
 // ─── Bulk Email Modal ─────────────────────────────────────────
-function BulkEmailModal({ customers, onClose }) {
+function BulkEmailModal({ customers, onClose, posData }) {
+  // Podatki podjetja za nogo e-poste - prej trdo zapisani (SIRM, naslov).
+  const pp = podatkiPodjetja(posData?.org || { name: posData?.businessName })
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [filter, setFilter] = useState('all') // all | with_email | active_packages
@@ -3221,7 +3251,7 @@ function BulkEmailModal({ customers, onClose }) {
               <h2 style="color:#0d2818">${subject}</h2>
               <div style="font-size:15px;line-height:1.7;color:#444">${body.split(String.fromCharCode(10)).join('<br/>')}</div>
               <hr style="margin:24px 0;border-color:#e5e1d8"/>
-              <p style="font-size:12px;color:#999">ŠIRM fitness&bar · Poljanska cesta 87</p>
+              <p style="font-size:12px;color:#999">${pp.ime}${pp.naslov ? ' · ' + pp.naslov : ''}</p>
             </div>`,
           })
         })
@@ -3254,7 +3284,7 @@ function BulkEmailModal({ customers, onClose }) {
 
         <Field label="Sporočilo *">
           <textarea value={body} onChange={e=>setBody(e.target.value)} rows={8}
-            style={{ ...inp, resize:'vertical' }} placeholder="Spoštovani,&#10;&#10;obveščamo vas, da...&#10;&#10;Lep pozdrav,&#10;Ekipa ŠIRM"/>
+            style={{ ...inp, resize:'vertical' }} placeholder="Spoštovani,&#10;&#10;obveščamo vas, da...&#10;&#10;Lep pozdrav,&#10;Ekipa"/>
         </Field>
 
         {result && (
@@ -4714,7 +4744,7 @@ function OpenCashModal({ posData, auth, onClose, onOpened }) {
       // Natisni otvoritev
       const html = buildOpeningReceipt({
         session: session!,
-        org: org || { name: 'ŠIRM fitness&bar', tax_number: '', vat_registered: false },
+        org: org || { name: 'Blagajna', tax_number: '', vat_registered: false },
         sessionNumber,
         cashierName,
       })
@@ -4802,7 +4832,7 @@ function VmesnoStanjeModal({ session, posData, auth, onClose }) {
       const html = buildXReportReceipt({
         session,
         stats,
-        org: org || { name: 'ŠIRM fitness&bar', tax_number: '', vat_registered: false },
+        org: org || { name: 'Blagajna', tax_number: '', vat_registered: false },
         sessionNumber,
         cashierName,
       })
@@ -4944,7 +4974,7 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
       const html = buildZReportReceipt({
         session: updatedSession as any,
         stats,
-        org: org || { name: 'ŠIRM fitness&bar', tax_number: '', vat_registered: false },
+        org: org || { name: 'Blagajna', tax_number: '', vat_registered: false },
         zReportNumber: zReportNumber!,
         cashierName,
         cashClosingDeclared: declared,
@@ -5057,6 +5087,8 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
 }
 
 function ZReportModal({ posData, onClose }) {
+  // Podatki podjetja za Z-porocilo - prej trdo zapisani.
+  const pp = podatkiPodjetja(posData?.org || { name: posData?.businessName })
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState(null)
   const [cashOpening, setCashOpening] = useState('0')
@@ -5197,7 +5229,7 @@ function ZReportModal({ posData, onClose }) {
             date: dateStr,
             amount: data.totalRevenue,
             refunds: data.totalRefunds,
-            description: `POS promet — ŠIRM fitness&bar (Z#${reportNumber})`,
+            description: `POS promet — ${posData.businessName || 'blagajna'} (Z#${reportNumber})`,
             z_report_id: zReport?.id,
           })
         })
@@ -5223,8 +5255,8 @@ function ZReportModal({ posData, onClose }) {
 <head><meta charset="UTF-8"><title>Z-poročilo #${num}</title></head>
 <body style="font-family:monospace;max-width:400px;margin:0 auto;padding:20px;background:#fff;color:#000">
 <div style="text-align:center;border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:16px">
-  <div style="font-size:18px;font-weight:bold">ŠIRM fitness&bar</div>
-  <div style="font-size:12px">Poljanska cesta 87, 4224 Gorenja vas</div>
+  <div style="font-size:18px;font-weight:bold">${pp.ime}</div>
+  ${pp.naslov ? `<div style="font-size:12px">${pp.naslov}</div>` : ''}
   <div style="font-size:12px">ID: ${new Date().getTime()}</div>
 </div>
 <div style="text-align:center;margin-bottom:16px">
@@ -5877,7 +5909,7 @@ function buildStornoReceiptHTML({ order, lines, payment, org, cashierName, voidE
 <style>@page{size:80mm auto;margin:0}body{font-family:monospace;font-size:11px;line-height:1.4;color:#000;background:#fff;margin:0;padding:8mm 4mm;max-width:80mm}.c{text-align:center}.b{font-weight:700}.l{border-top:1px dashed #000;margin:6px 0}.dl{border-top:2px solid #000;margin:6px 0}.r{display:flex;justify-content:space-between}.s{font-size:10px;color:#444}.footer{text-align:center;font-size:10px;margin-top:8px}.brand{font-weight:700;letter-spacing:4px;font-size:11px}</style>
 </head><body>
 <div class="c">
-  <div class="b" style="font-size:14px">${org?.name || 'ŠIRM fitness&bar'}</div>
+  <div class="b" style="font-size:14px">${org?.name || 'Blagajna'}</div>
   ${addr ? `<div class="s">${addr}</div>` : ''}
   ${org?.tax_number ? `<div class="s">Davčna št.: ${org.tax_number}</div>` : ''}
   ${org?.vat_registered ? `<div class="s">ID za DDV: SI${org.tax_number}</div>` : ''}
@@ -6081,9 +6113,9 @@ function OrdersScreen({ posData, auth }) {
     if (typeof window !== 'undefined' && (window as any).electronAPI?.printReceipt) {
       try {
         const html = await buildReceiptHTML({
-          org: orgData || { name: 'ŠIRM fitness&bar', tax_number: '', vat_registered: false },
+          org: orgData || { name: 'Blagajna', tax_number: '', vat_registered: false },
           premiseId: premiseData?.premise_id || 'SIRBFB01',
-          premiseAddress: premiseData ? [premiseData.address, [premiseData.post_code, premiseData.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') : 'Poljanska cesta 87, 4224 Gorenja vas',
+          premiseAddress: premiseData ? [premiseData.address, [premiseData.post_code, premiseData.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') : '',
           deviceId: deviceData?.device_id || 'RACUNK001',
           invoiceNumber: order.invoice_number || order.number || order.id.slice(-6),
           issueDate: new Date(order.closed_at),
@@ -6109,7 +6141,7 @@ function OrdersScreen({ posData, auth }) {
       const res = await fetch('http://localhost:6789/health', { signal: AbortSignal.timeout(1000) })
       if (res.ok) {
         const printData = {
-          business_name: orgData?.name || 'ŠIRM fitness&bar',
+          business_name: orgData?.name || 'Blagajna',
           business_address: [orgData?.address, [orgData?.post_code, orgData?.city].filter(Boolean).join(' ')].filter(Boolean).join(', '),
           tax_number: orgData?.tax_number || '',
           vat_id: orgData?.vat_registered ? `SI${orgData.tax_number}` : '',
@@ -6147,12 +6179,12 @@ function OrdersScreen({ posData, auth }) {
     try {
       const html = await buildReceiptHTML({
         org: orgData || {
-          name: 'ŠIRM fitness&bar',
+          name: posData?.businessName || 'Blagajna',
           tax_number: '',
           vat_registered: false,
         },
         premiseId: premiseData?.premise_id || 'SIRBFB01',
-        premiseAddress: premiseData ? [premiseData.address, [premiseData.post_code, premiseData.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') : 'Poljanska cesta 87, 4224 Gorenja vas',
+        premiseAddress: premiseData ? [premiseData.address, [premiseData.post_code, premiseData.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') : '',
         deviceId: deviceData?.device_id || 'RACUNK001',
         invoiceNumber: order.invoice_number || order.number || order.id.slice(-6),
         issueDate: new Date(order.closed_at),
@@ -6304,7 +6336,7 @@ function OrdersScreen({ posData, auth }) {
                     }
                   } catch {}
                   const pd = {
-                    business_name: orgData?.name || 'SIRM fitness&bar',
+                    business_name: orgData?.name || 'Blagajna',
                     business_address: [orgData?.address, [orgData?.post_code, orgData?.city].filter(Boolean).join(' ')].filter(Boolean).join(', '),
                     tax_number: orgData?.tax_number || '',
                     vat_id: orgData?.vat_registered ? 'SI'+(orgData?.tax_number||'') : '',
@@ -6320,7 +6352,7 @@ function OrdersScreen({ posData, auth }) {
                     furs_zoi: orderPayment?.furs_zoi,
                     furs_eor: orderPayment?.furs_eor,
                     premise_id: premiseData?.premise_id || 'SIRBFB01',
-                    premise_address: premiseData ? [premiseData.address, [premiseData.post_code, premiseData.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') : 'Poljanska cesta 87, 4224 Gorenja vas',
+                    premise_address: premiseData ? [premiseData.address, [premiseData.post_code, premiseData.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') : '',
                     is_copy: true,
                   }
                   const r = await (window as any).electronAPI.printRaw(pd)

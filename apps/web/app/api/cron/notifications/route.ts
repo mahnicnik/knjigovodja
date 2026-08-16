@@ -195,8 +195,8 @@ export async function GET(req: NextRequest) {
             customerName: cust.name,
             html: `<div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#fff">
               <div style="text-align:center;margin-bottom:28px">
-                <div style="font-size:22px;font-weight:800;color:#0d2818">ŠIRM fitness&bar</div>
-                <div style="font-size:13px;color:#888;margin-top:4px">Poljanska cesta 87, 4224 Gorenja vas</div>
+                <div style="font-size:22px;font-weight:800;color:#0d2818">${biz.name}</div>
+
               </div>
               <h2 style="color:#0d2818">Vaša kartica poteče čez ${daysLeft} dni</h2>
               <p style="color:#444;font-size:15px">Spoštovani/a <strong>${cust.name}</strong>,</p>
