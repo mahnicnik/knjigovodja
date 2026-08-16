@@ -128,7 +128,7 @@ export async function buildReceiptHTML(d: ReceiptData): Promise<string> {
 
   const vatHtml = vatGroups.length > 0 ? `
     <div class="line"></div>
-    <div class="sectitle">OBRACUN DDV</div>
+    <div class="sectitle">OBRAČUN DDV</div>
     <table class="vattable">
       <thead>
         <tr><th>##</th><th>DDV%</th><th>NETO</th><th>DDV</th><th>BRUTO</th></tr>
@@ -165,15 +165,27 @@ export async function buildReceiptHTML(d: ReceiptData): Promise<string> {
     <div class="row sub"><span>Napitnina</span><span>${eur(d.tip)}</span></div>
   ` : ''
 
+  // POPRAVLJENO (16.8.2026): sporocilo "FURS potrjevanje ni uspelo" se je
+  // natisnilo VEDNO, kadar kode EOR ni bilo - tudi ce davcno potrjevanje sploh
+  // ni bilo zahtevano (uporabnik je odkljukal). To je zavajajoce: bralcu racuna
+  // sporoca, da je nekaj spodletelo, ceprav se ni nic poskusilo.
+  //
+  // Zdaj locimo tri primere: potrjeno, poskuseno in spodletelo, ter ni bilo
+  // zahtevano. Poskus prepoznamo po tem, da ZOI obstaja (izracuna se PRED
+  // klicem na FURS) - ce ga ni, potrjevanje ni bilo zahtevano.
   const fursHtml = d.payment.furs_eor ? `
     <div class="line"></div>
     <div class="mono small">ZOI: ${d.payment.furs_zoi || '—'}</div>
     <div class="mono small">EOR: ${d.payment.furs_eor}</div>
     ${qrImg}
     <div class="center small confirm">Davčno potrjeno</div>
+  ` : d.payment.furs_zoi ? `
+    <div class="line"></div>
+    <div class="mono small">ZOI: ${d.payment.furs_zoi}</div>
+    <div class="center small warn">Davčno potrjevanje ni uspelo — račun bo potrjen naknadno</div>
   ` : `
     <div class="line"></div>
-    <div class="center small warn">FURS potrjevanje ni uspelo</div>
+    <div class="center small">Račun ni davčno potrjen</div>
   `
 
   return `<!DOCTYPE html>
@@ -228,7 +240,7 @@ export async function buildReceiptHTML(d: ReceiptData): Promise<string> {
   <div class="center">
     <div class="header-name">${escapeHtml(d.org.name)}</div>
     ${fullAddress ? `<div class="header-addr">${escapeHtml(fullAddress)}</div>` : ''}
-    <div class="header-addr">Davcna st.: ${escapeHtml(d.org.tax_number)}</div>
+    <div class="header-addr">Davčna št.: ${escapeHtml(d.org.tax_number)}</div>
     ${d.org.vat_registered ? `<div class="header-addr">ID za DDV: SI${escapeHtml(d.org.tax_number)}</div>` : ''}
   </div>
   ${d.premiseAddress ? `
@@ -237,10 +249,10 @@ export async function buildReceiptHTML(d: ReceiptData): Promise<string> {
   </div>` : ''}
   <div class="line"></div>
   <div class="meta">
-    <div class="row"><span class="bold">Racun st.:</span><span class="mono">${escapeHtml(d.invoiceNumber)}</span></div>
+    <div class="row"><span class="bold">Račun št.:</span><span class="mono">${escapeHtml(d.invoiceNumber)}</span></div>
     <div class="row"><span>Datum:</span><span>${fmtDateTime(d.issueDate)}</span></div>
     <div class="row"><span>Blagajnik:</span><span>${escapeHtml(d.cashierName || '—')}</span></div>
-    <div class="row"><span>Placilo:</span><span>${escapeHtml(methodLabel)}</span></div>
+    <div class="row"><span>Plačilo:</span><span>${escapeHtml(methodLabel)}</span></div>
   </div>
   <div class="line"></div>
   ${linesHtml}
@@ -249,7 +261,7 @@ export async function buildReceiptHTML(d: ReceiptData): Promise<string> {
   ${vatHtml}
   <div class="doubleline"></div>
   <div class="total-row">
-    <span>Za placilo:</span>
+    <span>Za plačilo:</span>
     <span>${eur(d.total)}</span>
   </div>
   <div class="doubleline"></div>

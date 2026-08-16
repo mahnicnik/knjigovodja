@@ -836,7 +836,11 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
               deviceInfo = d
             }
           }
-          cashierDisplayName = user.email?.split('@')[0] || ''
+          // POPRAVLJENO (16.8.2026): na racun se je natisnila PREDPONA E-NASLOVA
+          // racuna (npr. "mahnic.nik+test1"), ne ime osebe, ki je racun izdala.
+          // Prav sledljivost "kdo je izdal racun" je razlog, da ima vsak svoj
+          // PIN - na dokumentu se je to izgubilo.
+          cashierDisplayName = auth?.user?.name || user.email?.split('@')[0] || ''
         }
       } catch (e) { console.warn('Receipt meta load:', e) }
 
@@ -863,7 +867,7 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
           tax_number: orgInfo.tax_number,
           vat_registered: orgInfo.vat_registered,
         } : null,
-        premiseId: premiseInfo?.premise_id || 'SIRBFB01',
+        premiseId: premiseInfo?.premise_id || '',
         deviceId: deviceInfo?.device_id || 'RACUNKO01',
         cashierName: cashierDisplayName,
         lines: cart.map(l => ({
@@ -1034,7 +1038,7 @@ async function autoPrint(data) {
         payment_method: data.method,
         furs_zoi: data.zoi,
         furs_eor: data.eor,
-        premise_id: data.premiseId || 'SIRBFB01',
+        premise_id: data.premiseId || '',
         premise_address: data.premiseAddress || '',
         is_copy: false,
       }
@@ -1087,14 +1091,14 @@ async function autoPrint(data) {
       org: data.org || {
         name: posData?.businessName || 'Blagajna',
         address: '',
-        city: 'Gorenja vas',
-        post_code: '4224',
+        city: '',
+        post_code: '',
         tax_number: '',
         vat_registered: false,
       },
-      premiseId: data.premiseId || 'SIRBFB01',
+      premiseId: data.premiseId || '',
       premiseAddress: data.premiseAddress || '',
-      deviceId: data.deviceId || 'RACUNK001',
+      deviceId: data.deviceId || '',
       invoiceNumber: data.invoiceNumber || (data.orderId?.slice(-6)) || '—',
       issueDate: new Date(),
       cashierName: data.cashierName || '',
@@ -4739,7 +4743,9 @@ function OpenCashModal({ posData, auth, onClose, onOpened }) {
       // Org za izpis
       const member = await getActiveMembership().then(m => m ? { org_id: m.org_id } : null) // POPRAVLJENO 16.8.2026: vec-org varno
       const { data: org } = member ? await createClient().from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
-      const cashierName = user.email?.split('@')[0] || ''
+      // POPRAVLJENO (16.8.2026): ime PIN-prijavljene osebe namesto predpone
+      // e-naslova racuna.
+      const cashierName = auth?.user?.name || user.email?.split('@')[0] || ''
 
       // Natisni otvoritev
       const html = buildOpeningReceipt({
@@ -4845,7 +4851,7 @@ function VmesnoStanjeModal({ session, posData, auth, onClose }) {
 
   return (
     <Modal open onClose={onClose} width={400}>
-      <ModalHeader title="Vmesno stanje (vmesno stanje)" onClose={onClose}/>
+      <ModalHeader title="Vmesno stanje blagajne" onClose={onClose}/>
       <div style={{ padding:'20px', display:'flex', flexDirection:'column', gap:12 }}>
         {loading ? (
           <div style={{ textAlign:'center', padding:20, color:T.muted }}>Nalagam...</div>
@@ -6114,9 +6120,9 @@ function OrdersScreen({ posData, auth }) {
       try {
         const html = await buildReceiptHTML({
           org: orgData || { name: 'Blagajna', tax_number: '', vat_registered: false },
-          premiseId: premiseData?.premise_id || 'SIRBFB01',
+          premiseId: premiseData?.premise_id || '',
           premiseAddress: premiseData ? [premiseData.address, [premiseData.post_code, premiseData.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') : '',
-          deviceId: deviceData?.device_id || 'RACUNK001',
+          deviceId: deviceData?.device_id || '',
           invoiceNumber: order.invoice_number || order.number || order.id.slice(-6),
           issueDate: new Date(order.closed_at),
           cashierName: cashierName,
@@ -6183,9 +6189,9 @@ function OrdersScreen({ posData, auth }) {
           tax_number: '',
           vat_registered: false,
         },
-        premiseId: premiseData?.premise_id || 'SIRBFB01',
+        premiseId: premiseData?.premise_id || '',
         premiseAddress: premiseData ? [premiseData.address, [premiseData.post_code, premiseData.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') : '',
-        deviceId: deviceData?.device_id || 'RACUNK001',
+        deviceId: deviceData?.device_id || '',
         invoiceNumber: order.invoice_number || order.number || order.id.slice(-6),
         issueDate: new Date(order.closed_at),
         cashierName: cashierName,
@@ -6351,7 +6357,7 @@ function OrdersScreen({ posData, auth }) {
                     payment_method: orderPayment?.method,
                     furs_zoi: orderPayment?.furs_zoi,
                     furs_eor: orderPayment?.furs_eor,
-                    premise_id: premiseData?.premise_id || 'SIRBFB01',
+                    premise_id: premiseData?.premise_id || '',
                     premise_address: premiseData ? [premiseData.address, [premiseData.post_code, premiseData.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') : '',
                     is_copy: true,
                   }
@@ -9677,6 +9683,10 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
   const [unconfirmed, setUnconfirmed] = React.useState(0)
   const [resending, setResending] = React.useState(false)
   const loadUnconfirmed = React.useCallback(async () => {
+    // DODANO (16.8.2026): pocakaj na razrescen business_id. Prej se je poizvedba
+    // sprozila takoj ob izrisu in vrnila napako 400 ("orders.business_id=eq."
+    // brez vrednosti). To je bila zadnja od treh takih poizvedb.
+    if (!BUSINESS_ID) return
     try {
       const { count } = await createClient()
         .from('payments')
