@@ -68,18 +68,31 @@ export default function AIPage() {
     const monthStart = `${year}-01-01`
     const today = now.toISOString().split('T')[0]
 
-    const [invRes, expRes, empRes] = await Promise.all([
-      supabase.from('issued_invoices').select('amount_net,vat_amount,amount_total,status,due_date').eq('org_id', o.id).neq('status','draft'),
+    const [invRes, expRes, empRes, kpoRes] = await Promise.all([
+      supabase.from('issued_invoices').select('amount_net,vat_amount,amount_total,status,due_date').eq('org_id', o.id).neq('status','draft').or('zoi.is.null,zoi.not.like.DEMO-%'),
       supabase.from('receipts').select('amount_net,vat_amount').eq('org_id', o.id),
       supabase.from('employees').select('id').eq('org_id', o.id).eq('status','active'),
+      // DODANO (16.8.2026): promet in stroski iz knjige (POS blagajna, banka,
+      // kartice, place). Prej je AI videl SAMO izdane racune, zato bi na
+      // vprasanje o prihodkih ali DDV odgovoril prenizko - gostinski promet
+      // ne gre prek izdanih racunov. Filter invoice_id/receipt_id prepreci
+      // dvojno stetje ze zajetih racunov.
+      supabase.from('kpo_entries').select('income,expense,vat_out,vat_in,entry_type,invoice_id,receipt_id').eq('org_id', o.id),
     ])
 
     const invoices = invRes.data || []
     const receipts = expRes.data || []
+    const kpo = (kpoRes.data || []).filter((e: any) => !e.invoice_id && !e.receipt_id)
+    const kpoIncome = kpo.filter((e: any) => e.entry_type === 'income')
+    const kpoExpense = kpo.filter((e: any) => e.entry_type === 'expense')
     const revenue = invoices.reduce((s: number, i: any) => s + Number(i.amount_net), 0)
+      + kpoIncome.reduce((s: number, e: any) => s + Number(e.income || 0), 0)
     const expenses = receipts.reduce((s: number, r: any) => s + Number(r.amount_net), 0)
+      + kpoExpense.reduce((s: number, e: any) => s + Number(e.expense || 0), 0)
     const vatOut = invoices.reduce((s: number, i: any) => s + Number(i.vat_amount), 0)
+      + kpoIncome.reduce((s: number, e: any) => s + Number(e.vat_out || 0), 0)
     const vatIn = receipts.reduce((s: number, r: any) => s + Number(r.vat_amount), 0)
+      + kpoExpense.reduce((s: number, e: any) => s + Number(e.vat_in || 0), 0)
     const unpaid = invoices.filter((i: any) => i.status === 'sent')
     const overdue = invoices.filter((i: any) => i.status === 'sent' && i.due_date < today)
 

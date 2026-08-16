@@ -68,7 +68,7 @@ export default function StatistikaPage() {
 
     const [invRes, expRes, kpoIncRes, kpoExpRes] = await Promise.all([
       supabase.from('issued_invoices').select('*').eq('org_id', o.id)
-        .neq('status','draft').gte('issue_date', yearStart).lte('issue_date', yearEnd),
+        .neq('status','draft').or('zoi.is.null,zoi.not.like.DEMO-%').gte('issue_date', yearStart).lte('issue_date', yearEnd),
       supabase.from('receipts').select('*').eq('org_id', o.id)
         .gte('receipt_date', yearStart).lte('receipt_date', yearEnd),
       // DODANO (30.7.2026): KPO prihodki (POS, banka, kartice...) - SAMO
