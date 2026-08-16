@@ -2571,7 +2571,12 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
       }
 
       onSaved()
-    } catch(e) { showToast(e.message, false) }
+    } catch(e: any) {
+      const sporocilo = String(e?.message || '').includes('idx_staff_pin')
+        ? 'Ta PIN že uporablja druga oseba. Izberite drugega.'
+        : (e?.message || 'Shranjevanje ni uspelo')
+      showToast(sporocilo, false)
+    }
     setSaving(false)
   }
 
@@ -7310,6 +7315,14 @@ function StaffSection({ posData }) {
     if (!modal?.name?.trim()) { showToast('Ime je obvezno', false); return }
     if (!modal?.pin?.trim()) { showToast('PIN je obvezen', false); return }
     if (!modal.role) { showToast('Vloga je obvezna', false); return }
+    // DODANO (16.8.2026): preverba PIN-a PRED shranjevanjem. Prej je enolicnost
+    // ujela sele baza in vrnila surovo anglesko napako
+    // ("duplicate key value violates unique constraint idx_staff_pin"), ki
+    // uporabniku ne pove nicesar.
+    if (!/^\d{4,6}$/.test(String(modal.pin).trim())) { showToast('PIN mora imeti od 4 do 6 številk', false); return }
+    if (/^(\d)\1+$/.test(String(modal.pin).trim())) { showToast('PIN naj ne bo sestavljen iz enakih številk', false); return }
+    const zaseden = (posData.staffList || []).some((o: any) => String(o.pin) === String(modal.pin).trim() && o.id !== modal.id)
+    if (zaseden) { showToast('Ta PIN že uporablja druga oseba. Izberite drugega.', false); return }
     setSaving(true)
     try {
       if (modal.id) {
@@ -10339,6 +10352,31 @@ function KlasikApp() {
   const nav = profile.nav.filter(s => { const p = screenPerm[s]; if (!p) return true; return auth.permissions[p] })
 
   const [screen, setScreen] = useState('sale')
+
+  // DODANO (16.8.2026, VARNOST): ob zamenjavi uporabnika VEDNO ponastavi pogled
+  // na prodajo.
+  //
+  // Prej se pogled ni ponastavil: ce je lastnik zaklenil, medtem ko je bila
+  // odprta stran z nastavitvami, je naslednji uporabnik pristal ZNOTRAJ njih -
+  // tudi blagajnik, ki do njih nima pravice. Videl je seznam osebja z namigi
+  // PIN-ov in lahko odprl obrazec za novega zaposlenega z vlogo Lastnik. To je
+  // pomenilo pot do povisanja lastnih pravic.
+  const zadnjiUporabnik = React.useRef<string | null>(null)
+  React.useEffect(() => {
+    const trenutni = auth.user?.id ?? null
+    if (trenutni && zadnjiUporabnik.current && trenutni !== zadnjiUporabnik.current) {
+      setScreen('sale')
+    }
+    if (trenutni) zadnjiUporabnik.current = trenutni
+  }, [auth.user?.id])
+
+  // Ce uporabnik nima pravice do trenutnega pogleda, ga vrni na prodajo.
+  React.useEffect(() => {
+    const potrebna = screenPerm[screen]
+    if (potrebna && auth.permissions && !auth.permissions[potrebna]) {
+      setScreen('sale')
+    }
+  }, [screen, auth.permissions])
   const [activePremise, setActivePremiseState] = useState(getActivePremise())
   const [activeDevice, setActiveDeviceState] = useState(getActiveDevice())
   const [showPremiseSelect, setShowPremiseSelect] = useState(!getActivePremise() && false)
@@ -10511,15 +10549,20 @@ function KlasikApp() {
               Vmesno stanje
             </button>
           )}
+          {/* POPRAVLJENO (16.8.2026): gumb za zakljucek se prikaze SAMO tistemu,
+              ki ima pravico. Prej ga je videl tudi blagajnik, klik pa ni naredil
+              nicesar - videti je bilo, kot da aplikacija ne dela. Gumb, ki ga
+              nekdo ne sme uporabiti, naj ga sploh ne vidi. */}
           {cashSession
-            ? <button onClick={()=>{
-                // POPRAVLJENO (16.8.2026, VARNOST): prej brez preverbe pravic -
-                // blagajnik z dailyClose:false je lahko zakljucil dan (Z-porocilo).
-                if (!auth?.permissions?.dailyClose) { alert('Za dnevni zaključek nimate pravice. Obrnite se na vodjo.'); return }
-                setShowCloseCash(true)
-              }} style={{ padding:'5px 10px', borderRadius:7, border:'none', background:'rgba(168,50,50,0.15)', color:T.danger, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700 }}>
-                🔒 Zaključi
-              </button>
+            ? (auth?.permissions?.dailyClose
+                ? <button onClick={()=>setShowCloseCash(true)}
+                    style={{ padding:'5px 10px', borderRadius:7, border:'none', background:'rgba(168,50,50,0.15)', color:T.danger, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700 }}>
+                    🔒 Zaključi
+                  </button>
+                : <span title="Dnevni zaključek lahko opravi le vodja ali lastnik."
+                    style={{ padding:'5px 10px', borderRadius:7, background:'rgba(255,255,255,0.06)', color:T.inkSoft, fontSize:11, fontWeight:600 }}>
+                    Blagajna odprta
+                  </span>)
             : <button onClick={()=>setShowOpenCash(true)} style={{ padding:'5px 10px', borderRadius:7, border:'none', background:T.accentSoft, color:T.accent, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700 }}>
                 🔓 Odpri
               </button>

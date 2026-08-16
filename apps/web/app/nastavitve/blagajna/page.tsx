@@ -998,13 +998,17 @@ export default function BlagajnaPage() {
 
 // ── Helpers ──
 function FormField({ label, children }: { label: string, children: React.ReactNode }) {
+  // POPRAVLJENO (16.8.2026): tu je bil pomotoma vstavljen <AppLayout org={org}>.
+  // FormField je preprosta pomozna komponenta za oznako nad poljem - ovoja
+  // celotne strani ne sme vsebovati, spremenljivka "org" pa v tej datoteki
+  // sploh ne obstaja. Rezultat: ob vsakem izrisu obrazca se je aplikacija
+  // sesula z "ReferenceError: org is not defined" in pokazala belo stran.
+  // Napaka se je pokazala sele, ko je nov obrazec (osebje) uporabil FormField.
   return (
-    <AppLayout org={org}>
     <div>
       <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 5 }}>{label}</label>
       {children}
     </div>
-    </AppLayout>
   )
 }
 

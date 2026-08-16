@@ -177,25 +177,47 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
 
   // PROMET — payments joinanih z orders. tip_amount dodan (R8, 24.7.2026) -
   // napitnine so na ORDERS, ne na payments (payments.tip ne obstaja).
-  const { data: orders, error: ordersError } = await db
+  // POPRAVLJENO (16.8.2026, KRITICNO): promet se je filtriral SAMO po casovnem
+  // oknu seje, ne po blagajniku. Odkar ima vsak svojo blagajno, se je promet
+  // ene osebe stel v zakljucek DRUGE - Ana je v svojem zakljucku videla
+  // Bojanov racun in njeno pricakovano stanje je bilo previsoko. Ko bi Bojan
+  // zakljucil svojo sejo, bi bil isti racun stet DVAKRAT (v obeh Z-porocilih).
+  //
+  // Zdaj se prometu doda filter po cashier_id = staff_id seje. Ce seja nima
+  // staff_id (starejsi zapisi pred locitvijo blagajn), obdrzimo staro
+  // obnasanje, da zgodovinski zakljucki ostanejo enaki.
+  let ordersQuery = db
     .from('orders')
-    .select('id, tip_amount, payments(method, amount), order_lines(qty, unit_price, total, vat_rate, voided)')
+    .select('id, tip_amount, cashier_id, payments(method, amount), order_lines(qty, unit_price, total, vat_rate, voided)')
     .eq('business_id', BUSINESS_ID)
     .eq('status', 'paid')
     .gte('closed_at', from)
     .lte('closed_at', to)
+
+  // Filter po blagajniku te seje.
+  if (session.staff_id) {
+    ordersQuery = ordersQuery.eq('cashier_id', session.staff_id)
+  }
+
+  const { data: orders, error: ordersError } = await ordersQuery
   if (ordersError) {
     console.error('getSessionStats: napaka pri branju narocil', ordersError)
   }
 
   // VRAČILA - method dodan (R10, 24.7.2026), da se od gotovine odstejejo
   // SAMO gotovinska vracila, ne tudi kartcna.
-  const { data: refunds } = await db
+  // POPRAVLJENO (16.8.2026): tudi vracila se filtrirajo po blagajniku seje -
+  // sicer bi se vracilo ene osebe odstelo od gotovine druge.
+  let refundsQuery = db
     .from('refunds')
     .select('amount, method')
     .eq('business_id', BUSINESS_ID)
     .gte('created_at', from)
     .lte('created_at', to)
+  if (session.staff_id) {
+    refundsQuery = refundsQuery.eq('cashier_id', session.staff_id)
+  }
+  const { data: refunds } = await refundsQuery
 
   // Akumulacija
   let cash = 0, card = 0, bon = 0, prep = 0, other = 0, tips = 0
