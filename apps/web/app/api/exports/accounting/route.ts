@@ -181,6 +181,9 @@ export async function POST(req: NextRequest) {
       category: e.category,
       notes: e.notes,
       invoice_id: e.invoice_id,
+      // DODANO (16.8.2026): stopnja DDV, da racunovodja ve, v katero vrstico
+      // obrazca DDV-O spada promet iz blagajne, banke ali kartic.
+      vat_rate: e.vat_rate,
       receipt_id: e.receipt_id, // DODANO 30.7.2026
     }))
 

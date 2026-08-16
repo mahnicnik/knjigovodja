@@ -57,6 +57,9 @@ export interface KPOEntryRow {
   expense: number | null
   vat_in: number | null
   vat_out: number | null
+  /** DODANO 16.8.2026: stopnja DDV - brez nje racunovodja ne ve, v katero
+   *  vrstico obrazca DDV-O spada promet iz blagajne, banke ali kartic. */
+  vat_rate?: number | null
   category: string | null
   notes: string | null
   invoice_id: string | null
@@ -332,7 +335,7 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
   // je seznam RAZDELJEN na dva jasna dela, brez rocnega filtriranja.
   const kpoHeaders = [
     'Datum', 'Opis', 'Tip', 'Prihodek', 'Odhodek',
-    'DDV vhod', 'DDV izhod', 'Kategorija', 'Opombe',
+    'DDV vhod', 'DDV izhod', 'Stopnja DDV', 'Kategorija', 'Opombe',
   ]
 
   const kpoBookable = input.kpoEntries.filter(e => !e.invoice_id && !e.receipt_id)
@@ -346,6 +349,7 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
     formatAmount(e.expense),
     formatAmount(e.vat_in),
     formatAmount(e.vat_out),
+    e.vat_rate != null ? `${e.vat_rate}%` : (Number(e.vat_out ?? 0) > 0 ? '22%' : ''),
     e.category ?? '',
     e.notes ?? '',
   ]
@@ -355,7 +359,7 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
   const sumRowBookable = [
     'SKUPAJ ZA KNJIŽENJE', '', '',
     formatAmount(totalBookableIncome), formatAmount(totalBookableExpense),
-    '', '', '', '',
+    '', '', '', '', '',
   ]
 
   const kpoSheetData: any[][] = [
@@ -384,7 +388,7 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
   const wsKpo = XLSX.utils.aoa_to_sheet(kpoSheetData)
   wsKpo['!cols'] = [
     { wch: 12 }, { wch: 35 }, { wch: 10 }, { wch: 12 }, { wch: 12 },
-    { wch: 10 }, { wch: 10 }, { wch: 20 }, { wch: 30 },
+    { wch: 10 }, { wch: 10 }, { wch: 11 }, { wch: 20 }, { wch: 30 },
   ]
 
   XLSX.utils.book_append_sheet(wb, wsKpo, 'KPO evidenca')
