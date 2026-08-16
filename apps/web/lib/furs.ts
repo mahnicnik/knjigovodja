@@ -83,6 +83,13 @@ export interface FursInvoiceData {
   issueDateTime: Date
   /** Skupni znesek računa v EUR */
   amountTotal: number
+  /**
+   * DODANO (16.8.2026): razclenitev po stopnjah DDV. Prej se je CELOTEN racun
+   * prijavil FURS-u po 22%, tudi ce je vseboval hrano po 9,5% ali oproscene
+   * storitve - to je napacna davcna prijava. Ce ni podana, se ohrani staro
+   * obnasanje (vse po 22%), da starejsi klici se naprej delujejo.
+   */
+  vatBreakdown?: { rate: number; net: number; vat: number }[]
   /** Način plačila */
   paymentType: 'cash' | 'card' | 'voucher' | 'other'
   /** Tip računa */
@@ -185,8 +192,17 @@ function buildFursRequest(
   // izmisljeni tagi, ki jih uradna shema (TehnicnaDokumentacijaVer3.1.pdf) ne pozna.
   // Davcna stevilka MORA biti samo 8 mest, brez "SI" predpone.
   const cleanTaxNumber = taxNumber.replace(/^SI/i, '').trim()
-  const netAmount = Math.round((data.amountTotal / 1.22) * 100) / 100
-  const vatAmount = Math.round((data.amountTotal - netAmount) * 100) / 100
+  // POPRAVLJENO (16.8.2026): razclenitev po DEJANSKIH stopnjah, ce je podana.
+  // Prej vedno 22% za cel racun - pri mesanem racunu (pijaca 22% + hrana 9,5%)
+  // je bila prijava FURS-u napacna.
+  const razclenitev = (data.vatBreakdown && data.vatBreakdown.length > 0)
+    ? data.vatBreakdown
+    : (() => {
+        const net = Math.round((data.amountTotal / 1.22) * 100) / 100
+        return [{ rate: 22, net, vat: Math.round((data.amountTotal - net) * 100) / 100 }]
+      })()
+  const netAmount = razclenitev.reduce((s, r) => s + r.net, 0)
+  const vatAmount = razclenitev.reduce((s, r) => s + r.vat, 0)
 
   const invoiceXml = `<fu:InvoiceRequest xmlns:fu="http://www.fu.gov.si/" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" Id="data">
     <fu:Header>
@@ -205,11 +221,12 @@ function buildFursRequest(
       <fu:InvoiceAmount>${data.amountTotal.toFixed(2)}</fu:InvoiceAmount>
       <fu:PaymentAmount>${data.amountTotal.toFixed(2)}</fu:PaymentAmount>
       <fu:TaxesPerSeller>
-        <fu:VAT>
-          <fu:TaxRate>22.00</fu:TaxRate>
-          <fu:TaxableAmount>${netAmount.toFixed(2)}</fu:TaxableAmount>
-          <fu:TaxAmount>${vatAmount.toFixed(2)}</fu:TaxAmount>
-        </fu:VAT>
+${razclenitev.filter(r => r.rate > 0).map(r => `        <fu:VAT>
+          <fu:TaxRate>${r.rate.toFixed(2)}</fu:TaxRate>
+          <fu:TaxableAmount>${r.net.toFixed(2)}</fu:TaxableAmount>
+          <fu:TaxAmount>${r.vat.toFixed(2)}</fu:TaxAmount>
+        </fu:VAT>`).join('\n')}
+${razclenitev.filter(r => r.rate === 0).map(r => `        <fu:ExemptVATTaxableAmount>${r.net.toFixed(2)}</fu:ExemptVATTaxableAmount>`).join('\n')}
       </fu:TaxesPerSeller>
       <fu:OperatorTaxNumber>${cleanTaxNumber}</fu:OperatorTaxNumber>
       <fu:ProtectedID>${zoi}</fu:ProtectedID>${data.subsequentSubmit ? '<fu:SubsequentSubmit>true</fu:SubsequentSubmit>' : ''}

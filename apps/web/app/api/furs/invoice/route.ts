@@ -52,7 +52,9 @@ export async function POST(req: NextRequest) {
     // ne pravega org_id. Iščemo samo po order_id, org se določi preko user-ja.
     const { data: order } = await supabase
       .from('orders')
-      .select('*, payments(*)')
+      // DODANO (16.8.2026): vrstice narocila s stopnjami DDV - brez njih se je
+      // FURS-u prijavil CELOTEN racun po 22%, tudi ce je vseboval hrano po 9,5%.
+      .select('*, payments(*), order_lines(total, qty, unit_price, vat_rate, voided)')
       .eq('id', order_id)
       .single()
 
@@ -137,10 +139,37 @@ export async function POST(req: NextRequest) {
     const invoiceNumberFull = `${premise.premise_id}-${deviceIdCode}-${sequenceNumber}`
 
     const amountTotal = Number(total ?? order.total)
+
+    // DODANO (16.8.2026): razclenitev po stopnjah DDV za pravilno prijavo FURS-u.
+    // Ce se znesek vrstic ne ujema s skupnim zneskom racuna (popust, napitnina),
+    // razclenitev sorazmerno prilagodimo, da se vsota ujema s prijavljenim zneskom.
+    const linije = (order.order_lines || []).filter((l: any) => !l.voided)
+    let vatBreakdown: { rate: number; net: number; vat: number }[] | undefined
+    if (linije.length > 0) {
+      const vsotaVrstic = linije.reduce((s: number, l: any) =>
+        s + Number(l.total ?? (Number(l.qty || 0) * Number(l.unit_price || 0))), 0)
+      const faktor = vsotaVrstic > 0 ? amountTotal / vsotaVrstic : 1
+      const poStopnji = new Map<number, number>()
+      for (const l of linije) {
+        const bruto = Number(l.total ?? (Number(l.qty || 0) * Number(l.unit_price || 0))) * faktor
+        const stopnja = Number(l.vat_rate ?? 22)
+        poStopnji.set(stopnja, (poStopnji.get(stopnja) || 0) + bruto)
+      }
+      vatBreakdown = Array.from(poStopnji.entries()).map(([rate, bruto]) => {
+        const net = rate > 0 ? bruto / (1 + rate / 100) : bruto
+        return {
+          rate,
+          net: Math.round(net * 100) / 100,
+          vat: Math.round((bruto - net) * 100) / 100,
+        }
+      }).sort((a, b) => b.rate - a.rate)
+    }
+
     const fursData: FursInvoiceData = {
       invoiceNumber: sequenceNumber,
       issueDateTime: order.closed_at ? new Date(order.closed_at) : new Date(),
       amountTotal,
+      vatBreakdown,
       paymentType: 'cash',
       invoiceType: 'invoice',
     }
