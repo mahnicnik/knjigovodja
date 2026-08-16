@@ -569,7 +569,14 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         qty: line.qty,
         unitPrice: line.happyHourApplied ? line.price * (1 - Number(line.happyHourPct ?? 20) / 100) : line.price,
         vatRate: line.vat_rate || 22,
-        mods: line.mods || [],
+        // POPRAVLJENO (16.8.2026, OBRACUN): popust se je prej obracunal SAMO na
+        // osnovno ceno, doplacila modifikatorjev pa so ostala nepopustena -
+        // znesek narocila v bazi se ni ujemal s tistim v kosarici in na racunu
+        // (npr. 3,80 EUR namesto 3,50 EUR). Zdaj popust velja za oboje.
+        mods: (line.mods || []).map((m:any) => ({
+          ...m,
+          delta: line.happyHourApplied ? Number(m.delta || 0) * (1 - Number(line.happyHourPct ?? 20) / 100) : Number(m.delta || 0),
+        })),
         note: line.note || null,
       })))
 
@@ -700,8 +707,11 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         lines: cart.map(l => ({
           name: l.name,
           qty: l.qty,
-          unitPrice: l.happyHourApplied ? l.price * (1 - Number(l.happyHourPct ?? 20) / 100) : l.price,
-          unit_price: l.happyHourApplied ? l.price * (1 - Number(l.happyHourPct ?? 20) / 100) : l.price,
+          // POPRAVLJENO (16.8.2026): na racunu se doplacila modifikatorjev prej
+          // NISO upostevala - kupec bi videl nizjo ceno, kot jo dejansko placa.
+          // Enak izracun kot v H.lineTotal in replaceLines (cena + doplacila).
+          unitPrice: (() => { const b = l.price + (l.mods || []).reduce((s, m) => s + (m.delta || 0), 0); return l.happyHourApplied ? b * (1 - Number(l.happyHourPct ?? 20) / 100) : b })(),
+          unit_price: (() => { const b = l.price + (l.mods || []).reduce((s, m) => s + (m.delta || 0), 0); return l.happyHourApplied ? b * (1 - Number(l.happyHourPct ?? 20) / 100) : b })(),
           vat_rate: l.vat_rate || 22,
         })),
       })
@@ -10266,7 +10276,12 @@ function KlasikApp() {
                 const mods = Object.values(selected as Record<string,any>).flat().filter(Boolean).map((m:any)=>({ id:m.id, name:m.name, delta:m.price_delta||0 }))
                 const modDelta = mods.reduce((s:number,m:any)=>s+m.delta,0)
                 for (let i=0; i<qty; i++) {
-                  setCart((c:any[]) => [...c, { lineId: Math.random().toString(36).slice(2), id: item.id, name: item.name, price: Number(item.price) + modDelta, qty: 1, vat_rate: Number(item.vat_rate||22), unit: item.unit||'kos', mods, note: note||'', happyHourApplied: eligible, happyHourPct: Number(hhPct ?? 0) }])
+                  // POPRAVLJENO (16.8.2026, OBRACUN): prej "price: item.price + modDelta",
+                  // hkrati pa se doplacila hranijo se v mods. H.lineTotal in
+                  // replaceLines pristejeta mods.delta k price, zato se je doplacilo
+                  // steto DVAKRAT - stranka bi bila preplacana za znesek doplacil.
+                  // Osnovna cena zdaj ostane cista, doplacila nosi mods.
+                  setCart((c:any[]) => [...c, { lineId: Math.random().toString(36).slice(2), id: item.id, name: item.name, price: Number(item.price), qty: 1, vat_rate: Number(item.vat_rate||22), unit: item.unit||'kos', mods, note: note||'', happyHourApplied: eligible, happyHourPct: Number(hhPct ?? 0) }])
                 }
                 setModifierPickModal(null)
               }} style={{ flex:2,padding:'12px',borderRadius:9,border:'none',background:T.accent,color:'#fff',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:14 }}>
