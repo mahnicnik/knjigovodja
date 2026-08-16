@@ -110,7 +110,11 @@ const eur = (v) => '€ ' + Number(v).toFixed(2).replace('.', ',')
 const H = {
   lineTotal: (l) => {
     const base = (l.price + (l.mods || []).reduce((s, m) => s + (m.delta || 0), 0)) * l.qty
-    return l.happyHourApplied ? base * 0.8 : base
+    // POPRAVLJENO (16.8.2026): popust se bere iz PRAVILA (shranjen na vrstici ob
+    // dodajanju), prej trdo kodiranih 20% ne glede na nastavitve.
+    if (!l.happyHourApplied) return base
+    const pct = Number(l.happyHourPct ?? 20)
+    return base * (1 - pct / 100)
   },
   orderTotals: (cart) => {
     const sub = cart.reduce((s, l) => s + H.lineTotal(l), 0)
@@ -126,11 +130,28 @@ const H = {
     const ddv = Object.values(vatByRate).reduce((s, v) => s + v, 0)
     return { sub, ddv, total: sub, vatByRate }
   },
-  isHappyHourEligible: (itemName) => {
-    const n = (itemName || '').toLowerCase()
-    return n.includes('pivo') || n.includes('vino') || n.includes('laško') ||
-           n.includes('union') || n.includes('radler') || n.includes('whisky') ||
-           n.includes('viljam') || n.includes('borovni') || n.includes('žganje')
+  // POPRAVLJENO (16.8.2026): prej so bili upraviceni artikli doloceni po
+  // IMENU (trdo kodirane besede pivo/vino/lasko...), nastavljena pravila
+  // (kategorije, odstotek, dnevi, ure) pa se niso uporabljala nikjer.
+  // Zdaj: pravilo doloci kategorije in odstotek.
+  activeHappyHourRule: (rules) => {
+    if (!rules?.length) return null
+    const now = new Date()
+    const dan = now.getDay() // 0=nedelja
+    const hhmm = now.toTimeString().slice(0, 8)
+    return rules.find(r => {
+      if (!r.active) return false
+      if (Array.isArray(r.days) && r.days.length > 0 && !r.days.map(Number).includes(dan)) return false
+      if (r.from_time && hhmm < r.from_time) return false
+      if (r.to_time && hhmm > r.to_time) return false
+      return true
+    }) || null
+  },
+  isHappyHourEligible: (item, rule) => {
+    if (!rule) return false
+    // Prazen seznam kategorij = velja za VSE artikle
+    if (!Array.isArray(rule.category_ids) || rule.category_ids.length === 0) return true
+    return rule.category_ids.includes(item?.category_id)
   },
   memberStatus: (pkgs) => {
     if (!pkgs || pkgs.length === 0) return { status: 'none', remainingVisits: 0, daysToExpiry: null }
@@ -158,6 +179,8 @@ function usePosData() {
   const [spaces, setSpaces] = useState([])
   const [customers, setCustomers] = useState([])
   const [staffList, setStaffList] = useState([])
+  // DODANO (16.8.2026): happy hour pravila - prej se niso nikjer nalagala/uporabljala
+  const [happyHourRules, setHappyHourRules] = useState([])
   const [packageTemplates, setPackageTemplates] = useState([])
   const [services, setServices] = useState([])
   const [ingredients, setIngredients] = useState([])
@@ -220,6 +243,9 @@ function usePosData() {
         const notifRes = await createClient().from('pos_notifications').select('*, customers(name, email)').eq('business_id', BUSINESS_ID).eq('dismissed', false).order('created_at', { ascending: false })
         setNotifications(notifRes.data || [])
         // Fetch business profile
+        // DODANO (16.8.2026): nalozi happy hour pravila
+        const hhRes = await createClient().from('happy_hour_rules').select('*').eq('business_id', BUSINESS_ID).eq('active', true)
+        setHappyHourRules(hhRes.data || [])
         const { data: bizData } = await createClient().from('businesses').select('profile_type').eq('id', BUSINESS_ID).single()
         if (bizData?.profile_type) setBusinessProfile(bizData.profile_type)
       } catch (e) {
@@ -243,7 +269,7 @@ function usePosData() {
     return [{ id: 'cat-fav', name: 'Priljubljeno', icon: '★', color: '#E9B949' }, ...categories]
   }, [categories])
 
-  return { categories: categoriesWithFav, items, spaces, customers, staffList, packageTemplates, services, ingredients, notifications, setNotifications, todayStats, businessProfile, setBusinessProfile, loading, itemsIn, refresh }
+  return { categories: categoriesWithFav, items, spaces, customers, staffList, packageTemplates, services, ingredients, notifications, setNotifications, todayStats, businessProfile, setBusinessProfile, happyHourRules, loading, itemsIn, refresh }
 }
 
 // ================================================================
@@ -541,7 +567,7 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         itemId: line.id,
         name: line.name,
         qty: line.qty,
-        unitPrice: line.happyHourApplied ? line.price * 0.8 : line.price,
+        unitPrice: line.happyHourApplied ? line.price * (1 - Number(line.happyHourPct ?? 20) / 100) : line.price,
         vatRate: line.vat_rate || 22,
         mods: line.mods || [],
         note: line.note || null,
@@ -660,8 +686,8 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         lines: cart.map(l => ({
           name: l.name,
           qty: l.qty,
-          unitPrice: l.happyHourApplied ? l.price * 0.8 : l.price,
-          unit_price: l.happyHourApplied ? l.price * 0.8 : l.price,
+          unitPrice: l.happyHourApplied ? l.price * (1 - Number(l.happyHourPct ?? 20) / 100) : l.price,
+          unit_price: l.happyHourApplied ? l.price * (1 - Number(l.happyHourPct ?? 20) / 100) : l.price,
           vat_rate: l.vat_rate || 22,
         })),
       })
@@ -1383,26 +1409,38 @@ function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart
           <button onClick={() => setScanModal(true)} style={{ padding:'9px 12px', borderRadius:9, background:T.surface2, color:T.ink, border:'1px solid '+T.line, fontWeight:600, fontSize:12, display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontFamily:'inherit' }}>
             <KI name="barcode" size={14}/> Skeniraj
           </button>
-          <button onClick={() => setHappyHourActive(h => !h)} style={{ padding:'9px 12px', borderRadius:9, background: happyHourActive ? T.brand : T.surface2, color: happyHourActive ? T.header : T.ink, border:'1px solid '+(happyHourActive ? T.brand : T.line), fontWeight:700, fontSize:12, display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontFamily:'inherit' }}>
-            <KI name="happy" size={14}/> Happy hour{happyHourActive ? ' −20%' : ''}
+          <button onClick={() => {
+            // POPRAVLJENO (16.8.2026): ob vklopu preveri, ali za ta cas obstaja
+            // aktivno pravilo - prej je gumb vedno dal 20% na pivo/vino, ne glede
+            // na nastavitve. Brez pravila vklop nima ucinka, zato uporabnika
+            // opozorimo namesto tihega nedelovanja.
+            if (!happyHourActive) {
+              const r = H.activeHappyHourRule(posData.happyHourRules)
+              if (!r) { alert('Za ta dan in uro ni nastavljenega happy hour pravila.\n\nPravilo dodajte v Nastavitve → Happy hour.'); return }
+            }
+            setHappyHourActive(h => !h)
+          }} style={{ padding:'9px 12px', borderRadius:9, background: happyHourActive ? T.brand : T.surface2, color: happyHourActive ? T.header : T.ink, border:'1px solid '+(happyHourActive ? T.brand : T.line), fontWeight:700, fontSize:12, display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontFamily:'inherit' }}>
+            <KI name="happy" size={14}/> Happy hour{happyHourActive ? ` −${Number(H.activeHappyHourRule(posData.happyHourRules)?.discount_pct ?? 0)}%` : ''}
           </button>
           <div style={{ marginLeft:'auto', fontSize:12, color:T.muted }}>{items.length} artiklov</div>
         </div>
 
         <div style={{ flex:1, overflowY:'auto', padding:14, display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(150px, 1fr))', gap:8, alignContent:'start' }}>
           {items.map(it => {
-            const onSale = happyHourActive && H.isHappyHourEligible(it.name)
+            // POPRAVLJENO (16.8.2026): oznaka po AKTIVNEM PRAVILU, ne po imenu
+            const hhRule = happyHourActive ? H.activeHappyHourRule(posData.happyHourRules) : null
+            const onSale = !!hhRule && H.isHappyHourEligible(it, hhRule)
             return (
               <button key={it.id} onClick={() => addItem(it, happyHourActive)} style={{ background:T.surface, border:'1px solid '+T.line, borderRadius:11, padding:'12px', cursor:'pointer', textAlign:'left', fontFamily:'inherit', color:T.ink, display:'flex', flexDirection:'column', justifyContent:'space-between', minHeight:96, position:'relative' }}>
                 {it.fav && <span style={{ position:'absolute', top:8, right:8, color:T.brand, fontSize:11 }}>★</span>}
-                {onSale && <span style={{ position:'absolute', top:8, left:8, fontSize:9, fontWeight:800, color:T.header, background:T.brand, padding:'2px 5px', borderRadius:4, textTransform:'uppercase' }}>−20%</span>}
+                {onSale && <span style={{ position:'absolute', top:8, left:8, fontSize:9, fontWeight:800, color:T.header, background:T.brand, padding:'2px 5px', borderRadius:4, textTransform:'uppercase' }}>−{Number(hhRule?.discount_pct ?? 0)}%</span>}
                 <div style={{ fontSize:13, fontWeight:600, lineHeight:1.25, marginTop: (it.fav || onSale) ? 14 : 0 }}>{it.name}</div>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginTop:8 }}>
                   <div>
                     {onSale ? (
                       <>
                         <div style={{ fontSize:10, color:T.muted, textDecoration:'line-through' }}>{eur(it.price)}</div>
-                        <div style={{ fontSize:15, fontWeight:800, fontVariantNumeric:'tabular-nums', color:T.warn }}>{eur(it.price * 0.8)}</div>
+                        <div style={{ fontSize:15, fontWeight:800, fontVariantNumeric:'tabular-nums', color:T.warn }}>{eur(it.price * (1 - Number(hhRule?.discount_pct ?? 0) / 100))}</div>
                       </>
                     ) : (
                       <div style={{ fontSize:15, fontWeight:800, fontVariantNumeric:'tabular-nums' }}>{eur(it.price)}</div>
@@ -1637,7 +1675,7 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ fontSize:13, fontWeight:600 }}>
                 {l.name}
-                {l.happyHourApplied && <span style={{ fontSize:9, fontWeight:800, color:T.warn, background:'rgba(184,140,40,0.15)', padding:'1px 5px', borderRadius:4, marginLeft:5 }}>−20%</span>}
+                {l.happyHourApplied && <span style={{ fontSize:9, fontWeight:800, color:T.warn, background:'rgba(184,140,40,0.15)', padding:'1px 5px', borderRadius:4, marginLeft:5 }}>−{Number(l.happyHourPct ?? 20)}%</span>}
               </div>
             </div>
             <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:5 }}>
@@ -9959,7 +9997,10 @@ function KlasikApp() {
   const totals = H.orderTotals(cart)
 
   async function addItem(item, happyOn = false) {
-    const eligible = happyOn && H.isHappyHourEligible(item.name)
+    // POPRAVLJENO (16.8.2026): upravicenost in odstotek iz AKTIVNEGA PRAVILA
+    const hhRule = happyOn ? H.activeHappyHourRule(posData.happyHourRules) : null
+    const eligible = !!hhRule && H.isHappyHourEligible(item, hhRule)
+    const hhPct = Number(hhRule?.discount_pct ?? 0)
     // Preveri ali ima artikel modifier grupe
     const itemGroups = (posData?.items || []).length > 0 ? [] : []
     // Pridobi modifier grupe za ta artikel iz Supabase
@@ -9968,14 +10009,14 @@ function KlasikApp() {
       const groupIds = linkRows.map((l:any) => l.group_id)
       const { data: groups } = await createClient().from('item_modifier_groups').select('*, item_modifiers(*)').in('id', groupIds).order('sort_order')
       if (groups && groups.length > 0) {
-        setModifierPickModal({ item, eligible, groups, selected: {}, note: '', qty: 1 })
+        setModifierPickModal({ item, eligible, hhPct, groups, selected: {}, note: '', qty: 1 })
         return
       }
     }
     setCart(c => {
       const idx = c.findIndex(l => l.id === item.id && l.happyHourApplied === eligible && l.mods.length === 0)
       if (idx >= 0) { const cp = [...c]; cp[idx] = {...cp[idx], qty: cp[idx].qty + 1}; return cp }
-      return [...c, { lineId: Math.random().toString(36).slice(2), id: item.id, name: item.name, price: Number(item.price), qty: 1, vat_rate: Number(item.vat_rate || 22), unit: item.unit || 'kos', mods: [], note: '', happyHourApplied: eligible }]
+      return [...c, { lineId: Math.random().toString(36).slice(2), id: item.id, name: item.name, price: Number(item.price), qty: 1, vat_rate: Number(item.vat_rate || 22), unit: item.unit || 'kos', mods: [], note: '', happyHourApplied: eligible, happyHourPct: hhPct }]
     })
   }
 
@@ -10046,7 +10087,7 @@ function KlasikApp() {
       {/* CONTEXT STRIP */}
       {(activeTable || activeCustomer || happyHourActive) && (
         <div style={{ background:T.brand, color:T.header, padding:'7px 18px', display:'flex', alignItems:'center', gap:14, fontSize:12, fontWeight:600, flexShrink:0 }}>
-          {happyHourActive && <div style={{ display:'flex', alignItems:'center', gap:6 }}><KI name="happy" size={14}/><span>Happy hour <b>−20%</b></span></div>}
+          {happyHourActive && <div style={{ display:'flex', alignItems:'center', gap:6 }}><KI name="happy" size={14}/><span>Happy hour <b>−{Number(H.activeHappyHourRule(posData.happyHourRules)?.discount_pct ?? 0)}%</b></span></div>}
           {activeTable && (
             <div style={{ display:'flex', alignItems:'center', gap:6 }}>
               <KI name="chair" size={14}/><span>Miza: <b>{activeTable.name}</b></span>
@@ -10158,7 +10199,7 @@ function KlasikApp() {
             <div style={{ display:'flex', gap:8, marginTop:16 }}>
               <button onClick={()=>setModifierPickModal(null)} style={{ flex:1,padding:'12px',borderRadius:9,border:'1px solid '+T.line,background:'transparent',cursor:'pointer',fontFamily:'inherit',fontWeight:600,fontSize:13 }}>Prekliči</button>
               <button onClick={()=>{
-                const { item, eligible, selected, note, qty } = modifierPickModal
+                const { item, eligible, hhPct, selected, note, qty } = modifierPickModal
                 // Preveri obvezne grupe
                 const missing = modifierPickModal.groups.filter((g:any) => g.required && !selected[g.id])
                 if (missing.length > 0) { alert('Izberi: ' + missing.map((g:any)=>g.name).join(', ')); return }
@@ -10166,7 +10207,7 @@ function KlasikApp() {
                 const mods = Object.values(selected as Record<string,any>).flat().filter(Boolean).map((m:any)=>({ id:m.id, name:m.name, delta:m.price_delta||0 }))
                 const modDelta = mods.reduce((s:number,m:any)=>s+m.delta,0)
                 for (let i=0; i<qty; i++) {
-                  setCart((c:any[]) => [...c, { lineId: Math.random().toString(36).slice(2), id: item.id, name: item.name, price: Number(item.price) + modDelta, qty: 1, vat_rate: Number(item.vat_rate||22), unit: item.unit||'kos', mods, note: note||'', happyHourApplied: eligible }])
+                  setCart((c:any[]) => [...c, { lineId: Math.random().toString(36).slice(2), id: item.id, name: item.name, price: Number(item.price) + modDelta, qty: 1, vat_rate: Number(item.vat_rate||22), unit: item.unit||'kos', mods, note: note||'', happyHourApplied: eligible, happyHourPct: Number(hhPct ?? 0) }])
                 }
                 setModifierPickModal(null)
               }} style={{ flex:2,padding:'12px',borderRadius:9,border:'none',background:T.accent,color:'#fff',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:14 }}>
