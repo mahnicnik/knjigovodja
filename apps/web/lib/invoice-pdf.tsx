@@ -133,14 +133,47 @@ export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
 
         <View style={styles.totals}>
           <View style={styles.totalsBox}>
-            <View style={styles.totalRow}>
-              <Text>Osnova za DDV:</Text>
-              <Text>€{Number(invoice.amount_net).toFixed(2)}</Text>
-            </View>
-            <View style={styles.totalRow}>
-              <Text>DDV:</Text>
-              <Text>€{Number(invoice.vat_amount).toFixed(2)}</Text>
-            </View>
+            {/* POPRAVLJENO (16.8.2026): pri racunu z VEC stopnjami DDV je bila
+                prikazana ena sama skupna osnova in en DDV. 82. clen ZDDV-1
+                zahteva razclenitev po stopnjah - kupec mora videti osnovo in
+                znesek DDV za VSAKO stopnjo posebej. Pri enotni stopnji ostane
+                prikaz enak kot doslej. */}
+            {(() => {
+              const postavke: any[] = Array.isArray(invoice.line_items) ? invoice.line_items : []
+              const poStopnji = new Map<number, { net: number; vat: number }>()
+              for (const pz of postavke) {
+                const kolicina = Number(pz.quantity ?? 1)
+                const cena = Number(pz.unit_price ?? 0)
+                const popust = Number(pz.discount_pct ?? 0)
+                const neto = kolicina * cena * (1 - popust / 100)
+                const stopnja = Number(pz.vat_rate ?? 22)
+                const o = poStopnji.get(stopnja) || { net: 0, vat: 0 }
+                o.net += neto
+                o.vat += neto * stopnja / 100
+                poStopnji.set(stopnja, o)
+              }
+              const stopnje = Array.from(poStopnji.entries()).sort((a, b) => b[0] - a[0])
+              if (stopnje.length > 1) {
+                return stopnje.map(([rate, v]) => (
+                  <View key={rate} style={styles.totalRow}>
+                    <Text>Osnova {rate}% / DDV:</Text>
+                    <Text>€{v.net.toFixed(2)} / €{v.vat.toFixed(2)}</Text>
+                  </View>
+                ))
+              }
+              return (
+                <>
+                  <View style={styles.totalRow}>
+                    <Text>Osnova za DDV:</Text>
+                    <Text>€{Number(invoice.amount_net).toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.totalRow}>
+                    <Text>DDV:</Text>
+                    <Text>€{Number(invoice.vat_amount).toFixed(2)}</Text>
+                  </View>
+                </>
+              )
+            })()}
             <View style={styles.totalFinal}>
               <Text>{isStorno || isDobropis ? 'SKUPAJ ZA VRAČILO:' : 'SKUPAJ ZA PLAČILO:'}</Text>
               <Text>€{Number(invoice.amount_total).toFixed(2)}</Text>
