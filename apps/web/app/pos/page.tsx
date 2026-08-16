@@ -6039,13 +6039,17 @@ function OrdersScreen({ posData, auth }) {
                 💳 Spremeni plačilo
               </button>
             )}
-            {isToday(selectedOrder.closed_at) && !selectedOrder.voided_at && (
+            {/* POPRAVLJENO (16.8.2026, VARNOST): prej brez preverbe pravic -
+                blagajnik z voidReceipt:false je lahko storniral racune. */}
+            {isToday(selectedOrder.closed_at) && !selectedOrder.voided_at && auth?.permissions?.voidReceipt && (
               <button onClick={()=>setShowVoid(true)}
                 style={{ padding:'7px 14px', borderRadius:8, border:'none', background:'rgba(168,50,50,0.1)', color:T.danger, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', gap:6 }}>
                 🗑️ Storno
               </button>
             )}
-            {isToday(selectedOrder.closed_at) && !selectedOrder.voided_at && (
+            {/* POPRAVLJENO (16.8.2026, VARNOST): prej brez preverbe pravic -
+                blagajnik z refund:false je lahko izvajal vracila. */}
+            {isToday(selectedOrder.closed_at) && !selectedOrder.voided_at && auth?.permissions?.refund && (
               <button onClick={()=>setShowRefund(true)}
                 style={{ padding:'7px 14px', borderRadius:8, border:'none', background:'rgba(37,99,235,0.1)', color:'#2563eb', cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', gap:6 }}>
                 ↩️ Vračilo
@@ -9901,7 +9905,12 @@ function KlasikApp() {
 
   const profile = CFG.profiles.find(p => p.id === profileId) || CFG.profiles[0]
 
-  const screenPerm = { floor:null, sale:'sale', calendar:'manageBookings', customers:'viewMembers', packages:'editPrices', inventory:'editPrices', reports:'viewReports', admin:null }
+  // POPRAVLJENO (16.8.2026, VARNOST): 'admin' je bil null = dostopen VSEM,
+  // vkljucno z blagajniki, ki imajo systemSettings:false - lahko so urejali
+  // cenik, zaposlene in nastavitve sistema. 'orders' (Racuni) ostaja odprt
+  // vsem, ker blagajnik potrebuje ponoven izpis racuna - gumba za storno in
+  // vracilo znotraj pa sta zdaj zaklenjena s svojima pravicama.
+  const screenPerm = { floor:null, sale:'sale', calendar:'manageBookings', customers:'viewMembers', packages:'editPrices', inventory:'editPrices', orders:null, reports:'viewReports', admin:'systemSettings' }
   const nav = profile.nav.filter(s => { const p = screenPerm[s]; if (!p) return true; return auth.permissions[p] })
 
   const [screen, setScreen] = useState('sale')
@@ -10073,7 +10082,12 @@ function KlasikApp() {
             </button>
           )}
           {cashSession
-            ? <button onClick={()=>setShowCloseCash(true)} style={{ padding:'5px 10px', borderRadius:7, border:'none', background:'rgba(168,50,50,0.15)', color:T.danger, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700 }}>
+            ? <button onClick={()=>{
+                // POPRAVLJENO (16.8.2026, VARNOST): prej brez preverbe pravic -
+                // blagajnik z dailyClose:false je lahko zakljucil dan (Z-porocilo).
+                if (!auth?.permissions?.dailyClose) { alert('Za dnevni zaključek nimate pravice. Obrnite se na vodjo.'); return }
+                setShowCloseCash(true)
+              }} style={{ padding:'5px 10px', borderRadius:7, border:'none', background:'rgba(168,50,50,0.15)', color:T.danger, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700 }}>
                 🔒 Zaključi
               </button>
             : <button onClick={()=>setShowOpenCash(true)} style={{ padding:'5px 10px', borderRadius:7, border:'none', background:T.accentSoft, color:T.accent, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700 }}>
