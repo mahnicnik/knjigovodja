@@ -524,6 +524,13 @@ export default function DashboardPage() {
       legalForm: data.legalForm,
       taxSystem: data.taxSystem,
       isVatRegistered: !!org?.vat_registered,
+      // DODANO (16.8.2026): dejanski prispevki iz nastavitev - enako, kot jih
+      // uporablja stran /dohodnina. Prej pavsal iz konstant.
+      monthlyContributions:
+        Number(org?.contrib_piz ?? 0) +
+        Number(org?.contrib_zzzs ?? 0) +
+        Number(org?.contrib_zaposlovanje ?? 0) +
+        Number(org?.contrib_starsevstvo ?? 0),
     })
   }, [data, org])
 

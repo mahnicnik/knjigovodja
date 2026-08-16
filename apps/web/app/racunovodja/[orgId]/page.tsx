@@ -158,7 +158,7 @@ export default function RacunovodjaClientPage() {
 
     const [orgRes, invRes, recRes, comRes] = await Promise.all([
       supabase.from('organizations').select('id,name,tax_number,tax_system,vat_registered,address,city').eq('id', orgId).single(),
-      supabase.from('issued_invoices').select('*').eq('org_id', orgId).gte('issue_date', yearStart).neq('status', 'draft').order('issue_date', { ascending: false }),
+      supabase.from('issued_invoices').select('*').eq('org_id', orgId).gte('issue_date', yearStart).neq('status', 'draft').or('zoi.is.null,zoi.not.like.DEMO-%').order('issue_date', { ascending: false }),
       supabase.from('receipts').select('*').eq('org_id', orgId).gte('receipt_date', yearStart).order('receipt_date', { ascending: false }),
       supabase.from('accountant_comments').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
     ])

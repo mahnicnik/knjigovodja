@@ -80,7 +80,7 @@ export default function RacunovodjaPortal() {
           const membership = memberships.find(m => m.org_id === org.id)
 
           const [invRes, recRes, overdueRes, kpoRes] = await Promise.all([
-            supabase.from('issued_invoices').select('amount_total, status').eq('org_id', org.id).gte('issue_date', from).lte('issue_date', to).neq('status', 'draft'),
+            supabase.from('issued_invoices').select('amount_total, status').eq('org_id', org.id).gte('issue_date', from).lte('issue_date', to).neq('status', 'draft').or('zoi.is.null,zoi.not.like.DEMO-%'),
             supabase.from('receipts').select('status').eq('org_id', org.id).gte('receipt_date', from).lte('receipt_date', to),
             supabase.from('issued_invoices').select('amount_total').eq('org_id', org.id).eq('status', 'sent').lt('due_date', new Date().toISOString().split('T')[0]),
             // DODANO (30.7.2026): KPO prihodki (POS promet, banka, kartice...)

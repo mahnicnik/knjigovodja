@@ -128,7 +128,7 @@ export default function NormianiPage() {
 
       const { data: invoices } = await supabase
         .from('issued_invoices').select('amount_net')
-        .eq('org_id', o.id).neq('status', 'draft')
+        .eq('org_id', o.id).neq('status', 'draft').or('zoi.is.null,zoi.not.like.DEMO-%')
         .gte('issue_date', yearStart).lte('issue_date', yearEnd)
       const { data: receipts } = await supabase
         .from('receipts').select('amount_net').eq('org_id', o.id)

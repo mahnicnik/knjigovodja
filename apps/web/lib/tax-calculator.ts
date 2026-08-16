@@ -32,6 +32,13 @@ export interface TaxInput {
   taxSystem: TaxSystem | null
   /** Ali je org DDV zavezanec */
   isVatRegistered: boolean
+  /**
+   * Dejanski mesecni prispevki iz nastavitev organizacije (PIZ + ZZZS +
+   * zaposlovanje + starsevstvo). DODANO 16.8.2026: prej se je vedno uporabil
+   * pavsal iz konstant, ceprav ima organizacija vnesene svoje vrednosti -
+   * Dashboard in stran /dohodnina sta zato kazala razlicne stevilke.
+   */
+  monthlyContributions?: number | null
 }
 
 export interface TaxBreakdown {
@@ -159,6 +166,7 @@ export function calculateNetIncome(input: TaxInput): TaxBreakdown {
     legalForm,
     taxSystem,
     isVatRegistered,
+    monthlyContributions,
   } = input
 
   // Fallback če sistem ni nastavljen
@@ -202,7 +210,10 @@ export function calculateNetIncome(input: TaxInput): TaxBreakdown {
   // ===== PRISPEVKI =====
   // (izracunani PRED dohodnino, ker so davcno priznan odhodek)
   if (legalForm === 'sp') {
-    contributions = SP_CONTRIBUTIONS_MIN
+    // Dejanske vrednosti iz nastavitev, ce so vnesene; sicer zakonski minimum.
+    contributions = (monthlyContributions && monthlyContributions > 0)
+      ? monthlyContributions
+      : SP_CONTRIBUTIONS_MIN
   } else if (legalForm === 'doo') {
     // d.o.o. nima prispevkov na ravni podjetja (direktor jih plača posebej)
     contributions = 0

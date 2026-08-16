@@ -95,7 +95,7 @@ export default function LentniPregledPage() {
 
     const [invoicesRes, receiptsRes, kpoRes, employeesRes] = await Promise.all([
       supabase.from('issued_invoices').select('*').eq('org_id', org.id)
-        .neq('status', 'draft').gte('issue_date', yearStart).lte('issue_date', yearEnd),
+        .neq('status', 'draft').or('zoi.is.null,zoi.not.like.DEMO-%').gte('issue_date', yearStart).lte('issue_date', yearEnd),
       supabase.from('receipts').select('*').eq('org_id', org.id)
         .gte('receipt_date', yearStart).lte('receipt_date', yearEnd),
       supabase.from('kpo_entries').select('*').eq('org_id', org.id)
