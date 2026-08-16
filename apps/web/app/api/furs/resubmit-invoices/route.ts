@@ -52,7 +52,8 @@ export async function POST(req: NextRequest) {
     // Osnutki (draft) so izkljuceni - se niso izdani, fiskalizacija ni dolzna.
     const { data: candidates, error } = await admin
       .from('issued_invoices')
-      .select('id, invoice_number, amount_total, status, issue_date, client_name, created_at')
+      // DODANO (16.8.2026): line_items s stopnjami DDV za pravilno razclenitev
+      .select('id, invoice_number, amount_total, status, issue_date, client_name, created_at, line_items, invoice_type')
       .eq('org_id', member.org_id)
       .is('eor', null)
       .in('status', ['paid', 'sent'])

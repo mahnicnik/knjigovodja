@@ -148,10 +148,45 @@ export async function confirmIssuedInvoiceWithFurs(
   const sequenceNumber = seqData as number
   const invoiceNumberFull = `${premise.premise_id}-${deviceIdCode}-${sequenceNumber}`
 
+  // DODANO (16.8.2026): razclenitev po stopnjah DDV iz postavk racuna. Prej se
+  // je celoten racun prijavil FURS-u po 22%, tudi ce so postavke po 9,5% ali
+  // oproscene. Postavke stopnjo ZE nosijo (line_items[].vat_rate).
+  const znesekSkupaj = Number(invoice.amount_total)
+  const postavke: any[] = Array.isArray(invoice.line_items) ? invoice.line_items : []
+  let vatBreakdown: { rate: number; net: number; vat: number }[] | undefined
+  if (postavke.length > 0) {
+    const poStopnji = new Map<number, number>()
+    let vsotaPostavk = 0
+    for (const pz of postavke) {
+      const kolicina = Number(pz.quantity ?? 1)
+      const cena = Number(pz.unit_price ?? 0)
+      const popust = Number(pz.discount_pct ?? 0)
+      const neto = kolicina * cena * (1 - popust / 100)
+      const stopnja = Number(pz.vat_rate ?? 22)
+      const bruto = neto * (1 + stopnja / 100)
+      poStopnji.set(stopnja, (poStopnji.get(stopnja) || 0) + bruto)
+      vsotaPostavk += bruto
+    }
+    // Sorazmerna uskladitev, ce se vsota postavk ne ujema s skupnim zneskom
+    // (zaokrozevanje, popust na celoten racun).
+    const faktor = vsotaPostavk > 0 ? Math.abs(znesekSkupaj) / vsotaPostavk : 1
+    const predznak = znesekSkupaj < 0 ? -1 : 1
+    vatBreakdown = Array.from(poStopnji.entries()).map(([rate, bruto]) => {
+      const b = bruto * faktor
+      const net = rate > 0 ? b / (1 + rate / 100) : b
+      return {
+        rate,
+        net: predznak * Math.round(net * 100) / 100,
+        vat: predznak * Math.round((b - net) * 100) / 100,
+      }
+    }).sort((a, b) => b.rate - a.rate)
+  }
+
   const fursData: FursInvoiceData = {
     invoiceNumber: sequenceNumber,
     issueDateTime: invoice.issue_date ? new Date(invoice.issue_date) : new Date(),
-    amountTotal: Number(invoice.amount_total),
+    amountTotal: znesekSkupaj,
+    vatBreakdown,
     paymentType,
     invoiceType: invoice.invoice_type === 'credit_note' ? 'credit_note' : 'invoice',
   }
