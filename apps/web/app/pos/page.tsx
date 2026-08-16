@@ -625,6 +625,20 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         if (prepErr) throw new Error(prepErr.message || 'Predplačila ni bilo mogoče odšteti')
       }
 
+      // DODANO (16.8.2026): napitnina in popust se NISTA nikoli zapisala na
+      // narocilo. orders.tip_amount se bere na petih mestih (Z-porocilo,
+      // porocila, izpisi), a ga ni nihce nastavil - napitnina je bila
+      // zaracunana stranki, v evidencah pa je vedno kazala nic.
+      const napitnina = Math.round(total * tipPct / 100 * 100) / 100
+      const popust = Math.round((total * discount / 100 + discountEurVal) * 100) / 100
+      if (napitnina > 0 || popust > 0) {
+        const { error: tipErr } = await createClient().from('orders').update({
+          tip_amount: napitnina,
+          discount_amount: popust,
+        }).eq('id', orderId)
+        if (tipErr) console.error('Napitnine/popusta ni bilo mogoce zapisati:', tipErr)
+      }
+
       const payResult = await pos.orders.pay({
         orderId,
         method: method === 'bon' ? 'bon' : method === 'prep' ? 'prep' : method,
@@ -692,8 +706,11 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         method,
         total: finalTotal,
         subtotal: total,
-        discount_amount: total - finalTotal,
-        tip: 0,
+        // POPRAVLJENO (16.8.2026): prej "discount_amount: total - finalTotal" in
+        // "tip: 0" - ob napitnini je razlika NEGATIVNA, zato je racun prikazal
+        // negativen popust namesto napitnine.
+        discount_amount: popust,
+        tip: napitnina,
         furs,
         eor: fursEor,
         zoi: fursZoi,
