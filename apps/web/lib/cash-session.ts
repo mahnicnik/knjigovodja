@@ -175,7 +175,7 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
   // napitnine so na ORDERS, ne na payments (payments.tip ne obstaja).
   const { data: orders, error: ordersError } = await db
     .from('orders')
-    .select('id, tip_amount, payments(method, amount), order_lines(qty, unit_price, vat_rate, voided)')
+    .select('id, tip_amount, payments(method, amount), order_lines(qty, unit_price, total, vat_rate, voided)')
     .eq('business_id', BUSINESS_ID)
     .eq('status', 'paid')
     .gte('closed_at', from)
@@ -218,7 +218,14 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
     // DDV po vrsticah
     for (const l of (o as any).order_lines || []) {
       if (l.voided) continue
-      const lineTotal = Number(l.qty || 0) * Number(l.unit_price || 0)
+      // POPRAVLJENO (16.8.2026, DDV): prej "qty * unit_price" - BREZ doplacil
+      // modifikatorjev. Stolpec order_lines.total jih ze vsebuje (zapise ga
+      // replaceLines kot (unitPrice + doplacila) * qty), zato je bila osnova za
+      // DDV na Z-POROCILU - uradnem davcnem dokumentu - prenizka za znesek
+      // doplacil. Uporabimo total, s pripravljenim nadomestkom za stare zapise.
+      const lineTotal = l.total != null
+        ? Number(l.total)
+        : Number(l.qty || 0) * Number(l.unit_price || 0)
       const rate = Number(l.vat_rate || 22)
 
       if (rate === 22) {

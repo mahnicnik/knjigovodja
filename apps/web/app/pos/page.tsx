@@ -5223,6 +5223,21 @@ function ChangePaymentModal({ order, payment, onClose, onChanged }) {
     setSaving(true)
     setError('')
     try {
+      // DODANO (16.8.2026): odkar se predplacilo dejansko odsteva od stanja
+      // stranke, mora sprememba nacina placila stanje tudi popraviti - sicer
+      // bi stranki znesek ostal odstet (ali pa bi placala s predplacilom, ne
+      // da bi se ji odstelo).
+      const staraJePrep = payment?.method === 'prep'
+      const novaJePrep = method === 'prep'
+      if (staraJePrep !== novaJePrep) {
+        if (!order?.customer_id) throw new Error('Za spremembo iz/v predplačilo mora biti na računu izbrana stranka.')
+        const znesek = Number(payment?.amount || 0)
+        const { error: prepErr } = staraJePrep
+          ? await createClient().rpc('refund_prepaid', { p_customer_id: order.customer_id, p_amount: znesek })
+          : await createClient().rpc('use_prepaid', { p_customer_id: order.customer_id, p_amount: znesek })
+        if (prepErr) throw new Error(prepErr.message || 'Stanja predplačila ni bilo mogoče popraviti')
+      }
+
       const { error: err } = await createClient().from('payments').update({ method }).eq('id', payment.id)
       if (err) throw err
       onChanged()
@@ -5580,6 +5595,12 @@ function RefundModal({ order, lines, payment, auth, onClose, onRefunded }) {
         // uporabimo PIN-preverjeno identiteto blagajnika (auth.user je zapis
         // iz staff tabele).
         cashier_id: auth?.user?.id,
+        // DODANO (16.8.2026): nacin vracila se ni belezil. Izracun pricakovane
+        // gotovine v blagajni manjkajoc nacin obravnava kot GOTOVINO, zato bi
+        // se KARTICNO vracilo odstelo od pricakovane gotovine - blagajniku bi
+        // ob zakljucku manjkal denar, ki ga ni nikoli izplacal. Vracilo gre po
+        // isti poti kot izvirno placilo.
+        method: payment?.method || 'cash',
         refunded_at: new Date().toISOString(),
       })
       // DODANO (16.8.2026): prej se napaka pri vpisu ni preverjala - vracilo
