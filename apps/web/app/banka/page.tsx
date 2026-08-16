@@ -187,14 +187,54 @@ function parseDate(str: string, format: string): string {
   }
   if (format === 'dd/mm/yyyy') {
     const [d, m, y] = clean.split('/')
+    // POPRAVLJENO (16.8.2026): manjkala je preverba (za razliko od dd.mm.yyyy).
+    // Ob nepricakovani obliki je nastal datum "undefined-NaN-NaN".
+    if (!d || !m || !y) return clean
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
   }
   return clean
 }
 
 function parseAmount(str: string): number {
+  // POPRAVLJENO (16.8.2026): prej so se ODSTRANILE vse pike, nato je vejica
+  // postala decimalna. To deluje za slovenski zapis (1.234,56), ANGLESKEGA pa
+  // popaci: "1,234.56" -> 1,23 in "1234.56" -> 123456. Izpiski iz tujih
+  // sistemov ali izvozi iz Excela lahko uporabljajo anglesko obliko, kar bi
+  // pomenilo napacen znesek v knjigi prihodkov.
+  //
+  // Zdaj ugotovimo, katero locilo je DECIMALNO: tisto, ki je zadnje. Ce je
+  // prisotno samo eno in mu sledijo natanko tri stevke, gre za locilo tisocic.
   if (!str) return 0
-  return parseFloat(str.replace(/"/g, '').replace(/\./g, '').replace(',', '.').trim()) || 0
+  let s = String(str).replace(/"/g, '').replace(/\s/g, '').trim()
+  if (!s) return 0
+
+  const zadnjaPika = s.lastIndexOf('.')
+  const zadnjaVejica = s.lastIndexOf(',')
+
+  if (zadnjaPika >= 0 && zadnjaVejica >= 0) {
+    // Obe locili: zadnje je decimalno, prvo je locilo tisocic
+    const decimalno = zadnjaPika > zadnjaVejica ? '.' : ','
+    const tisocice = decimalno === '.' ? ',' : '.'
+    s = s.split(tisocice).join('')
+    if (decimalno === ',') s = s.replace(',', '.')
+  } else if (zadnjaVejica >= 0) {
+    // Samo vejica: decimalna, razen ce ji sledijo natanko 3 stevke in je vec
+    // kot ena vejica ali je pred njo vsaj ena stevka (npr. "1,234" = 1234)
+    const zaVejico = s.length - zadnjaVejica - 1
+    const vecVejic = (s.match(/,/g) || []).length > 1
+    s = (zaVejico === 3 && (vecVejic || zadnjaVejica > 0 && /^\d{1,3}$/.test(s.slice(0, zadnjaVejica).replace('-', ''))))
+      ? s.split(',').join('')
+      : s.replace(',', '.')
+  } else if (zadnjaPika >= 0) {
+    // Samo pika: decimalna, razen ce ji sledijo natanko 3 stevke (locilo tisocic)
+    const zaPiko = s.length - zadnjaPika - 1
+    const vecPik = (s.match(/\./g) || []).length > 1
+    if (zaPiko === 3 && (vecPik || /^-?\d{1,3}$/.test(s.slice(0, zadnjaPika)))) {
+      s = s.split('.').join('')
+    }
+  }
+
+  return parseFloat(s) || 0
 }
 
 function parseCSV(text: string, bankKey: string): BankTransaction[] {

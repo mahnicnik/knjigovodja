@@ -63,13 +63,28 @@ function verifyWooCommerceSignature(
  */
 async function generateInvoiceNumber(supabase: any, orgId: string): Promise<string> {
   const year = new Date().getFullYear()
-  const { count } = await supabase
+  // POPRAVLJENO (16.8.2026): stevilka se je dolocala s STETJEM obstojecih
+  // racunov, ne z najvisjo. Dve tezavi:
+  //  1. Ob brisanju racuna se stevec zmanjsa in nova stevilka TRCI z obstojeco.
+  //     Vpis zavrne omejitev v bazi, webhook spodleti, ponudnik poskusa znova -
+  //     placilo je prejeto, racun pa ne nastane.
+  //  2. Vzorec je stel tudi storno zapise s pripono -S/-D, zato je stevec rasel
+  //     hitreje od dejanskih racunov in preskakoval stevilke.
+  // Zdaj vzamemo NAJVISJO obstojeco stevilko in ji pristejemo ena, pripone pa
+  // izloCimo.
+  const { data: obstojeci } = await supabase
     .from('issued_invoices')
-    .select('*', { count: 'exact', head: true })
+    .select('invoice_number')
     .eq('org_id', orgId)
     .like('invoice_number', `WC-${year}-%`)
 
-  const seq = String((count ?? 0) + 1).padStart(4, '0')
+  const vzorec = new RegExp(`^WC-${year}-(\\d+)$`)
+  const najvisja = (obstojeci ?? []).reduce((max: number, r: any) => {
+    const m = vzorec.exec(String(r.invoice_number ?? ''))
+    return m ? Math.max(max, parseInt(m[1], 10)) : max
+  }, 0)
+
+  const seq = String(najvisja + 1).padStart(4, '0')
   return `WC-${year}-${seq}`
 }
 
