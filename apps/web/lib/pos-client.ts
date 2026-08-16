@@ -56,7 +56,53 @@ export async function resolveBusinessId(orgId: string, orgName: string, ownerUse
   await supabase.from('organizations').update({ pos_business_id: newBiz.id }).eq('id', orgId)
 
   BUSINESS_ID = newBiz.id
+
   return BUSINESS_ID
+}
+
+/**
+ * Ali ima blagajna ze kaksnega uporabnika s PIN-om?
+ *
+ * DODANO (16.8.2026, BLOKADA): brez uporabnika nov lastnik NE MORE v blagajno.
+ * Prijava gre izkljucno prek PIN-a iz tabele staff (master PIN je bil
+ * odstranjen 24.7.2026), tabela pa je za novo podjetje prazna. Nastavitve,
+ * kjer bi osebje dodal, so ZA zaklepom - torej nedosegljive. Rezultat je bil
+ * trajno zaklenjen zaslon brez izhoda.
+ *
+ * Privzetega PIN-a NAMENOMA ne ustvarjamo: enaka zacetna koda pri vseh
+ * podjetjih bi pomenila, da jo pozna vsakdo. Namesto tega blagajna ob prvem
+ * vstopu ponudi, da lastnik sam dolo Ci svoje ime in PIN - takrat je ze
+ * prijavljen s svojim racunom, zato je to varno.
+ */
+export async function imaOsebje(businessId: string): Promise<boolean> {
+  if (!businessId) return false
+  const { data, error } = await sb()
+    .from('staff')
+    .select('id')
+    .eq('business_id', businessId)
+    .limit(1)
+  if (error) throw new Error('Osebja blagajne ni bilo mogoce prebrati: ' + error.message)
+  return !!(data && data.length > 0)
+}
+
+/** Ustvari PRVEGA uporabnika blagajne z imenom in PIN-om, ki ju izbere lastnik. */
+export async function ustvariPrvegaUporabnika(
+  businessId: string,
+  ownerUserId: string,
+  ime: string,
+  pin: string,
+): Promise<void> {
+  const { error } = await sb().from('staff').insert({
+    business_id: businessId,
+    user_id: ownerUserId,
+    name: ime.trim() || 'Lastnik',
+    role: 'Lastnik',
+    pin: pin.trim(),
+    active: true,
+  })
+  if (error) {
+    throw new Error('Uporabnika ni bilo mogoce dodati: ' + error.message)
+  }
 }
 
 // ─── Supabase client ──────────────────────────────────────────────────

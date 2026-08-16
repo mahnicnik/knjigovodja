@@ -82,6 +82,10 @@ const MAX_OPEN_HOURS = 24 // če je odprto več kot 24h, pri otvoritvi avto-zapr
  * Če je izmena starejša od 24h, vrne null (in jo treba ročno zapreti).
  */
 export async function getCurrentSession(staffId?: string): Promise<CashSession | null> {
+  // DODANO (16.8.2026): brez tega se poizvedba sprozi, preden je business_id
+  // razrescen - streznik vrne napako 400 in v konzoli se pojavi
+  // "getCurrentSession error" ob vsakem odprtju blagajne.
+  if (!BUSINESS_ID) return null
   const db = createClient()
   // POPRAVLJENO (13.8.2026, KRITICNO): ce je staffId podan, filtriraj SAMO
   // na sejo TE osebe - vec ljudi ima lahko ODPRTO SVOJO sejo hkrati. Prej se

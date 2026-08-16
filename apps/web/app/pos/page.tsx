@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { pos, BUSINESS_ID, resolveBusinessId } from '@/lib/pos-client'
+import { pos, BUSINESS_ID, resolveBusinessId, imaOsebje, ustvariPrvegaUporabnika } from '@/lib/pos-client'
 import { buildReceiptHTML } from '@/lib/receipt'
 import { WorkStatusBar, ClockInModal } from '@/lib/work-session-components'
 import { getCurrentSession, openSession, getSessionStats, closeSession, getLastCarryOver, type CashSession, type SessionStats } from '@/lib/cash-session'
@@ -205,6 +205,8 @@ function usePosData() {
   const [bizNapaka, setBizNapaka] = useState<string | null>(null)
   // DODANO (16.8.2026): ime podjetja iz organizacije - prej trdo zapisano.
   const [businessName, setBusinessName] = useState('')
+  // DODANO (16.8.2026): ali blagajna se nima nobenega uporabnika s PIN-om.
+  const [potrebujePrvoNastavitev, setPotrebujePrvoNastavitev] = useState(false)
 
   const refresh = useCallback(() => setReloadKey(k => k + 1), [])
 
@@ -221,7 +223,8 @@ function usePosData() {
         }
         const { data: o } = await sb2.from('organizations').select('name').eq('id', mem.org_id).single()
         setBusinessName(o?.name || '')
-        await resolveBusinessId(mem.org_id, o?.name || 'Moj biznis', user.id)
+        const bizId = await resolveBusinessId(mem.org_id, o?.name || 'Moj biznis', user.id)
+        setPotrebujePrvoNastavitev(!(await imaOsebje(bizId)))
         setBizReady(true)
       } catch (e: any) {
         console.error('Napaka pri inicializaciji POS biznisa:', e)
@@ -289,7 +292,7 @@ function usePosData() {
     return [{ id: 'cat-fav', name: 'Priljubljeno', icon: '★', color: '#E9B949' }, ...categories]
   }, [categories])
 
-  return { categories: categoriesWithFav, items, spaces, customers, staffList, packageTemplates, services, ingredients, notifications, setNotifications, todayStats, businessProfile, setBusinessProfile, happyHourRules, loading, itemsIn, refresh, bizNapaka, businessName }
+  return { categories: categoriesWithFav, items, spaces, customers, staffList, packageTemplates, services, ingredients, notifications, setNotifications, todayStats, businessProfile, setBusinessProfile, happyHourRules, loading, itemsIn, refresh, bizNapaka, businessName, potrebujePrvoNastavitev, setPotrebujePrvoNastavitev }
 }
 
 // ================================================================
@@ -427,9 +430,94 @@ const KI = ({ name, size = 18, strokeWidth = 1.7 }) => {
 }
 
 // ================================================================
+// PRVA NASTAVITEV BLAGAJNE
+// ================================================================
+/**
+ * DODANO (16.8.2026, BLOKADA): brez tega nov lastnik ni mogel v blagajno.
+ * Prijava gre izkljucno prek PIN-a iz tabele osebja, ta pa je za novo podjetje
+ * prazna; nastavitve, kjer bi osebje dodal, so ZA zaklepom.
+ *
+ * Privzetega PIN-a namenoma NE ustvarjamo - enaka zacetna koda pri vseh
+ * podjetjih bi pomenila, da jo pozna vsakdo. Namesto tega lastnik tu sam
+ * doloCi svoje ime in PIN. Varno je, ker je ze prijavljen s svojim racunom;
+ * PIN je dodatna plast za izmensko osebje, ne glavna prijava.
+ */
+function PrvaNastavitev({ imePodjetja, onKoncano }) {
+  const [ime, setIme] = useState('')
+  const [pin, setPin] = useState('')
+  const [pin2, setPin2] = useState('')
+  const [napaka, setNapaka] = useState('')
+  const [shranjujem, setShranjujem] = useState(false)
+
+  async function shrani() {
+    setNapaka('')
+    if (!ime.trim()) { setNapaka('Vnesite svoje ime.'); return }
+    if (!/^\d{4,6}$/.test(pin)) { setNapaka('PIN mora imeti od 4 do 6 številk.'); return }
+    if (pin !== pin2) { setNapaka('PIN-a se ne ujemata.'); return }
+    if (/^(\d)\1+$/.test(pin)) { setNapaka('PIN naj ne bo sestavljen iz enakih številk (npr. 1111).'); return }
+    setShranjujem(true)
+    try {
+      const { data: { user } } = await createClient().auth.getUser()
+      if (!user) throw new Error('Niste prijavljeni')
+      await ustvariPrvegaUporabnika(BUSINESS_ID, user.id, ime, pin)
+      onKoncano()
+    } catch (e: any) {
+      setNapaka(e?.message || 'Shranjevanje ni uspelo.')
+      setShranjujem(false)
+    }
+  }
+
+  const polje: React.CSSProperties = {
+    width: '100%', padding: '11px 13px', borderRadius: 9, fontSize: 14,
+    border: '1px solid rgba(246,241,232,0.25)', background: 'rgba(255,255,255,0.06)',
+    color: T.headerInk, outline: 'none', fontFamily: 'inherit', marginTop: 6,
+  }
+
+  return (
+    <div style={{ position:'absolute', inset:0, zIndex:1000, background:'radial-gradient(circle at center, #1a3520 0%, #0d2818 60%, #06140d 100%)', color:T.headerInk, display:'flex', alignItems:'center', justifyContent:'center', padding:24, fontFamily:'"Inter", system-ui, sans-serif' }}>
+      <div style={{ width:'100%', maxWidth:380 }}>
+        <div style={{ textAlign:'center', marginBottom:26 }}>
+          <div style={{ width:44, height:44, borderRadius:11, background:T.brand, color:T.header, fontWeight:800, fontSize:21, display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 14px' }}>R</div>
+          <div style={{ fontSize:17, fontWeight:700 }}>{imePodjetja || 'Blagajna'}</div>
+          <div style={{ fontSize:13, opacity:0.7, marginTop:8, lineHeight:1.6 }}>
+            Blagajna še ni nastavljena.<br/>Določite svoje ime in PIN za vstop.
+          </div>
+        </div>
+
+        <label style={{ fontSize:12, opacity:0.7 }}>Vaše ime
+          <input value={ime} onChange={e=>setIme(e.target.value)} placeholder="npr. Ana" style={polje}/>
+        </label>
+
+        <label style={{ fontSize:12, opacity:0.7, display:'block', marginTop:14 }}>PIN (4–6 številk)
+          <input value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,'').slice(0,6))}
+            inputMode="numeric" type="password" placeholder="••••" style={polje}/>
+        </label>
+
+        <label style={{ fontSize:12, opacity:0.7, display:'block', marginTop:14 }}>Ponovite PIN
+          <input value={pin2} onChange={e=>setPin2(e.target.value.replace(/\D/g,'').slice(0,6))}
+            inputMode="numeric" type="password" placeholder="••••" style={polje}
+            onKeyDown={e => { if (e.key === 'Enter') shrani() }}/>
+        </label>
+
+        {napaka && <div style={{ fontSize:12.5, color:'#ff8fa3', marginTop:14, lineHeight:1.5 }}>{napaka}</div>}
+
+        <button onClick={shrani} disabled={shranjujem}
+          style={{ width:'100%', marginTop:22, padding:'12px', borderRadius:9, border:'none', background:T.brand, color:T.header, fontSize:14, fontWeight:700, cursor: shranjujem?'default':'pointer', fontFamily:'inherit', opacity: shranjujem?0.6:1 }}>
+          {shranjujem ? 'Shranjujem…' : 'Nastavi in vstopi'}
+        </button>
+
+        <div style={{ fontSize:11.5, opacity:0.55, marginTop:16, textAlign:'center', lineHeight:1.6 }}>
+          Dodatno osebje in njihove PIN-e boste lahko dodali v nastavitvah blagajne.
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ================================================================
 // LOCK SCREEN
 // ================================================================
-function LockScreen({ auth, imePodjetja, jePrivzetiPin }) {
+function LockScreen({ auth, imePodjetja }) {
   const [pin, setPin] = useState('')
   const [error, setError] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -493,15 +581,7 @@ function LockScreen({ auth, imePodjetja, jePrivzetiPin }) {
               ))}
         </div>
         {error && <div style={{ fontSize:13, color:'#ff5577', marginTop:14, fontWeight:700 }}>Napačna koda</div>}
-        {/* DODANO (16.8.2026): nov uporabnik ne bi vedel, s katerim PIN-om
-            sploh vstopiti - ob postavitvi blagajne se ustvari lastnik s PIN
-            1111. Namig se pokaze samo, dokler je ta privzeti PIN se v rabi. */}
-        {!error && jePrivzetiPin && (
-          <div style={{ fontSize:12, opacity:0.75, marginTop:14, lineHeight:1.6, maxWidth:300 }}>
-            Prva prijava: PIN <b style={{ letterSpacing:'0.1em' }}>1111</b><br/>
-            <span style={{ opacity:0.7 }}>Po vstopu ga takoj spremenite v Nastavitve → Osebje.</span>
-          </div>
-        )}
+
         {loading && <div style={{ fontSize:13, opacity:0.6, marginTop:14 }}>Preverjam...</div>}
       </div>
 
@@ -10698,7 +10778,12 @@ function KlasikApp() {
       {showTableActions && activeTable && <TableActionsModal activeTable={activeTable} posData={posData} auth={auth} onClose={()=>setShowTableActions(false)} onDone={()=>{ switchToTable(null); posData.refresh() }}/>}
       {showCloseCash && cashSession && <CloseCashModal session={cashSession} posData={posData} auth={auth} onClose={()=>setShowCloseCash(false)} onClosed={()=>{ setCashSession(null); refreshSession() }}/>}
       
-      {auth.locked && <LockScreen auth={auth} imePodjetja={posData.businessName} jePrivzetiPin={posData.staffList?.length === 1 && posData.staffList[0]?.pin === '1111'}/>}
+      {/* DODANO (16.8.2026): dokler blagajna nima nobenega uporabnika s PIN-om,
+          pokazi zaslon za prvo nastavitev namesto zaklepa - sicer je vstop
+          nemogoc (nastavitve so ZA zaklepom). */}
+      {posData.potrebujePrvoNastavitev
+        ? <PrvaNastavitev imePodjetja={posData.businessName} onKoncano={() => { posData.setPotrebujePrvoNastavitev(false); posData.refresh() }}/>
+        : auth.locked && <LockScreen auth={auth} imePodjetja={posData.businessName}/>}
     </div>
   )
 }

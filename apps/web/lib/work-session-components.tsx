@@ -82,6 +82,10 @@ export function WorkStatusBar({ posData, onRequestClockIn }: {
   }, [])
 
   async function loadSessions() {
+    // DODANO (16.8.2026): brez tega se je poizvedba sprozila, preden je bil
+    // business_id razrescen - streznik je vrnil napako 400 ("business_id=eq."
+    // brez vrednosti) ob vsakem odprtju blagajne.
+    if (!BUSINESS_ID) return
     const db = createClient()
     // Najprej work_sessions
     const { data: ws } = await db

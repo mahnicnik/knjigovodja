@@ -48,7 +48,13 @@ interface FursDevice {
 // MAIN PAGE
 // ================================================================
 export default function BlagajnaPage() {
-  const [tab, setTab] = useState<'certifikat' | 'prostori' | 'naprave' | 'test'>('certifikat')
+  const [tab, setTab] = useState<'certifikat' | 'prostori' | 'naprave' | 'osebje' | 'test'>('certifikat')
+  // DODANO (16.8.2026): upravljanje osebja blagajne iz portala. Prej se je
+  // osebje dalo dodajati SAMO znotraj blagajne, ta pa je za PIN zaklepom -
+  // nov lastnik brez osebja torej ni imel poti do njega.
+  const [osebje, setOsebje] = useState<any[]>([])
+  const [osebjeModal, setOsebjeModal] = useState<any>(null)
+  const [posBusinessId, setPosBusinessId] = useState<string | null>(null)
   const [config, setConfig] = useState<FursConfig>({ testMode: true, premises: [], devices: [], certPassword: undefined, certExpiry: undefined, certSubject: undefined })
   // DODANO (11.8.2026): DEMO nacin - LOCEN od testMode. NE komunicira s
   // FURS sploh, generira jasno lazne ZOI/EOR kode za testiranje/predstavitev.
@@ -84,6 +90,17 @@ export default function BlagajnaPage() {
       const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
 
       if (member) {
+        // DODANO (16.8.2026): osebje blagajne. Potrebujemo pos_business_id
+        // organizacije - blagajna je locena enota, vezana na organizacijo.
+        const { data: orgRow } = await supabase
+          .from('organizations').select('pos_business_id').eq('id', member.org_id).maybeSingle()
+        if (orgRow?.pos_business_id) {
+          setPosBusinessId(orgRow.pos_business_id)
+          const { data: stf } = await supabase
+            .from('staff').select('*').eq('business_id', orgRow.pos_business_id).order('name')
+          setOsebje(stf || [])
+        }
+
         // Naloži OBA certifikata (produkcijski + testni), ne samo enega
         // (26.7.2026: prej "katerikoli aktiven", zdaj loceno).
         const { data: certs } = await supabase
@@ -448,7 +465,7 @@ export default function BlagajnaPage() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 0, background: '#f0ede8', padding: 4, borderRadius: 10, marginBottom: 24, width: 'fit-content' }}>
-        {([['certifikat', '🔐 Certifikat'], ['prostori', '🏢 Poslovni prostori'], ['naprave', '🖨️ Naprave'], ['test', '🧪 Test povezave']] as const).map(([id, lbl]) => (
+        {([['certifikat', '🔐 Certifikat'], ['prostori', '🏢 Poslovni prostori'], ['naprave', '🖨️ Naprave'], ['osebje', '👥 Osebje blagajne'], ['test', '🧪 Test povezave']] as const).map(([id, lbl]) => (
           <button key={id} onClick={() => setTab(id)}
             style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: tab === id ? '#0d2818' : 'transparent', color: tab === id ? '#f6f1e8' : '#666', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
             {lbl}
@@ -697,6 +714,62 @@ export default function BlagajnaPage() {
       )}
 
       {/* ── TEST ── */}
+      {/* ─── OSEBJE BLAGAJNE (dodano 16.8.2026) ─── */}
+      {tab === 'osebje' && (
+        <div>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+            <div>
+              <div style={{ fontSize:16, fontWeight:700 }}>Osebje blagajne</div>
+              <div style={{ fontSize:12.5, color:'#777', marginTop:4, lineHeight:1.6 }}>
+                Vsak, ki dela na blagajni, potrebuje svoj PIN. Z njim se prijavi na terminalu;
+                po PIN-u se vodi, kdo je izdal račun, opravil storno in zaključil dan.
+              </div>
+            </div>
+            <button onClick={() => setOsebjeModal({ name:'', role:'Blagajnik', pin:'' })}
+              disabled={!posBusinessId}
+              style={{ padding:'9px 16px', borderRadius:9, border:'none', background: posBusinessId ? '#1D9E75' : '#ccc', color:'#fff', fontWeight:600, fontSize:13, cursor: posBusinessId ? 'pointer':'default', fontFamily:'inherit', flexShrink:0 }}>
+              + Dodaj osebo
+            </button>
+          </div>
+
+          {!posBusinessId ? (
+            <div style={{ background:'#FDF6E3', border:'0.5px solid #E8D9A8', borderRadius:10, padding:'14px 16px', fontSize:13, color:'#8a6d1f', lineHeight:1.6 }}>
+              Blagajna še ni bila odprta. Ob prvem obisku strani <b>/pos</b> se samodejno pripravi,
+              nato se osebje lahko ureja tudi tu.
+            </div>
+          ) : osebje.length === 0 ? (
+            <div style={{ background:'#f7f6f4', borderRadius:10, padding:'20px 16px', fontSize:13, color:'#777', textAlign:'center', lineHeight:1.6 }}>
+              Ni še nobene osebe.<br/>Dodajte prvo, da bo mogoč vstop v blagajno.
+            </div>
+          ) : (
+            <div style={{ background:'#fff', borderRadius:12, border:'0.5px solid rgba(0,0,0,0.08)', overflow:'hidden' }}>
+              {osebje.map((o:any, i:number) => (
+                <div key={o.id} style={{ display:'flex', alignItems:'center', gap:14, padding:'13px 16px', borderTop: i>0 ? '0.5px solid rgba(0,0,0,0.06)' : 'none' }}>
+                  <div style={{ width:34, height:34, borderRadius:8, background:o.color||'#3a6e8f', color:'#fff', fontWeight:700, fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                    {(o.name||'?').charAt(0).toUpperCase()}
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13.5, fontWeight:600 }}>{o.name}</div>
+                    <div style={{ fontSize:11.5, color:'#888', marginTop:2 }}>{o.role} · PIN {'•'.repeat(String(o.pin||'').length)}</div>
+                  </div>
+                  {!o.active && <span style={{ fontSize:11, color:'#999', background:'#f0efec', padding:'3px 8px', borderRadius:5 }}>neaktiven</span>}
+                  <button onClick={() => setOsebjeModal({ ...o })}
+                    style={{ fontSize:12, color:'#1D9E75', background:'none', border:'none', cursor:'pointer', fontWeight:600, fontFamily:'inherit' }}>
+                    Uredi
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ fontSize:11.5, color:'#999', marginTop:14, lineHeight:1.6 }}>
+            Vloge: <b>Lastnik</b> ima vse pravice · <b>Vodja</b> vse razen nastavitev in poročil ·
+            <b> Blagajnik</b> prodaja, ne more stornirati ali zaključiti dneva · <b>Trener</b> in
+            <b> Terapevt</b> vidita koledar in stranke, ne prodajata.
+          </div>
+        </div>
+      )}
+
       {tab === 'test' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e1d8', padding: 20 }}>
@@ -797,6 +870,75 @@ export default function BlagajnaPage() {
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
               <button onClick={() => setPremiseModal(null)} style={{ padding: '9px 16px', borderRadius: 8, border: '1px solid #d0ccc5', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Prekliči</button>
               <button onClick={addPremise} style={{ padding: '9px 20px', borderRadius: 8, background: '#0d2818', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit' }}>Shrani</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Okno za osebje blagajne (dodano 16.8.2026) */}
+      {osebjeModal && (
+        <div onClick={() => setOsebjeModal(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:50, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width:400, background:'#fff', borderRadius:14, padding:24, boxShadow:'0 20px 60px rgba(0,0,0,0.25)' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+              <h3 style={{ margin:0, fontSize:17, fontWeight:700 }}>{osebjeModal.id ? 'Uredi osebo' : 'Nova oseba'}</h3>
+              <button onClick={() => setOsebjeModal(null)} style={{ background:'none', border:'none', cursor:'pointer', fontSize:20, color:'#666' }}>×</button>
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+              <FormField label="Ime *">
+                <input value={osebjeModal.name || ''} onChange={e => setOsebjeModal(p => ({ ...p, name: e.target.value }))}
+                  placeholder="npr. Ana" style={inputStyle} autoFocus />
+              </FormField>
+              <FormField label="Vloga *">
+                <select value={osebjeModal.role || 'Blagajnik'} onChange={e => setOsebjeModal(p => ({ ...p, role: e.target.value }))} style={inputStyle}>
+                  <option value="Lastnik">Lastnik — vse pravice</option>
+                  <option value="Vodja">Vodja — vse razen nastavitev in poročil</option>
+                  <option value="Blagajnik">Blagajnik — prodaja, brez storna in zaključka</option>
+                  <option value="Trener">Trener — koledar in stranke</option>
+                  <option value="Terapevt">Terapevt — koledar in stranke</option>
+                </select>
+              </FormField>
+              <FormField label="PIN za vstop v blagajno * (4–6 številk)">
+                <input value={osebjeModal.pin || ''} onChange={e => setOsebjeModal(p => ({ ...p, pin: e.target.value.replace(/\D/g,'').slice(0,6) }))}
+                  inputMode="numeric" placeholder="npr. 4827" style={{ ...inputStyle, fontFamily:'monospace', letterSpacing:'0.2em' }} />
+              </FormField>
+              {osebjeModal.id && (
+                <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, cursor:'pointer' }}>
+                  <input type="checkbox" checked={osebjeModal.active !== false}
+                    onChange={e => setOsebjeModal(p => ({ ...p, active: e.target.checked }))} />
+                  Aktiven (lahko se prijavi na blagajno)
+                </label>
+              )}
+            </div>
+            <div style={{ display:'flex', gap:8, marginTop:22 }}>
+              <button onClick={() => setOsebjeModal(null)}
+                style={{ flex:1, padding:'10px', borderRadius:9, border:'0.5px solid #ddd', background:'#fff', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+                Prekliči
+              </button>
+              <button onClick={async () => {
+                const ime = String(osebjeModal.name || '').trim()
+                const pin = String(osebjeModal.pin || '')
+                if (!ime) { showToast('Ime je obvezno', false); return }
+                if (!/^\d{4,6}$/.test(pin)) { showToast('PIN mora imeti od 4 do 6 številk', false); return }
+                if (/^(\d)\1+$/.test(pin)) { showToast('PIN naj ne bo sestavljen iz enakih številk', false); return }
+                // PIN mora biti edinstven znotraj blagajne - sicer prijava ne bi
+                // vedela, katera oseba je vstopila.
+                const podvojen = osebje.some((o:any) => o.pin === pin && o.id !== osebjeModal.id)
+                if (podvojen) { showToast('Ta PIN že uporablja druga oseba', false); return }
+
+                const payload = { business_id: posBusinessId, name: ime, role: osebjeModal.role || 'Blagajnik', pin, active: osebjeModal.active !== false }
+                const { error } = osebjeModal.id
+                  ? await supabase.from('staff').update(payload).eq('id', osebjeModal.id)
+                  : await supabase.from('staff').insert(payload)
+                if (error) { showToast('Napaka pri shranjevanju: ' + error.message, false); return }
+
+                const { data: stf } = await supabase.from('staff').select('*').eq('business_id', posBusinessId).order('name')
+                setOsebje(stf || [])
+                setOsebjeModal(null)
+                showToast('Oseba shranjena')
+              }}
+                style={{ flex:1, padding:'10px', borderRadius:9, border:'none', background:'#1D9E75', color:'#fff', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+                Shrani
+              </button>
             </div>
           </div>
         </div>
