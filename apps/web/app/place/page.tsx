@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
-import { EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS, MANDATORY_HEALTH_CONTRIBUTION, GENERAL_RELIEF_MONTH, MIN_WAGE as TC_MIN_WAGE, INCOME_TAX_BRACKETS, REGRES_TAX_FREE_LIMIT } from '@/lib/tax-constants'
+import { EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS, MANDATORY_HEALTH_CONTRIBUTION, GENERAL_RELIEF_MONTH, MIN_WAGE as TC_MIN_WAGE, INCOME_TAX_BRACKETS, REGRES_TAX_FREE_LIMIT, MEAL_ALLOWANCE, KM_RATE_COMMUTE } from '@/lib/tax-constants'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 
@@ -27,7 +27,14 @@ function calcPayroll(grossSalary: number, dependents: number = 0, extras: {
   const sundayAmt = r(grossSalary / 174 * 0.5 * (extras.sundayBonus || 0))
   const holidayAmt = r(grossSalary / 174 * 1.0 * (extras.holidayBonus || 0))
   const taxableGross = grossSalary + overtimeAmt + nightAmt + sundayAmt + holidayAmt
-  const travelAmt = r((extras.travelAllowance || 0) * 21 * 0.21)
+  // POPRAVLJENO (16.8.2026): stopnja prevoza je bila trdo kodirana (0,21) in
+  // stevilo dni pavsalno 21. Zdaj stopnja iz lib/tax-constants.ts, dnevi pa
+  // taksni, kot jih vnese uporabnik (polje "Prevoz (dni)").
+  const travelAmt = r((extras.travelAllowance || 0) * KM_RATE_COMMUTE)
+  // POPRAVLJENO (16.8.2026): MALICA se je vnasala in shranjevala, v izracunu
+  // pa se NIKOLI ni uporabila - zaposlenemu je tiho izpadla iz place.
+  // Malica je do zakonske meje neobdavcena, zato se pristeje k NETU.
+  const mealAmt = r((extras.mealAllowance || 0) * MEAL_ALLOWANCE)
   const ee_piz = r(taxableGross * EE.piz)
   const ee_zzzs = r(taxableGross * EE.zzzs)
   const ee_injury = 0 // zaposlenci ne placujejo poskodb pri delu - samo delodajalec
@@ -49,7 +56,7 @@ function calcPayroll(grossSalary: number, dependents: number = 0, extras: {
     if (b.upTo === Infinity) break
   }
   const incomeTax = r(tax / 12)
-  const netSalary = r(taxableGross - ee_total - incomeTax + travelAmt)
+  const netSalary = r(taxableGross - ee_total - incomeTax + travelAmt + mealAmt)
   const er_piz = r(taxableGross * ER.piz)
   const er_zzzs = r(taxableGross * ER.zzzs)
   const er_injury = r(taxableGross * ER.injury)
@@ -59,9 +66,13 @@ function calcPayroll(grossSalary: number, dependents: number = 0, extras: {
   const er_total = r(er_piz + er_zzzs + er_injury + er_unemployment + er_parental + er_dolgotrajna)
   return {
     baseSalary: grossSalary, overtimeAmt, nightAmt, sundayAmt, holidayAmt,
-    taxableGross, travelAmt, ee_piz, ee_zzzs, ee_injury, ee_unemployment, ee_parental, ee_dolgotrajna, ee_ozp, ee_total,
+    taxableGross, travelAmt, mealAmt, ee_piz, ee_zzzs, ee_injury, ee_unemployment, ee_parental, ee_dolgotrajna, ee_ozp, ee_total,
     incomeTax, netSalary, er_piz, er_zzzs, er_injury, er_unemployment, er_parental, er_dolgotrajna, er_total,
-    totalCost: r(taxableGross + er_total), totalFurs: r(ee_total + incomeTax + er_total),
+    // POPRAVLJENO (16.8.2026): povracila (prevoz, malica) so DEJANSKI strosek
+    // delodajalca, prej pa nista bila vsteta v skupni strosek - podjetje je
+    // videlo nizji strosek, kot ga dejansko ima.
+    totalCost: r(taxableGross + er_total + travelAmt + mealAmt),
+    totalFurs: r(ee_total + incomeTax + er_total),
   }
 }
 
@@ -813,7 +824,8 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
                         { key:'nightBonus', label:'Nočno delo (ur)' },
                         { key:'sundayBonus', label:'Nedelja (ur)' },
                         { key:'holidayBonus', label:'Praznik (ur)' },
-                        { key:'travelAllowance', label:'Prevoz (dni)' },
+                        { key:'travelAllowance', label:'Prevoz (km skupaj)' },
+                        { key:'mealAllowance', label:'Malica (dni)' },
                       ].map(field => (
                         <div key={field.key}>
                           <label className="text-xs text-gray-500 block mb-1">{field.label}</label>
