@@ -128,13 +128,34 @@ ${lineItems.map((item: any, i: number) => `    <ram:IncludedSupplyChainTradeLine
         </ram:PayeePartyCreditorFinancialAccount>
       </ram:SpecifiedTradeSettlementPaymentMeans>` : ''}
 
-      <ram:ApplicableTradeTax>
-        <ram:CalculatedAmount>${Number(inv.vat_amount).toFixed(2)}</ram:CalculatedAmount>
+      ${(() => {
+        // POPRAVLJENO (16.8.2026): glava je imela ENO samo davcno skupino s
+        // TRDO vpisano stopnjo 22%, tudi ce so postavke po 9,5% ali oproscene.
+        // Standard zahteva loceno skupino za VSAKO stopnjo - prejemnikov sistem
+        // bi sicer racun zavrnil ali napacno poknjizil DDV.
+        const poStopnji = new Map()
+        for (const item of lineItems) {
+          const stopnja = Number(item.vat_rate ?? 22)
+          const neto = Number(item.unit_price) * Number(item.quantity) * (1 - Number(item.discount_pct ?? 0) / 100)
+          const o = poStopnji.get(stopnja) || { osnova: 0, ddv: 0 }
+          o.osnova += neto
+          o.ddv += neto * stopnja / 100
+          poStopnji.set(stopnja, o)
+        }
+        // Ce postavk ni (starejsi racuni), ohranimo staro obnasanje.
+        if (poStopnji.size === 0) {
+          poStopnji.set(22, { osnova: Number(inv.amount_net), ddv: Number(inv.vat_amount) })
+        }
+        return Array.from(poStopnji.entries())
+          .sort((a, b) => b[0] - a[0])
+          .map(([stopnja, v]) => `<ram:ApplicableTradeTax>
+        <ram:CalculatedAmount>${v.ddv.toFixed(2)}</ram:CalculatedAmount>
         <ram:TypeCode>VAT</ram:TypeCode>
-        <ram:BasisAmount>${Number(inv.amount_net).toFixed(2)}</ram:BasisAmount>
-        <ram:CategoryCode>${Number(inv.vat_amount) > 0 ? 'S' : 'Z'}</ram:CategoryCode>
-        <ram:RateApplicablePercent>22</ram:RateApplicablePercent>
-      </ram:ApplicableTradeTax>
+        <ram:BasisAmount>${v.osnova.toFixed(2)}</ram:BasisAmount>
+        <ram:CategoryCode>${stopnja > 0 ? 'S' : 'Z'}</ram:CategoryCode>
+        <ram:RateApplicablePercent>${stopnja}</ram:RateApplicablePercent>
+      </ram:ApplicableTradeTax>`).join('\n      ')
+      })()}
 
       <ram:SpecifiedTradePaymentTerms>
         <ram:DueDateDateTime>
