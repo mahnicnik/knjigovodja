@@ -395,6 +395,9 @@ export default function BankaPage() {
     setImporting(true)
 
     let bookedCount = 0
+    // DODANO (16.8.2026): zbiranje napak - prej so posamezne napake pri
+    // knjizenju ostale neopazene, uporabnik pa je videl samo stevilo uspesnih.
+    const errors: string[] = []
     let skippedNoCategory = 0
 
     for (const t of transactions) {
@@ -405,18 +408,23 @@ export default function BankaPage() {
         // Predal 1: ujeto z racunom - samodejno knjizi s pravo DDV razclenitvijo
         const inv = t.matched_invoice
         const alreadyPaid = inv.status === 'paid'
-        await supabase.from('issued_invoices').update({
+        // POPRAVLJENO (16.8.2026): prej brez preverbe napake - racun je ostal
+        // neplacan, v knjigo pa se je VSEENO vpisal prihodek. Rezultat:
+        // prihodek dvakrat (ob naslednjem uvozu se enkrat) ali odprta terjatev,
+        // ki je v resnici placana.
+        const { error: payErr } = await supabase.from('issued_invoices').update({
           status: 'paid',
           paid_at: new Date(t.date).toISOString(),
           paid_amount: t.amount,
         }).eq('id', inv.id)
+        if (payErr) { errors.push(`Računa ${inv.invoice_number} ni bilo mogoče označiti kot plačanega: ${payErr.message}`); continue }
 
         // VAROVALKA: ce je racun ZE bil placan (npr. prekrivajoc uvoz), ne
         // podvoji KPO vnosa.
         if (!alreadyPaid) {
           // POPRAVLJENO (26.7.2026): invoice_id doda, da KPO stran lahko
           // izloci podvojen prikaz (izdan racun + to placilo, ista transakcija).
-          await supabase.from('kpo_entries').insert({
+          const { error: kpo1Err } = await supabase.from('kpo_entries').insert({
             org_id: orgId,
             entry_date: t.date,
             description: `Plačilo računa ${inv.invoice_number} — ${inv.client_name || ''}`,
@@ -429,13 +437,14 @@ export default function BankaPage() {
             notes: `Bančni uvoz · ${t.reference || ''}`,
             invoice_id: inv.id,
           })
+          if (kpo1Err) { errors.push(`Vnosa v knjigo za račun ${inv.invoice_number} ni bilo mogoče shraniti: ${kpo1Err.message}`); continue }
           bookedCount++
         }
       } else if (t.bookCategory) {
         // Predal 3: neujeto, rocno izbrana kategorija - knjizi celoten
         // znesek (brez DDV razclenitve - iz bancnega podatka je ni mogoce
         // zanesljivo izracunati).
-        await supabase.from('kpo_entries').insert({
+        const { error: kpo2Err } = await supabase.from('kpo_entries').insert({
           org_id: orgId,
           entry_date: t.date,
           description: t.description || (t.type === 'credit' ? 'Bančni priliv' : 'Bančni odliv'),
@@ -447,6 +456,7 @@ export default function BankaPage() {
           category: t.bookCategory,
           notes: `Bančni uvoz · ${t.reference || ''}`,
         })
+        if (kpo2Err) { errors.push(`Vnosa "${t.description || t.reference}" ni bilo mogoče shraniti: ${kpo2Err.message}`); continue }
         bookedCount++
       } else {
         // Neujeto, brez izbrane kategorije - PRESKOCI (varovalka pred
@@ -458,6 +468,11 @@ export default function BankaPage() {
     const msg = skippedNoCategory > 0
       ? `Poknjiženih ${bookedCount} transakcij. ${skippedNoCategory} preskočenih - izberite kategorijo za knjiženje.`
       : `Poknjiženih ${bookedCount} transakcij.`
+    // DODANO (16.8.2026): napake se zdaj pokazejo - prej je uporabnik videl le
+    // stevilo uspesnih in ni vedel, da kaksna transakcija ni bila poknjizena.
+    if (errors.length > 0) {
+      alert(`Poknjiženih ${bookedCount} transakcij, ${errors.length} pa NI uspelo:\n\n${errors.slice(0, 8).join('\n')}${errors.length > 8 ? `\n… in še ${errors.length - 8}` : ''}\n\nTe transakcije poknjižite ročno.`)
+    }
     showToast(msg)
     setStep('done')
     setImporting(false)

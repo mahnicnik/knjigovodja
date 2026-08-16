@@ -226,7 +226,11 @@ export async function POST(req: NextRequest) {
       throw new Error(`Napaka pri ustvarjanju računa: ${invErr?.message}`)
     }
 
-    await supabase.from('kpo_entries').insert({
+    // POPRAVLJENO (16.8.2026): prej brez preverbe napake - racun je nastal,
+    // vnos v knjigo prihodkov pa ne. Ker webhook vrne uspeh, Stripe dogodka
+    // NE bi ponovil, zato bi prihodek trajno manjkal v davcni evidenci, brez
+    // sledi. Zdaj se zabelezi v integration_logs za rocni pregled.
+    const { error: kpoErr } = await supabase.from('kpo_entries').insert({
       org_id: orgId,
       entry_date: issueDate,
       description: `Stripe — ${customerName}`,
@@ -237,6 +241,21 @@ export async function POST(req: NextRequest) {
       category: 'spletna_prodaja',
       notes: `Avtomatski vnos iz Stripe`,
     })
+    if (kpoErr) {
+      console.error('Stripe webhook: racun', invoiceNumber, 'je nastal, vnos v KPO knjigo pa NI uspel:', kpoErr)
+      await supabase.from('integration_logs').insert({
+        org_id: orgId,
+        integration_type: 'stripe',
+        status: 'failed',
+        payload: {
+          error: 'kpo_entry_failed',
+          message: kpoErr.message,
+          invoice_number: invoiceNumber,
+          invoice_id: invoice.id,
+          amount: amountTotal,
+        },
+      })
+    }
 
     // ────────────────────────────────────────────────────────────────
     // FURS davcno potrjevanje (dodano 21.7.2026) - Stripe placilo se po

@@ -218,7 +218,10 @@ export async function POST(req: NextRequest) {
     }
 
     // KPO vnos
-    await supabase.from('kpo_entries').insert({
+    // POPRAVLJENO (16.8.2026): prej brez preverbe napake - racun je nastal,
+    // vnos v knjigo prihodkov pa ne. Webhook vrne uspeh, zato Shopify
+    // dogodka NE ponovi in prihodek trajno manjka v davcni evidenci.
+    const { error: kpoErr } = await supabase.from('kpo_entries').insert({
       org_id: orgId,
       entry_date: issueDate,
       description: `Shopify #${order.order_number ?? order.name} — ${clientName}`,
@@ -229,6 +232,15 @@ export async function POST(req: NextRequest) {
       category: 'spletna_prodaja',
       notes: 'Avtomatski vnos iz Shopify',
     })
+    if (kpoErr) {
+      console.error('Shopify webhook: racun je nastal, vnos v KPO knjigo pa NI uspel:', kpoErr)
+      await supabase.from('integration_logs').insert({
+        org_id: orgId,
+        integration_type: 'shopify',
+        status: 'failed',
+        payload: { error: 'kpo_entry_failed', message: kpoErr.message, invoice_id: invoice?.id },
+      })
+    }
 
     // Log
     await supabase.from('integration_logs').insert({

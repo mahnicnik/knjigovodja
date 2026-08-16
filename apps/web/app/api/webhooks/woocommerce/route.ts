@@ -232,7 +232,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Doda KPO vnos (knjiga prihodkov)
-    await supabase.from('kpo_entries').insert({
+    // POPRAVLJENO (16.8.2026): prej brez preverbe napake - racun je nastal,
+    // vnos v knjigo prihodkov pa ne. Webhook vrne uspeh, zato WooCommerce
+    // dogodka NE ponovi in prihodek trajno manjka v davcni evidenci.
+    const { error: kpoErr } = await supabase.from('kpo_entries').insert({
       org_id: orgId,
       entry_date: issueDate,
       description: `WooCommerce #${order.number ?? order.id} — ${clientName}`,
@@ -243,6 +246,15 @@ export async function POST(req: NextRequest) {
       category: 'spletna_prodaja',
       notes: `Avtomatski vnos iz WooCommerce`,
     })
+    if (kpoErr) {
+      console.error('WooCommerce webhook: racun je nastal, vnos v KPO knjigo pa NI uspel:', kpoErr)
+      await supabase.from('integration_logs').insert({
+        org_id: orgId,
+        integration_type: 'woocommerce',
+        status: 'failed',
+        payload: { error: 'kpo_entry_failed', message: kpoErr.message, invoice_id: invoice?.id },
+      })
+    }
 
     // Log uspešne integracije
     await supabase.from('integration_logs').insert({
