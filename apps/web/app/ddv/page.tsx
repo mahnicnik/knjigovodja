@@ -34,6 +34,8 @@ export default function DDVPage() {
   const [invoices, setInvoices] = useState<any[]>([])
   const [receipts, setReceipts] = useState<any[]>([])
   const [kpoExpenses, setKpoExpenses] = useState<any[]>([])
+  // DODANO (16.8.2026): izstopni DDV iz knjige (POS blagajna, banka, kartice)
+  const [kpoIncome, setKpoIncome] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
@@ -61,7 +63,7 @@ export default function DDVPage() {
     setLoading(true)
     const { from, to } = quarterRange(quarter, year)
 
-    const [invRes, recRes, kpoExpRes] = await Promise.all([
+    const [invRes, recRes, kpoExpRes, kpoIncRes] = await Promise.all([
       supabase
         .from('issued_invoices')
         .select('*')
@@ -89,15 +91,31 @@ export default function DDVPage() {
         .is('receipt_id', null)
         .gte('entry_date', from)
         .lte('entry_date', to),
+      // DODANO (16.8.2026, KRITICNO): IZSTOPNI DDV iz knjige prihodkov.
+      // Obracun je bral izstopni DDV SAMO iz izdanih racunov, promet iz POS
+      // blagajne (in bancni ter karticni prilivi) pa se knjizi v kpo_entries -
+      // njihov DDV v obracunu NI bil zajet. Podjetje bi FURS-u prijavilo
+      // PREMALO izstopnega DDV. Filter invoice_id IS NULL prepreci dvojno
+      // stetje racunov, ki so ze zajeti zgoraj.
+      supabase
+        .from('kpo_entries')
+        .select('vat_out, entry_date')
+        .eq('org_id', org.id)
+        .eq('entry_type', 'income')
+        .is('invoice_id', null)
+        .gte('entry_date', from)
+        .lte('entry_date', to),
     ])
 
     setInvoices(invRes.data || [])
     setReceipts(recRes.data || [])
     setKpoExpenses(kpoExpRes.data || [])
+    setKpoIncome(kpoIncRes.data || [])
     setLoading(false)
   }
 
   const vatOut = invoices.reduce((s, i) => s + Number(i.vat_amount || 0), 0)
+    + kpoIncome.reduce((s, e) => s + Number(e.vat_out || 0), 0)
   const vatIn = receipts.reduce((s, r) => s + Number(r.vat_amount || 0), 0)
     + kpoExpenses.reduce((s, e) => s + Number(e.vat_in || 0), 0)
   const vatDue = vatOut - vatIn

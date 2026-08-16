@@ -40,22 +40,36 @@ export default function DDVEvidencaPage() {
     const from = `${selectedYear}${quarter.from}`
     const to = `${selectedYear}${quarter.to}`
 
-    const [invoicesRes, receiptsRes] = await Promise.all([
+    const [invoicesRes, receiptsRes, kpoRes] = await Promise.all([
       supabase.from('issued_invoices').select('*').eq('org_id', org.id)
         .neq('status', 'draft').or('zoi.is.null,zoi.not.like.DEMO-%').gte('issue_date', from).lte('issue_date', to),
       supabase.from('receipts').select('*').eq('org_id', org.id)
         .gte('receipt_date', from).lte('receipt_date', to),
+      // DODANO (16.8.2026, KRITICNO): promet iz POS blagajne, banke in kartic
+      // se knjizi v kpo_entries, ne kot izdan racun. Evidenca ga ni zajela,
+      // zato je bil obrazec DDV-O sestavljen iz nepopolnih podatkov.
+      supabase.from('kpo_entries').select('income, vat_out, entry_date')
+        .eq('org_id', org.id).eq('entry_type', 'income').is('invoice_id', null)
+        .gte('entry_date', from).lte('entry_date', to),
     ])
 
     const invoices = invoicesRes.data || []
     const receipts = receiptsRes.data || []
+    const kpoIncome = kpoRes.data || []
+    // Promet iz knjige je pri gostinstvu/trgovini praviloma po standardni
+    // stopnji; ce bo potreben locen prikaz po stopnjah, ga je treba dodati
+    // v kpo_entries kot lastno polje.
+    const kpoVatOut = kpoIncome.reduce((s: number, e: any) => s + Number(e.vat_out || 0), 0)
+    const kpoNet = kpoIncome.reduce((s: number, e: any) => s + Number(e.income || 0), 0)
 
     const vatOut22 = invoices.filter((i: any) => !i.vat_rate || i.vat_rate === 22)
       .reduce((s: number, i: any) => s + Number(i.vat_amount), 0)
+      + kpoVatOut
     const vatOut95 = invoices.filter((i: any) => i.vat_rate === 9.5)
       .reduce((s: number, i: any) => s + Number(i.vat_amount), 0)
     const sales22 = invoices.filter((i: any) => !i.vat_rate || i.vat_rate === 22)
       .reduce((s: number, i: any) => s + Number(i.amount_net), 0)
+      + kpoNet
     const sales95 = invoices.filter((i: any) => i.vat_rate === 9.5)
       .reduce((s: number, i: any) => s + Number(i.amount_net), 0)
     const vatIn = receipts.reduce((s: number, r: any) => s + Number(r.vat_amount), 0)
