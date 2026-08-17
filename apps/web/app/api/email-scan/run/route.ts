@@ -82,6 +82,9 @@ export async function POST(request: NextRequest) {
       if (conn.token_expires_at && new Date(conn.token_expires_at) <= new Date()) {
         const refreshToken = decryptToken(conn.refresh_token)
         const refreshRes = await fetch('https://oauth2.googleapis.com/token', {
+          // POPRAVLJENO (17.8.2026): casovna omejitev - brez nje zahteva ob
+          // neodzivni storitvi visi, dokler je streznik sam ne prekine.
+          signal: AbortSignal.timeout(10000),
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams({

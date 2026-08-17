@@ -1150,6 +1150,9 @@ async function autoPrint(data) {
         furs_eor: data.eor,
       }
       const printRes = await fetch('http://localhost:6789/print/receipt', {
+        // POPRAVLJENO (17.8.2026): casovna omejitev - brez nje zahteva ob
+        // neodzivni storitvi visi, dokler je streznik sam ne prekine.
+        signal: AbortSignal.timeout(3000),
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(printData)
@@ -4829,6 +4832,9 @@ async function printCashReceipt(html: string) {
     const res = await fetch('http://localhost:6789/health', { signal: AbortSignal.timeout(1000) })
     if (res.ok) {
       const printRes = await fetch('http://localhost:6789/print/receipt', {
+        // POPRAVLJENO (17.8.2026): casovna omejitev - brez nje zahteva ob
+        // neodzivni storitvi visi, dokler je streznik sam ne prekine.
+        signal: AbortSignal.timeout(3000),
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ html })
@@ -6413,6 +6419,9 @@ function OrdersScreen({ posData, auth }) {
           furs_eor: payment?.furs_eor,
         }
         const printRes = await fetch('http://localhost:6789/print/receipt', {
+          // POPRAVLJENO (17.8.2026): casovna omejitev - brez nje zahteva ob
+          // neodzivni storitvi visi, dokler je streznik sam ne prekine.
+          signal: AbortSignal.timeout(3000),
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(printData)

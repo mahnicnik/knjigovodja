@@ -45,6 +45,9 @@ export async function GET(request: NextRequest) {
 
     // Zamenjaj kodo za access/refresh token
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      // POPRAVLJENO (17.8.2026): casovna omejitev - brez nje zahteva ob
+      // neodzivni storitvi visi, dokler je streznik sam ne prekine.
+      signal: AbortSignal.timeout(10000),
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -63,6 +66,9 @@ export async function GET(request: NextRequest) {
 
     // Pridobi email naslov povezanega racuna
     const profileRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+      // POPRAVLJENO (17.8.2026): casovna omejitev - brez nje zahteva ob
+      // neodzivni storitvi visi, dokler je streznik sam ne prekine.
+      signal: AbortSignal.timeout(10000),
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
     })
     const profile = await profileRes.json()

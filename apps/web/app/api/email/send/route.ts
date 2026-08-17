@@ -55,6 +55,9 @@ export async function POST(req: NextRequest) {
     const emailHtml = html || buildEmailTemplate({ customerName, packageName, expiresAt, severity })
 
     const res = await fetch('https://api.resend.com/emails', {
+      // POPRAVLJENO (17.8.2026): casovna omejitev - brez nje zahteva ob
+      // neodzivni storitvi visi, dokler je streznik sam ne prekine.
+      signal: AbortSignal.timeout(15000),
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

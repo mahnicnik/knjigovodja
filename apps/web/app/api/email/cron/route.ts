@@ -63,6 +63,9 @@ export async function GET(request: NextRequest) {
 
 async function sendEmail(to: string, subject: string, html: string) {
   const res = await fetch('https://api.resend.com/emails', {
+    // POPRAVLJENO (17.8.2026): casovna omejitev - brez nje zahteva ob
+    // neodzivni storitvi visi, dokler je streznik sam ne prekine.
+    signal: AbortSignal.timeout(15000),
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,

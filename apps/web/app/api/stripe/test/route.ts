@@ -55,6 +55,9 @@ export async function POST(request: NextRequest) {
 
     // Test z Stripe API
     const res = await fetch('https://api.stripe.com/v1/account', {
+      // POPRAVLJENO (17.8.2026): casovna omejitev - brez nje zahteva ob
+      // neodzivni storitvi visi, dokler je streznik sam ne prekine.
+      signal: AbortSignal.timeout(10000),
       headers: { 'Authorization': `Bearer ${settings.secret_key}` }
     })
 
