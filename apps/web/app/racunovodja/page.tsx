@@ -35,8 +35,8 @@ const TAX_SYSTEM_LABELS: Record<string, string> = {
 
 function getMonthRange() {
   const now = new Date()
-  const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
-  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
+  const from = new lokalniDatum(Date(now.getFullYear(), now.getMonth(), 1))
+  const to = new lokalniDatum(Date(now.getFullYear(), now.getMonth() + 1, 0))
   const label = now.toLocaleDateString('sl-SI', { month: 'long', year: 'numeric' })
   return { from, to, label }
 }

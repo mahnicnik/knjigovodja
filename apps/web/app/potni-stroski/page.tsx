@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { escapeHtml } from '@/lib/html-escape'
 import { lokalniDatum } from '@/lib/tax-constants'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
@@ -187,7 +188,7 @@ export default function PotniStroskiPage() {
   .sign-line{border-top:1px solid #111;width:200px;padding-top:4px;font-size:9px;color:#666}
 </style></head><body>
 <div class="header">
-  <div><strong>${org.name}</strong><br><span style="color:#666;font-size:9px">${org.address}, ${org.city}<br>Davčna: ${org.tax_number}</span></div>
+  <div><strong>${escapeHtml(org.name)}</strong><br><span style="color:#666;font-size:9px">${escapeHtml(org.address)}, ${org.city}<br>Davčna: ${org.tax_number}</span></div>
   <div style="text-align:right;font-size:9px;color:#666">Potni stroški<br>${new Date().toLocaleDateString('sl-SI')}</div>
 </div>
 <h2>Povračilo potnih stroškov</h2>
@@ -210,7 +211,7 @@ export default function PotniStroskiPage() {
   </tbody>
 </table>
 <div class="sign">
-  <div><div class="sign-line">${org.name}</div><div>Delodajalec</div></div>
+  <div><div class="sign-line">${escapeHtml(org.name)}</div><div>Delodajalec</div></div>
   <div><div class="sign-line">${emp.full_name}</div><div>Delavec</div></div>
 </div>
 <script>window.onload=function(){window.print()}</script>

@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
       if (pkg.expires && frozenDays > 0) {
         const exp = new Date(pkg.expires)
         exp.setDate(exp.getDate() + frozenDays)
-        newExpires = exp.toISOString().split('T')[0]
+        newExpires = lokalniDatum(exp)
       }
 
       // POPRAVLJENO (16.8.2026): prej brez preverbe napake - kartica je ostala

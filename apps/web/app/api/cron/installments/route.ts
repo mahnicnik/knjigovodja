@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { issueInstallmentInvoice } from '@/lib/installment-invoice'
 
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
   const today = new Date()
   const cutoff = new Date(today)
   cutoff.setDate(cutoff.getDate() + NOTIFY_DAYS_BEFORE)
-  const cutoffStr = cutoff.toISOString().split('T')[0]
+  const cutoffStr = lokalniDatum(cutoff)
 
   // Zapadli obroki PREK VSEH organizacij (join do business_id na planu)
   const { data: dueInstallments } = await supabase

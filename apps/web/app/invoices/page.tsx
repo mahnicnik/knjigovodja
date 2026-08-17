@@ -152,7 +152,7 @@ export default function InvoicesPage() {
       client_email: inv.client_email,
       client_tax_number: inv.client_tax_number,
       issue_date: lokalniDatum(),
-      due_date: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0],
+      due_date: new lokalniDatum(Date(Date.now() + 30*24*60*60*1000)),
       line_items: inv.line_items || [],
       amount_net: inv.amount_net,
       vat_amount: inv.vat_amount,

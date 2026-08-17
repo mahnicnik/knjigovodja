@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { escapeHtml } from '@/lib/html-escape'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import {
@@ -265,7 +266,7 @@ export async function POST(req: NextRequest) {
   <div style="background: #0D1F12; color: #fff; padding: 24px; border-radius: 12px 12px 0 0;">
     <div style="font-size: 14px; color: #E8B547; letter-spacing: 0.06em; text-transform: uppercase;">RAČUNKO · Računovodski izvoz</div>
     <h1 style="margin: 8px 0 0; font-size: 22px; font-weight: 500;">${periodLabel}</h1>
-    <div style="margin-top: 4px; opacity: 0.7; font-size: 13px;">${org.name} · DŠ: ${org.tax_number ?? '—'}</div>
+    <div style="margin-top: 4px; opacity: 0.7; font-size: 13px;">${escapeHtml(org.name)} · DŠ: ${org.tax_number ?? '—'}</div>
   </div>
   
   <div style="background: #fff; border: 1px solid rgba(0,0,0,0.08); border-top: 0; border-radius: 0 0 12px 12px; padding: 24px;">
@@ -317,7 +318,7 @@ export async function POST(req: NextRequest) {
     
     <p style="font-size: 13px; color: #888; margin-top: 12px;">
       Lep pozdrav,<br>
-      ${org.name}${user.email ? ` · ${user.email}` : ''}
+      ${escapeHtml(org.name)}${user.email ? ` · ${user.email}` : ''}
     </p>
   </div>
   
@@ -332,7 +333,7 @@ export async function POST(req: NextRequest) {
         from: FROM_EMAIL,
         to: recipientEmail,
         replyTo: user.email,
-        subject: `Računovodski izvoz · ${org.name} · ${periodLabel}`,
+        subject: `Računovodski izvoz · ${escapeHtml(org.name)} · ${periodLabel}`,
         html: emailHtml,
         attachments,
       } as any)

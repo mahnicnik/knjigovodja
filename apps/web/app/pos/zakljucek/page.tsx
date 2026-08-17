@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { escapeHtml } from '@/lib/html-escape'
 import { lokalniDatum } from '@/lib/tax-constants'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
@@ -218,7 +219,7 @@ export default function PosZakljucekPage() {
 <body>
   <div class="center">
     <div class="bold" style="font-size:14px">${orgData?.name ?? 'Podjetje'}</div>
-    ${orgData?.address ? `<div>${orgData.address}</div>` : ''}
+    ${orgData?.address ? `<div>${escapeHtml(orgData.address)}</div>` : ''}
     ${orgData?.tax_number ? `<div>ID DDV: SI${orgData.tax_number}</div>` : ''}
   </div>
 
@@ -226,7 +227,7 @@ export default function PosZakljucekPage() {
 
   <div class="center">
     <h1>DNEVNI ZAKLJUČEK</h1>
-    ${location ? `<div>${location.name}</div>` : ''}
+    ${location ? `<div>${escapeHtml(location.name)}</div>` : ''}
     <div>Datum: ${fmtDate(closing.closing_date)}</div>
     <div>Izpis: ${new Date().toLocaleString('sl-SI')}</div>
   </div>

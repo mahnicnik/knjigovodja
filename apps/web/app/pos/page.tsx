@@ -2777,7 +2777,7 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
           if (pkg.package_templates?.validity_days) {
             const exp = new Date()
             exp.setDate(exp.getDate() + pkg.package_templates.validity_days)
-            updates.expires = exp.toISOString().split('T')[0]
+            updates.expires = lokalniDatum(exp)
           }
         }
         const { error: visitErr } = await createClient().from('customer_packages').update(updates).eq('id', selectedPkg)
@@ -3557,7 +3557,7 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
         if (pkg.package_templates?.validity_days) {
           const exp = new Date(now)
           exp.setDate(exp.getDate() + pkg.package_templates.validity_days)
-          updates.expires = exp.toISOString().split('T')[0]
+          updates.expires = lokalniDatum(exp)
         }
       }
       if (updates.remaining === 0) updates.active = false
@@ -3578,7 +3578,7 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
         if (pkg.expires && frozenDays > 0) {
           const exp = new Date(pkg.expires)
           exp.setDate(exp.getDate()+frozenDays)
-          newExpires = exp.toISOString().split('T')[0]
+          newExpires = lokalniDatum(exp)
         }
         // POPRAVLJENO (16.8.2026): prej brez preverbe napake - uporabnik je videl
         // "odmrznjena", tudi ce se v bazi ni nic spremenilo.
@@ -5733,6 +5733,9 @@ function TableActionsModal({ activeTable, posData, auth, onClose, onDone }) {
 
   async function moveToTable() {
     if (!targetTableId) return
+    // POPRAVLJENO (17.8.2026): varovalka pred dvojnim klikom - prej se je
+    // stanje nastavilo, a se ni preverjalo.
+    if (saving) return
     setSaving(true); setError('')
     try {
       const existing = await pos.orders.getOpenOnTable(activeTable.id)
@@ -5758,6 +5761,9 @@ function TableActionsModal({ activeTable, posData, auth, onClose, onDone }) {
 
   async function moveToStaff() {
     if (!targetStaffId) return
+    // POPRAVLJENO (17.8.2026): varovalka pred dvojnim klikom - prej se je
+    // stanje nastavilo, a se ni preverjalo.
+    if (saving) return
     setSaving(true); setError('')
     try {
       const existing = await pos.orders.getOpenOnTable(activeTable.id)
@@ -5772,6 +5778,9 @@ function TableActionsModal({ activeTable, posData, auth, onClose, onDone }) {
 
   async function mergeTables() {
     if (!sourceTableId) return
+    // POPRAVLJENO (17.8.2026): varovalka pred dvojnim klikom - prej se je
+    // stanje nastavilo, a se ni preverjalo.
+    if (saving) return
     setSaving(true); setError('')
     try {
       const db = createClient()
@@ -10460,7 +10469,7 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
     if (template.validity_days) {
       const exp = new Date(start)
       exp.setDate(exp.getDate() + Number(template.validity_days))
-      return exp.toISOString().split('T')[0]
+      return lokalniDatum(exp)
     }
     if (template.fixed_end_date) return template.fixed_end_date
     return null
@@ -10516,7 +10525,7 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
       installmentRows.push({
         plan_id: plan.id,
         installment_number: i + 1,
-        due_date: due.toISOString().split('T')[0],
+        due_date: lokalniDatum(due),
         amount: perInstallment,
         vat_rate: 22,
         // Ce je prvi obrok ze placan na blagajni (firstAlreadyPaid), ga oznacimo
@@ -11331,7 +11340,7 @@ function ManualAddCardModal({ customer, posData, onClose, onDone }) {
       if (tpl.validity_days) {
         const d = new Date()
         d.setDate(d.getDate() + Number(tpl.validity_days))
-        expires = d.toISOString().split('T')[0]
+        expires = lokalniDatum(d)
       }
       // Ce ima predloga stevilcen obisk (visits), uporabi rocno vneseno stevilo (customVisits),
       // sicer padi nazaj na privzeto iz predloge (za neomejene/casovne kartice ostane null).
@@ -11455,7 +11464,7 @@ function ExtendPackageModal({ pkg, onClose, onDone }) {
     const base = pkg.expires ? new Date(pkg.expires) : new Date()
     base.setDate(base.getDate() + d)
     // POPRAVLJENO (16.8.2026): prej brez preverbe napake.
-    const { error: extErr } = await createClient().from('customer_packages').update({ expires: base.toISOString().split('T')[0] }).eq('id', pkg.id)
+    const { error: extErr } = await createClient().from('customer_packages').update({ expires: lokalniDatum(base) }).eq('id', pkg.id)
     setSaving(false)
     if (extErr) { alert('Veljavnosti ni bilo mogoče podaljšati: ' + extErr.message); return }
     onDone()

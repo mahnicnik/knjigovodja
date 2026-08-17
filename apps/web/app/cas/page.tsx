@@ -116,7 +116,7 @@ export default function CasPage() {
       invoice_type: 'invoice',
       client_name: entry.client_name ?? 'Stranka',
       issue_date: lokalniDatum(),
-      due_date: new Date(Date.now() + 30 * 864e5).toISOString().split('T')[0],
+      due_date: new lokalniDatum(Date(Date.now() + 30 * 864e5)),
       line_items: [{ description: entry.description, quantity: entry.hours, unit_price: entry.hourly_rate, amount_net: amount, vat_amount: 0 }],
       amount_net: amount, vat_amount: 0, amount_total: amount,
       status: 'draft',

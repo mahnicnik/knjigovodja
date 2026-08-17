@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
@@ -66,7 +67,7 @@ export default function AIPage() {
     const now = new Date()
     const year = now.getFullYear()
     const monthStart = `${year}-01-01`
-    const today = now.toISOString().split('T')[0]
+    const today = lokalniDatum(now)
 
     const [invRes, expRes, empRes, kpoRes] = await Promise.all([
       supabase.from('issued_invoices').select('amount_net,vat_amount,amount_total,status,due_date').eq('org_id', o.id).neq('status','draft').or('zoi.is.null,zoi.not.like.DEMO-%'),

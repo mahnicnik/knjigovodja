@@ -28,7 +28,7 @@ export default function NewDobavnicaPage() {
   const [taxLookupLoading, setTaxLookupLoading] = useState(false)
   const [taxLookupError, setTaxLookupError] = useState('')
   const [issueDate, setIssueDate] = useState(lokalniDatum())
-  const [dueDate, setDueDate] = useState(new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0])
+  const [dueDate, setDueDate] = useState(new lokalniDatum(Date(Date.now() + 30*24*60*60*1000)))
   const [items, setItems] = useState<LineItem[]>([{ description: '', quantity: 1, unit_price: 0, vat_rate: 22 }])
   const [notes, setNotes] = useState('')
   const [serviceDate, setServiceDate] = useState('')

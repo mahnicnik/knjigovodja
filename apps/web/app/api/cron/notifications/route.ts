@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { escapeHtml } from '@/lib/html-escape'
 import { createClient } from '@supabase/supabase-js'
 
 // Supabase service role klient (bypass RLS za cron)
@@ -195,7 +196,7 @@ export async function GET(req: NextRequest) {
             customerName: cust.name,
             html: `<div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#fff">
               <div style="text-align:center;margin-bottom:28px">
-                <div style="font-size:22px;font-weight:800;color:#0d2818">${biz.name}</div>
+                <div style="font-size:22px;font-weight:800;color:#0d2818">${escapeHtml(biz.name)}</div>
 
               </div>
               <h2 style="color:#0d2818">Vaša kartica poteče čez ${daysLeft} dni</h2>

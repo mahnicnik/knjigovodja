@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { escapeHtml } from '@/lib/html-escape'
 import { lokalniDatum } from '@/lib/tax-constants'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
@@ -170,7 +171,7 @@ export default function BlagajnaPage() {
 <div class="center" style="font-size:10px">${new Date(receipt.date).toLocaleString('sl-SI')}</div>
 <div class="line"></div>
 ${receipt.items.map((item: CartItem) => `
-  <div class="row"><span>${item.name} x${item.qty}</span><span>€${(item.price * item.qty).toFixed(2)}</span></div>
+  <div class="row"><span>${escapeHtml(item.name)} x${item.qty}</span><span>€${(item.price * item.qty).toFixed(2)}</span></div>
 `).join('')}
 <div class="line"></div>
 ${receipt.vat22 > 0 ? `<div class="row"><span>DDV 22%</span><span>€${receipt.vat22.toFixed(2)}</span></div>` : ''}

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -214,7 +215,7 @@ export default function DashboardPage() {
   const now = new Date()
   const month = now.getMonth()
   const year = now.getFullYear()
-  const today = now.toISOString().split('T')[0]
+  const today = lokalniDatum(now)
   const dayOfMonth = now.getDate()
   const monthStart = `${year}-${String(month+1).padStart(2,'0')}-01`
   const monthEnd = `${year}-${String(month+1).padStart(2,'0')}-${new Date(year,month+1,0).getDate()}`

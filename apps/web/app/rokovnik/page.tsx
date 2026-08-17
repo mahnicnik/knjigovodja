@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import { lastWorkingDayOfMonth } from '@/lib/slovenian-holidays'
-import { MIN_REGRES } from '@/lib/tax-constants'
+import { MIN_REGRES , lokalniDatum} from '@/lib/tax-constants'
 import AppLayout from '@/components/AppLayout'
 
 interface Deadline {
@@ -189,7 +189,7 @@ export default function RokovnikPage() {
   }
 
   const today = new Date()
-  const todayStr = today.toISOString().split('T')[0]
+  const todayStr = lokalniDatum(today)
 
   function getDaysLeft(dateStr: string) {
     const d = new Date(dateStr)

@@ -67,7 +67,10 @@ export async function POST(req: NextRequest) {
     }
 
     const config: FursConfig = {
-      taxNumber: cert.tax_number || org?.tax_number || '91390419', // POPRAVLJENO 29.7.2026
+            // POPRAVLJENO (17.8.2026): tu je bila kot rezervna vrednost TUJA DAVCNA
+      // STEVILKA. Ce podjetje nima svoje, bi svoj racun prijavilo pri FURS
+      // pod tujo. Bolje je zavrniti z razlago kot prijaviti napacno.
+      taxNumber: cert.tax_number || org?.tax_number || '', // POPRAVLJENO 29.7.2026
       premiseId: premise?.premise_id ?? '',
       deviceId: device?.device_id ?? 'RACUNKO01',
       privateKeyPem,

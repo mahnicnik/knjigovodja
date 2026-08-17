@@ -11,6 +11,7 @@
  */
 
 import type { LegalForm, TaxSystem } from './tax-calculator'
+import { lokalniDatum } from '@/lib/tax-constants'
 
 export interface OpenInvoice {
   id: string
@@ -87,7 +88,7 @@ export interface CashFlowResult {
 // ===== POMOŽNE FUNKCIJE =====
 
 function formatDate(d: Date): string {
-  return d.toISOString().split('T')[0]
+  return lokalniDatum(d)
 }
 
 function daysBetween(from: Date, to: Date): number {

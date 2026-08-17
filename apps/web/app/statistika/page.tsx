@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { createClient } from '@/lib/supabase'
 
 import {
@@ -64,7 +65,7 @@ export default function StatistikaPage() {
 
     const yearStart = `${currentYear}-01-01`
     const yearEnd = `${currentYear}-12-31`
-    const today = now.toISOString().split('T')[0]
+    const today = lokalniDatum(now)
 
     const [invRes, expRes, kpoIncRes, kpoExpRes] = await Promise.all([
       supabase.from('issued_invoices').select('*').eq('org_id', o.id)

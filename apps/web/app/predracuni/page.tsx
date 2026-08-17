@@ -85,7 +85,7 @@ export default function PredracuniPage() {
         client_email: q.client_email,
         client_tax_number: q.client_tax_number,
         issue_date: lokalniDatum(),
-        due_date: new Date(Date.now() + 30 * 864e5).toISOString().split('T')[0],
+        due_date: new lokalniDatum(Date(Date.now() + 30 * 864e5)),
         line_items: q.line_items,
         amount_net: q.amount_net,
         vat_amount: q.vat_amount,

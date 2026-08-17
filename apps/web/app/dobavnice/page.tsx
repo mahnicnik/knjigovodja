@@ -74,7 +74,7 @@ export default function DobavnicePage() {
       client_address: firstDoc.client_address,
       client_iban: firstDoc.client_iban,
       issue_date: lokalniDatum(),
-      due_date: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0],
+      due_date: new lokalniDatum(Date(Date.now() + 30*24*60*60*1000)),
       line_items: allItems,
       amount_net: subtotal,
       vat_amount: vatAmount,

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { escapeHtml } from '@/lib/html-escape'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS, MANDATORY_HEALTH_CONTRIBUTION, GENERAL_RELIEF_MONTH, MIN_WAGE as TC_MIN_WAGE, INCOME_TAX_BRACKETS, REGRES_TAX_FREE_LIMIT, MEAL_ALLOWANCE, KM_RATE_COMMUTE , lokalniDatum} from '@/lib/tax-constants'
@@ -408,7 +409,7 @@ export default function PlacePage() {
 </style></head><body>
 <div class="header">
   <div>
-    <div class="company">${org.name}</div>
+    <div class="company">${escapeHtml(org.name)}</div>
     <div style="font-size:9px;color:#666;margin-top:4px">${org.address || ''}, ${org.city || ''}<br>Davčna: ${org.tax_number}</div>
   </div>
   <div style="text-align:right;font-size:9px;color:#666">Regres za letni dopust<br>${year}</div>
@@ -424,7 +425,7 @@ export default function PlacePage() {
   </div>
   <div class="info-box">
     <div class="info-label">Delodajalec</div>
-    <div class="info-val">${org.name}</div>
+    <div class="info-val">${escapeHtml(org.name)}</div>
     <div style="font-size:9px;color:#666;margin-top:2px">Davčna: ${org.tax_number}</div>
   </div>
   <div class="info-box">
@@ -461,11 +462,11 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
 </div>` : ''}
 
 <div class="sign">
-  <div><div class="sign-line">${org.name}</div><div style="font-size:9px;color:#666">Delodajalec — podpis in žig</div></div>
+  <div><div class="sign-line">${escapeHtml(org.name)}</div><div style="font-size:9px;color:#666">Delodajalec — podpis in žig</div></div>
   <div><div class="sign-line">${emp.full_name}</div><div style="font-size:9px;color:#666">Delavec — podpis</div></div>
 </div>
 
-<div class="footer">Dokument je bil generiran z Računko · ${org.name} · ${year}</div>
+<div class="footer">Dokument je bil generiran z Računko · ${escapeHtml(org.name)} · ${year}</div>
 <script>window.onload=function(){window.print()}</script>
 </body></html>`
 
@@ -501,7 +502,7 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
   .footer{margin-top:20px;font-size:8px;color:#aaa;text-align:center}
 </style></head><body>
 <div class="header">
-  <div><div class="company">${org.name}</div>
+  <div><div class="company">${escapeHtml(org.name)}</div>
     <div style="font-size:9px;color:#666;margin-top:4px">${org.address || ''}, ${org.city || ''}<br>Davčna: ${org.tax_number}</div>
   </div>
   <div style="text-align:right;font-size:9px;color:#666">Plačilna lista<br>${month} ${selectedYear}</div>
@@ -509,7 +510,7 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
 <div class="title">Plačilna lista — ${month} ${selectedYear}</div>
 <div class="info-grid">
   <div class="info-box"><div class="info-label">Delavec</div><div class="info-val">${emp.full_name}</div><div style="font-size:9px;color:#666;margin-top:2px">Davčna: ${emp.tax_number || '—'}</div></div>
-  <div class="info-box"><div class="info-label">Delodajalec</div><div class="info-val">${org.name}</div><div style="font-size:9px;color:#666;margin-top:2px">Davčna: ${org.tax_number}</div></div>
+  <div class="info-box"><div class="info-label">Delodajalec</div><div class="info-val">${escapeHtml(org.name)}</div><div style="font-size:9px;color:#666;margin-top:2px">Davčna: ${org.tax_number}</div></div>
   <div class="info-box"><div class="info-label">Vrsta zaposlitve</div><div class="info-val">${emp.employment_type === 'full_time' ? 'Polni delovni čas' : emp.employment_type === 'part_time' ? 'Krajši delovni čas' : 'Študentsko delo'}</div></div>
   <div class="info-box"><div class="info-label">Datum izplačila</div><div class="info-val">${new Date().toLocaleDateString('sl-SI')}</div></div>
 </div>
@@ -544,10 +545,10 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
   </tbody>
 </table>
 <div class="sign">
-  <div><div class="sign-line">${org.name}</div><div style="font-size:9px;color:#666">Delodajalec</div></div>
+  <div><div class="sign-line">${escapeHtml(org.name)}</div><div style="font-size:9px;color:#666">Delodajalec</div></div>
   <div><div class="sign-line">${emp.full_name}</div><div style="font-size:9px;color:#666">Delavec</div></div>
 </div>
-<div class="footer">Plačilna lista je bila generirana z Računko · ${org.name} · ${new Date().getFullYear()}</div>
+<div class="footer">Plačilna lista je bila generirana z Računko · ${escapeHtml(org.name)} · ${new Date().getFullYear()}</div>
 <script>window.onload=function(){window.print()}</script>
 </body></html>`
     const w = window.open('', '_blank')
