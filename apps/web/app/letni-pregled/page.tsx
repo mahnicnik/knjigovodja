@@ -320,7 +320,7 @@ ${data.receipts.length > 0 ? `
   <tbody>
     ${data.receipts.map((r: any) => `
       <tr>
-        <td>${(r.receipt_date ? new Date(r.receipt_date).toLocaleDateString('sl-SI') : '—')}</td>
+        <td>${(r.receipt_date ? (r.receipt_date ? (r.receipt_date ? new Date(r.receipt_date).toLocaleDateString('sl-SI') : '—') : '—') : '—')}</td>
         <td>${r.vendor}</td>
         <td>${r.category || '—'}</td>
         <td class="r">€${Number(r.amount_net).toFixed(2)}</td>

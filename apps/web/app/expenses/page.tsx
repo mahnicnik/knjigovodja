@@ -458,7 +458,7 @@ export default function ExpensesPage() {
             {expenses.map((exp, i) => (
               <div key={exp.id} onClick={() => openEdit(exp)} className={`grid grid-cols-12 gap-2 px-6 py-3 items-center cursor-pointer hover:bg-gray-50 transition-colors ${i < expenses.length-1 ? 'border-b border-gray-50' : ''}`}>
                 <div className="col-span-2 text-xs text-gray-500">
-                  {(exp.receipt_date ? new Date(exp.receipt_date).toLocaleDateString('sl-SI') : '—')}
+                  {(exp.receipt_date ? (exp.receipt_date ? (exp.receipt_date ? new Date(exp.receipt_date).toLocaleDateString('sl-SI') : '—') : '—') : '—')}
                 </div>
                 <div className="col-span-3 text-xs font-medium text-gray-900 truncate">{exp.vendor}</div>
                 <div className="col-span-2 text-xs text-gray-500 truncate">{exp.category}</div>

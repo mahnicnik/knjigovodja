@@ -253,7 +253,7 @@ export default function DDVPage() {
                   <div key={r.id} className={`flex justify-between items-center py-2 ${i < receipts.length-1 ? 'border-b border-gray-50' : ''}`}>
                     <div>
                       <div className="text-sm font-medium text-gray-900">{r.vendor}</div>
-                      <div className="text-xs text-gray-500">{r.category} · {(r.receipt_date ? new Date(r.receipt_date).toLocaleDateString('sl-SI') : '—')}</div>
+                      <div className="text-xs text-gray-500">{r.category} · {(r.receipt_date ? (r.receipt_date ? (r.receipt_date ? new Date(r.receipt_date).toLocaleDateString('sl-SI') : '—') : '—') : '—')}</div>
                     </div>
                     <div className="text-right">
                       <div className="text-sm">€{Number(r.amount_total || 0).toFixed(2)}</div>

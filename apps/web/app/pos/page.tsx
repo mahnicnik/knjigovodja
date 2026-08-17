@@ -146,11 +146,19 @@ const eur = (v) => '€ ' + Number(v).toFixed(2).replace('.', ',')
 
 const H = {
   lineTotal: (l) => {
-    const base = (l.price + (l.mods || []).reduce((s, m) => s + (m.delta || 0), 0)) * l.qty
+    // POPRAVLJENO (17.8.2026): varovalke za robne primere. Prej so manjkajoca
+    // cena dala "ni stevilo", negativno doplacilo ali popust nad 100% pa
+    // NEGATIVEN znesek - kar pri davcnem dokumentu ne sme biti mogoce.
+    const cena = Number(l.price) || 0
+    const kolicina = Math.max(0, Number(l.qty) || 0)
+    const doplacila = (l.mods || []).reduce((s, m) => s + (Number(m.delta) || 0), 0)
+    const base = Math.max(0, (cena + doplacila) * kolicina)
+
     // POPRAVLJENO (16.8.2026): popust se bere iz PRAVILA (shranjen na vrstici ob
     // dodajanju), prej trdo kodiranih 20% ne glede na nastavitve.
     if (!l.happyHourApplied) return base
-    const pct = Number(l.happyHourPct ?? 20)
+    // Popust omejimo na 0-100 %: nad 100 % bi znesek postal negativen.
+    const pct = Math.min(100, Math.max(0, Number(l.happyHourPct ?? 20) || 0))
     return base * (1 - pct / 100)
   },
   orderTotals: (cart) => {
@@ -806,7 +814,15 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
           tip_amount: napitnina,
           discount_amount: popust,
         }).eq('id', orderId)
-        if (tipErr) console.error('Napitnine/popusta ni bilo mogoce zapisati:', tipErr)
+        // POPRAVLJENO (17.8.2026): napitnina in popust vplivata na ZNESEK racuna.
+        // Prej se je napaka zapisala samo v konzolo - racun je bil natisnjen z
+        // enim zneskom, v evidenci pa je stal drug.
+        if (tipErr) {
+          console.error('Napitnine/popusta ni bilo mogoce zapisati:', tipErr)
+          alert('POZOR: napitnine oziroma popusta ni bilo mogoče zapisati.\n\n' +
+                'Znesek na natisnjenem računu se lahko razlikuje od zneska v evidenci. ' +
+                'Preverite račun v zavihku Računi.')
+        }
       }
 
       const payResult = await pos.orders.pay({
@@ -1179,8 +1195,15 @@ async function autoPrint(data) {
     if (!w) return
     w.document.write(html)
     w.document.close()
-  } catch (e) {
+  } catch (e: any) {
+    // POPRAVLJENO (17.8.2026): ce tiskanje ne uspe (blokiran pojavni zaslon,
+    // zavrnjen dostop), uporabnik ni izvedel nicesar - racun je bil izdan, a
+    // brez potrdila za stranko.
     console.error('Receipt print error:', e)
+    alert('Računa ni bilo mogoče natisniti.\n\n' +
+          'Račun JE izdan in shranjen. Natisnete ga lahko znova v zavihku Računi ' +
+          '(gumb Ponovni izpis).\n\nČe se to ponavlja, preverite, ali brskalnik ' +
+          'blokira pojavna okna.')
   }
 }
 
@@ -3853,7 +3876,12 @@ function DobavnicaImportModal({ posData, onClose, onImported }) {
           total_inc_vat: Number(a.vrednost_z_ddv || 0),
         }))
         const { error: dlErr } = await sb.from('delivery_lines').insert(lines)
-        if (dlErr) console.error('Vrstic dobavnice ni bilo mogoce shraniti:', dlErr)
+        // POPRAVLJENO (17.8.2026): brez vrstic je dobavnica prazna - uporabnik
+        // je videl potrditev, zaloga pa se ni spremenila.
+        if (dlErr) {
+          console.error('Vrstic dobavnice ni bilo mogoce shraniti:', dlErr)
+          showToast('Dobavnica je shranjena, artiklov na njej pa NI bilo mogoče shraniti: ' + dlErr.message, false)
+        }
       }
     } catch(e) {
       console.error('delivery save error:', e)
