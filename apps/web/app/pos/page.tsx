@@ -5067,6 +5067,22 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
           // POPRAVLJENO (16.8.2026): posredujemo blagajnika seje, da se ob
           // hkratnih sejah vec blagajnikov isti promet ne knjizi veckrat.
           await pos.orders.syncSessionToKPO(member.org_id, session.opened_at, casZakljucka, session.staff_id)
+
+          // DODANO (17.8.2026): oznaci Z-porocilo kot preneseno.
+          //
+          // Prej se ta zastavica ni posodobila NIKOLI ob samodejnem prenosu -
+          // ostala je "false", cetudi je prenos uspel. Sama po sebi to ni
+          // motilo, postane pa nevarna v trenutku, ko bi kdo dodal ponovni
+          // poskus neuspelih prenosov ali gumb "poslji se enkrat": ta bi videl
+          // "false" in promet knjizil DRUGIC.
+          //
+          // Zastavica zdaj odraza resnicno stanje.
+          const { error: zFlagErr } = await createClient()
+            .from('z_reports')
+            .update({ sent_to_racunko: true })
+            .eq('business_id', BUSINESS_ID)
+            .eq('report_number', zReportNumber)
+          if (zFlagErr) console.warn('Oznake prenosa Z-porocila ni bilo mogoce shraniti:', zFlagErr)
         } catch (kpoErr: any) {
           console.warn('KPO sinhronizacija ni uspela:', kpoErr)
         }
@@ -5355,7 +5371,11 @@ function ZReportModal({ posData, onClose }) {
             z_report_id: zReport?.id,
           })
         })
-        // Označi Z-poročilo kot poslano
+        // OPOMBA (17.8.2026): ista zastavica se uporablja za DVE stvari - za
+        // prenos prometa v knjigo prihodkov (ob zakljucku izmene) in za
+        // posiljanje Z-porocila po e-posti (tu). Ker oboje pomeni "obdelano v
+        // portalu", zastavica ostaja skupna; ce bi kdaj potrebovali loceno
+        // sled, je treba dodati locen stolpec.
         const { error: zSyncErr } = await createClient().from('z_reports').update({ sent_to_racunko: true }).eq('id', zReport?.id)
         if (zSyncErr) console.error('Z-porocila ni bilo mogoce oznaciti kot poslano:', zSyncErr)
       } catch (syncErr) {
