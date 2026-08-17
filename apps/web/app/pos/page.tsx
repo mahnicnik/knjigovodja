@@ -6302,7 +6302,7 @@ function OrdersScreen({ posData, auth }) {
           vat_id: orgData?.vat_registered ? `SI${orgData.tax_number}` : '',
           receipt_number: order.invoice_number || order.number || order.id.slice(-6),
           cashier: cashierName,
-          date: new Date(order.closed_at).toLocaleString('sl-SI'),
+          date: order.closed_at ? new Date(order.closed_at).toLocaleString('sl-SI') : '—',
           items: (lines||[]).map(l => ({
             name: l.name,
             qty: Number(l.qty),
@@ -6433,7 +6433,7 @@ function OrdersScreen({ posData, auth }) {
                     )}
                   </div>
                   <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>
-                    {new Date(o.closed_at).toLocaleString('sl-SI')}
+                    {o.closed_at ? new Date(o.closed_at).toLocaleString('sl-SI') : '—'}
                   </div>
                 </div>
                 <div style={{ fontWeight:800, fontSize:15, fontVariantNumeric:'tabular-nums',
@@ -6488,7 +6488,7 @@ function OrdersScreen({ posData, auth }) {
           <div style={{ padding:'14px 20px', borderBottom:'1px solid '+T.line, display:'flex', alignItems:'center', gap:12 }}>
             <div style={{ flex:1 }}>
               <div style={{ fontWeight:700, fontSize:15 }}>Račun #{selectedOrder.number || selectedOrder.id.slice(-6)}</div>
-              <div style={{ fontSize:12, color:T.muted }}>{new Date(selectedOrder.closed_at).toLocaleString('sl-SI')}</div>
+              <div style={{ fontSize:12, color:T.muted }}>{selectedOrder.closed_at ? new Date(selectedOrder.closed_at).toLocaleString('sl-SI') : '—'}</div>
             </div>
             <button onClick={async ()=>{
                 if (typeof window !== 'undefined' && (window as any).electronAPI?.printRaw) {
@@ -6517,7 +6517,7 @@ function OrdersScreen({ posData, auth }) {
                     vat_id: orgData?.vat_registered ? 'SI'+(orgData?.tax_number||'') : '',
                     receipt_number: selectedOrder.invoice_number || selectedOrder.number || selectedOrder.id.slice(-6),
                     cashier: cashierName,
-                    date: new Date(selectedOrder.closed_at).toLocaleString('sl-SI'),
+                    date: selectedOrder.closed_at ? new Date(selectedOrder.closed_at).toLocaleString('sl-SI') : '—',
                     items: (orderLines||[]).map((l:any) => ({ name: l.name, qty: Number(l.qty), unit_price: Number(l.unit_price), vat_rate: Number(l.vat_rate||22) })),
                     subtotal: Number(selectedOrder.subtotal||0),
                     discount_amount: Number(selectedOrder.discount_amount||0),

@@ -421,9 +421,17 @@ export default function VodicPage() {
       .eq('user_id', user.id)
       .single()
 
+    // POPRAVLJENO (17.8.2026): branje iz shrambe brskalnika brez varovalke -
+    // pokvarjen zapis bi podrl celotno stran. Zdaj se ob napaki obnasa, kot da
+    // profila ni, in ponudi ponovno nastavitev.
     const savedProfile = localStorage.getItem('vodic_profile')
+    let profilPrebran = false
     if (savedProfile) {
-      setProfile(JSON.parse(savedProfile))
+      try { setProfile(JSON.parse(savedProfile)); profilPrebran = true }
+      catch { localStorage.removeItem('vodic_profile') }
+    }
+    if (profilPrebran) {
+      // profil je nalozen
     } else if (prefs?.onboarding_answers) {
       const derived = onboardingToProfile(prefs.onboarding_answers)
       setProfile(derived)
@@ -434,7 +442,8 @@ export default function VodicPage() {
 
     const savedProgress = localStorage.getItem(storageKey)
     if (savedProgress) {
-      setCompleted(new Set(JSON.parse(savedProgress)))
+      try { setCompleted(new Set(JSON.parse(savedProgress))) }
+      catch { localStorage.removeItem(storageKey) }
     }
     setLoading(false)
   }

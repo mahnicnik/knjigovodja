@@ -111,7 +111,7 @@ ${inv.client_email ? `E-pošta: ${inv.client_email}` : ''}
 
 Račun številka: ${inv.invoice_number}
 Datum računa: ${new Date(inv.issue_date).toLocaleDateString('sl-SI')}
-Rok plačila: ${new Date(inv.due_date).toLocaleDateString('sl-SI')}
+Rok plačila: ${(inv.due_date ? new Date(inv.due_date).toLocaleDateString('sl-SI') : '—')}
 Dni v zamudi: ${days} dni
 
 ─────────────────────────────────────
@@ -188,7 +188,7 @@ ${org.phone || ''}`
 
 <div class="row"><span style="color:#666">Račun številka:</span><span><strong>${inv.invoice_number}</strong></span></div>
 <div class="row"><span style="color:#666">Datum računa:</span><span>${new Date(inv.issue_date).toLocaleDateString('sl-SI')}</span></div>
-<div class="row"><span style="color:#666">Rok plačila:</span><span style="color:#dc2626">${new Date(inv.due_date).toLocaleDateString('sl-SI')}</span></div>
+<div class="row"><span style="color:#666">Rok plačila:</span><span style="color:#dc2626">${inv.due_date ? new Date(inv.due_date).toLocaleDateString('sl-SI') : '—'}</span></div>
 <div class="row"><span style="color:#666">Dni v zamudi:</span><span style="color:#dc2626;font-weight:bold">${days} dni</span></div>
 <hr>
 <div class="row"><span>Znesek računa:</span><span>€${Number(inv.amount_total).toFixed(2)}</span></div>
@@ -301,7 +301,7 @@ ${org.phone || ''}`
                     <div>
                       <div className="font-semibold text-gray-900">{inv.client_name}</div>
                       <div className="text-xs text-gray-500 mt-0.5">
-                        #{inv.invoice_number} · Rok bil: {new Date(inv.due_date).toLocaleDateString('sl-SI')}
+                        #{inv.invoice_number} · Rok bil: {inv.due_date ? new Date(inv.due_date).toLocaleDateString('sl-SI') : '—'}
                       </div>
                     </div>
                     <div className="text-right">

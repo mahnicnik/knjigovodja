@@ -94,7 +94,7 @@ export async function issueInstallmentInvoice(
     issueDate: newInvoice.issue_date,
     amount: Number(newInvoice.amount_total),
     dueDate: newInvoice.due_date,
-    customMessage: `Obvestilo: obrok za "${pkg?.name || 'vaš paket'}" zapade ${new Date(inst.due_date).toLocaleDateString('sl-SI')}.`,
+    customMessage: `Obvestilo: obrok za "${pkg?.name || 'vaš paket'}" zapade ${(inst.due_date ? new Date(inst.due_date).toLocaleDateString('sl-SI') : '—')}.`,
     iban: org.iban ?? null,
     reference: newInvoice.reference ?? null,
   })

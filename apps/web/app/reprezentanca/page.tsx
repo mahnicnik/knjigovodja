@@ -41,7 +41,12 @@ export default function ReprezentancaPage() {
       const o = (member as any).organizations
       setOrg(o)
       const stored = localStorage.getItem(`reprezentanca_${o.id}`)
-      if (stored) setEntries(JSON.parse(stored))
+      // POPRAVLJENO (17.8.2026): branje iz shrambe brskalnika brez varovalke.
+      // Ce se zapis pokvari (prekinjena seja, sprememba oblike, rocni poseg),
+      // razclenjevanje vrze napako in stran se sploh ne nalozi - uporabnik
+      // obtici na beli strani brez izhoda. Zdaj se pokvarjen zapis preprosto
+      // preskoci.
+      if (stored) { try { setEntries(JSON.parse(stored)) } catch { /* pokvarjen zapis - preskoci */ } }
     }
     setLoading(false)
   }

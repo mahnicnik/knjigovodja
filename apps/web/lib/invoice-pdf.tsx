@@ -94,7 +94,7 @@ export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
                     : `Opravljeno: ${new Date(invoice.service_date).toLocaleDateString('sl-SI')}`}
                 </Text>
               )}
-              <Text>Rok plačila: {new Date(invoice.due_date).toLocaleDateString('sl-SI')}</Text>
+              {invoice.due_date && <Text>Rok plačila: {new Date(invoice.due_date).toLocaleDateString('sl-SI')}</Text>}
             </View>
           </View>
         </View>

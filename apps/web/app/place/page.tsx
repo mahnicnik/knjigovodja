@@ -517,9 +517,9 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
     ${p.sundayAmt > 0 ? `<tr><td>Nedeljski dodatek (50%)</td><td class="r">${getExtras(emp.id).sundayBonus || 0} ur</td><td class="r">€${p.sundayAmt.toFixed(2)}</td></tr>` : ''}
     ${p.holidayAmt > 0 ? `<tr><td>Praznični dodatek (100%)</td><td class="r">${getExtras(emp.id).holidayBonus || 0} ur</td><td class="r">€${p.holidayAmt.toFixed(2)}</td></tr>` : ''}
     <tr class="total-row"><td>BRUTO PLAČA</td><td class="r">—</td><td class="r">€${p.taxableGross.toFixed(2)}</td></tr>
-    <tr><td style="color:#666">− ZPIZ delavec (15.50%)</td><td class="r" style="color:#666">€${p.taxableGross.toFixed(2)}</td><td class="r" style="color:#dc2626">−€${p.ee_piz.toFixed(2)}</td></tr>
-    <tr><td style="color:#666">− ZZZS delavec (6.36%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${p.ee_zzzs.toFixed(2)}</td></tr>
-    <tr><td style="color:#666">− Brezposelnost (0.14%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${p.ee_unemployment.toFixed(2)}</td></tr>
+    <tr><td style="color:#666">− ZPIZ delavec (15.50%)</td><td class="r" style="color:#666">€${p.taxableGross.toFixed(2)}</td><td class="r" style="color:#dc2626">−€${Number(p.ee_piz || 0).toFixed(2)}</td></tr>
+    <tr><td style="color:#666">− ZZZS delavec (6.36%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${Number(p.ee_zzzs || 0).toFixed(2)}</td></tr>
+    <tr><td style="color:#666">− Brezposelnost (0.14%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${Number(p.ee_unemployment || 0).toFixed(2)}</td></tr>
     <tr><td style="color:#666">− Starševsko varstvo (0.10%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${p.ee_parental.toFixed(2)}</td></tr>
     <tr><td style="color:#666">− Dolgotrajna oskrba (1.00%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${p.ee_dolgotrajna.toFixed(2)}</td></tr>
     <tr><td style="color:#666">− Obvezni zdravstveni prispevek</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${p.ee_ozp.toFixed(2)}</td></tr>
@@ -531,10 +531,10 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
 <table>
   <thead><tr><th>Prispevki delodajalca</th><th class="r">Stopnja</th><th class="r">Znesek</th></tr></thead>
   <tbody>
-    <tr><td>ZPIZ delodajalec</td><td class="r">8.85%</td><td class="r">€${p.er_piz.toFixed(2)}</td></tr>
-    <tr><td>ZZZS delodajalec</td><td class="r">6.56%</td><td class="r">€${p.er_zzzs.toFixed(2)}</td></tr>
-    <tr><td>Poškodbe</td><td class="r">0.53%</td><td class="r">€${p.er_injury.toFixed(2)}</td></tr>
-    <tr><td>Starševstvo</td><td class="r">0.10%</td><td class="r">€${p.er_parental.toFixed(2)}</td></tr>
+    <tr><td>ZPIZ delodajalec</td><td class="r">8.85%</td><td class="r">€${Number(p.er_piz || 0).toFixed(2)}</td></tr>
+    <tr><td>ZZZS delodajalec</td><td class="r">6.56%</td><td class="r">€${Number(p.er_zzzs || 0).toFixed(2)}</td></tr>
+    <tr><td>Poškodbe</td><td class="r">0.53%</td><td class="r">€${Number(p.er_injury || 0).toFixed(2)}</td></tr>
+    <tr><td>Starševstvo</td><td class="r">0.10%</td><td class="r">€${Number(p.er_parental || 0).toFixed(2)}</td></tr>
     <tr class="total-row"><td>Skupni strošek delodajalca</td><td class="r">—</td><td class="r">€${p.totalCost.toFixed(2)}</td></tr>
   </tbody>
 </table>

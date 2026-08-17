@@ -280,8 +280,8 @@ export default function REK1Page() {
                             className="w-24 text-right font-medium border border-gray-200 rounded-lg px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-900"
                           />
                         </div>
-                        <div className="flex justify-between"><span className="text-gray-600">ZPIZ (15.50%)</span><span>−€{p.ee_piz.toFixed(2)}</span></div>
-                        <div className="flex justify-between"><span className="text-gray-600">ZZZS (6.36%)</span><span>−€{p.ee_zzzs.toFixed(2)}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-600">ZPIZ (15.50%)</span><span>−€{Number(p.ee_piz || 0).toFixed(2)}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-600">ZZZS (6.36%)</span><span>−€{Number(p.ee_zzzs || 0).toFixed(2)}</span></div>
                         <div className="flex justify-between"><span className="text-gray-600">Dohodnina</span><span>−€{p.incomeTax.toFixed(2)}</span></div>
                         <div className="flex justify-between font-semibold border-t border-gray-200 pt-1.5 mt-1">
                           <span>Neto plača</span><span className="text-green-600">€{p.netSalary.toFixed(2)}</span>
@@ -291,10 +291,10 @@ export default function REK1Page() {
                     <div className="bg-gray-50 rounded-xl p-4">
                       <div className="text-xs font-medium text-gray-500 mb-2 uppercase">Delodajalec (FURS)</div>
                       <div className="space-y-1.5 text-xs">
-                        <div className="flex justify-between"><span className="text-gray-600">ZPIZ (8.85%)</span><span>€{p.er_piz.toFixed(2)}</span></div>
-                        <div className="flex justify-between"><span className="text-gray-600">ZZZS (6.56%)</span><span>€{p.er_zzzs.toFixed(2)}</span></div>
-                        <div className="flex justify-between"><span className="text-gray-600">Poškodbe (0.53%)</span><span>€{p.er_injury.toFixed(2)}</span></div>
-                        <div className="flex justify-between"><span className="text-gray-600">Starševstvo (0.10%)</span><span>€{p.er_parental.toFixed(2)}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-600">ZPIZ (8.85%)</span><span>€{Number(p.er_piz || 0).toFixed(2)}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-600">ZZZS (6.56%)</span><span>€{Number(p.er_zzzs || 0).toFixed(2)}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-600">Poškodbe (0.53%)</span><span>€{Number(p.er_injury || 0).toFixed(2)}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-600">Starševstvo (0.10%)</span><span>€{Number(p.er_parental || 0).toFixed(2)}</span></div>
                         <div className="flex justify-between font-semibold border-t border-gray-200 pt-1.5 mt-1">
                           <span>Skupaj FURS</span><span className="text-red-500">€{p.totalFurs.toFixed(2)}</span>
                         </div>

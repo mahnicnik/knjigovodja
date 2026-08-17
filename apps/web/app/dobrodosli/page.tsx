@@ -63,7 +63,12 @@ export default function DobrodosliPage() {
 
       // Naloži shranjene done items
       const saved = localStorage.getItem('rk_onboarding_done')
-      if (saved) setDone(JSON.parse(saved))
+      // POPRAVLJENO (17.8.2026): branje iz shrambe brskalnika brez varovalke.
+      // Ce se zapis pokvari (prekinjena seja, sprememba oblike, rocni poseg),
+      // razclenjevanje vrze napako in stran se sploh ne nalozi - uporabnik
+      // obtici na beli strani brez izhoda. Zdaj se pokvarjen zapis preprosto
+      // preskoci.
+      if (saved) { try { setDone(JSON.parse(saved)) } catch { /* pokvarjen zapis - preskoci */ } }
     }
     load()
   }, [])
