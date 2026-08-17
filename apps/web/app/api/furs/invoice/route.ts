@@ -205,7 +205,15 @@ export async function POST(req: NextRequest) {
       deviceId: deviceIdCode,
       privateKeyPem,
       certificatePem,
-      isTest: process.env.FURS_TEST_MODE !== 'false',
+      // POPRAVLJENO (17.8.2026, KRITICNO): tu se je testni nacin bral iz
+      // OKOLJSKE SPREMENLJIVKE, certifikat pa iz BAZE (organizations.furs_test_mode).
+      // Ce se vira razlikujeta, gre TESTNI certifikat na PRODUKCIJSKI streznik
+      // (ali obratno) - FURS zavrne povezavo z napako "Certifikat ni veljaven
+      // ali ni registriran". Blagajna je pri tem kazala testni nacin, ker bere
+      // bazo, klic pa je sel drugam.
+      //
+      // Zdaj oba izvirata iz ISTEGA vira, zato se ne moreta vec razhajati.
+      isTest,
     }
 
     const { data: logEntry } = await supabase

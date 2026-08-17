@@ -136,7 +136,8 @@ export async function POST(req: NextRequest) {
       deviceId: deviceIdCode,
       privateKeyPem,
       certificatePem,
-      isTest: process.env.FURS_TEST_MODE !== 'false',
+      // POPRAVLJENO (17.8.2026): isti vir kot za certifikat - glej furs/invoice.
+      isTest,
     }
 
     // DODANO (16.8.2026): razclenitev po stopnjah DDV tudi za STORNO. Prej se

@@ -32,7 +32,16 @@ export async function GET(req: NextRequest) {
   // prijavljeni pa tudi zivo preverbo povezave.
   const zivaPreverba = !!user
 
-  const testMode = process.env.FURS_TEST_MODE === 'true'
+  // POPRAVLJENO (17.8.2026): testni nacin iz BAZE, ne iz okoljske spremenljivke -
+  // sicer prikaz ne ustreza temu, kar dejansko pocne izdaja racuna.
+  let testMode = process.env.FURS_TEST_MODE === 'true'
+  if (user) {
+    const { data: m } = await authClient.from('org_members').select('org_id').eq('user_id', user.id).limit(1).maybeSingle()
+    if (m?.org_id) {
+      const { data: o } = await authClient.from('organizations').select('furs_test_mode').eq('id', m.org_id).maybeSingle()
+      if (o) testMode = !!o.furs_test_mode
+    }
+  }
   const hasCert = !!(process.env.FURS_CERT_B64 || process.env.FURS_CERT_PATH)
 
   // Preveri ali FURS API odgovori
