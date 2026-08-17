@@ -4997,6 +4997,11 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
   const diffColor = Math.abs(difference) < 0.01 ? T.accent : difference > 0 ? '#2563eb' : T.danger
 
   async function handleClose() {
+    // DODANO (17.8.2026): zastavica mora biti VIDNA tudi v obravnavi napake,
+    // zato je deklarirana pred pastjo. Pove, ali je bilo BISTVO (zapis izmene
+    // in Z-porocila) ze opravljeno - takrat napaka v pomoznem koraku ne sme
+    // izgledati kot padec celotnega zakljucka.
+    let zakljucekUspel = false
     if (!stats) return
     setSaving(true)
     setError('')
@@ -5042,6 +5047,17 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
       })
       if (err) throw new Error(err)
 
+      // DODANO (17.8.2026): od tu naprej je BISTVO opravljeno - izmena je
+      // zaprta in Z-porocilo zapisano v bazi. Vse nadaljnje (prenos v knjigo,
+      // izpis, e-posta) so POMOZNI koraki.
+      //
+      // Prej je bila vsa ta koda v eni sami pasti za napake: ce je padel
+      // katerikoli pomozni korak, je vmesnik prikazal celoten zakljucek kot
+      // NEUSPEL - cetudi sta bila izmena in Z-porocilo ze shranjena.
+      // Blagajnik bi ob tem poskusil zakljuciti znova, kar ni mogoce in ni
+      // potrebno. Zdaj napaka v pomoznem koraku ne razveljavi videza uspeha.
+      zakljucekUspel = true
+
       // Pridobi org za izpis
       const member = await getActiveMembership().then(m => m ? { org_id: m.org_id } : null) // POPRAVLJENO 16.8.2026: vec-org varno
       const { data: org } = member ? await createClient().from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
@@ -5051,7 +5067,7 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
           // POPRAVLJENO (16.8.2026): posredujemo blagajnika seje, da se ob
           // hkratnih sejah vec blagajnikov isti promet ne knjizi veckrat.
           await pos.orders.syncSessionToKPO(member.org_id, session.opened_at, casZakljucka, session.staff_id)
-        } catch (kpoErr) {
+        } catch (kpoErr: any) {
           console.warn('KPO sinhronizacija ni uspela:', kpoErr)
         }
       }
@@ -5094,7 +5110,23 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
       setSaved(true)
       setTimeout(() => { onClosed(); onClose() }, 1500)
     } catch (e: any) {
-      setError(e.message)
+      // POPRAVLJENO (17.8.2026): ce je bilo BISTVO ze opravljeno (izmena zaprta,
+      // Z-porocilo zapisano), napake NE prikazemo kot padec zakljucka. Prej je
+      // padec pomoznega koraka - na primer prenosa v knjigo - prikazal celoten
+      // zakljucek kot neuspel, cetudi je bil ze zapisan. Blagajnik bi ob tem
+      // poskusil zakljuciti znova, kar ni mogoce in ni potrebno.
+      if (zakljucekUspel) {
+        console.warn('Zakljucek je uspel, pomozni korak pa ne:', e)
+        alert(
+          'Blagajna je zaključena in Z-poročilo je shranjeno.\n\n' +
+          'Ni pa uspelo: ' + (e?.message || 'zadnji korak') + '\n\n' +
+          'Zaključka NE ponavljajte — izmena je že zaprta.'
+        )
+        onClosed?.()
+        onClose?.()
+      } else {
+        setError(e.message)
+      }
     }
     setSaving(false)
   }
