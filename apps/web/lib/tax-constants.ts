@@ -171,6 +171,29 @@ export const LEGAL_INTEREST_HISTORY: { from: string; rate: number }[] = [
 ]
 
 /**
+ * Ali je slovenska davcna stevilka veljavna?
+ *
+ * DODANO (17.8.2026): davcna stevilka ima kontrolno stevko, zato je napacno
+ * vneseno mogoce prepoznati TAKOJ. Prej se ni preverjalo nic - napacna stevilka
+ * je sla na racun in v prijavo FURS, napaka pa se je pokazala sele pri
+ * prejemniku ali davcnem organu.
+ *
+ * Izracun: utezi 8,7,6,5,4,3,2 na prvih sedem stevk; kontrolna = 11 - (vsota
+ * mod 11), pri cemer 10 postane 0, rezultat 11 pa pomeni neveljavno stevilko.
+ */
+export function veljavnaDavcnaStevilka(vnos: string): boolean {
+  const d = String(vnos || '').replace(/^SI/i, '').replace(/\s/g, '')
+  if (!/^\d{8}$/.test(d)) return false
+  const utezi = [8, 7, 6, 5, 4, 3, 2]
+  let vsota = 0
+  for (let i = 0; i < 7; i++) vsota += Number(d[i]) * utezi[i]
+  let kontrolna = 11 - (vsota % 11)
+  if (kontrolna === 10) kontrolna = 0
+  if (kontrolna === 11) return false
+  return kontrolna === Number(d[7])
+}
+
+/**
  * Datum v LOKALNEM casovnem pasu, oblika YYYY-MM-DD.
  *
  * DODANO (17.8.2026): toISOString() pretvori v UTC. Slovenija je poleti dve uri

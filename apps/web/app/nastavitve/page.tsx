@@ -7,7 +7,7 @@ import posthog from 'posthog-js'
 import UpgradeButton from '@/components/UpgradeButton'
 import ManageSubscriptionButton from '@/components/ManageSubscriptionButton'
 import { getActiveMembership } from '@/lib/active-org'
-import { SP_MIN_CONTRIBUTIONS_MONTH } from '@/lib/tax-constants'
+import { SP_MIN_CONTRIBUTIONS_MONTH, veljavnaDavcnaStevilka } from '@/lib/tax-constants'
 
 /**
  * Slovenski zapis zneska: 7.812,48 € (vejica decimalno, pika tisocice, valuta
@@ -238,6 +238,18 @@ export default function NastavitevPage() {
                 <div>
                   <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Davčna številka *</label>
                   <input value={form.tax_number} onChange={e => setForm({...form, tax_number: e.target.value})} className={inp}/>
+                  {/* DODANO (17.8.2026): davcna stevilka ima kontrolno stevko, zato
+                      je napacno vneseno mogoce prepoznati TAKOJ. Prej se ni
+                      preverjalo nic - napacna stevilka je sla na racun in v prijavo
+                      FURS, napaka pa se je pokazala sele pri prejemniku.
+                      Opozorilo NE preprecuje shranjevanja, ker obstajajo tudi tuje
+                      davcne stevilke z drugacnimi pravili. */}
+                  {form.tax_number && String(form.tax_number).replace(/^SI/i,'').length >= 8
+                    && !veljavnaDavcnaStevilka(form.tax_number) && (
+                    <div style={{ fontSize: 11, color: '#A32D2D', marginTop: 5, lineHeight: 1.5 }}>
+                      Ta davčna številka ne prestane kontrolnega izračuna. Preverite, ali ni prišlo do tipkarske napake.
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Email</label>

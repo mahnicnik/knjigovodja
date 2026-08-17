@@ -29,7 +29,21 @@ export async function POST(req: NextRequest) {
     const { to, subject, html, customerName, packageName, expiresAt, severity } = await req.json()
 
     if (!to || !subject) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+      return NextResponse.json({ error: 'Manjka prejemnik ali zadeva' }, { status: 400 })
+    }
+
+    // DODANO (17.8.2026): preverba oblike e-naslova. Prej se je preverjalo samo,
+    // da naslov OBSTAJA - napacno vnesen naslov je sel v posiljanje in tam
+    // spodletel, uporabnik pa je videl le splosno napako ponudnika. Zdaj se
+    // ustavi prej, s sporocilom, ki pove, kaj je narobe.
+    const naslovi = String(to).split(',').map(s => s.trim()).filter(Boolean)
+    const neveljavni = naslovi.filter(a => !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(a))
+    if (naslovi.length === 0 || neveljavni.length > 0) {
+      return NextResponse.json({
+        error: neveljavni.length
+          ? `Neveljaven e-naslov: ${neveljavni.join(', ')}`
+          : 'Manjka prejemnik',
+      }, { status: 400 })
     }
 
     const apiKey = process.env.RESEND_API_KEY
