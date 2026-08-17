@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
@@ -30,8 +31,8 @@ export default function EslogPage() {
   }
 
   function generateESlog(inv: any): string {
-    const issueDate = new Date(inv.issue_date).toISOString().split('T')[0]
-    const dueDate = new Date(inv.due_date).toISOString().split('T')[0]
+    const issueDate = lokalniDatum(new Date(inv.issue_date))
+    const dueDate = lokalniDatum(new Date(inv.due_date))
     const lineItems = inv.line_items || []
 
     return `<?xml version="1.0" encoding="UTF-8"?>

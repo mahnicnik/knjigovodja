@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
@@ -109,7 +110,7 @@ export default function BlagajnaPage() {
       // POPRAVLJENO (16.8.2026): prej brez preverbe - prihodek se ni poknjizil.
       const { error: kpoErr } = await supabase.from('kpo_entries').insert({
         org_id: org.id,
-        entry_date: new Date().toISOString().split('T')[0],
+        entry_date: lokalniDatum(),
         description: `Blagajna ${receiptNum} — ${cart.map(i => i.name).join(', ')}`,
         entry_type: 'income',
         income: Math.round((total / 1.22) * 100) / 100,
@@ -143,7 +144,7 @@ export default function BlagajnaPage() {
     setNewProduct({ name: '', price: '', vat_rate: '22', category: '', color: 'bg-blue-500' })
   }
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = lokalniDatum()
   const todayReceipts = receipts.filter(r => r.date.startsWith(today))
   const todayTotal = todayReceipts.reduce((s, r) => s + r.total, 0)
   const todayCash = todayReceipts.filter(r => r.paymentMethod === 'cash').reduce((s, r) => s + r.total, 0)

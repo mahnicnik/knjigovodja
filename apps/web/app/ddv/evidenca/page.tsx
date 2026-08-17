@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
@@ -120,7 +121,7 @@ export default function DDVEvidencaPage() {
     <P53>${data.vatDue.toFixed(2)}</P53>
   </Obracun>
   <Podpis>
-    <Datum>${new Date().toISOString().split('T')[0]}</Datum>
+    <Datum>${lokalniDatum()}</Datum>
     <Ime>${org.name}</Ime>
   </Podpis>
 </DDV_O>`

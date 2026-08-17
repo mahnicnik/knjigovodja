@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { confirmBusinessPremiseWithFurs, extractFromP12, type FursConfig, type FursPremiseData } from '@/lib/furs'
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
       community: body.community,
       city: body.city,
       postalCode: body.postalCode,
-      validityDate: body.validityDate || new Date().toISOString().split('T')[0],
+      validityDate: body.validityDate || lokalniDatum(),
       softwareSupplierTaxNumber: cert.tax_number || org?.tax_number || '91390419', // POPRAVLJENO 29.7.2026
     }
 

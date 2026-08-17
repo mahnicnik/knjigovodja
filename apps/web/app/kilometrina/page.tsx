@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
-import { KM_RATE_BUSINESS as TC_KM_BUSINESS, KM_RATE_COMMUTE as TC_KM_COMMUTE } from '@/lib/tax-constants'
+import { KM_RATE_BUSINESS as TC_KM_BUSINESS, KM_RATE_COMMUTE as TC_KM_COMMUTE , lokalniDatum} from '@/lib/tax-constants'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 
@@ -20,7 +20,7 @@ export default function KilometrinaPage() {
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: lokalniDatum(),
     from_location: '',
     to_location: '',
     km: '',
@@ -88,7 +88,7 @@ export default function KilometrinaPage() {
     if (kmErr) { alert('Kilometrine ni bilo mogoče poknjižiti: ' + kmErr.message); return }
 
     setForm({
-      date: new Date().toISOString().split('T')[0],
+      date: lokalniDatum(),
       from_location: '',
       to_location: '',
       km: '',

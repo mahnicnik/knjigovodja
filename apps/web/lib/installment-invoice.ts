@@ -1,4 +1,5 @@
 import { renderToBuffer } from '@react-pdf/renderer'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { InvoicePDF, generateUpnQr } from '@/lib/invoice-pdf'
 import { buildInvoiceEmailHtml } from '@/lib/invoice-email'
 import { resend, FROM_EMAIL } from '@/lib/resend'
@@ -65,7 +66,7 @@ export async function issueInstallmentInvoice(
     invoice_type: 'invoice',
     client_name: customer.name,
     client_email: customer.email,
-    issue_date: new Date().toISOString().split('T')[0],
+    issue_date: lokalniDatum(),
     due_date: inst.due_date,
     line_items: lineItems,
     amount_net: netAmount,

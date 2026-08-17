@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
@@ -246,7 +247,7 @@ export default function RacunovodjaClientPage() {
     return d.getMonth() === thisMonth.getMonth() && d.getFullYear() === thisMonth.getFullYear()
   })
   const monthRevenue = monthInvoices.reduce((s, i) => s + Number(i.amount_total), 0)
-  const overdueInvoices = invoices.filter(i => i.status === 'overdue' || (i.status === 'sent' && i.due_date && i.due_date < new Date().toISOString().split('T')[0]))
+  const overdueInvoices = invoices.filter(i => i.status === 'overdue' || (i.status === 'sent' && i.due_date && i.due_date < lokalniDatum()))
   const unconfirmedReceipts = receipts.filter(r => r.status === 'pending')
   const openComments = comments.filter(c => !c.is_resolved)
 
@@ -331,7 +332,7 @@ export default function RacunovodjaClientPage() {
                       <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 600, color: '#0D1F12', fontFamily: 'monospace' }}>{inv.invoice_number}</td>
                       <td style={{ padding: '12px 16px', fontSize: 13, color: '#666' }}>{fmtDate(inv.issue_date)}</td>
                       <td style={{ padding: '12px 16px', fontSize: 13, color: '#0D1F12' }}>{inv.client_name}</td>
-                      <td style={{ padding: '12px 16px', fontSize: 13, color: inv.due_date && inv.due_date < new Date().toISOString().split('T')[0] && inv.status === 'sent' ? '#DC2626' : '#666' }}>{fmtDate(inv.due_date)}</td>
+                      <td style={{ padding: '12px 16px', fontSize: 13, color: inv.due_date && inv.due_date < lokalniDatum() && inv.status === 'sent' ? '#DC2626' : '#666' }}>{fmtDate(inv.due_date)}</td>
                       <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 600, color: '#0D1F12' }}>{fmt(inv.amount_total)}</td>
                       <td style={{ padding: '12px 16px' }}><StatusBadge status={inv.status} /></td>
                       <td style={{ padding: '12px 16px', display: 'flex', gap: 10, alignItems: 'center' }}>

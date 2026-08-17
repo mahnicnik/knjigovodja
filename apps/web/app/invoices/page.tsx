@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import SendInvoiceModal from '@/components/SendInvoiceModal'
@@ -80,8 +81,8 @@ export default function InvoicesPage() {
       client_name: inv.client_name,
       client_email: inv.client_email,
       client_tax_number: inv.client_tax_number,
-      issue_date: new Date().toISOString().split('T')[0],
-      due_date: new Date().toISOString().split('T')[0],
+      issue_date: lokalniDatum(),
+      due_date: lokalniDatum(),
       line_items: lineItems,
       amount_net: -Math.abs(inv.amount_net),
       vat_amount: -Math.abs(inv.vat_amount),
@@ -113,8 +114,8 @@ export default function InvoicesPage() {
       client_name: inv.client_name,
       client_email: inv.client_email,
       client_tax_number: inv.client_tax_number,
-      issue_date: new Date().toISOString().split('T')[0],
-      due_date: new Date().toISOString().split('T')[0],
+      issue_date: lokalniDatum(),
+      due_date: lokalniDatum(),
       line_items: inv.line_items || [],
       amount_net: -Math.abs(inv.amount_net),
       vat_amount: -Math.abs(inv.vat_amount),
@@ -150,7 +151,7 @@ export default function InvoicesPage() {
       client_name: inv.client_name,
       client_email: inv.client_email,
       client_tax_number: inv.client_tax_number,
-      issue_date: new Date().toISOString().split('T')[0],
+      issue_date: lokalniDatum(),
       due_date: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0],
       line_items: inv.line_items || [],
       amount_net: inv.amount_net,

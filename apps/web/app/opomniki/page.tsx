@@ -5,7 +5,7 @@ import { escapeHtml } from '@/lib/html-escape'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
-import { LEGAL_DEFAULT_INTEREST_RATE, legalInterestRateOn } from '@/lib/tax-constants'
+import { LEGAL_DEFAULT_INTEREST_RATE, legalInterestRateOn , lokalniDatum} from '@/lib/tax-constants'
 import AppLayout from '@/components/AppLayout'
 
 // POPRAVLJENO (30.7.2026): prej trdo kodirana 11% - napacna za oba dela
@@ -58,7 +58,7 @@ export default function OpomnikPage() {
     if (member) {
       const o = (member as any).organizations
       setOrg(o)
-      const today = new Date().toISOString().split('T')[0]
+      const today = lokalniDatum()
       const { data } = await supabase
         .from('issued_invoices')
         .select('*')

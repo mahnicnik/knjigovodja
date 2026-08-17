@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 
 /**
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = lokalniDatum()
   const FREQ_DAYS: Record<string, number> = { weekly: 7, monthly: 30, quarterly: 91, yearly: 365 }
 
   const { data: due } = await supabase

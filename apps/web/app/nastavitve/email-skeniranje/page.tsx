@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, Suspense } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
@@ -89,7 +90,7 @@ function EmailSkeniranjeContent() {
     const { error: rcpErr } = await supabase.from('receipts').insert({
       org_id: org.id,
       vendor: d.vendor || '',
-      receipt_date: d.date || new Date().toISOString().split('T')[0],
+      receipt_date: d.date || lokalniDatum(),
       amount_net: amountNet,
       vat_rate: vatRate,
       vat_amount: vatAmount,
@@ -104,7 +105,7 @@ function EmailSkeniranjeContent() {
     if (rcpErr) { alert('Računa ni bilo mogoče shraniti: ' + rcpErr.message); return }
     const { error: kpoErr } = await supabase.from('kpo_entries').insert({
       org_id: org.id,
-      entry_date: d.date || new Date().toISOString().split('T')[0],
+      entry_date: d.date || lokalniDatum(),
       description: `${d.vendor || ''} — ${d.category || 'Drugo'}`,
       entry_type: 'expense',
       income: 0,

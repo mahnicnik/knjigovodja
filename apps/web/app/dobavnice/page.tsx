@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -72,7 +73,7 @@ export default function DobavnicePage() {
       client_tax_number: firstDoc.client_tax_number,
       client_address: firstDoc.client_address,
       client_iban: firstDoc.client_iban,
-      issue_date: new Date().toISOString().split('T')[0],
+      issue_date: lokalniDatum(),
       due_date: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0],
       line_items: allItems,
       amount_net: subtotal,

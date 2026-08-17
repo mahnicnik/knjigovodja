@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
@@ -34,7 +35,7 @@ export default function ScanPage() {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
     vendor: '',
-    receipt_date: new Date().toISOString().split('T')[0],
+    receipt_date: lokalniDatum(),
     amount_net: '',
     vat_rate: '22',
     category: 'Pisarniški material',
@@ -185,7 +186,7 @@ export default function ScanPage() {
       setResult(data)
       setForm({
         vendor: data.vendor || '',
-        receipt_date: data.date || new Date().toISOString().split('T')[0],
+        receipt_date: data.date || lokalniDatum(),
         amount_net: data.amount_net?.toString() || '',
         vat_rate: data.vat_rate?.toString() || '0',
         category: data.category || 'Marketing',
@@ -297,7 +298,7 @@ export default function ScanPage() {
         const vatRate = parseFloat(data.vat_rate ?? '0')
         const vatAmount = amountNet * (vatRate / 100)
         const amountTotal = amountNet + vatAmount
-        const receiptDate = data.date || new Date().toISOString().split('T')[0]
+        const receiptDate = data.date || lokalniDatum()
         const category = data.category || 'Drugo'
 
         // POPRAVLJENO (17.8.2026): prej brez preverbe - pri paketnem skeniranju

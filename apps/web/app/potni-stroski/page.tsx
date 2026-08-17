@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
@@ -45,8 +46,8 @@ export default function PotniStroskiPage() {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
     employee_id: '',
-    date_from: new Date().toISOString().split('T')[0],
-    date_to: new Date().toISOString().split('T')[0],
+    date_from: lokalniDatum(),
+    date_to: lokalniDatum(),
     destination: '',
     purpose: '',
     expense_type: 'km',
@@ -153,8 +154,8 @@ export default function PotniStroskiPage() {
     saveEntries([entry, ...entries])
     setForm({
       employee_id: form.employee_id,
-      date_from: new Date().toISOString().split('T')[0],
-      date_to: new Date().toISOString().split('T')[0],
+      date_from: lokalniDatum(),
+      date_to: lokalniDatum(),
       destination: '', purpose: '',
       expense_type: 'km', quantity: '',
       amount_per_unit: '', receipt_amount: '', notes: '',

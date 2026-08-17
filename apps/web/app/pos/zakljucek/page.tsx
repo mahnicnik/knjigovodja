@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
@@ -46,7 +47,7 @@ export default function PosZakljucekPage() {
   const [toast, setToast] = useState<string | null>(null)
 
   // Forma za nov zaključek
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
+  const [selectedDate, setSelectedDate] = useState(lokalniDatum())
   const [selectedLocation, setSelectedLocation] = useState('')
   const [closedBy, setClosedBy] = useState('')
   const [notes, setNotes] = useState('')

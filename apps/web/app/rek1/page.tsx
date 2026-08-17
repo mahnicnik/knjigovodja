@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
-import { EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS, MANDATORY_HEALTH_CONTRIBUTION, GENERAL_RELIEF_MONTH, INCOME_TAX_BRACKETS } from '@/lib/tax-constants'
+import { EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS, MANDATORY_HEALTH_CONTRIBUTION, GENERAL_RELIEF_MONTH, INCOME_TAX_BRACKETS , lokalniDatum} from '@/lib/tax-constants'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 
@@ -127,7 +127,7 @@ export default function REK1Page() {
     emp = { ...emp, gross_salary: effectiveGross }
     const monthStr = String(selectedMonth + 1).padStart(2, '0')
     const dateFrom = `${selectedYear}-${monthStr}-01`
-    const dateTo = new Date(selectedYear, selectedMonth + 1, 0).toISOString().split('T')[0]
+    const dateTo = lokalniDatum(new Date(selectedYear, selectedMonth + 1, 0))
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <REK1 xmlns="http://edavki.durs.si/Documents/Schemas/REK_1_2.xsd">

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
@@ -21,7 +22,7 @@ export default function ReprezentancaPage() {
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: lokalniDatum(),
     category: 'kosilo',
     description: '',
     attendees: '',
@@ -101,7 +102,7 @@ export default function ReprezentancaPage() {
 
     save([entry, ...entries])
     setForm({
-      date: new Date().toISOString().split('T')[0],
+      date: lokalniDatum(),
       category: 'kosilo', description: '', attendees: '',
       business_purpose: '', amount: '', vendor: '',
     })

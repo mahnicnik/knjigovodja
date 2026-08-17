@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
@@ -124,7 +125,7 @@ export default function PonavljajoceRacunePage() {
       const { count } = await supabase.from('issued_invoices').select('*', { count: 'exact', head: true }).eq('org_id', orgId).like('invoice_number', `${year}-%`)
       const seq = String((count ?? 0) + 1).padStart(4, '0')
       const invoiceNumber = `${year}-${seq}`
-      const today = new Date().toISOString().split('T')[0]
+      const today = lokalniDatum()
       const due = new Date(Date.now() + 30 * 864e5).toISOString().split('T')[0]
 
       // POPRAVLJENO (16.8.2026): prej brez preverbe napake - ce racun ni nastal,
@@ -171,7 +172,7 @@ export default function PonavljajoceRacunePage() {
     setRecurring(prev => prev.filter(r => r.id !== id))
   }
 
-  const dueToday = recurring.filter(r => r.is_active && r.next_issue_date <= new Date().toISOString().split('T')[0])
+  const dueToday = recurring.filter(r => r.is_active && r.next_issue_date <= lokalniDatum())
   const monthlyTotal = recurring.filter(r => r.is_active).reduce((s, r) => {
     const multiplier = r.frequency === 'weekly' ? 4 : r.frequency === 'quarterly' ? 1/3 : r.frequency === 'yearly' ? 1/12 : 1
     return s + r.amount_total * multiplier
@@ -291,7 +292,7 @@ export default function PonavljajoceRacunePage() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {recurring.map(r => {
-              const isDue = r.is_active && r.next_issue_date <= new Date().toISOString().split('T')[0]
+              const isDue = r.is_active && r.next_issue_date <= lokalniDatum()
               return (
                 <div key={r.id} style={{ background: '#fff', borderRadius: 14, border: `0.5px solid ${isDue ? 'rgba(232,181,71,0.4)' : 'rgba(0,0,0,0.08)'}`, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', opacity: r.is_active ? 1 : 0.5 }}>
                   <div style={{ width: 40, height: 40, borderRadius: 10, background: r.is_active ? '#E1F5EE' : '#F3F4F6', display: 'grid', placeItems: 'center', fontSize: 20, flexShrink: 0 }}>🔄</div>

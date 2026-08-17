@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { getActiveMembership } from '@/lib/active-org'
@@ -27,7 +28,7 @@ export default function NewQuotePage() {
   const [clientEmail, setClientEmail] = useState('')
   const [clientAddress, setClientAddress] = useState('')
   const [clientTax, setClientTax] = useState('')
-  const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0])
+  const [issueDate, setIssueDate] = useState(lokalniDatum())
   const [validUntil, setValidUntil] = useState(new Date(Date.now() + 30 * 864e5).toISOString().split('T')[0])
   const [notes, setNotes] = useState('')
   const [items, setItems] = useState<LineItem[]>([

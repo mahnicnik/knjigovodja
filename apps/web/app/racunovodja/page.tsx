@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
@@ -82,7 +83,7 @@ export default function RacunovodjaPortal() {
           const [invRes, recRes, overdueRes, kpoRes] = await Promise.all([
             supabase.from('issued_invoices').select('amount_total, status').eq('org_id', org.id).gte('issue_date', from).lte('issue_date', to).neq('status', 'draft').or('zoi.is.null,zoi.not.like.DEMO-%'),
             supabase.from('receipts').select('status').eq('org_id', org.id).gte('receipt_date', from).lte('receipt_date', to),
-            supabase.from('issued_invoices').select('amount_total').eq('org_id', org.id).eq('status', 'sent').lt('due_date', new Date().toISOString().split('T')[0]),
+            supabase.from('issued_invoices').select('amount_total').eq('org_id', org.id).eq('status', 'sent').lt('due_date', lokalniDatum()),
             // DODANO (30.7.2026): KPO prihodki (POS promet, banka, kartice...)
             // - SAMO brez invoice_id, da se placila ze prestetih racunov ne
             // stejejo dvakrat.

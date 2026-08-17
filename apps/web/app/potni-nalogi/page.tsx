@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
@@ -56,8 +57,8 @@ export default function PotniNalogiPage() {
   const [employeeName, setEmployeeName] = useState('')
   const [purpose, setPurpose] = useState('')
   const [destination, setDestination] = useState('')
-  const [departureDate, setDepartureDate] = useState(new Date().toISOString().split('T')[0])
-  const [returnDate, setReturnDate] = useState(new Date().toISOString().split('T')[0])
+  const [departureDate, setDepartureDate] = useState(lokalniDatum())
+  const [returnDate, setReturnDate] = useState(lokalniDatum())
   const [transportType, setTransportType] = useState('car')
   const [km, setKm] = useState<number>(0)
   const [kmRate, setKmRate] = useState(0.43)

@@ -1,6 +1,7 @@
 'use client'
 
 import UpgradeModal from '@/components/UpgradeModal'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
@@ -34,7 +35,7 @@ export default function NewInvoicePage() {
   const [reference, setReference] = useState('')
   const [taxLookupLoading, setTaxLookupLoading] = useState(false)
   const [taxLookupError, setTaxLookupError] = useState('')
-  const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0])
+  const [issueDate, setIssueDate] = useState(lokalniDatum())
   const [dueDate, setDueDate] = useState(new Date(Date.now() + 14*24*60*60*1000).toISOString().split('T')[0])
   const [items, setItems] = useState<LineItem[]>([{ description: '', quantity: 1, unit_price: 0, vat_rate: 22, discount_pct: 0 }])
   const [notes, setNotes] = useState('')

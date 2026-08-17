@@ -10420,7 +10420,7 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
   const [firstInstallmentPayNow, setFirstInstallmentPayNow] = useState(false)
   const [installmentCount, setInstallmentCount] = useState(6)
   const [installmentFrequency, setInstallmentFrequency] = useState('monthly')
-  const [firstDueDate, setFirstDueDate] = useState(new Date().toISOString().split('T')[0])
+  const [firstDueDate, setFirstDueDate] = useState(lokalniDatum())
   const tconf = TEMPLATE_TYPES[template.template_type||'visits'] || TEMPLATE_TYPES.visits
 
   function showToast(msg, ok=true) { setToast({msg,ok}); setTimeout(()=>setToast(null),3000) }
@@ -10505,7 +10505,7 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
       // Ce prvi obrok zapade danes ali je ze v preteklosti, dnevni cron (ki tece
       // ob 6:00 in sicer tudi ujame zapadle/danasnje obroke) ga ne bi poslal
       // pravocasno - poslji racun/opomnik TAKOJ, ne caka se na jutrisnji run.
-      const todayStr = new Date().toISOString().split('T')[0]
+      const todayStr = lokalniDatum()
       const firstInst = insertedInstallments?.find((r) => r.installment_number === 1)
       if (firstInst && firstInst.due_date <= todayStr) {
         fetch('/api/installments/send-now', {
@@ -11487,7 +11487,7 @@ function FreezePackageModal({ pkg, onClose, onDone }) {
           Zamrzni do dolocenega datuma (avtomatsko)
         </label>
         {mode === 'until' && (
-          <input type="date" value={untilDate} onChange={e=>setUntilDate(e.target.value)} min={new Date().toISOString().split('T')[0]} style={inp}/>
+          <input type="date" value={untilDate} onChange={e=>setUntilDate(e.target.value)} min={lokalniDatum()} style={inp}/>
         )}
         <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
           <button onClick={onClose} style={btnS}>Prekliči</button>

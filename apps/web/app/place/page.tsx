@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
-import { EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS, MANDATORY_HEALTH_CONTRIBUTION, GENERAL_RELIEF_MONTH, MIN_WAGE as TC_MIN_WAGE, INCOME_TAX_BRACKETS, REGRES_TAX_FREE_LIMIT, MEAL_ALLOWANCE, KM_RATE_COMMUTE } from '@/lib/tax-constants'
+import { EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS, MANDATORY_HEALTH_CONTRIBUTION, GENERAL_RELIEF_MONTH, MIN_WAGE as TC_MIN_WAGE, INCOME_TAX_BRACKETS, REGRES_TAX_FREE_LIMIT, MEAL_ALLOWANCE, KM_RATE_COMMUTE , lokalniDatum} from '@/lib/tax-constants'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 
@@ -126,13 +126,13 @@ export default function PlacePage() {
 
   const [form, setForm] = useState({
     full_name: '', tax_number: '', iban: '', gross_salary: '',
-    employment_type: 'full_time', start_date: new Date().toISOString().split('T')[0], dependents: 0,
+    employment_type: 'full_time', start_date: lokalniDatum(), dependents: 0,
     annual_leave_days: 20,
   })
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null)
 
   function emptyForm() {
-    return { full_name: '', tax_number: '', iban: '', gross_salary: '', employment_type: 'full_time', start_date: new Date().toISOString().split('T')[0], dependents: 0, annual_leave_days: 20 }
+    return { full_name: '', tax_number: '', iban: '', gross_salary: '', employment_type: 'full_time', start_date: lokalniDatum(), dependents: 0, annual_leave_days: 20 }
   }
 
   function startEdit(emp: any) {
@@ -140,7 +140,7 @@ export default function PlacePage() {
     setForm({
       full_name: emp.full_name || '', tax_number: emp.tax_number || '', iban: emp.iban || '',
       gross_salary: String(emp.gross_salary ?? ''), employment_type: emp.employment_type || 'full_time',
-      start_date: emp.start_date || new Date().toISOString().split('T')[0],
+      start_date: emp.start_date || lokalniDatum(),
       dependents: emp.dependents || 0, annual_leave_days: emp.annual_leave_days ?? 20,
     })
     setShowForm(true)

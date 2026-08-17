@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import posthog from 'posthog-js'
@@ -58,7 +59,7 @@ export default function ExpensesPage() {
 
   const [form, setForm] = useState({
     vendor: '',
-    receipt_date: new Date().toISOString().split('T')[0],
+    receipt_date: lokalniDatum(),
     amount_net: '',
     vat_rate: '22',
     description: '',
@@ -211,7 +212,7 @@ export default function ExpensesPage() {
     })
     setForm({
       vendor: '',
-      receipt_date: new Date().toISOString().split('T')[0],
+      receipt_date: lokalniDatum(),
       amount_net: '',
       vat_rate: '22',
       description: '',

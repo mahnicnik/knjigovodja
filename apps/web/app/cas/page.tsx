@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
@@ -44,7 +45,7 @@ export default function CasPage() {
   const [description, setDescription] = useState('')
   const [clientName, setClientName] = useState('')
   const [project, setProject] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [date, setDate] = useState(lokalniDatum())
   const [hours, setHours] = useState(1)
   const [hourlyRate, setHourlyRate] = useState(0)
   const [isBillable, setIsBillable] = useState(true)
@@ -114,7 +115,7 @@ export default function CasPage() {
       invoice_number: `${year}-${seq}`,
       invoice_type: 'invoice',
       client_name: entry.client_name ?? 'Stranka',
-      issue_date: new Date().toISOString().split('T')[0],
+      issue_date: lokalniDatum(),
       due_date: new Date(Date.now() + 30 * 864e5).toISOString().split('T')[0],
       line_items: [{ description: entry.description, quantity: entry.hours, unit_price: entry.hourly_rate, amount_net: amount, vat_amount: 0 }],
       amount_net: amount, vat_amount: 0, amount_total: amount,

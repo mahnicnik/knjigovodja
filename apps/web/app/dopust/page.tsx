@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
@@ -87,8 +88,8 @@ export default function DopustPage() {
   const [form, setForm] = useState({
     employee_id: '',
     leave_type: 'vacation',
-    from_date: new Date().toISOString().split('T')[0],
-    to_date: new Date().toISOString().split('T')[0],
+    from_date: lokalniDatum(),
+    to_date: lokalniDatum(),
     notes: '',
   })
   const supabase = createClient()

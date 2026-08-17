@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
@@ -142,8 +143,8 @@ export default function ImportInvoicesPage() {
         client_name: inv.client_name || 'Neznana stranka',
         client_tax_number: inv.client_tax_number || null,
         client_address: inv.client_address || null,
-        issue_date: inv.issue_date || new Date().toISOString().split('T')[0],
-        due_date: inv.due_date || inv.issue_date || new Date().toISOString().split('T')[0],
+        issue_date: inv.issue_date || lokalniDatum(),
+        due_date: inv.due_date || inv.issue_date || lokalniDatum(),
         line_items: inv.line_items || [],
         amount_net: inv.amount_net || 0,
         vat_amount: inv.vat_amount || 0,

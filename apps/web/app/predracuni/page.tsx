@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
@@ -83,7 +84,7 @@ export default function PredracuniPage() {
         client_address: q.client_address,
         client_email: q.client_email,
         client_tax_number: q.client_tax_number,
-        issue_date: new Date().toISOString().split('T')[0],
+        issue_date: lokalniDatum(),
         due_date: new Date(Date.now() + 30 * 864e5).toISOString().split('T')[0],
         line_items: q.line_items,
         amount_net: q.amount_net,

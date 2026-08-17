@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
@@ -44,7 +45,7 @@ export default function AmortizacijaPage() {
     name: '',
     category: 'racunalnik',
     purchase_price: '',
-    purchase_date: new Date().toISOString().split('T')[0],
+    purchase_date: lokalniDatum(),
     description: '',
   })
   const supabase = createClient()
@@ -134,7 +135,7 @@ export default function AmortizacijaPage() {
       if (amortErr) { alert('Amortizacije ni bilo mogoče poknjižiti: ' + amortErr.message); return }
     }
 
-    setForm({ name: '', category: 'racunalnik', purchase_price: '', purchase_date: new Date().toISOString().split('T')[0], description: '' })
+    setForm({ name: '', category: 'racunalnik', purchase_price: '', purchase_date: lokalniDatum(), description: '' })
     setShowForm(false)
     setSaving(false)
     load()

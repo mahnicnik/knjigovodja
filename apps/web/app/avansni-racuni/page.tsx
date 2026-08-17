@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
@@ -46,7 +47,7 @@ export default function AvansniRacuniPage() {
   const [description, setDescription] = useState('')
   const [totalAmount, setTotalAmount] = useState(0)
   const [advancePct, setAdvancePct] = useState(50)
-  const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0])
+  const [issueDate, setIssueDate] = useState(lokalniDatum())
   const [dueDate, setDueDate] = useState(new Date(Date.now() + 15 * 864e5).toISOString().split('T')[0])
 
   // Za finalni račun
@@ -143,7 +144,7 @@ export default function AvansniRacuniPage() {
         p_org_id: orgId, p_year: year,
       })
       const finalInvoiceNumber = nextNumber || `${year}-001`
-      const today = new Date().toISOString().split('T')[0]
+      const today = lokalniDatum()
 
       const { data: inv, error: invErr } = await supabase.from('issued_invoices').insert({
         org_id: orgId,

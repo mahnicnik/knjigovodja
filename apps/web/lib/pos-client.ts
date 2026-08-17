@@ -5,6 +5,7 @@
 //   const items = await pos.items.list()
 
 import { createClient } from '@/lib/supabase'
+import { lokalniDatum } from '@/lib/tax-constants'
 
 // ─── Business ID — multi-tenant: dinamično nastavljen glede na org ──
 // Live binding: ko resolveBusinessId() spremeni to vrednost, se sprememba
@@ -514,7 +515,7 @@ export const pos = {
         }
       }
 
-      const today = new Date(sessionTo).toISOString().split('T')[0]
+      const today = lokalniDatum(new Date(sessionTo))
 
       // En zapis na kombinacijo vrste in stopnje DDV.
       for (const s of skupine.values()) {

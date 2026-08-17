@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import crypto from 'crypto'
@@ -210,7 +211,7 @@ export async function POST(req: NextRequest) {
     }]
 
     const invoiceNumber = await generateInvoiceNumber(supabase, orgId)
-    const issueDate = new Date().toISOString().split('T')[0]
+    const issueDate = lokalniDatum()
 
     const { data: invoice, error: invErr } = await supabase
       .from('issued_invoices')
