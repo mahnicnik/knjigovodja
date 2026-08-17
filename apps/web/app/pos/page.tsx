@@ -5736,6 +5736,9 @@ function TableActionsModal({ activeTable, posData, auth, onClose, onDone }) {
     // POPRAVLJENO (17.8.2026): varovalka pred dvojnim klikom - prej se je
     // stanje nastavilo, a se ni preverjalo.
     if (saving) return
+    // POPRAVLJENO (17.8.2026): varovalka pred dvojnim klikom - prej se je
+    // stanje nastavilo, a se ni preverjalo.
+    if (saving) return
     setSaving(true); setError('')
     try {
       const existing = await pos.orders.getOpenOnTable(activeTable.id)
@@ -5764,6 +5767,9 @@ function TableActionsModal({ activeTable, posData, auth, onClose, onDone }) {
     // POPRAVLJENO (17.8.2026): varovalka pred dvojnim klikom - prej se je
     // stanje nastavilo, a se ni preverjalo.
     if (saving) return
+    // POPRAVLJENO (17.8.2026): varovalka pred dvojnim klikom - prej se je
+    // stanje nastavilo, a se ni preverjalo.
+    if (saving) return
     setSaving(true); setError('')
     try {
       const existing = await pos.orders.getOpenOnTable(activeTable.id)
@@ -5778,6 +5784,9 @@ function TableActionsModal({ activeTable, posData, auth, onClose, onDone }) {
 
   async function mergeTables() {
     if (!sourceTableId) return
+    // POPRAVLJENO (17.8.2026): varovalka pred dvojnim klikom - prej se je
+    // stanje nastavilo, a se ni preverjalo.
+    if (saving) return
     // POPRAVLJENO (17.8.2026): varovalka pred dvojnim klikom - prej se je
     // stanje nastavilo, a se ni preverjalo.
     if (saving) return
