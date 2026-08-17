@@ -24,7 +24,7 @@ import { createServerClient } from '@supabase/ssr'
 // Hkrati je bil odstranjen '/dashboard' iz seznama za accountant/cashier:
 // dashboard je lastnikov pregled poslovanja, racunovodja ima svoj portal
 // na /racunovodja.
-import { ROLE_ALLOWED_PREFIXES, ROLE_HOME } from '@/lib/role-access'
+import { ROLE_ALLOWED_PREFIXES, ROLE_HOME, isPathAllowedForRole } from '@/lib/role-access'
 
 // Poti, ki jih middleware sploh ne preverja (javne strani, staticne datoteke, auth).
 const PUBLIC_PREFIXES = [
@@ -94,10 +94,11 @@ export async function middleware(req: NextRequest) {
   if (hasUnrestricted) return res
 
   const role = roles[0]
-  const allowed = ROLE_ALLOWED_PREFIXES[role]
 
-  const isAllowed = allowed.some((p) => pathname.startsWith(p))
-  if (isAllowed) return res
+  // SPREMENJENO (17.8.2026): uporabimo skupno funkcijo namesto lastnega
+  // preverjanja predpon - ta uposteva tudi ROLE_DENIED_PREFIXES
+  // (npr. /invoices je racunovodji dovoljen, /invoices/new pa ne).
+  if (isPathAllowedForRole(pathname, role)) return res
 
   const home = ROLE_HOME[role] ?? '/dashboard'
   if (pathname === home || pathname.startsWith(home)) return res

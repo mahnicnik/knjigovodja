@@ -22,6 +22,7 @@ export default function InvoicesPage() {
   const [actionLoading, setActionLoading] = useState('')
   const [sendModalInv, setSendModalInv] = useState<any>(null)
   const [sendSuccess, setSendSuccess] = useState('')
+  const [canCreate, setCanCreate] = useState(true)
   const supabase = createClient()
 
   // DODANO (Prelet 17, 17.8.2026): izbirnik obdobja za hitrejsi pregled,
@@ -43,6 +44,10 @@ export default function InvoicesPage() {
     if (!user) { setLoading(false); return }
     const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
     if (member) {
+      // DODANO (17.8.2026): racunovodja ima vpogled v racune, ne pa pravice
+      // ustvarjanja - brez tega bi videl gumb "+ Nov racun", ki bi ga
+      // middleware zavrnil in vrgel nazaj (videti kot pokvarjen gumb).
+      setCanCreate(!['accountant', 'viewer', 'cashier'].includes((member as any).role))
       const o = (member as any).organizations
       setOrg(o)
       const { from, to } = getPeriodRange(periodMode, customFrom, customTo)
@@ -283,9 +288,11 @@ export default function InvoicesPage() {
               <Link href="/invoices/import" className="border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium">
                 Uvozi iz PDF
               </Link>
-              <Link href="/invoices/new" className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium">
-                + Nov račun
-              </Link>
+              {canCreate && (
+                <Link href="/invoices/new" className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium">
+                  + Nov račun
+                </Link>
+              )}
             </div>
           )}
         </div>
@@ -330,10 +337,12 @@ export default function InvoicesPage() {
           <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
             <div className="text-4xl mb-4">📄</div>
             <h3 className="font-semibold text-gray-900 mb-2">Še ni računov</h3>
-            <p className="text-gray-500 text-sm mb-6">Ustvarite prvi račun in ga pošljite stranki</p>
-            <Link href="/invoices/new" className="bg-gray-900 text-white px-6 py-3 rounded-xl text-sm font-medium">
-              + Ustvari prvi račun
-            </Link>
+            <p className="text-gray-500 text-sm mb-6">{canCreate ? 'Ustvarite prvi račun in ga pošljite stranki' : 'V izbranem obdobju ni računov'}</p>
+            {canCreate && (
+              <Link href="/invoices/new" className="bg-gray-900 text-white px-6 py-3 rounded-xl text-sm font-medium">
+                + Ustvari prvi račun
+              </Link>
+            )}
           </div>
         ) : (
           <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
