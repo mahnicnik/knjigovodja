@@ -76,7 +76,11 @@ Ce katerega od podatkov ni mogoce najti, uporabi razumno privzeto vrednost (0 za
       ],
     })
 
-    const text = response.content[0].type === 'text' ? response.content[0].text : ''
+    const text = // POPRAVLJENO (17.8.2026): prej neposreden dostop do content[0]. Ce AI vrne
+    // PRAZEN odgovor (omejitev hitrosti, prekinjena povezava, zavrnitev), je
+    // polje prazno in dostop vrze napako, ki podre celotno stran namesto da bi
+    // uporabniku povedala, da branje ni uspelo.
+    (response.content?.[0]?.type === 'text' ? response.content[0].text : '')
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
       return NextResponse.json({ error: 'Ni bilo mogoče prebrati podatkov iz PDF-ja' }, { status: 422 })

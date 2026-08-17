@@ -27,7 +27,10 @@ const STATUS: Record<string, { label: string; color: string; bg: string }> = {
   expired:  { label: 'Poteklo',  color: '#888',    bg: '#F3F4F6' },
 }
 
-function fmt(n: number) { return `€${Number(n).toFixed(2)}` }
+// POPRAVLJENO (17.8.2026): slovenski zapis zneska. Prej "€1234.56" - angleska
+// oblika z valuto spredaj in piko kot decimalnim locilom. V isti aplikaciji sta
+// obstajala oba zapisa, kar je zgledalo kot napaka.
+function fmt(n: number) { return new Intl.NumberFormat('sl-SI', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0) }
 function fmtDate(d: string) { return new Date(d).toLocaleDateString('sl-SI') }
 
 export default function PredracuniPage() {

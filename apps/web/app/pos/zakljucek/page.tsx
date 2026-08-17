@@ -5,7 +5,10 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 
-function fmt(n: number) { return `€${Number(n).toFixed(2)}` }
+// POPRAVLJENO (17.8.2026): slovenski zapis zneska. Prej "€1234.56" - angleska
+// oblika z valuto spredaj in piko kot decimalnim locilom. V isti aplikaciji sta
+// obstajala oba zapisa, kar je zgledalo kot napaka.
+function fmt(n: number) { return new Intl.NumberFormat('sl-SI', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0) }
 function fmtDate(d: string) { return new Date(d).toLocaleDateString('sl-SI') }
 
 interface DailyClosing {
@@ -73,7 +76,7 @@ export default function PosZakljucekPage() {
 
       setLocations(locRes.data ?? [])
       setClosings(closRes.data ?? [])
-      if (locRes.data?.[0]) setSelectedLocation(locRes.data[0].id)
+      if (locRes.data?.[0]) setSelectedLocation(locRes.data[0]?.id)
       setLoading(false)
     }
     load()

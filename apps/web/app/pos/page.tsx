@@ -6,6 +6,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { pos, BUSINESS_ID, resolveBusinessId, imaOsebje, ustvariPrvegaUporabnika } from '@/lib/pos-client'
+import { lokalniDatum } from '@/lib/tax-constants'
 import { buildReceiptHTML } from '@/lib/receipt'
 import { WorkStatusBar, ClockInModal } from '@/lib/work-session-components'
 import { getCurrentSession, openSession, getSessionStats, closeSession, getLastCarryOver, type CashSession, type SessionStats } from '@/lib/cash-session'
@@ -1462,7 +1463,7 @@ function FloorScreen({ spaces, switchToTable, setScreen }) {
   const [selectedSpace, setSelectedSpace] = useState(null)
 
   useEffect(() => {
-    if (spaces.length > 0 && !selectedSpace) setSelectedSpace(spaces[0].id)
+    if (spaces.length > 0 && !selectedSpace) setSelectedSpace(spaces[0]?.id)
   }, [spaces])
 
   if (spaces.length === 0) {
@@ -5359,7 +5360,9 @@ function ZReportModal({ posData, onClose }) {
 
       // Sinhroniziraj promet z računko.si
       try {
-        const dateStr = data.date.toISOString().slice(0, 10)
+        // POPRAVLJENO (17.8.2026): lokalni datum namesto UTC - prodaja po
+        // polnoci bi sicer padla v prejsnji dan.
+        const dateStr = lokalniDatum(data.date)
         await fetch('/api/pos/sync-income', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -6132,8 +6135,8 @@ function OrdersScreen({ posData, auth }) {
   const [orderPayment, setOrderPayment] = useState(null)
   const [period, setPeriod] = useState('today')
   const [search, setSearch] = useState('')
-  const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate()-30); return d.toISOString().slice(0,10) })
-  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0,10))
+  const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate()-30); return lokalniDatum(d) })
+  const [dateTo, setDateTo] = useState(() => lokalniDatum())
   const [showVoid, setShowVoid] = React.useState(false)
   const [showRefund, setShowRefund] = React.useState(false)
   const [showChangePayment, setShowChangePayment] = React.useState(false)
@@ -8319,7 +8322,7 @@ function SpacesSection({ posData }) {
   const SPACE_COLORS = ['#8FBF8F','#B8956A','#9B7AC9','#3a6e8f','#c26a3a','#1f6b3a','#e9b949','#a83232']
 
   useEffect(() => {
-    if (posData.spaces.length > 0 && !selectedSpaceId) setSelectedSpaceId(posData.spaces[0].id)
+    if (posData.spaces.length > 0 && !selectedSpaceId) setSelectedSpaceId(posData.spaces[0]?.id)
   }, [posData.spaces])
 
   function showToast(msg, ok=true) { setToast({msg,ok}); setTimeout(()=>setToast(null),3000) }

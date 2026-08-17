@@ -7,8 +7,10 @@ import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 
-function fmt(n: number) { return `€${Math.abs(Number(n)).toFixed(2)}` }
-function fmtN(n: number) { return n >= 0 ? `€${n.toFixed(2)}` : `-€${Math.abs(n).toFixed(2)}` }
+// POPRAVLJENO (17.8.2026): slovenski zapis zneska namesto angleskega.
+const _eur = (n: number) => new Intl.NumberFormat('sl-SI', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0)
+function fmt(n: number) { return _eur(Math.abs(Number(n))) }
+function fmtN(n: number) { return _eur(Number(n) || 0) }
 
 const MONTHS = ['Jan','Feb','Mar','Apr','Maj','Jun','Jul','Avg','Sep','Okt','Nov','Dec']
 const MONTHS_LONG = ['Januar','Februar','Marec','April','Maj','Junij','Julij','Avgust','September','Oktober','November','December']

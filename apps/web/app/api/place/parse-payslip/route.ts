@@ -111,7 +111,11 @@ export async function POST(request: NextRequest) {
       throw apiErr
     }
 
-    const text = response.content[0].type === 'text' ? response.content[0].text : ''
+    const text = // POPRAVLJENO (17.8.2026): prej neposreden dostop do content[0]. Ce AI vrne
+    // PRAZEN odgovor (omejitev hitrosti, prekinjena povezava, zavrnitev), je
+    // polje prazno in dostop vrze napako, ki podre celotno stran namesto da bi
+    // uporabniku povedala, da branje ni uspelo.
+    (response.content?.[0]?.type === 'text' ? response.content[0].text : '')
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
       return NextResponse.json({ error: 'Ni mogoče prebrati podatkov s plačilne liste' }, { status: 400 })

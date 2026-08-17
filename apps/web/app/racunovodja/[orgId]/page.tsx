@@ -97,8 +97,9 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
+// POPRAVLJENO (17.8.2026): slovenski zapis zneska.
 function fmt(n: number | null | undefined) {
-  return n != null ? `€${Number(n).toFixed(2)}` : '—'
+  return new Intl.NumberFormat('sl-SI', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0)
 }
 
 function fmtDate(d: string | null) {

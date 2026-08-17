@@ -34,7 +34,7 @@ export async function resolveActiveOrgId(
     // Pade na prvo (varno), namesto da bi vrnila tuje podatke.
   }
 
-  return { orgId: memberships[0].org_id, role: memberships[0].role }
+  return { orgId: memberships[0]?.org_id, role: memberships[0]?.role }
 }
 
 /** Prebere zaželeno organizacijo iz glave zahteve (če jo odjemalec pošlje). */

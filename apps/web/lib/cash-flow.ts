@@ -211,8 +211,12 @@ export function generateCashFlow(input: CashFlowInput): CashFlowResult {
       days[dayIdx].inflowReasons.push(`${inv.client_name} (#${inv.invoice_number})`)
     } else if (dayIdx < 0) {
       // Zapadel račun — štejemo kot day 0 inflow (pesimistično predpostavimo da bo plačan danes)
-      days[0].inflow += Number(inv.amount_total)
-      days[0].inflowReasons.push(`${inv.client_name} (zapadel)`)
+      // POPRAVLJENO (17.8.2026): pri praznem seznamu dni bi dostop do prvega
+      // elementa vrgel napako in podrl izracun pretoka denarja.
+      if (days[0]) {
+        days[0].inflow += Number(inv.amount_total)
+        days[0].inflowReasons.push(`${inv.client_name} (zapadel)`)
+      }
     }
   }
   

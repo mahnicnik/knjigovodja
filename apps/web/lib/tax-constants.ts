@@ -170,6 +170,21 @@ export const LEGAL_INTEREST_HISTORY: { from: string; rate: number }[] = [
   { from: '2026-01-01', rate: 0.1015 },
 ]
 
+/**
+ * Datum v LOKALNEM casovnem pasu, oblika YYYY-MM-DD.
+ *
+ * DODANO (17.8.2026): toISOString() pretvori v UTC. Slovenija je poleti dve uri
+ * naprej, zato bi prodaja ob 00:30 dobila VCERAJSNJI datum - pri baru, ki dela
+ * pozno, bi promet padel v napacen dan, Z-porocilo in knjiga prihodkov pa bi se
+ * razhajala.
+ */
+export function lokalniDatum(d: Date = new Date()): string {
+  const leto = d.getFullYear()
+  const mesec = String(d.getMonth() + 1).padStart(2, '0')
+  const dan = String(d.getDate()).padStart(2, '0')
+  return `${leto}-${mesec}-${dan}`
+}
+
 /** Mera, ki je veljala na dani dan. */
 export function legalInterestRateOn(date: Date | string): number {
   const d = typeof date === 'string' ? date : date.toISOString().slice(0, 10)

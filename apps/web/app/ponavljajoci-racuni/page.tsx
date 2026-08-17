@@ -28,7 +28,10 @@ const FREQ = {
 }
 
 const inp: React.CSSProperties = { width: '100%', padding: '10px 12px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.15)', fontSize: 13, outline: 'none', background: '#fff' }
-function fmt(n: number) { return `€${Number(n).toFixed(2)}` }
+// POPRAVLJENO (17.8.2026): slovenski zapis zneska. Prej "€1234.56" - angleska
+// oblika z valuto spredaj in piko kot decimalnim locilom. V isti aplikaciji sta
+// obstajala oba zapisa, kar je zgledalo kot napaka.
+function fmt(n: number) { return new Intl.NumberFormat('sl-SI', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0) }
 function fmtDate(d: string) { return new Date(d).toLocaleDateString('sl-SI') }
 
 export default function PonavljajoceRacunePage() {

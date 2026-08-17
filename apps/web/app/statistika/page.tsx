@@ -238,8 +238,12 @@ export default function StatistikaPage() {
               <div style={{ textAlign:'center', padding:'30px', color:'#888', fontSize:'12px' }}>Ni stroškov</div>
             ) : (
               categoryData.map((cat, i) => {
-                const max = categoryData[0].value
-                const pct = Math.round((cat.value / max) * 100)
+                // POPRAVLJENO (17.8.2026): prej neposreden dostop do prvega
+                // elementa in deljenje brez varovalke. Pri praznem seznamu bi
+                // dostop vrgel napako, pri najvecji vrednosti 0 pa bi deljenje
+                // dalo neveljavno stevilo in stolpci bi izginili.
+                const max = categoryData[0]?.value || 0
+                const pct = max > 0 ? Math.round((cat.value / max) * 100) : 0
                 return (
                   <div key={cat.name} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'7px 0', borderBottom: i < categoryData.length-1 ? '0.5px solid rgba(0,0,0,0.05)' : 'none' }}>
                     <div style={{ width:'8px', height:'8px', borderRadius:'2px', background: COLORS_CAT[i], flexShrink:0 }}></div>

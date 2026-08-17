@@ -33,7 +33,10 @@ interface Movement {
 
 const inp: React.CSSProperties = { width: '100%', padding: '10px 12px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.15)', fontSize: 13, outline: 'none', background: '#fff' }
 
-function fmt(n: number) { return `€${Number(n).toFixed(2)}` }
+// POPRAVLJENO (17.8.2026): slovenski zapis zneska. Prej "€1234.56" - angleska
+// oblika z valuto spredaj in piko kot decimalnim locilom. V isti aplikaciji sta
+// obstajala oba zapisa, kar je zgledalo kot napaka.
+function fmt(n: number) { return new Intl.NumberFormat('sl-SI', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0) }
 
 export default function ZalogePage() {
   const router = useRouter()
@@ -332,7 +335,7 @@ export default function ZalogePage() {
               <div style={{ fontSize: 14, fontWeight: 600, color: '#0D1F12', marginBottom: 14 }}>🏆 Top artikli po vrednosti zaloge</div>
               {[...items].sort((a, b) => (b.current_stock * b.sale_price) - (a.current_stock * a.sale_price)).slice(0, 5).map((item, i) => {
                 const val = item.current_stock * item.sale_price
-                const max = items[0] ? items[0].current_stock * items[0].sale_price : 1
+                const max = items[0] ? items[0]?.current_stock * items[0]?.sale_price : 1
                 return (
                   <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
                     <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#0D1F12', color: '#E8B547', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{i + 1}</div>
