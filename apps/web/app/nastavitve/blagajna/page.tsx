@@ -12,7 +12,6 @@ const supabase = createClient()
 // TYPES
 // ================================================================
 interface FursConfig {
-  certPassword?: string
   certExpiry?: string
   certSubject?: string
   // DODANO (26.7.2026): loceno stanje za produkcijski IN testni certifikat
@@ -55,7 +54,7 @@ export default function BlagajnaPage() {
   const [osebje, setOsebje] = useState<any[]>([])
   const [osebjeModal, setOsebjeModal] = useState<any>(null)
   const [posBusinessId, setPosBusinessId] = useState<string | null>(null)
-  const [config, setConfig] = useState<FursConfig>({ testMode: true, premises: [], devices: [], certPassword: undefined, certExpiry: undefined, certSubject: undefined })
+  const [config, setConfig] = useState<FursConfig>({ testMode: true, premises: [], devices: [], certExpiry: undefined, certSubject: undefined })
   // DODANO (11.8.2026): DEMO nacin - LOCEN od testMode. NE komunicira s
   // FURS sploh, generira jasno lazne ZOI/EOR kode za testiranje/predstavitev.
   const [demoMode, setDemoMode] = useState(false)
@@ -105,7 +104,12 @@ export default function BlagajnaPage() {
         // (26.7.2026: prej "katerikoli aktiven", zdaj loceno).
         const { data: certs } = await supabase
           .from('furs_certificates')
-          .select('issuer, certificate_password, valid_to, is_test')
+          // POPRAVLJENO (17.8.2026): GESLO CERTIFIKATA se je prenaslo v brskalnik,
+          // ceprav ga tam nihce ne uporablja - preveril sem, nikjer se ne bere.
+          // Geslo odpira certifikat, s katerim se podpisujejo davcni racuni;
+          // v brskalniku nima kaj poceti, ker ga vidi vsak, ki odpre razvijalska
+          // orodja ali pregleduje omrezni promet.
+          .select('issuer, valid_to, is_test')
           .eq('org_id', member.org_id)
           .eq('is_active', true)
         const cert = (certs || []).find(cc => !cc.is_test) // za obstojeco certPassword logiko spodaj
@@ -149,7 +153,6 @@ export default function BlagajnaPage() {
             channel: d.channel || 'both',
           })),
           certSubject: cert?.issuer,
-          certPassword: cert?.certificate_password,
           certExpiry: cert?.valid_to,
           prodCertSubject: prodCert?.issuer,
           prodCertExpiry: prodCert?.valid_to,

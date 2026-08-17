@@ -45,12 +45,12 @@ export default function StripePage() {
       setSettings(s)
       setForm({
         secret_key: s.secret_key ? '••••••••' + s.secret_key.slice(-4) : '',
-        webhook_secret: effectiveWebhookSecret ? '••••••••' + effectiveWebhookSecret.slice(-4) : '',
+        webhook_secret: zadnji4 ? '••••••••' + zadnji4 : '',
         default_vat_rate: s.default_vat_rate || '0',
         auto_create_invoices: s.auto_create_invoices ?? true,
       })
-    } else if (effectiveWebhookSecret) {
-      setForm(f => ({ ...f, webhook_secret: '••••••••' + effectiveWebhookSecret.slice(-4) }))
+    } else if (zadnji4) {
+      setForm(f => ({ ...f, webhook_secret: '••••••••' + zadnji4 }))
     }
     setLoading(false)
   }
