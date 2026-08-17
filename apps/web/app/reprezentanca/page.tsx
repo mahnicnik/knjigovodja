@@ -215,7 +215,7 @@ export default function ReprezentancaPage() {
               </div>
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Znesek (€) *</label>
-                <input type="number" value={form.amount}
+                <input type="number" onFocus={e => e.target.select()} value={form.amount}
                   onChange={e => setForm({...form, amount: e.target.value})}
                   placeholder="0.00"
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />

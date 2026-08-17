@@ -2084,7 +2084,7 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
                 </button>
               ))}
             </div>
-            <input type="number" min="0" max="100" value={discountInput} onChange={e=>setDiscountInput(e.target.value)}
+            <input type="number" onFocus={e => e.target.select()} min="0" max="100" value={discountInput} onChange={e=>setDiscountInput(e.target.value)}
               placeholder="Ali vnesi ročno..." style={{ width:'100%', padding:'10px 12px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:14, background:T.inputBg, outline:'none', boxSizing:'border-box', marginBottom:12 }}/>
             <div style={{ display:'flex', gap:8 }}>
               <button onClick={()=>{setCartDiscount(0);setDiscountOpen(false)}} style={{ flex:1, padding:'10px', borderRadius:8, border:'1px solid '+T.line, background:'transparent', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:13 }}>Odstrani</button>
@@ -2861,7 +2861,7 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
             <input type="datetime-local" value={data.start_at} onChange={e=>setData(p=>({...p,start_at:e.target.value}))} style={inp}/>
           </Field>
           <Field label="Trajanje (min)">
-            <input type="number" value={data.duration_min} onChange={e=>setData(p=>({...p,duration_min:e.target.value}))} min="15" step="15" style={inp}/>
+            <input type="number" onFocus={e => e.target.select()} value={data.duration_min} onChange={e=>setData(p=>({...p,duration_min:e.target.value}))} min="15" step="15" style={inp}/>
           </Field>
         </div>
 
@@ -3695,7 +3695,7 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
         </div>
         <div style={{ fontSize:12, color:T.muted, marginBottom:10 }}>Stranka lahko z predplačilom plačuje storitve in produkte. Stanje se odbija avtomatsko.</div>
         <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-          <input type="number" value={prepaidAmount} onChange={e=>setPrepaidAmount(e.target.value)} placeholder="Znesek €" min="0" step="0.5"
+          <input type="number" onFocus={e => e.target.select()} value={prepaidAmount} onChange={e=>setPrepaidAmount(e.target.value)} placeholder="Znesek €" min="0" step="0.5"
             style={{ width:120, ...inp }}/>
           <button onClick={addPrepaid} disabled={addingPrepaid||!prepaidAmount} style={{ ...btnP, opacity:!prepaidAmount?0.5:1 }}>+ Napolni</button>
         </div>
@@ -4519,18 +4519,18 @@ function InventoryScreen({ posData }) {
               </Field>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
                 <Field label="Prodajna cena (EUR)">
-                  <input type="number" min="0" step="0.01" value={editModal.price??''} onChange={e=>setEditModal(p=>({...p,price:e.target.value}))} style={{ width:'100%', padding:'8px 10px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13, background:T.inputBg, outline:'none', boxSizing:'border-box' }}/>
+                  <input type="number" onFocus={e => e.target.select()} min="0" step="0.01" value={editModal.price??''} onChange={e=>setEditModal(p=>({...p,price:e.target.value}))} style={{ width:'100%', padding:'8px 10px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13, background:T.inputBg, outline:'none', boxSizing:'border-box' }}/>
                 </Field>
                 <Field label="Nabavna cena (EUR)">
-                  <input type="number" min="0" step="0.0001" value={editModal.cost_price??''} onChange={e=>setEditModal(p=>({...p,cost_price:e.target.value}))} style={{ width:'100%', padding:'8px 10px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13, background:T.inputBg, outline:'none', boxSizing:'border-box' }}/>
+                  <input type="number" onFocus={e => e.target.select()} min="0" step="0.0001" value={editModal.cost_price??''} onChange={e=>setEditModal(p=>({...p,cost_price:e.target.value}))} style={{ width:'100%', padding:'8px 10px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13, background:T.inputBg, outline:'none', boxSizing:'border-box' }}/>
                 </Field>
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
                 <Field label="Zaloga">
-                  <input type="number" min="0" value={editModal.stock??''} onChange={e=>setEditModal(p=>({...p,stock:e.target.value}))} placeholder="prazno = neomejeno" style={{ width:'100%', padding:'8px 10px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13, background:T.inputBg, outline:'none', boxSizing:'border-box' }}/>
+                  <input type="number" onFocus={e => e.target.select()} min="0" value={editModal.stock??''} onChange={e=>setEditModal(p=>({...p,stock:e.target.value}))} placeholder="prazno = neomejeno" style={{ width:'100%', padding:'8px 10px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13, background:T.inputBg, outline:'none', boxSizing:'border-box' }}/>
                 </Field>
                 <Field label="Min. zaloga">
-                  <input type="number" min="0" value={editModal.min_stock??''} onChange={e=>setEditModal(p=>({...p,min_stock:e.target.value}))} placeholder="npr. 20" style={{ width:'100%', padding:'8px 10px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13, background:T.inputBg, outline:'none', boxSizing:'border-box' }}/>
+                  <input type="number" onFocus={e => e.target.select()} min="0" value={editModal.min_stock??''} onChange={e=>setEditModal(p=>({...p,min_stock:e.target.value}))} placeholder="npr. 20" style={{ width:'100%', padding:'8px 10px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13, background:T.inputBg, outline:'none', boxSizing:'border-box' }}/>
                 </Field>
               </div>
               <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:4 }}>
@@ -4609,12 +4609,12 @@ function InventoryScreen({ posData }) {
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
                 {(itemModal?.item_type||'simple') !== 'ingredient' && (
                   <Field label="Prodajna cena (€) *">
-                    <input type="number" step="0.01" min="0" value={itemModal?.price||''} onChange={e=>setItemModal(p=>({...p,price:e.target.value}))} placeholder="0.00" style={inp}/>
+                    <input type="number" onFocus={e => e.target.select()} step="0.01" min="0" value={itemModal?.price||''} onChange={e=>setItemModal(p=>({...p,price:e.target.value}))} placeholder="0.00" style={inp}/>
                   </Field>
                 )}
                 {(itemModal?.item_type||'simple') === 'ingredient' && (
                   <Field label="Nabavna cena (€)">
-                    <input type="number" step="0.01" min="0" value={itemModal?.price||''} onChange={e=>setItemModal(p=>({...p,price:e.target.value}))} placeholder="0.00" style={inp}/>
+                    <input type="number" onFocus={e => e.target.select()} step="0.01" min="0" value={itemModal?.price||''} onChange={e=>setItemModal(p=>({...p,price:e.target.value}))} placeholder="0.00" style={inp}/>
                   </Field>
                 )}
                 <Field label="Enota">
@@ -4645,7 +4645,7 @@ function InventoryScreen({ posData }) {
                 </Field>
               )}
               <Field label={(itemModal?.item_type||'simple')==='ingredient'?'Zaloga v skladišču':'Zaloga (pusti prazno za neomejeno)'}>
-                <input type="number" min="0" value={itemModal?.stock??''} onChange={e=>setItemModal(p=>({...p,stock:e.target.value}))} placeholder="∞" style={inp}/>
+                <input type="number" onFocus={e => e.target.select()} min="0" value={itemModal?.stock??''} onChange={e=>setItemModal(p=>({...p,stock:e.target.value}))} placeholder="∞" style={inp}/>
               </Field>
               {/* Modifier grupe */}
               {(itemModal?.item_type||'simple') !== 'ingredient' && (
@@ -4717,7 +4717,7 @@ function InventoryScreen({ posData }) {
                   {modGroupModal.modifiers.map((m:any, i:number) => (
                     <div key={i} style={{ display:'flex', gap:6, alignItems:'center' }}>
                       <input value={m.name} onChange={e=>{const ms=[...modGroupModal.modifiers];ms[i]={...ms[i],name:e.target.value};setModGroupModal((p:any)=>({...p,modifiers:ms}))}} placeholder="npr. Ovseno" style={{...inp,flex:2}}/>
-                      <input type="number" step="0.1" value={m.price_delta||''} onChange={e=>{const ms=[...modGroupModal.modifiers];ms[i]={...ms[i],price_delta:parseFloat(e.target.value)||0};setModGroupModal((p:any)=>({...p,modifiers:ms}))}} placeholder="+0.50" style={{...inp,flex:1,width:80}}/>
+                      <input type="number" onFocus={e => e.target.select()} step="0.1" value={m.price_delta||''} onChange={e=>{const ms=[...modGroupModal.modifiers];ms[i]={...ms[i],price_delta:parseFloat(e.target.value)||0};setModGroupModal((p:any)=>({...p,modifiers:ms}))}} placeholder="+0.50" style={{...inp,flex:1,width:80}}/>
                       <button onClick={()=>{const ms=modGroupModal.modifiers.filter((_:any,j:number)=>j!==i);setModGroupModal((p:any)=>({...p,modifiers:ms}))}} style={{ color:T.danger, background:'none', border:'none', cursor:'pointer', fontSize:16 }}>×</button>
                     </div>
                   ))}
@@ -4770,7 +4770,7 @@ function InventoryScreen({ posData }) {
                   {modGroupModal.modifiers.map((m:any, i:number) => (
                     <div key={i} style={{ display:'flex', gap:6, alignItems:'center' }}>
                       <input value={m.name} onChange={e=>{const ms=[...modGroupModal.modifiers];ms[i]={...ms[i],name:e.target.value};setModGroupModal((p:any)=>({...p,modifiers:ms}))}} placeholder="npr. Ovseno" style={{...inp,flex:2}}/>
-                      <input type="number" step="0.1" value={m.price_delta||''} onChange={e=>{const ms=[...modGroupModal.modifiers];ms[i]={...ms[i],price_delta:parseFloat(e.target.value)||0};setModGroupModal((p:any)=>({...p,modifiers:ms}))}} placeholder="+0.50" style={{...inp,flex:1,width:80}}/>
+                      <input type="number" onFocus={e => e.target.select()} step="0.1" value={m.price_delta||''} onChange={e=>{const ms=[...modGroupModal.modifiers];ms[i]={...ms[i],price_delta:parseFloat(e.target.value)||0};setModGroupModal((p:any)=>({...p,modifiers:ms}))}} placeholder="+0.50" style={{...inp,flex:1,width:80}}/>
                       <button onClick={()=>{const ms=modGroupModal.modifiers.filter((_:any,j:number)=>j!==i);setModGroupModal((p:any)=>({...p,modifiers:ms}))}} style={{ color:T.danger, background:'none', border:'none', cursor:'pointer', fontSize:16 }}>×</button>
                     </div>
                   ))}
@@ -4922,7 +4922,7 @@ function OpenCashModal({ posData, auth, onClose, onOpened }) {
         <div>
           <div style={{ fontSize:12, fontWeight:600, marginBottom:6 }}>Znesek v blagajni (€)</div>
           <input
-            type="number"
+            type="number" onFocus={e => e.target.select()}
             min="0"
             step="0.01"
             value={cashAmount}
@@ -5262,7 +5262,7 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
           <div>
             <div style={{ fontSize:12, fontWeight:600, marginBottom:6 }}>Prešteto v blagajni (€)</div>
             <input
-              type="number" min="0" step="0.01"
+              type="number" onFocus={e => e.target.select()} min="0" step="0.01"
               value={cashDeclared}
               onChange={e => setCashDeclared(e.target.value)}
               style={{ width:'100%', padding:'10px 12px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:14, fontWeight:700, background:T.inputBg, outline:'none' }}
@@ -5535,7 +5535,7 @@ function ZReportModal({ posData, onClose }) {
               <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>STANJE BLAGAJNE</div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
                 <Field label="Gotovina ob odprtju (€)">
-                  <input type="number" value={cashOpening} onChange={e=>setCashOpening(e.target.value)} min="0" step="0.01" style={inp}/>
+                  <input type="number" onFocus={e => e.target.select()} value={cashOpening} onChange={e=>setCashOpening(e.target.value)} min="0" step="0.01" style={inp}/>
                   {carryOver !== null && (
                     <div style={{ marginTop:6, padding:'7px 10px', borderRadius:7, background:T.accentSoft, fontSize:11, color:T.accent, fontWeight:600 }}>
                       💰 Prenos iz prejšnje izmene: €{carryOver.toFixed(2).replace('.',',')}
@@ -5543,7 +5543,7 @@ function ZReportModal({ posData, onClose }) {
                   )}
                 </Field>
                 <Field label="Gotovina ob zaključku (€)">
-                  <input type="number" value={cashClosing} onChange={e=>setCashClosing(e.target.value)} min="0" step="0.01" style={inp}/>
+                  <input type="number" onFocus={e => e.target.select()} value={cashClosing} onChange={e=>setCashClosing(e.target.value)} min="0" step="0.01" style={inp}/>
                 </Field>
               </div>
             </div>
@@ -6099,7 +6099,7 @@ function RefundModal({ order, lines, payment, auth, onClose, onRefunded }) {
             <div>
               <div style={{ fontSize:12, fontWeight:600, marginBottom:6 }}>Znesek vračila (€)</div>
               <input
-                type="number" min="0.01" step="0.01" max={order.total}
+                type="number" onFocus={e => e.target.select()} min="0.01" step="0.01" max={order.total}
                 value={customAmount}
                 onChange={e => setCustomAmount(e.target.value)}
                 placeholder={`Max: €${Number(order.total).toFixed(2)}`}
@@ -7123,7 +7123,7 @@ function InventuraScreen({ posData, auth }) {
                       </span>
                     ) : (
                       <input
-                        type="number"
+                        type="number" onFocus={e => e.target.select()}
                         min="0"
                         step={line.unit==='kos'?'1':'0.01'}
                         value={line.actual_qty !== null && line.actual_qty !== undefined ? line.actual_qty : ''}
@@ -7986,7 +7986,7 @@ function CenikImportModal({ onClose, posData }) {
                   <input value={it.name} onChange={e => updateItem(i, 'name', e.target.value)} style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '5px 7px', fontSize: 12 }} />
                   <input value={it.category} onChange={e => updateItem(i, 'category', e.target.value)} placeholder="Kategorija" style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '5px 7px', fontSize: 12 }} />
                   <input value={it.unit} onChange={e => updateItem(i, 'unit', e.target.value)} style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '5px 7px', fontSize: 12, textAlign: 'center' }} />
-                  <input type="number" step="0.01" value={it.price} onChange={e => updateItem(i, 'price', Number(e.target.value))} style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '5px 7px', fontSize: 12, textAlign: 'right' }} />
+                  <input type="number" onFocus={e => e.target.select()} step="0.01" value={it.price} onChange={e => updateItem(i, 'price', Number(e.target.value))} style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '5px 7px', fontSize: 12, textAlign: 'right' }} />
                   <select value={it.vat_rate} onChange={e => updateItem(i, 'vat_rate', Number(e.target.value))} style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '4px 2px', fontSize: 12 }}>
                     <option value={22}>22%</option>
                     <option value={9.5}>9.5%</option>
@@ -8239,12 +8239,12 @@ function CatalogSection({ posData }) {
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             {(itemModal?.item_type||'simple') !== 'ingredient' && (
               <Field label="Prodajna cena (€) *">
-                <input type="number" step="0.01" min="0" value={itemModal?.price||''} onChange={e=>setItemModal(p=>({...p,price:e.target.value}))} placeholder="0.00" style={inp}/>
+                <input type="number" onFocus={e => e.target.select()} step="0.01" min="0" value={itemModal?.price||''} onChange={e=>setItemModal(p=>({...p,price:e.target.value}))} placeholder="0.00" style={inp}/>
               </Field>
             )}
             {(itemModal?.item_type||'simple') === 'ingredient' && (
               <Field label="Nabavna cena (€)">
-                <input type="number" step="0.01" min="0" value={itemModal?.price||''} onChange={e=>setItemModal(p=>({...p,price:e.target.value}))} placeholder="0.00" style={inp}/>
+                <input type="number" onFocus={e => e.target.select()} step="0.01" min="0" value={itemModal?.price||''} onChange={e=>setItemModal(p=>({...p,price:e.target.value}))} placeholder="0.00" style={inp}/>
               </Field>
             )}
             <Field label="Enota">
@@ -8279,7 +8279,7 @@ function CatalogSection({ posData }) {
           )}
 
           <Field label={(itemModal?.item_type||'simple')==='ingredient'?'Zaloga v skladišču':'Zaloga (pusti prazno za neomejeno)'}>
-            <input type="number" min="0" value={itemModal?.stock??''} onChange={e=>setItemModal(p=>({...p,stock:e.target.value}))} placeholder="∞" style={inp}/>
+            <input type="number" onFocus={e => e.target.select()} min="0" value={itemModal?.stock??''} onChange={e=>setItemModal(p=>({...p,stock:e.target.value}))} placeholder="∞" style={inp}/>
           </Field>
 
           {/* Normativ — samo za recipe tip */}
@@ -8294,7 +8294,7 @@ function CatalogSection({ posData }) {
                     <option value="">— izberi surovino —</option>
                     {posData.ingredients.map(ig=><option key={ig.id} value={ig.id}>{ig.name} ({ig.unit})</option>)}
                   </select>
-                  <input type="number" step="0.01" min="0" value={n.qty_used||''} onChange={e=>{const nv=[...(itemModal.normativ||[])];nv[i]={...nv[i],qty_used:e.target.value};setItemModal(p=>({...p,normativ:nv}))}} placeholder="Qty" style={{ ...inp, width:80, flex:0 }}/>
+                  <input type="number" onFocus={e => e.target.select()} step="0.01" min="0" value={n.qty_used||''} onChange={e=>{const nv=[...(itemModal.normativ||[])];nv[i]={...nv[i],qty_used:e.target.value};setItemModal(p=>({...p,normativ:nv}))}} placeholder="Qty" style={{ ...inp, width:80, flex:0 }}/>
                   <span style={{ fontSize:11, color:T.muted, minWidth:24 }}>
                     {posData.ingredients.find(ig=>ig.id===n.ingredient_id)?.unit||''}
                   </span>
@@ -8397,7 +8397,7 @@ function CatalogSection({ posData }) {
                 {modGroupModal.modifiers.map((m:any, i:number) => (
                   <div key={i} style={{ display:'flex', gap:6, alignItems:'center' }}>
                     <input value={m.name} onChange={(e:any)=>{const ms=[...modGroupModal.modifiers];ms[i]={...ms[i],name:e.target.value};setModGroupModal((p:any)=>({...p,modifiers:ms}))}} placeholder="npr. Ovseno" style={{...inp,flex:2}}/>
-                    <input type="number" step="0.1" value={m.price_delta||''} onChange={(e:any)=>{const ms=[...modGroupModal.modifiers];ms[i]={...ms[i],price_delta:parseFloat(e.target.value)||0};setModGroupModal((p:any)=>({...p,modifiers:ms}))}} placeholder="+0.50" style={{...inp,flex:1,width:80}}/>
+                    <input type="number" onFocus={e => e.target.select()} step="0.1" value={m.price_delta||''} onChange={(e:any)=>{const ms=[...modGroupModal.modifiers];ms[i]={...ms[i],price_delta:parseFloat(e.target.value)||0};setModGroupModal((p:any)=>({...p,modifiers:ms}))}} placeholder="+0.50" style={{...inp,flex:1,width:80}}/>
                     <button onClick={()=>{const ms=modGroupModal.modifiers.filter((_:any,j:number)=>j!==i);setModGroupModal((p:any)=>({...p,modifiers:ms}))}} style={{ color:T.danger, background:'none', border:'none', cursor:'pointer', fontSize:16 }}>x</button>
                   </div>
                 ))}
@@ -8721,7 +8721,7 @@ function SpacesSection({ posData }) {
                 </button>
               ))}
             </div>
-            <input type="number" min="1" max="20" value={tableModal?.seats||2} onChange={e=>setTableModal(p=>({...p,seats:Number(e.target.value)}))} style={{ ...inp, marginTop:6 }} placeholder="Ali vpiši ročno"/>
+            <input type="number" onFocus={e => e.target.select()} min="1" max="20" value={tableModal?.seats||2} onChange={e=>setTableModal(p=>({...p,seats:Number(e.target.value)}))} style={{ ...inp, marginTop:6 }} placeholder="Ali vpiši ročno"/>
           </Field>
           <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
             <button onClick={()=>setTableModal(null)} style={btnS}>Prekliči</button>
@@ -8879,7 +8879,7 @@ function PackagesAdminSection({ posData, modal, setModal }) {
 
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <Field label={ttype==='gift_voucher'?'Vrednost bona (€) *':'Cena (€) *'}>
-              <input type="number" step="0.01" min="0" value={modal?.price||''} onChange={e=>setModal(p=>({...p,price:e.target.value}))} style={inp}/>
+              <input type="number" onFocus={e => e.target.select()} step="0.01" min="0" value={modal?.price||''} onChange={e=>setModal(p=>({...p,price:e.target.value}))} style={inp}/>
             </Field>
             <Field label="DDV stopnja *">
               <select value={modal?.vat_rate??22} onChange={e=>setModal(p=>({...p,vat_rate:e.target.value}))} style={inp}>
@@ -8903,7 +8903,7 @@ function PackagesAdminSection({ posData, modal, setModal }) {
           {/* Trajanje */}
           {ttype !== 'seasonal' && (
             <Field label="Veljavnost (dni od aktivacije)">
-              <input type="number" min="1" value={modal?.validity_days||''} onChange={e=>setModal(p=>({...p,validity_days:e.target.value}))} placeholder="30, 90, 365..." style={inp}/>
+              <input type="number" onFocus={e => e.target.select()} min="1" value={modal?.validity_days||''} onChange={e=>setModal(p=>({...p,validity_days:e.target.value}))} placeholder="30, 90, 365..." style={inp}/>
             </Field>
           )}
 
@@ -8918,7 +8918,7 @@ function PackagesAdminSection({ posData, modal, setModal }) {
           {/* Obiski */}
           {['visits','group_class'].includes(ttype) && (
             <Field label="Število obiskov *">
-              <input type="number" min="1" value={modal?.visits||10} onChange={e=>setModal(p=>({...p,visits:e.target.value}))} style={inp}/>
+              <input type="number" onFocus={e => e.target.select()} min="1" value={modal?.visits||10} onChange={e=>setModal(p=>({...p,visits:e.target.value}))} style={inp}/>
             </Field>
           )}
 
@@ -8943,7 +8943,7 @@ function PackagesAdminSection({ posData, modal, setModal }) {
           {/* Opozorila */}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <Field label="Opozorilo pred iztekom (dni)">
-              <input type="number" min="1" value={modal?.notify_before_days||7} onChange={e=>setModal(p=>({...p,notify_before_days:e.target.value}))} style={inp}/>
+              <input type="number" onFocus={e => e.target.select()} min="1" value={modal?.notify_before_days||7} onChange={e=>setModal(p=>({...p,notify_before_days:e.target.value}))} style={inp}/>
             </Field>
             <div style={{ display:'flex', flexDirection:'column', justifyContent:'flex-end', paddingBottom:4 }}>
               <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, cursor:'pointer' }}>
@@ -9100,15 +9100,15 @@ function SestavineSection({ posData }) {
               </select>
             </Field>
             <Field label="Trenutna zaloga">
-              <input type="number" min="0" step="0.01" value={modal?.stock_qty||0} onChange={e=>setModal(p=>({...p,stock_qty:e.target.value}))} style={inp}/>
+              <input type="number" onFocus={e => e.target.select()} min="0" step="0.01" value={modal?.stock_qty||0} onChange={e=>setModal(p=>({...p,stock_qty:e.target.value}))} style={inp}/>
             </Field>
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <Field label="Minimalna zaloga (opozorilo)">
-              <input type="number" min="0" step="0.01" value={modal?.min_stock||0} onChange={e=>setModal(p=>({...p,min_stock:e.target.value}))} style={inp}/>
+              <input type="number" onFocus={e => e.target.select()} min="0" step="0.01" value={modal?.min_stock||0} onChange={e=>setModal(p=>({...p,min_stock:e.target.value}))} style={inp}/>
             </Field>
             <Field label="Nabavna cena (€)">
-              <input type="number" min="0" step="0.01" value={modal?.cost_price||''} onChange={e=>setModal(p=>({...p,cost_price:e.target.value}))} placeholder="0.00" style={inp}/>
+              <input type="number" onFocus={e => e.target.select()} min="0" step="0.01" value={modal?.cost_price||''} onChange={e=>setModal(p=>({...p,cost_price:e.target.value}))} placeholder="0.00" style={inp}/>
             </Field>
           </div>
           <Field label="Dobavitelj (neobvezno)">
@@ -9248,10 +9248,10 @@ function StoritveCrudSection({ posData, modal, setModal }) {
           </Field>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <Field label="Cena (€) *">
-              <input type="number" step="0.01" min="0" value={modal?.price||''} onChange={e=>setModal(p=>({...p,price:e.target.value}))} style={inp}/>
+              <input type="number" onFocus={e => e.target.select()} step="0.01" min="0" value={modal?.price||''} onChange={e=>setModal(p=>({...p,price:e.target.value}))} style={inp}/>
             </Field>
             <Field label="Trajanje (min) *">
-              <input type="number" min="5" step="5" value={modal?.duration_min||60} onChange={e=>setModal(p=>({...p,duration_min:e.target.value}))} style={inp}/>
+              <input type="number" onFocus={e => e.target.select()} min="5" step="5" value={modal?.duration_min||60} onChange={e=>setModal(p=>({...p,duration_min:e.target.value}))} style={inp}/>
             </Field>
           </div>
           <Field label="DDV stopnja *">
@@ -9413,7 +9413,7 @@ function HappyHourSection({ posData }) {
             <input value={modal?.name||''} onChange={e=>setModal(p=>({...p,name:e.target.value}))} placeholder="Bar happy hour, Jutranjo kavo..." style={inp} autoFocus/>
           </Field>
           <Field label="Popust (%) *">
-            <input type="number" min="1" max="99" value={modal?.discount_pct||20} onChange={e=>setModal(p=>({...p,discount_pct:e.target.value}))} style={inp}/>
+            <input type="number" onFocus={e => e.target.select()} min="1" max="99" value={modal?.discount_pct||20} onChange={e=>setModal(p=>({...p,discount_pct:e.target.value}))} style={inp}/>
           </Field>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <Field label="Od *">
@@ -10694,7 +10694,7 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
           {payInInstallments && (
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginTop:12 }}>
               <Field label="Stevilo obrokov">
-                <input type="number" min={2} max={24} value={installmentCount} onChange={e=>setInstallmentCount(e.target.value)} style={inp}/>
+                <input type="number" onFocus={e => e.target.select()} min={2} max={24} value={installmentCount} onChange={e=>setInstallmentCount(e.target.value)} style={inp}/>
               </Field>
               <Field label="Pogostost">
                 <select value={installmentFrequency} onChange={e=>setInstallmentFrequency(e.target.value)} style={inp}>
@@ -11346,7 +11346,7 @@ function ManualAddCardModal({ customer, posData, onClose, onDone }) {
         </Field>
         {tpl && tpl.visits != null && (
           <Field label="Število obiskov (spremeni, če se razlikuje od privzetega v ceniku)">
-            <input type="number" min={1} value={customVisits} onChange={e=>setCustomVisits(e.target.value)} style={inp}/>
+            <input type="number" onFocus={e => e.target.select()} min={1} value={customVisits} onChange={e=>setCustomVisits(e.target.value)} style={inp}/>
           </Field>
         )}
         <Field label="Razlog (obvezno)">
@@ -11398,7 +11398,7 @@ function EditPackageModal({ pkg, onClose, onDone }) {
         </Field>
         {pkg.remaining !== null && (
           <Field label="Preostali obiski">
-            <input type="number" min={0} value={remaining} onChange={e=>setRemaining(e.target.value)} style={inp}/>
+            <input type="number" onFocus={e => e.target.select()} min={0} value={remaining} onChange={e=>setRemaining(e.target.value)} style={inp}/>
           </Field>
         )}
         <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
@@ -11439,7 +11439,7 @@ function ExtendPackageModal({ pkg, onClose, onDone }) {
       <div style={{ padding:20, display:'flex', flexDirection:'column', gap:12 }}>
         <div style={{ fontSize:12, color:T.muted }}>Trenutno poteče: {pkg.expires ? new Date(pkg.expires).toLocaleDateString('sl-SI') : 'brez omejitve'}</div>
         <Field label="Podaljšaj za (dni)">
-          <input type="number" min={1} value={days} onChange={e=>setDays(e.target.value)} style={inp}/>
+          <input type="number" onFocus={e => e.target.select()} min={1} value={days} onChange={e=>setDays(e.target.value)} style={inp}/>
         </Field>
         <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
           <button onClick={onClose} style={btnS}>Prekliči</button>

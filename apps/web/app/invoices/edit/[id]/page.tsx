@@ -239,12 +239,12 @@ export default function EditInvoicePage() {
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'8px' }}>
                       <div>
                         <label style={{ fontSize:'10px', color:'#888', display:'block', marginBottom:'3px' }}>Količina</label>
-                        <input type="number" value={item.quantity} onChange={e => updateItem(i, 'quantity', +e.target.value)}
+                        <input type="number" onFocus={e => e.target.select()} value={item.quantity} onChange={e => updateItem(i, 'quantity', +e.target.value)}
                           className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none text-center" />
                       </div>
                       <div>
                         <label style={{ fontSize:'10px', color:'#888', display:'block', marginBottom:'3px' }}>Cena (€)</label>
-                        <input type="number" value={item.unit_price} onChange={e => updateItem(i, 'unit_price', +e.target.value)}
+                        <input type="number" onFocus={e => e.target.select()} value={item.unit_price} onChange={e => updateItem(i, 'unit_price', +e.target.value)}
                           className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none text-right" />
                       </div>
                       <div>
@@ -441,8 +441,8 @@ export default function EditInvoicePage() {
               {items.map((item, i) => (
                 <div key={i} className="grid grid-cols-12 gap-2 items-center">
                   <div className="col-span-5"><input value={item.description} onChange={e => updateItem(i, 'description', e.target.value)} placeholder="Opis storitve" className={inp} /></div>
-                  <div className="col-span-2"><input type="number" value={item.quantity} onChange={e => updateItem(i, 'quantity', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none text-center" /></div>
-                  <div className="col-span-2"><input type="number" value={item.unit_price} onChange={e => updateItem(i, 'unit_price', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none text-right" /></div>
+                  <div className="col-span-2"><input type="number" onFocus={e => e.target.select()} value={item.quantity} onChange={e => updateItem(i, 'quantity', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none text-center" /></div>
+                  <div className="col-span-2"><input type="number" onFocus={e => e.target.select()} value={item.unit_price} onChange={e => updateItem(i, 'unit_price', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none text-right" /></div>
                   <div className="col-span-2">
                     <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none">
                       <option value={22}>22%</option><option value={9.5}>9.5%</option><option value={0}>0%</option>

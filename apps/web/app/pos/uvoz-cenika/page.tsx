@@ -182,7 +182,7 @@ export default function UvozCenikaPage() {
                   <input value={it.name} onChange={e => updateItem(i, 'name', e.target.value)} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 8px', fontSize: 13 }} />
                   <input value={it.category} onChange={e => updateItem(i, 'category', e.target.value)} placeholder="Kategorija" style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 8px', fontSize: 13 }} />
                   <input value={it.unit} onChange={e => updateItem(i, 'unit', e.target.value)} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 8px', fontSize: 13, textAlign: 'center' }} />
-                  <input type="number" step="0.01" value={it.sale_price} onChange={e => updateItem(i, 'sale_price', Number(e.target.value))} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 8px', fontSize: 13, textAlign: 'right' }} />
+                  <input type="number" onFocus={e => e.target.select()} step="0.01" value={it.sale_price} onChange={e => updateItem(i, 'sale_price', Number(e.target.value))} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 8px', fontSize: 13, textAlign: 'right' }} />
                   <select value={it.vat_rate} onChange={e => updateItem(i, 'vat_rate', Number(e.target.value))} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 4px', fontSize: 13 }}>
                     <option value={22}>22%</option>
                     <option value={9.5}>9.5%</option>

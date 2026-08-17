@@ -642,18 +642,18 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 block mb-1">Bruto plača (€)</label>
-                    <input type="number" value={uploadParsed.gross_amount ?? ''} onChange={e => setUploadParsed({ ...uploadParsed, gross_amount: parseFloat(e.target.value) || 0 })} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm" />
+                    <input type="number" onFocus={e => e.target.select()} value={uploadParsed.gross_amount ?? ''} onChange={e => setUploadParsed({ ...uploadParsed, gross_amount: parseFloat(e.target.value) || 0 })} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm" />
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 block mb-1">Neto plača (€)</label>
-                    <input type="number" value={uploadParsed.net_amount ?? ''} onChange={e => setUploadParsed({ ...uploadParsed, net_amount: parseFloat(e.target.value) || 0 })} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm" />
+                    <input type="number" onFocus={e => e.target.select()} value={uploadParsed.net_amount ?? ''} onChange={e => setUploadParsed({ ...uploadParsed, net_amount: parseFloat(e.target.value) || 0 })} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm" />
                   </div>
                   <div className="col-span-2">
                     <label className="text-xs text-gray-500 block mb-1">
                       Skupaj strošek v breme podjetja (€) — <strong>to se poknjiži v KPO</strong>
                     </label>
                     <input
-                      type="number"
+                      type="number" onFocus={e => e.target.select()}
                       value={uploadParsed.employer_total_cost ?? ''}
                       onChange={e => setUploadParsed({ ...uploadParsed, employer_total_cost: parseFloat(e.target.value) || null })}
                       className="w-full border rounded-xl px-3 py-2 text-sm"
@@ -698,7 +698,7 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
                   <option value={0}>Brez</option><option value={1}>1 otrok</option><option value={2}>2 otroka</option><option value={3}>3+</option>
                 </select></div>
               <div><label className="text-xs text-gray-500 block mb-1">Nadure (ur)</label>
-                <input type="number" value={calcExtras.overtime} onChange={e=>setCalcExtras({...calcExtras,overtime:parseFloat(e.target.value)||0})} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none" /></div>
+                <input type="number" onFocus={e => e.target.select()} value={calcExtras.overtime} onChange={e=>setCalcExtras({...calcExtras,overtime:parseFloat(e.target.value)||0})} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none" /></div>
             </div>
             {calcResult && (
               <div className="bg-gray-900 rounded-xl p-4 text-white">
@@ -735,7 +735,7 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
                   <option value={0}>Brez</option><option value={1}>1 otrok</option><option value={2}>2 otroka</option><option value={3}>3+</option>
                 </select></div>
               <div><label className="text-xs text-gray-500 block mb-1">Letni dopust (dni)</label>
-                <input type="number" min={20} value={form.annual_leave_days} onChange={e=>setForm({...form,annual_leave_days:parseInt(e.target.value)||20})} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none" /></div>
+                <input type="number" onFocus={e => e.target.select()} min={20} value={form.annual_leave_days} onChange={e=>setForm({...form,annual_leave_days:parseInt(e.target.value)||20})} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none" /></div>
             </div>
             <div className="flex gap-3">
               <button onClick={handleAddEmployee} disabled={saving||!form.full_name||!form.gross_salary} className="flex-1 bg-gray-900 text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-40">
@@ -834,7 +834,7 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
                       ].map(field => (
                         <div key={field.key}>
                           <label className="text-xs text-gray-500 block mb-1">{field.label}</label>
-                          <input type="number" min="0" value={empExtras[field.key] || ''} onChange={e => setEmpExtras(emp.id, field.key, parseFloat(e.target.value)||0)}
+                          <input type="number" onFocus={e => e.target.select()} min="0" value={empExtras[field.key] || ''} onChange={e => setEmpExtras(emp.id, field.key, parseFloat(e.target.value)||0)}
                             placeholder="0" className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none" />
                         </div>
                       ))}

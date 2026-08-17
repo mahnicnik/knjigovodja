@@ -462,14 +462,14 @@ export default function KarticeePage() {
               </div>
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Bruto prodaja (€) *</label>
-                <input type="number" value={form.gross_sales}
+                <input type="number" onFocus={e => e.target.select()} value={form.gross_sales}
                   onChange={e => setForm({...form, gross_sales: e.target.value})}
                   placeholder="0.00"
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
               </div>
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Št. transakcij</label>
-                <input type="number" value={form.transactions}
+                <input type="number" onFocus={e => e.target.select()} value={form.transactions}
                   onChange={e => setForm({...form, transactions: e.target.value})}
                   placeholder="0"
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
@@ -478,7 +478,7 @@ export default function KarticeePage() {
                 <label className="text-xs text-gray-500 block mb-1">
                   Provizija % <span className="text-gray-400">(privzeto {feePct}%)</span>
                 </label>
-                <input type="number" value={customFee}
+                <input type="number" onFocus={e => e.target.select()} value={customFee}
                   onChange={e => setCustomFee(e.target.value)}
                   placeholder={feePct.toString()}
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />

@@ -188,21 +188,21 @@ export default function AvtoPage() {
               </div>
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Skupaj prevoženi km</label>
-                <input type="number" value={form.total_km}
+                <input type="number" onFocus={e => e.target.select()} value={form.total_km}
                   onChange={e => setForm({...form, total_km: e.target.value})}
                   placeholder="0"
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
               </div>
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Zasebni km</label>
-                <input type="number" value={form.private_km}
+                <input type="number" onFocus={e => e.target.select()} value={form.private_km}
                   onChange={e => setForm({...form, private_km: e.target.value})}
                   placeholder="0"
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
               </div>
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Nabavna vrednost avta (€)</label>
-                <input type="number" value={form.car_value}
+                <input type="number" onFocus={e => e.target.select()} value={form.car_value}
                   onChange={e => setForm({...form, car_value: e.target.value})}
                   placeholder="npr. 25000"
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />

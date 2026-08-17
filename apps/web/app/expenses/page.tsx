@@ -345,7 +345,7 @@ export default function ExpensesPage() {
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Znesek brez DDV (€) *</label>
                 <input
-                  type="number"
+                  type="number" onFocus={e => e.target.select()}
                   value={form.amount_net}
                   onChange={e => setForm({...form, amount_net: e.target.value})}
                   placeholder="0.00"

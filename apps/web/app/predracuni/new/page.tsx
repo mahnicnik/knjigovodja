@@ -172,9 +172,9 @@ export default function NewQuotePage() {
             {items.map((item, i) => (
               <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 70px 90px 70px 70px 90px 32px', gap: 8, alignItems: 'center' }}>
                 <input value={item.description} onChange={e => updateItem(i, 'description', e.target.value)} placeholder="Opis storitve" style={{ ...inp, fontSize: 12 }} />
-                <input type="number" value={item.quantity} onChange={e => updateItem(i, 'quantity', Number(e.target.value))} style={{ ...inp, fontSize: 12, textAlign: 'right' }} />
-                <input type="number" step="0.01" value={item.unit_price} onChange={e => updateItem(i, 'unit_price', Number(e.target.value))} placeholder="0.00" style={{ ...inp, fontSize: 12, textAlign: 'right' }} />
-                <input type="number" min={0} max={100} value={item.discount_pct || 0} onChange={e => updateItem(i, 'discount_pct', Number(e.target.value))} placeholder="0%" style={{ ...inp, fontSize: 12, textAlign: 'right' }} title="Popust %" />
+                <input type="number" onFocus={e => e.target.select()} value={item.quantity} onChange={e => updateItem(i, 'quantity', Number(e.target.value))} style={{ ...inp, fontSize: 12, textAlign: 'right' }} />
+                <input type="number" onFocus={e => e.target.select()} step="0.01" value={item.unit_price} onChange={e => updateItem(i, 'unit_price', Number(e.target.value))} placeholder="0.00" style={{ ...inp, fontSize: 12, textAlign: 'right' }} />
+                <input type="number" onFocus={e => e.target.select()} min={0} max={100} value={item.discount_pct || 0} onChange={e => updateItem(i, 'discount_pct', Number(e.target.value))} placeholder="0%" style={{ ...inp, fontSize: 12, textAlign: 'right' }} title="Popust %" />
                 <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', Number(e.target.value))} style={{ ...inp, fontSize: 12 }}>
                   <option value={0}>0%</option>
                   <option value={9.5}>9.5%</option>

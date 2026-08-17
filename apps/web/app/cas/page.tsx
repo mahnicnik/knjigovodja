@@ -217,7 +217,7 @@ export default function CasPage() {
               </div>
               <div>
                 <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Ure *</label>
-                <input type="number" step="0.25" min="0.25" value={hours} onChange={e => setHours(Number(e.target.value))} style={inp} />
+                <input type="number" onFocus={e => e.target.select()} step="0.25" min="0.25" value={hours} onChange={e => setHours(Number(e.target.value))} style={inp} />
               </div>
               <div>
                 <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Datum</label>
@@ -235,7 +235,7 @@ export default function CasPage() {
               </div>
               <div>
                 <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Urna postavka (€/h)</label>
-                <input type="number" step="1" min="0" value={hourlyRate} onChange={e => setHourlyRate(Number(e.target.value))} placeholder="0" style={inp} />
+                <input type="number" onFocus={e => e.target.select()} step="1" min="0" value={hourlyRate} onChange={e => setHourlyRate(Number(e.target.value))} placeholder="0" style={inp} />
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>

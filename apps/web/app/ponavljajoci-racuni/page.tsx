@@ -234,7 +234,7 @@ export default function PonavljajoceRacunePage() {
               </div>
               <div>
                 <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Cena (€) *</label>
-                <input type="number" step="0.01" min="0" value={unitPrice} onChange={e => setUnitPrice(Number(e.target.value))} style={inp} />
+                <input type="number" onFocus={e => e.target.select()} step="0.01" min="0" value={unitPrice} onChange={e => setUnitPrice(Number(e.target.value))} style={inp} />
               </div>
               <div>
                 <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Pogostost</label>

@@ -218,7 +218,7 @@ export default function DohodninaPage() {
                   <span className="text-gray-400 ml-1">— iz vaše KPO</span>
                 </label>
                 <input
-                  type="number"
+                  type="number" onFocus={e => e.target.select()}
                   value={revenue}
                   onChange={e => setRevenue(e.target.value)}
                   placeholder="0.00"
@@ -232,7 +232,7 @@ export default function DohodninaPage() {
                   <span className="text-gray-400 ml-1">— oceni letni prihodek</span>
                 </label>
                 <input
-                  type="number"
+                  type="number" onFocus={e => e.target.select()}
                   value={avgMonthlyRevenue}
                   onChange={e => setAvgMonthlyRevenue(e.target.value)}
                   placeholder="0.00"
@@ -244,7 +244,7 @@ export default function DohodninaPage() {
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Odhodki YTD (€)</label>
                 <input
-                  type="number"
+                  type="number" onFocus={e => e.target.select()}
                   value={expenses}
                   onChange={e => setExpenses(e.target.value)}
                   placeholder="0.00"

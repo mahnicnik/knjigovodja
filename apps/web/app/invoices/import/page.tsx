@@ -258,17 +258,17 @@ export default function ImportInvoicesPage() {
                       </div>
                       <div>
                         <label style={{ fontSize: 10, color: '#999' }}>Osnova</label>
-                        <input type="number" step="0.01" value={inv.amount_net} onChange={e => updateField(idx, 'amount_net', parseFloat(e.target.value) || 0)}
+                        <input type="number" onFocus={e => e.target.select()} step="0.01" value={inv.amount_net} onChange={e => updateField(idx, 'amount_net', parseFloat(e.target.value) || 0)}
                           style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 13 }} />
                       </div>
                       <div>
                         <label style={{ fontSize: 10, color: '#999' }}>DDV</label>
-                        <input type="number" step="0.01" value={inv.vat_amount} onChange={e => updateField(idx, 'vat_amount', parseFloat(e.target.value) || 0)}
+                        <input type="number" onFocus={e => e.target.select()} step="0.01" value={inv.vat_amount} onChange={e => updateField(idx, 'vat_amount', parseFloat(e.target.value) || 0)}
                           style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 13 }} />
                       </div>
                       <div>
                         <label style={{ fontSize: 10, color: '#999' }}>Skupaj</label>
-                        <input type="number" step="0.01" value={inv.amount_total} onChange={e => updateField(idx, 'amount_total', parseFloat(e.target.value) || 0)}
+                        <input type="number" onFocus={e => e.target.select()} step="0.01" value={inv.amount_total} onChange={e => updateField(idx, 'amount_total', parseFloat(e.target.value) || 0)}
                           style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 13, fontWeight: 700 }} />
                       </div>
                     </div>

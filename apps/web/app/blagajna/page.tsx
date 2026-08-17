@@ -281,7 +281,7 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95
                 <input value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})}
                   placeholder="Naziv *"
                   className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none" />
-                <input type="number" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})}
+                <input type="number" onFocus={e => e.target.select()} value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})}
                   placeholder="Cena z DDV *"
                   className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none" />
                 <select value={newProduct.vat_rate} onChange={e => setNewProduct({...newProduct, vat_rate: e.target.value})}
@@ -434,7 +434,7 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95
               </div>
               {paymentMethod === 'cash' && (
                 <div className="mb-3">
-                  <input type="number" value={cashGiven}
+                  <input type="number" onFocus={e => e.target.select()} value={cashGiven}
                     onChange={e => setCashGiven(e.target.value)}
                     placeholder="Prejeto (€)"
                     className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-2.5 text-sm focus:outline-none mb-2" />

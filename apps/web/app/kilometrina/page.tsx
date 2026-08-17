@@ -225,7 +225,7 @@ export default function KilometrinaPage() {
               </div>
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Razdalja (km, enosmerno) *</label>
-                <input type="number" value={form.km}
+                <input type="number" onFocus={e => e.target.select()} value={form.km}
                   onChange={e => setForm({...form, km: e.target.value})}
                   placeholder="0"
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />

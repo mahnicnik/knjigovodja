@@ -273,7 +273,7 @@ export default function REK1Page() {
                       <div className="space-y-1.5 text-xs">
                         <div className="flex justify-between items-center"><span className="text-gray-600">Bruto plača</span>
                           <input
-                            type="number"
+                            type="number" onFocus={e => e.target.select()}
                             step="0.01"
                             value={effectiveGross || ''}
                             onChange={e => setGrossOverrides(prev => ({ ...prev, [emp.id]: e.target.value === '' ? 0 : Number(e.target.value) }))}

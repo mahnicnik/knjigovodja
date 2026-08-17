@@ -238,7 +238,7 @@ export default function RegresPage() {
                         </td>
                         <td style={{ padding: '14px 14px' }}>
                           <input
-                            type="number"
+                            type="number" onFocus={e => e.target.select()}
                             step="1"
                             min={MIN_REGRES}
                             value={amount}

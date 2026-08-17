@@ -319,7 +319,7 @@ export default function PotniStroskiPage() {
                 <label className="text-xs text-gray-500 block mb-1">
                   Količina ({expType.unit})
                 </label>
-                <input type="number" value={form.quantity}
+                <input type="number" onFocus={e => e.target.select()} value={form.quantity}
                   onChange={e => setForm({...form, quantity: e.target.value})}
                   placeholder="0"
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
@@ -327,7 +327,7 @@ export default function PotniStroskiPage() {
               {['accommodation', 'parking', 'toll', 'other'].includes(form.expense_type) && (
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">Znesek po računu (€)</label>
-                  <input type="number" value={form.receipt_amount}
+                  <input type="number" onFocus={e => e.target.select()} value={form.receipt_amount}
                     onChange={e => setForm({...form, receipt_amount: e.target.value})}
                     placeholder="0.00"
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />

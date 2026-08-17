@@ -199,14 +199,14 @@ export default function NormianiPage() {
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="text-xs text-gray-500 block mb-1">Letni prihodki (€)</label>
-              <input type="number" value={revenue}
+              <input type="number" onFocus={e => e.target.select()} value={revenue}
                 onChange={e => setRevenue(e.target.value)}
                 placeholder="0.00"
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
             </div>
             <div>
               <label className="text-xs text-gray-500 block mb-1">Dejanski letni stroški (€)</label>
-              <input type="number" value={expenses}
+              <input type="number" onFocus={e => e.target.select()} value={expenses}
                 onChange={e => setExpenses(e.target.value)}
                 placeholder="0.00"
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />

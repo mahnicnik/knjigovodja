@@ -233,25 +233,25 @@ export default function PotniNalogiPage() {
                   <>
                     <div>
                       <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Kilometri (km)</label>
-                      <input type="number" min="0" value={km} onChange={e => setKm(Number(e.target.value))} style={inp} />
+                      <input type="number" onFocus={e => e.target.select()} min="0" value={km} onChange={e => setKm(Number(e.target.value))} style={inp} />
                     </div>
                     <div>
                       <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>€/km (država: €0.43)</label>
-                      <input type="number" step="0.01" value={kmRate} onChange={e => setKmRate(Number(e.target.value))} style={inp} />
+                      <input type="number" onFocus={e => e.target.select()} step="0.01" value={kmRate} onChange={e => setKmRate(Number(e.target.value))} style={inp} />
                     </div>
                   </>
                 )}
                 <div>
                   <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Dnevnica (€)</label>
-                  <input type="number" step="0.01" min="0" value={dailyAllowance} onChange={e => setDailyAllowance(Number(e.target.value))} style={inp} />
+                  <input type="number" onFocus={e => e.target.select()} step="0.01" min="0" value={dailyAllowance} onChange={e => setDailyAllowance(Number(e.target.value))} style={inp} />
                 </div>
                 <div>
                   <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Nastanitev (€)</label>
-                  <input type="number" step="0.01" min="0" value={accommodation} onChange={e => setAccommodation(Number(e.target.value))} style={inp} />
+                  <input type="number" onFocus={e => e.target.select()} step="0.01" min="0" value={accommodation} onChange={e => setAccommodation(Number(e.target.value))} style={inp} />
                 </div>
                 <div>
                   <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Ostali stroški (€)</label>
-                  <input type="number" step="0.01" min="0" value={otherCosts} onChange={e => setOtherCosts(Number(e.target.value))} style={inp} />
+                  <input type="number" onFocus={e => e.target.select()} step="0.01" min="0" value={otherCosts} onChange={e => setOtherCosts(Number(e.target.value))} style={inp} />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'flex-end' }}>
                   <div style={{ background: '#0D1F12', borderRadius: 8, padding: '10px 16px', width: '100%' }}>

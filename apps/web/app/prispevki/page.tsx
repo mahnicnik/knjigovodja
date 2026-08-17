@@ -237,7 +237,7 @@ export default function PrispevkiPage() {
           <div className="font-medium text-gray-900 text-sm mb-1">Akontacija dohodnine</div>
           <div className="text-xs text-gray-500 mb-3">Opcijsko — samo če jo plačujete mesečno</div>
           <div className="flex gap-3 mb-3">
-            <input type="number" value={akontacija} onChange={e => setAkontacija(e.target.value)}
+            <input type="number" onFocus={e => e.target.select()} value={akontacija} onChange={e => setAkontacija(e.target.value)}
               placeholder="0.00"
               className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
             <span className="flex items-center text-sm text-gray-500">€/mesec</span>

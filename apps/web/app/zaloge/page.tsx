@@ -418,11 +418,11 @@ export default function ZalogePage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                 <div>
                   <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Nabavna cena (€)</label>
-                  <input type="number" step="0.01" min="0" value={itemModal.purchase_price ?? 0} onChange={e => setItemModal(p => ({ ...p, purchase_price: Number(e.target.value) }))} style={inp} />
+                  <input type="number" onFocus={e => e.target.select()} step="0.01" min="0" value={itemModal.purchase_price ?? 0} onChange={e => setItemModal(p => ({ ...p, purchase_price: Number(e.target.value) }))} style={inp} />
                 </div>
                 <div>
                   <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Prodajna cena (€)</label>
-                  <input type="number" step="0.01" min="0" value={itemModal.sale_price ?? 0} onChange={e => setItemModal(p => ({ ...p, sale_price: Number(e.target.value) }))} style={inp} />
+                  <input type="number" onFocus={e => e.target.select()} step="0.01" min="0" value={itemModal.sale_price ?? 0} onChange={e => setItemModal(p => ({ ...p, sale_price: Number(e.target.value) }))} style={inp} />
                 </div>
                 <div>
                   <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>DDV %</label>
@@ -437,12 +437,12 @@ export default function ZalogePage() {
                 {!itemModal.id && (
                   <div>
                     <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Začetna zaloga</label>
-                    <input type="number" step="0.001" min="0" value={itemModal.current_stock ?? 0} onChange={e => setItemModal(p => ({ ...p, current_stock: Number(e.target.value) }))} style={inp} />
+                    <input type="number" onFocus={e => e.target.select()} step="0.001" min="0" value={itemModal.current_stock ?? 0} onChange={e => setItemModal(p => ({ ...p, current_stock: Number(e.target.value) }))} style={inp} />
                   </div>
                 )}
                 <div>
                   <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Minimalna zaloga (opomnik)</label>
-                  <input type="number" step="0.001" min="0" value={itemModal.min_stock ?? 0} onChange={e => setItemModal(p => ({ ...p, min_stock: Number(e.target.value) }))} style={inp} />
+                  <input type="number" onFocus={e => e.target.select()} step="0.001" min="0" value={itemModal.min_stock ?? 0} onChange={e => setItemModal(p => ({ ...p, min_stock: Number(e.target.value) }))} style={inp} />
                 </div>
               </div>
               {itemModal.purchase_price && itemModal.sale_price && itemModal.sale_price > 0 && (
@@ -478,12 +478,12 @@ export default function ZalogePage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
                 <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Količina *</label>
-                <input type="number" step="0.001" min="0.001" value={movQty} onChange={e => setMovQty(Number(e.target.value))} style={inp} autoFocus />
+                <input type="number" onFocus={e => e.target.select()} step="0.001" min="0.001" value={movQty} onChange={e => setMovQty(Number(e.target.value))} style={inp} autoFocus />
               </div>
               {movModal.type === 'in' && (
                 <div>
                   <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Nabavna cena/enoto (€)</label>
-                  <input type="number" step="0.01" min="0" value={movPrice} onChange={e => setMovPrice(Number(e.target.value))} style={inp} />
+                  <input type="number" onFocus={e => e.target.select()} step="0.01" min="0" value={movPrice} onChange={e => setMovPrice(Number(e.target.value))} style={inp} />
                 </div>
               )}
               <div>
