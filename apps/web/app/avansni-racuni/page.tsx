@@ -77,6 +77,11 @@ export default function AvansniRacuniPage() {
 
   async function saveAdvance() {
     if (!orgId || !clientName.trim() || totalAmount <= 0) { showToast('Izpolnite vsa polja'); return }
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       const advanceAmount = Math.round(totalAmount * (advancePct / 100) * 100) / 100
@@ -119,6 +124,11 @@ export default function AvansniRacuniPage() {
 
   async function saveFinal(advance: Invoice) {
     if (!orgId) return
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       const contractValue = (advance as any).total_contract_value ?? advance.amount_total

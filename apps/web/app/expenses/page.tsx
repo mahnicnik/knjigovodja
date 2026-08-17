@@ -103,6 +103,11 @@ export default function ExpensesPage() {
   // DODANO (11.8.2026): manjkala je moznost brisanja stroska.
   async function deleteReceipt(id: string) {
     if (!confirm('Res želite izbrisati ta strošek? To dejanje je nepovratno.')) return
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     // Najprej pocisti povezan KPO vnos (ce obstaja), da ne ostane osirotel
     // POPRAVLJENO (16.8.2026): prej brez preverbe - ce vnos v knjigi ostane,
@@ -123,6 +128,11 @@ export default function ExpensesPage() {
 
   async function handleSave() {
     if (!org || !form.vendor || !form.amount_net) return
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     const amountNet = parseFloat(form.amount_net)
     const vatRate = parseFloat(form.vat_rate)

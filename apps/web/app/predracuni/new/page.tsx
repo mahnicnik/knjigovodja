@@ -83,6 +83,11 @@ export default function NewQuotePage() {
 
   async function save() {
     if (!orgId || !clientName.trim()) return
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       const year = new Date().getFullYear()

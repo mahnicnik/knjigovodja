@@ -199,6 +199,11 @@ export default function ScanPage() {
 
   async function handleSave() {
     if (!org || !form.vendor || !form.amount_net) return
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     const amountNet = parseFloat(form.amount_net)
     const vatRate = parseFloat(form.vat_rate)

@@ -1391,6 +1391,11 @@ function PremiseSelectScreen({ auth, onSelected }) {
 
   function confirm() {
     if (!selectedPremise) return
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     setActivePremise(selectedPremise)
     setActiveDevice(selectedDevice || premiseDevices[0] || null)
@@ -1573,6 +1578,11 @@ function WriteoffModal({ cart, auth, onClose, onDone }) {
     { id: 'reprezentanca', label: 'Reprezentanca', desc: 'Pogostitev poslovnih partnerjev' },
   ]
   async function handleSave() {
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     setError('')
     try {
@@ -2647,6 +2657,11 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
   }, [data.service_id])
 
   async function save() {
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       const payload = {
@@ -3301,6 +3316,11 @@ function CustomerNotesTab({ customer, onSave }) {
   useEffect(() => { setNotes(customer.notes||''); setSaved(false) }, [customer.id])
 
   async function save() {
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     const { error: notesErr } = await createClient().from('customers').update({ notes }).eq('id', customer.id)
     if (notesErr) { alert('Opombe ni bilo mogoče shraniti: ' + notesErr.message); return }
@@ -3427,6 +3447,11 @@ function CustomerProfileEditTab({ customer, onSave }) {
   }
   useEffect(() => { setData({...customer}); setSaved(false) }, [customer.id])
   async function save() {
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       const {error} = await createClient().from('customers').update({
@@ -3761,6 +3786,11 @@ function AddCustomerModal({ onClose, onSaved }) {
   const [saving, setSaving] = useState(false)
   async function save() {
     if (!data.name.trim()) return alert('Ime je obvezno')
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       const {data:saved, error} = await createClient().from('customers').insert({
@@ -4151,6 +4181,11 @@ function InventoryScreen({ posData }) {
     const itemType = itemModal?.item_type || 'simple'
     if (itemType !== 'ingredient' && (!itemModal.price || Number(itemModal.price)<=0)) { showInvToast('Prodajna cena mora biti > 0',false); return }
     if (itemModal.vat_rate===undefined || itemModal.vat_rate==='') { showInvToast('DDV stopnja je obvezna',false); return }
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       const payload = {
@@ -4820,6 +4855,11 @@ function OpenCashModal({ posData, auth, onClose, onOpened }) {
   async function handleOpen() {
     const amount = parseFloat(cashAmount)
     if (isNaN(amount) || amount < 0) { setError('Vnesi veljavni znesek'); return }
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     setError('')
     try {
@@ -5032,6 +5072,11 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
     // izgledati kot padec celotnega zakljucka.
     let zakljucekUspel = false
     if (!stats) return
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     setError('')
     try {
@@ -5344,6 +5389,11 @@ function ZReportModal({ posData, onClose }) {
 
   async function closeShift() {
     if (!data) return
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       const db = createClient()
@@ -5580,6 +5630,11 @@ function ChangePaymentModal({ order, payment, onClose, onChanged }) {
   const [error, setError] = React.useState('')
   async function handleSave() {
     if (method === payment?.method) { onClose(); return }
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     setError('')
     try {
@@ -5784,6 +5839,11 @@ function VoidModal({ order, lines, payment, posData, auth, onClose, onVoided }) 
   const [error, setError] = React.useState('')
 
   async function handleVoid() {
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     setError('')
     try {
@@ -5938,6 +5998,11 @@ function RefundModal({ order, lines, payment, auth, onClose, onRefunded }) {
   async function handleRefund() {
     if (refundAmount <= 0) { setError('Znesek vračila mora biti večji od 0'); return }
     if (refundAmount > Number(order.total)) { setError('Znesek ne sme presegati skupaj računa'); return }
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     setError('')
     try {
@@ -6699,6 +6764,11 @@ function InventuraScreen({ posData, auth }) {
       await loadLines(data.id)
       return
     }
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       // DODANO (16.8.2026): brez te preverbe je bilo mogoce odpreti VEC
@@ -6793,6 +6863,11 @@ function InventuraScreen({ posData, auth }) {
   async function closeSession() {
     if (!activeSession) return
     if (!confirm('Zaključi inventuro in posodobi zalogo?')) return
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       const db = createClient()
@@ -7565,6 +7640,11 @@ function StaffSection({ posData }) {
     if (/^(\d)\1+$/.test(String(modal.pin).trim())) { showToast('PIN naj ne bo sestavljen iz enakih številk', false); return }
     const zaseden = (posData.staffList || []).some((o: any) => String(o.pin) === String(modal.pin).trim() && o.id !== modal.id)
     if (zaseden) { showToast('Ta PIN že uporablja druga oseba. Izberite drugega.', false); return }
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       if (modal.id) {
@@ -7795,6 +7875,11 @@ function CenikImportModal({ onClose, posData }) {
   }
 
   async function saveAll() {
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     setError('')
     try {
@@ -7956,6 +8041,11 @@ function CatalogSection({ posData }) {
 
   async function saveCat() {
     if (!catModal?.name?.trim()) { showToast('Ime je obvezno',false); return }
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       if (catModal.id) {
@@ -7982,6 +8072,11 @@ function CatalogSection({ posData }) {
     const itemType = itemModal?.item_type || 'simple'
     if (itemType !== 'ingredient' && (!itemModal.price || Number(itemModal.price)<=0)) { showToast('Prodajna cena mora biti > 0',false); return }
     if (itemModal.vat_rate===undefined || itemModal.vat_rate==='') { showToast('DDV stopnja je obvezna ★',false); return }
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       const payload = {
@@ -8392,6 +8487,11 @@ function SpacesSection({ posData }) {
 
   async function saveSpace() {
     if (!spaceModal?.name?.trim()) { showToast('Ime je obvezno',false); return }
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       if (spaceModal.id) {
@@ -8439,6 +8539,11 @@ function SpacesSection({ posData }) {
     if (!tableModal?.name?.trim()) { showToast('Ime je obvezno',false); return }
     const spaceId = tableModal.space_id || selectedSpaceId
     if (!spaceId) { showToast('Izberite prostor',false); return }
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       const payload = { space_id:spaceId, name:tableModal.name, seats:Number(tableModal.seats||2), x:Number(tableModal.x||10), y:Number(tableModal.y||10), status:'free' }
@@ -8664,6 +8769,11 @@ function PackagesAdminSection({ posData, modal, setModal }) {
   async function save() {
     if (!modal?.name?.trim()) { showToast('Ime je obvezno',false); return }
     if (!modal?.price && ttype !== 'service_bon') { showToast('Cena je obvezna',false); return }
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       const payload = {
@@ -8870,6 +8980,11 @@ function SestavineSection({ posData }) {
   async function save() {
     if (!modal?.name?.trim()) { showToast('Ime je obvezno',false); return }
     if (!modal?.unit) { showToast('Enota je obvezna',false); return }
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       const payload = {
@@ -9021,6 +9136,11 @@ function StoritveCrudSection({ posData, modal, setModal }) {
     if (!modal?.name?.trim()) { showToast('Ime je obvezno',false); return }
     if (!modal?.price) { showToast('Cena je obvezna',false); return }
     if (!modal?.duration_min) { showToast('Trajanje je obvezno',false); return }
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       const db = createClient()
@@ -9200,6 +9320,11 @@ function HappyHourSection({ posData }) {
     if (!modal?.from_time || !modal?.to_time) { showToast('Čas je obvezen',false); return }
     if (!modal?.discount_pct || modal.discount_pct <= 0) { showToast('Popust mora biti > 0%',false); return }
     if (!modal?.days || modal.days.length === 0) { showToast('Izberi vsaj en dan',false); return }
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       const catIds = (posData.categories || []).filter(c => c.id !== 'cat-fav' && (modal.selected_cats || []).includes(c.id)).map(c => c.id)
@@ -9658,6 +9783,11 @@ function FursSection() {
   }, [])
 
   async function save(newSettings) {
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       // Naloži obstoječe pos_settings
@@ -10206,6 +10336,11 @@ function CustomerEditButton({ customer, onSave }) {
   }
 
   async function save() {
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       const {error} = await createClient().from('customers').update({
@@ -10416,6 +10551,11 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
       })
       return
     }
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       await createInstallmentPlanAfterPayment(false)
@@ -10426,6 +10566,11 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
   async function sell() {
     if (payInInstallments) { return sellInInstallments() }
     if (!customerId) { showToast('Izberi stranko',false); return }
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       // KLJUCNO: paket se placa preko pravega placilnega toka (gotovina/kartica + FURS fiskalizacija),
@@ -11147,6 +11292,11 @@ function ManualAddCardModal({ customer, posData, onClose, onDone }) {
   async function save() {
     if (!templateId) { setError('Izberi paket/kartico'); return }
     if (!reason.trim()) { setError('Razlog je obvezen (za sledljivost, ker gre brez racuna)'); return }
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     try {
       const now = new Date().toISOString()
@@ -11218,6 +11368,11 @@ function EditPackageModal({ pkg, onClose, onDone }) {
   const [remaining, setRemaining] = useState(pkg.remaining ?? '')
   const [saving, setSaving] = useState(false)
   async function save() {
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     const updates = { expires: expires || null }
     if (pkg.remaining !== null) {
@@ -11260,6 +11415,11 @@ function ExtendPackageModal({ pkg, onClose, onDone }) {
   const [days, setDays] = useState(30)
   const [saving, setSaving] = useState(false)
   async function save() {
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     // POPRAVLJENO (16.8.2026): prej brez preverbe vnosa - vnos "abc" je dal
     // Invalid Date in vrgel napako pri toISOString(), ki je nihce ni ujel.
@@ -11298,6 +11458,11 @@ function FreezePackageModal({ pkg, onClose, onDone }) {
   const [saving, setSaving] = useState(false)
   async function save() {
     if (mode === 'until' && !untilDate) return
+    // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
+    // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
+    // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
+    // dokument oziroma dvakrat odsteto stanje.
+    if (saving) return
     setSaving(true)
     // POPRAVLJENO (16.8.2026): prej brez preverbe napake.
     const { error: freezeErr } = await createClient().from('customer_packages').update({
