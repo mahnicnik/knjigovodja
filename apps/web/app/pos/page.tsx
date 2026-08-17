@@ -235,6 +235,8 @@ function usePosData() {
   // DODANO (16.8.2026): celotna organizacija - izpisi potrebujejo tudi naslov
   // in davcno stevilko, ki sta bila prej TRDO ZAPISANA (SIRM, 91390419).
   const [org, setOrg] = useState<any>(null)
+  // DODANO (17.8.2026): ali blagajna dela v TESTNEM nacinu FURS.
+  const [fursTestMode, setFursTestMode] = useState(false)
   // DODANO (16.8.2026): ali blagajna se nima nobenega uporabnika s PIN-om.
   const [potrebujePrvoNastavitev, setPotrebujePrvoNastavitev] = useState(false)
 
@@ -252,8 +254,9 @@ function usePosData() {
           return
         }
         const { data: o } = await sb2.from('organizations')
-          .select('name, address, post_code, city, tax_number, vat_registered')
+          .select('name, address, post_code, city, tax_number, vat_registered, furs_test_mode')
           .eq('id', mem.org_id).single()
+        setFursTestMode(!!o?.furs_test_mode)
         setBusinessName(o?.name || '')
         setOrg(o || null)
         const bizId = await resolveBusinessId(mem.org_id, o?.name || 'Moj biznis', user.id)
@@ -325,7 +328,7 @@ function usePosData() {
     return [{ id: 'cat-fav', name: 'Priljubljeno', icon: '★', color: '#E9B949' }, ...categories]
   }, [categories])
 
-  return { categories: categoriesWithFav, items, spaces, customers, staffList, packageTemplates, services, ingredients, notifications, setNotifications, todayStats, businessProfile, setBusinessProfile, happyHourRules, loading, itemsIn, refresh, bizNapaka, businessName, org, potrebujePrvoNastavitev, setPotrebujePrvoNastavitev }
+  return { categories: categoriesWithFav, items, spaces, customers, staffList, packageTemplates, services, ingredients, notifications, setNotifications, todayStats, businessProfile, setBusinessProfile, happyHourRules, loading, itemsIn, refresh, bizNapaka, businessName, org, fursTestMode, potrebujePrvoNastavitev, setPotrebujePrvoNastavitev }
 }
 
 // ================================================================
@@ -736,6 +739,11 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
       let fursEor = null
       let fursZoi = null
       let fursInvoiceNumber = null
+      // DODANO (17.8.2026): razlog neuspesne fiskalizacije, da ga POVEMO
+      // blagajniku. Prej se je zapisal samo v konzolo - prodaja se je
+      // zakljucila navidez normalno, racun pa je ostal brez davcne potrditve
+      // in tega nihce ni opazil.
+      let fursNapaka: string | null = null
       if (furs) {
         try {
           const fursRes = await fetch('/api/furs/invoice', {
@@ -762,9 +770,13 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
           if (fursData.invoiceNumber) fursInvoiceNumber = fursData.invoiceNumber
           if (!fursRes.ok && fursData.error) {
             console.warn('FURS:', fursData.error)
+            fursNapaka = fursData.error
+          } else if (!fursData.eor) {
+            fursNapaka = 'FURS ni vrnil potrditvene kode (EOR).'
           }
-        } catch (e) {
-          console.warn('FURS klic ni uspel, račun bo shranjen brez EOR:', e.message)
+        } catch (e: any) {
+          console.warn('FURS klic ni uspel, račun bo shranjen brez EOR:', e?.message)
+          fursNapaka = e?.message || 'Povezava s FURS ni uspela.'
         }
       }
 
@@ -863,6 +875,21 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
       } catch (e) { console.warn('Receipt meta load:', e) }
 
       const fallbackNumber = `RAC-${orderId ? orderId.slice(-5).toUpperCase() : Date.now().toString().slice(-5)}`
+
+      // DODANO (17.8.2026): ce je bila fiskalizacija ZAHTEVANA, a ni uspela,
+      // to POVEJ. Prej se je prodaja zakljucila navidez normalno in racun je
+      // ostal brez davcne potrditve - blagajnik tega ni imel kako opaziti.
+      // Racun je vseeno izdan (denar je prejet), zato ne ustavljamo prodaje;
+      // opozorimo pa, da ga je treba naknadno potrditi.
+      if (furs && fursNapaka) {
+        alert(
+          'Račun je izdan, DAVČNO POTRJEVANJE pa NI uspelo.\n\n' +
+          'Razlog: ' + fursNapaka + '\n\n' +
+          'Račun je treba potrditi v dveh delovnih dneh. To storite prek zvonca ' +
+          'v glavi blagajne — gumb "Pošlji v potrditev".'
+        )
+      }
+
       onComplete({
         method,
         total: finalTotal,
@@ -10642,6 +10669,16 @@ function KlasikApp() {
             </div>
           </div>
           {activePremise && <div style={{ fontSize:10, fontWeight:700, color:'#e9b949', background:'rgba(233,185,73,0.15)', padding:'4px 8px', borderRadius:6, letterSpacing:'0.04em' }}>📍 {activePremise.premise_id}</div>}
+          {/* DODANO (17.8.2026): oznaka TESTNEGA nacina. Ker sta v nastavitvah
+              lahko nalozena OBA certifikata, za pultom ni bilo nacina preveriti,
+              kateri je aktiven - racun v testnem nacinu je videti enak pravemu,
+              a pri FURS ne velja. */}
+          {posData.fursTestMode && (
+            <div title="Računi se pošiljajo v TESTNO okolje FURS in NISO davčno veljavni."
+              style={{ fontSize:10, fontWeight:800, color:'#0d2818', background:'#e9b949', padding:'4px 9px', borderRadius:6, letterSpacing:'0.06em' }}>
+              ⚠ TESTNI NAČIN
+            </div>
+          )}
           <WorkStatusBar key={wsRefreshKey} posData={posData} onRequestClockIn={()=>setShowClockIn(true)}/>
           <BellNotifications notifications={posData.notifications} notifOpen={notifOpen} setNotifOpen={setNotifOpen} posData={posData} orderListOpen={orderListOpen} setOrderListOpen={setOrderListOpen}/>
           {orderListOpen && <OrderListModal posData={posData} onClose={()=>setOrderListOpen(false)}/>}
