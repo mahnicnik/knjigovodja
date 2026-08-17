@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import { formatEurNumber } from '@/lib/format'
 
 export default function DobavnicePage() {
   const [org, setOrg] = useState<any>(null)
@@ -147,7 +148,7 @@ export default function DobavnicePage() {
                     <div className="flex justify-between items-start mb-3">
                       <div>
                         <div className="font-medium text-gray-900">{clientName}</div>
-                        <div className="text-sm text-gray-500">{pending.length} dobavnic · €{total.toFixed(2)}</div>
+                        <div className="text-sm text-gray-500">{pending.length} dobavnic · €{formatEurNumber(total)}</div>
                       </div>
                       <button
                         onClick={() => mergeToInvoice(clientName)}
@@ -161,7 +162,7 @@ export default function DobavnicePage() {
                       {pending.map((doc: any) => (
                         <div key={doc.id} className="flex justify-between items-center text-sm py-2 border-t border-gray-50">
                           <div className="text-gray-600">#{doc.invoice_number} · {doc.issue_date}</div>
-                          <div className="font-medium">€{Number(doc.amount_total).toFixed(2)}</div>
+                          <div className="font-medium">€{formatEurNumber(Number(doc.amount_total))}</div>
                         </div>
                       ))}
                     </div>
@@ -193,7 +194,7 @@ export default function DobavnicePage() {
                     <div className="text-sm text-gray-500">{doc.client_name} · {doc.issue_date}</div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <div className="font-medium">€{Number(doc.amount_total).toFixed(2)}</div>
+                    <div className="font-medium">€{formatEurNumber(Number(doc.amount_total))}</div>
                     <span className={`text-xs px-2 py-1 rounded-full ${doc.status === 'sent' ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'}`}>
                       {doc.status === 'sent' ? 'Zaračunana' : 'Čaka'}
                     </span>

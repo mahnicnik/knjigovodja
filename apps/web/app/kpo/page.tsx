@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import { formatEurNumber } from '@/lib/format'
 
 const MONTHS = ['Januar', 'Februar', 'Marec', 'April', 'Maj', 'Junij', 'Julij', 'Avgust', 'September', 'Oktober', 'November', 'December']
 
@@ -144,22 +145,22 @@ export default function KPOPage() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-xs text-gray-500 mb-1">Prihodki</div>
-            <div className="text-xl font-semibold text-green-600">€{totalIncome.toFixed(2)}</div>
+            <div className="text-xl font-semibold text-green-600">€{formatEurNumber(totalIncome)}</div>
           </div>
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-xs text-gray-500 mb-1">Odhodki</div>
-            <div className="text-xl font-semibold text-red-500">€{totalExpense.toFixed(2)}</div>
+            <div className="text-xl font-semibold text-red-500">€{formatEurNumber(totalExpense)}</div>
           </div>
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-xs text-gray-500 mb-1">Dobiček</div>
             <div className={`text-xl font-semibold ${profit >= 0 ? 'text-gray-900' : 'text-red-500'}`}>
-              €{profit.toFixed(2)}
+              €{formatEurNumber(profit)}
             </div>
           </div>
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-xs text-gray-500 mb-1">DDV dolg</div>
             <div className="text-xl font-semibold text-orange-500">
-              €{(totalVatOut - totalVatIn).toFixed(2)}
+              €{formatEurNumber((totalVatOut - totalVatIn))}
             </div>
           </div>
         </div>
@@ -193,13 +194,13 @@ export default function KPOPage() {
                 </div>
                 <div className="col-span-4 text-gray-900 text-xs truncate">{entry.description}</div>
                 <div className="col-span-2 text-right text-xs">
-                  {entry.income > 0 ? <span className="text-green-600 font-medium">€{entry.income.toFixed(2)}</span> : <span className="text-gray-300">—</span>}
+                  {entry.income > 0 ? <span className="text-green-600 font-medium">€{formatEurNumber(entry.income)}</span> : <span className="text-gray-300">—</span>}
                 </div>
                 <div className="col-span-2 text-right text-xs">
-                  {entry.expense > 0 ? <span className="text-red-500">€{entry.expense.toFixed(2)}</span> : <span className="text-gray-300">—</span>}
+                  {entry.expense > 0 ? <span className="text-red-500">€{formatEurNumber(entry.expense)}</span> : <span className="text-gray-300">—</span>}
                 </div>
                 <div className="col-span-2 text-right text-xs text-gray-500">
-                  {(entry.vat_out || entry.vat_in) > 0 ? `€${(entry.vat_out || entry.vat_in).toFixed(2)}` : '—'}
+                  {(entry.vat_out || entry.vat_in) > 0 ? `€${formatEurNumber((entry.vat_out || entry.vat_in))}` : '—'}
                 </div>
               </div>
             ))
@@ -209,13 +210,13 @@ export default function KPOPage() {
             <div className="grid grid-cols-12 gap-2 px-6 py-3 bg-gray-50 border-t border-gray-200">
               <div className="col-span-2 text-xs font-medium text-gray-700">SKUPAJ</div>
               <div className="col-span-4"></div>
-              <div className="col-span-2 text-right text-xs font-semibold text-green-600">€{totalIncome.toFixed(2)}</div>
-              <div className="col-span-2 text-right text-xs font-semibold text-red-500">€{totalExpense.toFixed(2)}</div>
+              <div className="col-span-2 text-right text-xs font-semibold text-green-600">€{formatEurNumber(totalIncome)}</div>
+              <div className="col-span-2 text-right text-xs font-semibold text-red-500">€{formatEurNumber(totalExpense)}</div>
               {/* POPRAVLJENO (30.7.2026): SKUPAJ je sestevek vsega DDV, prikazanega
                   v tem stolpcu (prihodek + strosek), NE neto obveznost -
                   ta je pravilno ze zgoraj v kartici "DDV dolg". Prej je
                   vrstica izpuscala DDV od stroskov v celoti. */}
-              <div className="col-span-2 text-right text-xs font-semibold text-gray-700">€{(totalVatOut + totalVatIn).toFixed(2)}</div>
+              <div className="col-span-2 text-right text-xs font-semibold text-gray-700">€{formatEurNumber((totalVatOut + totalVatIn))}</div>
             </div>
           )}
           </div>

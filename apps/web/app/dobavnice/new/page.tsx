@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import posthog from 'posthog-js'
 import { getActiveMembership } from '@/lib/active-org'
+import { formatEurNumber } from '@/lib/format'
 
 interface LineItem {
   description: string
@@ -383,9 +384,9 @@ export default function NewDobavnicaPage() {
             <h3 className="font-medium text-gray-900 mb-4">Povzetek</h3>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between text-gray-500"><span>Št. računa</span><span className="font-mono">{invoiceNumber}</span></div>
-              <div className="flex justify-between text-gray-500"><span>Osnova</span><span>€{subtotal.toFixed(2)}</span></div>
-              <div className="flex justify-between text-gray-500"><span>DDV</span><span>€{vatAmount.toFixed(2)}</span></div>
-              <div className="border-t border-gray-100 pt-2 mt-2 flex justify-between font-semibold text-gray-900"><span>Skupaj</span><span>€{total.toFixed(2)}</span></div>
+              <div className="flex justify-between text-gray-500"><span>Osnova</span><span>€{formatEurNumber(subtotal)}</span></div>
+              <div className="flex justify-between text-gray-500"><span>DDV</span><span>€{formatEurNumber(vatAmount)}</span></div>
+              <div className="border-t border-gray-100 pt-2 mt-2 flex justify-between font-semibold text-gray-900"><span>Skupaj</span><span>€{formatEurNumber(total)}</span></div>
             </div>
             <div className="mt-4 pt-4 border-t border-gray-100">
               <div className="text-xs text-gray-500 mb-1">Sklic</div>

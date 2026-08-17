@@ -6,6 +6,7 @@ import { lokalniDatum } from '@/lib/tax-constants'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
+import { formatEurNumber } from '@/lib/format'
 
 interface CartItem {
   id: string
@@ -171,15 +172,15 @@ export default function BlagajnaPage() {
 <div class="center" style="font-size:10px">${new Date(receipt.date).toLocaleString('sl-SI')}</div>
 <div class="line"></div>
 ${receipt.items.map((item: CartItem) => `
-  <div class="row"><span>${escapeHtml(item.name)} x${item.qty}</span><span>€${(item.price * item.qty).toFixed(2)}</span></div>
+  <div class="row"><span>${escapeHtml(item.name)} x${item.qty}</span><span>€${formatEurNumber((item.price * item.qty))}</span></div>
 `).join('')}
 <div class="line"></div>
-${receipt.vat22 > 0 ? `<div class="row"><span>DDV 22%</span><span>€${receipt.vat22.toFixed(2)}</span></div>` : ''}
-${receipt.vat95 > 0 ? `<div class="row"><span>DDV 9.5%</span><span>€${receipt.vat95.toFixed(2)}</span></div>` : ''}
+${receipt.vat22 > 0 ? `<div class="row"><span>DDV 22%</span><span>€${formatEurNumber(receipt.vat22)}</span></div>` : ''}
+${receipt.vat95 > 0 ? `<div class="row"><span>DDV 9.5%</span><span>€${formatEurNumber(receipt.vat95)}</span></div>` : ''}
 <div class="line"></div>
-<div class="row total"><span>SKUPAJ</span><span>€${receipt.total.toFixed(2)}</span></div>
-<div class="row"><span>${receipt.paymentMethod === 'cash' ? 'Gotovina' : 'Kartica'}</span><span>€${receipt.total.toFixed(2)}</span></div>
-${receipt.change > 0 ? `<div class="row"><span>Vračilo</span><span>€${receipt.change.toFixed(2)}</span></div>` : ''}
+<div class="row total"><span>SKUPAJ</span><span>€${formatEurNumber(receipt.total)}</span></div>
+<div class="row"><span>${receipt.paymentMethod === 'cash' ? 'Gotovina' : 'Kartica'}</span><span>€${formatEurNumber(receipt.total)}</span></div>
+${receipt.change > 0 ? `<div class="row"><span>Vračilo</span><span>€${formatEurNumber(receipt.change)}</span></div>` : ''}
 <div class="line"></div>
 <div class="center" style="font-size:10px">Hvala za obisk!</div>
 <script>window.onload=function(){window.print()}</script>
@@ -215,14 +216,14 @@ ${receipt.change > 0 ? `<div class="row"><span>Vračilo</span><span>€${receipt
 <div class="line"></div>
 <div class="row"><span>Število računov:</span><span>${todayReceipts.length}</span></div>
 <div class="line"></div>
-<div class="row"><span>Gotovina:</span><span>€${todayCash.toFixed(2)}</span></div>
-<div class="row"><span>Kartica:</span><span>€${todayCard.toFixed(2)}</span></div>
+<div class="row"><span>Gotovina:</span><span>€${formatEurNumber(todayCash)}</span></div>
+<div class="row"><span>Kartica:</span><span>€${formatEurNumber(todayCard)}</span></div>
 <div class="line"></div>
-<div class="row"><span>Osnova brez DDV:</span><span>€${todayNet.toFixed(2)}</span></div>
-${todayVat22 > 0 ? `<div class="row"><span>DDV 22%:</span><span>€${todayVat22.toFixed(2)}</span></div>` : ''}
-${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95.toFixed(2)}</span></div>` : ''}
+<div class="row"><span>Osnova brez DDV:</span><span>€${formatEurNumber(todayNet)}</span></div>
+${todayVat22 > 0 ? `<div class="row"><span>DDV 22%:</span><span>€${formatEurNumber(todayVat22)}</span></div>` : ''}
+${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${formatEurNumber(todayVat95)}</span></div>` : ''}
 <div class="line"></div>
-<div class="row big"><span>SKUPAJ PROMET:</span><span>€${todayTotal.toFixed(2)}</span></div>
+<div class="row big"><span>SKUPAJ PROMET:</span><span>€${formatEurNumber(todayTotal)}</span></div>
 <div class="line"></div>
 <div class="center" style="font-size:9px;margin-top:8px">Dnevni zaključek blagajne</div>
 <div class="center" style="font-size:9px">ZDavPR — davčna blagajna</div>
@@ -251,9 +252,9 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95
         </div>
         <div className="flex items-center gap-3">
           <div className="text-xs text-gray-400">
-            Danes: <span className="text-white font-medium">€{todayTotal.toFixed(2)}</span>
-            <span className="ml-2 text-green-400">💳 €{todayCard.toFixed(2)}</span>
-            <span className="ml-2 text-yellow-400">💵 €{todayCash.toFixed(2)}</span>
+            Danes: <span className="text-white font-medium">€{formatEurNumber(todayTotal)}</span>
+            <span className="ml-2 text-green-400">💳 €{formatEurNumber(todayCard)}</span>
+            <span className="ml-2 text-yellow-400">💵 €{formatEurNumber(todayCash)}</span>
           </div>
           <button onClick={() => setShowReceipts(!showReceipts)}
             className="border border-gray-700 text-gray-300 px-3 py-1.5 rounded-lg text-xs">
@@ -310,7 +311,7 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95
                 {products.map(p => (
                   <div key={p.id} className={`${p.color} rounded-2xl p-4 relative`}>
                     <div className="font-medium text-sm">{p.name}</div>
-                    <div className="text-lg font-bold mt-1">€{p.price.toFixed(2)}</div>
+                    <div className="text-lg font-bold mt-1">€{formatEurNumber(p.price)}</div>
                     <div className="text-xs opacity-75">{p.vat_rate}% DDV</div>
                     <button onClick={() => saveProducts(products.filter(x => x.id !== p.id))}
                       className="absolute top-2 right-2 text-white opacity-60 hover:opacity-100">✕</button>
@@ -333,7 +334,7 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95
                         <div className="text-xs text-gray-400">{r.items.map((i: CartItem) => i.name).join(', ')}</div>
                       </div>
                       <div className="text-right">
-                        <div className="font-semibold">€{r.total.toFixed(2)}</div>
+                        <div className="font-semibold">€{formatEurNumber(r.total)}</div>
                         <div className="text-xs text-gray-400">{r.paymentMethod === 'cash' ? '💵' : '💳'}</div>
                         <button onClick={() => printReceipt(r)} className="text-xs text-blue-400 mt-1">🖨️ Natisni</button>
                       </div>
@@ -342,13 +343,13 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95
                   <div className="bg-gray-700 rounded-xl p-4">
                     <div className="flex justify-between font-semibold">
                       <span>DNEVNI ZAKLJUČEK</span>
-                      <span>€{todayTotal.toFixed(2)}</span>
+                      <span>€{formatEurNumber(todayTotal)}</span>
                     </div>
                     <div className="flex justify-between text-sm text-gray-400 mt-1">
-                      <span>Gotovina</span><span>€{todayCash.toFixed(2)}</span>
+                      <span>Gotovina</span><span>€{formatEurNumber(todayCash)}</span>
                     </div>
                     <div className="flex justify-between text-sm text-gray-400">
-                      <span>Kartica</span><span>€{todayCard.toFixed(2)}</span>
+                      <span>Kartica</span><span>€{formatEurNumber(todayCard)}</span>
                     </div>
                   </div>
                 </div>
@@ -372,7 +373,7 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95
                       className={`${product.color} rounded-2xl p-5 text-left active:scale-95 transition-transform`}>
                       <div className="font-medium text-sm mb-1">{product.name}</div>
                       {product.category && <div className="text-xs opacity-75 mb-2">{product.category}</div>}
-                      <div className="text-2xl font-bold">€{product.price.toFixed(2)}</div>
+                      <div className="text-2xl font-bold">€{formatEurNumber(product.price)}</div>
                       <div className="text-xs opacity-75 mt-1">DDV {product.vat_rate}%</div>
                     </button>
                   ))}
@@ -401,7 +402,7 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95
                   <div key={item.id} className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="text-sm font-medium">{item.name}</div>
-                      <div className="text-xs text-gray-400">€{item.price.toFixed(2)} × {item.qty}</div>
+                      <div className="text-xs text-gray-400">€{formatEurNumber(item.price)} × {item.qty}</div>
                     </div>
                     <div className="flex items-center gap-2">
                       <button onClick={() => removeFromCart(item.id)}
@@ -409,7 +410,7 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95
                       <span className="text-sm font-medium w-6 text-center">{item.qty}</span>
                       <button onClick={() => addToCart({id: item.id, name: item.name, price: item.price, vat_rate: item.vat_rate, category: '', color: ''})}
                         className="w-6 h-6 bg-gray-700 rounded-full text-sm flex items-center justify-center">+</button>
-                      <span className="text-sm font-semibold w-16 text-right">€{(item.price * item.qty).toFixed(2)}</span>
+                      <span className="text-sm font-semibold w-16 text-right">€{formatEurNumber((item.price * item.qty))}</span>
                     </div>
                   </div>
                 ))}
@@ -419,10 +420,10 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95
 
           {cart.length > 0 && (
             <div className="p-4 border-t border-gray-700">
-              {vat22 > 0 && <div className="flex justify-between text-xs text-gray-400 mb-1"><span>DDV 22%</span><span>€{vat22.toFixed(2)}</span></div>}
-              {vat95 > 0 && <div className="flex justify-between text-xs text-gray-400 mb-1"><span>DDV 9.5%</span><span>€{vat95.toFixed(2)}</span></div>}
+              {vat22 > 0 && <div className="flex justify-between text-xs text-gray-400 mb-1"><span>DDV 22%</span><span>€{formatEurNumber(vat22)}</span></div>}
+              {vat95 > 0 && <div className="flex justify-between text-xs text-gray-400 mb-1"><span>DDV 9.5%</span><span>€{formatEurNumber(vat95)}</span></div>}
               <div className="flex justify-between text-xl font-bold mb-4">
-                <span>SKUPAJ</span><span>€{total.toFixed(2)}</span>
+                <span>SKUPAJ</span><span>€{formatEurNumber(total)}</span>
               </div>
               <div className="grid grid-cols-2 gap-2 mb-3">
                 <button onClick={() => setPaymentMethod('card')}
@@ -442,7 +443,7 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95
                     className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-2.5 text-sm focus:outline-none mb-2" />
                   {cashGiven && parseFloat(cashGiven) >= total && (
                     <div className="text-center text-green-400 font-semibold">
-                      Vračilo: €{change.toFixed(2)}
+                      Vračilo: €{formatEurNumber(change)}
                     </div>
                   )}
                 </div>
@@ -457,7 +458,7 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95
 
           {showSuccess && lastReceipt && (
             <div className="p-4 bg-green-600 text-center">
-              <div className="font-semibold mb-1">✓ Plačano! €{lastReceipt.total.toFixed(2)}</div>
+              <div className="font-semibold mb-1">✓ Plačano! €{formatEurNumber(lastReceipt.total)}</div>
               <button onClick={() => printReceipt(lastReceipt)} className="text-xs underline">
                 🖨️ Natisni račun
               </button>

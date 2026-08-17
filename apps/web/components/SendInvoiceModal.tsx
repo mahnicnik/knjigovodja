@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { formatEurNumber } from '@/lib/format'
 
 interface Props {
   invoice: any
@@ -14,7 +15,7 @@ export default function SendInvoiceModal({ invoice, orgName, onClose, onSent }: 
   const [cc, setCc] = useState('')
   const [subject, setSubject] = useState(`Račun ${invoice.invoice_number} — ${orgName}`)
   const [message, setMessage] = useState(
-    `Pozdravljeni,\n\nV prilogi vam pošiljamo račun ${invoice.invoice_number} z dne ${new Date(invoice.issue_date).toLocaleDateString('sl-SI')}, v znesku €${Number(invoice.amount_total).toFixed(2)} z rokom plačila ${new Date(invoice.due_date).toLocaleDateString('sl-SI')}.\n\nPlačilo lahko opravite preko UPN QR kode v PDF-u.\n\nHvala in lep pozdrav,\n${orgName}`
+    `Pozdravljeni,\n\nV prilogi vam pošiljamo račun ${invoice.invoice_number} z dne ${new Date(invoice.issue_date).toLocaleDateString('sl-SI')}, v znesku €${formatEurNumber(Number(invoice.amount_total))} z rokom plačila ${new Date(invoice.due_date).toLocaleDateString('sl-SI')}.\n\nPlačilo lahko opravite preko UPN QR kode v PDF-u.\n\nHvala in lep pozdrav,\n${orgName}`
   )
   const [sendEslog, setSendEslog] = useState(false)
   const [sending, setSending] = useState(false)

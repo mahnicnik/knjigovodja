@@ -5,6 +5,7 @@ import { lokalniDatum } from '@/lib/tax-constants'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { getActiveMembership } from '@/lib/active-org'
+import { formatEurNumber } from '@/lib/format'
 
 interface LineItem {
   description: string
@@ -181,7 +182,7 @@ export default function NewQuotePage() {
                   <option value={9.5}>9.5%</option>
                   <option value={22}>22%</option>
                 </select>
-                <div style={{ fontSize: 13, fontWeight: 600, textAlign: 'right', color: '#0D1F12' }}>€{(item.amount_net + item.vat_amount).toFixed(2)}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, textAlign: 'right', color: '#0D1F12' }}>€{formatEurNumber((item.amount_net + item.vat_amount))}</div>
                 <button onClick={() => removeItem(i)} style={{ background: 'none', border: 0, color: '#aaa', cursor: 'pointer', fontSize: 18, padding: 4 }}>×</button>
               </div>
             ))}
@@ -201,15 +202,15 @@ export default function NewQuotePage() {
             {isVatRegistered && (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#666', marginBottom: 4 }}>
-                  <span>Neto</span><span>€{amountNet.toFixed(2)}</span>
+                  <span>Neto</span><span>€{formatEurNumber(amountNet)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#666', marginBottom: 8 }}>
-                  <span>DDV</span><span>€{vatAmount.toFixed(2)}</span>
+                  <span>DDV</span><span>€{formatEurNumber(vatAmount)}</span>
                 </div>
               </>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 700, color: '#0D1F12' }}>
-              <span>SKUPAJ</span><span>€{amountTotal.toFixed(2)}</span>
+              <span>SKUPAJ</span><span>€{formatEurNumber(amountTotal)}</span>
             </div>
           </div>
         </div>

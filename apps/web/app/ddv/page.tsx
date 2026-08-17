@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import { formatEurNumber } from '@/lib/format'
 
 // POPRAVLJENO (29.7.2026, audit portala):
 //  1. VHODNI DDV: prej trdo kodiran na €0.00 (s komentarjem "za zdaj brez
@@ -174,18 +175,18 @@ export default function DDVPage() {
                 <div className="space-y-3">
                   <div className="flex justify-between items-center py-2 border-b border-gray-50">
                     <span className="text-sm text-gray-600">DDV izhod (od prodaj)</span>
-                    <span className="font-semibold text-red-500">€{vatOut.toFixed(2)}</span>
+                    <span className="font-semibold text-red-500">€{formatEurNumber(vatOut)}</span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-gray-50">
                     <span className="text-sm text-gray-600">DDV vhod (od nakupov)</span>
-                    <span className="font-semibold text-green-600">−€{vatIn.toFixed(2)}</span>
+                    <span className="font-semibold text-green-600">−€{formatEurNumber(vatIn)}</span>
                   </div>
                   <div className="flex justify-between items-center py-3 bg-gray-50 rounded-xl px-3">
                     <span className="font-medium text-gray-900">
                       {isRefund ? 'FURS vam vrne' : 'Za plačilo FURS'}
                     </span>
                     <span className={`text-xl font-semibold ${isRefund ? 'text-green-600' : 'text-gray-900'}`}>
-                      €{Math.abs(vatDue).toFixed(2)}
+                      €{formatEurNumber(Math.abs(vatDue))}
                     </span>
                   </div>
                   {isRefund && (
@@ -216,7 +217,7 @@ export default function DDVPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Znesek</span>
-                    <span className="font-semibold">€{vatDue.toFixed(2)}</span>
+                    <span className="font-semibold">€{formatEurNumber(vatDue)}</span>
                   </div>
                 </div>
               </div>
@@ -235,8 +236,8 @@ export default function DDVPage() {
                       <div className="text-xs text-gray-500">#{inv.invoice_number} · {new Date(inv.issue_date).toLocaleDateString('sl-SI')}</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm">€{Number(inv.amount_total || 0).toFixed(2)}</div>
-                      <div className="text-xs text-orange-500">DDV: €{Number(inv.vat_amount || 0).toFixed(2)}</div>
+                      <div className="text-sm">€{formatEurNumber(Number(inv.amount_total || 0))}</div>
+                      <div className="text-xs text-orange-500">DDV: €{formatEurNumber(Number(inv.vat_amount || 0))}</div>
                     </div>
                   </div>
                 ))
@@ -256,8 +257,8 @@ export default function DDVPage() {
                       <div className="text-xs text-gray-500">{r.category} · {(r.receipt_date ? (r.receipt_date ? (r.receipt_date ? new Date(r.receipt_date).toLocaleDateString('sl-SI') : '—') : '—') : '—')}</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm">€{Number(r.amount_total || 0).toFixed(2)}</div>
-                      <div className="text-xs text-green-600">DDV: €{Number(r.vat_amount || 0).toFixed(2)}</div>
+                      <div className="text-sm">€{formatEurNumber(Number(r.amount_total || 0))}</div>
+                      <div className="text-xs text-green-600">DDV: €{formatEurNumber(Number(r.vat_amount || 0))}</div>
                     </div>
                   </div>
                 ))

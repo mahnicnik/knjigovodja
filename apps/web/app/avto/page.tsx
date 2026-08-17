@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import { formatEurNumber } from '@/lib/format'
 
 const MONTHS = ['Januar','Februar','Marec','April','Maj','Junij','Julij','Avgust','September','Oktober','November','December']
 
@@ -160,7 +161,7 @@ export default function AvtoPage() {
           </div>
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-xs text-gray-500 mb-1">Skupna boniteta</div>
-            <div className="text-2xl font-semibold text-red-500">€{totalBoniteta.toFixed(2)}</div>
+            <div className="text-2xl font-semibold text-red-500">€{formatEurNumber(totalBoniteta)}</div>
             <div className="text-xs text-gray-400 mt-1">Poročati na REK-1</div>
           </div>
         </div>
@@ -230,7 +231,7 @@ export default function AvtoPage() {
                   </div>
                   <div>
                     <div className="text-xs text-gray-500 mb-1">Boniteta/mes</div>
-                    <div className="font-semibold text-red-500">€{bonitetaMonthly.toFixed(2)}</div>
+                    <div className="font-semibold text-red-500">€{formatEurNumber(bonitetaMonthly)}</div>
                   </div>
                   <div>
                     <div className="text-xs text-gray-500 mb-1">DDV odbitek</div>
@@ -239,8 +240,8 @@ export default function AvtoPage() {
                 </div>
                 {carValue > 0 && (
                   <div className="mt-3 text-xs text-gray-600 bg-white rounded-lg p-2">
-                    Boniteta = €{carValue.toFixed(0)} × 1.5% × {privatePct}% = €{bonitetaMonthly.toFixed(2)}/mes
-                    (letno: €{bonitetaAnnual.toFixed(2)})
+                    Boniteta = €{carValue.toFixed(0)} × 1.5% × {privatePct}% = €{formatEurNumber(bonitetaMonthly)}/mes
+                    (letno: €{formatEurNumber(bonitetaAnnual)})
                   </div>
                 )}
               </div>
@@ -293,7 +294,7 @@ export default function AvtoPage() {
                 <div className="col-span-2 text-xs text-right text-green-600">{e.business_km} km</div>
                 <div className="col-span-2 text-xs text-right text-orange-500">{e.private_km} km</div>
                 <div className="col-span-1 text-xs text-right text-gray-600">{e.private_pct}%</div>
-                <div className="col-span-2 text-xs text-right font-medium text-red-500">€{Number(e.boniteta_monthly || 0).toFixed(2)}</div>
+                <div className="col-span-2 text-xs text-right font-medium text-red-500">€{formatEurNumber(Number(e.boniteta_monthly || 0))}</div>
                 <div className="col-span-1 flex justify-end">
                   <button onClick={() => deleteEntry(e.id)}
                     className="text-xs text-red-400 hover:text-red-600">✕</button>
@@ -313,7 +314,7 @@ export default function AvtoPage() {
               </div>
               <div className="col-span-1"></div>
               <div className="col-span-2 text-xs text-right font-semibold text-red-500">
-                €{totalBoniteta.toFixed(2)}
+                €{formatEurNumber(totalBoniteta)}
               </div>
               <div className="col-span-1"></div>
             </div>
@@ -325,7 +326,7 @@ export default function AvtoPage() {
           <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 mt-6">
             <div className="font-medium text-blue-800 text-sm mb-1">📋 Boniteta na REK-1</div>
             <div className="text-blue-700 text-xs leading-relaxed">
-              Skupno boniteto <strong>€{totalBoniteta.toFixed(2)}</strong> morate vpisati v REK-1
+              Skupno boniteto <strong>€{formatEurNumber(totalBoniteta)}</strong> morate vpisati v REK-1
               obrazec pod vrsto dohodka <strong>1150 — Boniteta</strong>.
               Boniteta poveča davčno osnovo in se obdavči kot dohodek iz delovnega razmerja.
             </div>

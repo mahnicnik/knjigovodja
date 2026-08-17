@@ -7,6 +7,7 @@ import Link from 'next/link'
 import SendInvoiceModal from '@/components/SendInvoiceModal'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import { formatEurNumber } from '@/lib/format'
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<any[]>([])
@@ -279,15 +280,15 @@ export default function InvoicesPage() {
         <div className="grid grid-cols-3 gap-4 mb-8">
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-xs text-gray-500 mb-1">Skupaj fakturirano</div>
-            <div className="text-xl font-semibold">€{totalSent.toFixed(2)}</div>
+            <div className="text-xl font-semibold">€{formatEurNumber(totalSent)}</div>
           </div>
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-xs text-gray-500 mb-1">Plačano</div>
-            <div className="text-xl font-semibold text-green-600">€{totalPaid.toFixed(2)}</div>
+            <div className="text-xl font-semibold text-green-600">€{formatEurNumber(totalPaid)}</div>
           </div>
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-xs text-gray-500 mb-1">Neplačano</div>
-            <div className="text-xl font-semibold text-orange-500">€{totalUnpaid.toFixed(2)}</div>
+            <div className="text-xl font-semibold text-orange-500">€{formatEurNumber(totalUnpaid)}</div>
           </div>
         </div>
 
@@ -321,7 +322,7 @@ export default function InvoicesPage() {
                     </div>
                   </div>
                   <div className="text-right mr-2 flex-shrink-0">
-                    <div className="font-semibold text-sm">€{Number(inv.amount_total).toFixed(2)}</div>
+                    <div className="font-semibold text-sm">€{formatEurNumber(Number(inv.amount_total))}</div>
                     <div style={{ fontSize: '10px', marginTop: '2px', padding: '2px 8px', borderRadius: '20px', background: s.bg, color: s.color, display: 'inline-block', fontWeight: '500' }}>
                       {s.label}
                     </div>

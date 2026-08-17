@@ -1,0 +1,1609 @@
+diff --git a/apps/web/app/amortizacija/page.tsx b/apps/web/app/amortizacija/page.tsx
+index 452217e..2a072f2 100644
+--- a/apps/web/app/amortizacija/page.tsx
++++ b/apps/web/app/amortizacija/page.tsx
+@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
+ import Link from 'next/link'
+ import { getActiveMembership } from '@/lib/active-org'
+ import AppLayout from '@/components/AppLayout'
++import { formatEurNumber } from '@/lib/format'
+ 
+ // Amortizacijske stopnje po ZDoh-2
+ const CATEGORIES = [
+@@ -202,12 +203,12 @@ export default function AmortizacijaPage() {
+           </div>
+           <div className="bg-white rounded-2xl border border-gray-100 p-5">
+             <div className="text-xs text-gray-500 mb-1">Amortizacija {currentYear}</div>
+-            <div className="text-2xl font-semibold text-red-500">€{currentYearExpense.toFixed(2)}</div>
++            <div className="text-2xl font-semibold text-red-500">€{formatEurNumber(currentYearExpense)}</div>
+             <div className="text-xs text-gray-400 mt-1">Davčno priznavni strošek</div>
+           </div>
+           <div className="bg-white rounded-2xl border border-gray-100 p-5">
+             <div className="text-xs text-gray-500 mb-1">Neto vrednost sredstev</div>
+-            <div className="text-2xl font-semibold">€{totalNetValue.toFixed(2)}</div>
++            <div className="text-2xl font-semibold">€{formatEurNumber(totalNetValue)}</div>
+             <div className="text-xs text-gray-400 mt-1">Neodpisana vrednost</div>
+           </div>
+         </div>
+@@ -262,8 +263,8 @@ export default function AmortizacijaPage() {
+                   ).map(e => (
+                     <div key={e.year} className={`flex justify-between text-xs px-2 py-1.5 rounded-lg ${e.year === currentYear ? 'bg-gray-900 text-white' : 'text-gray-600'}`}>
+                       <span>{e.year}</span>
+-                      <span>strošek: €{e.amount.toFixed(2)}</span>
+-                      <span>ostane: €{e.remaining.toFixed(2)}</span>
++                      <span>strošek: €{formatEurNumber(e.amount)}</span>
++                      <span>ostane: €{formatEurNumber(e.remaining)}</span>
+                     </div>
+                   ))}
+                 </div>
+@@ -309,7 +310,7 @@ export default function AmortizacijaPage() {
+                     <div>
+                       <div className="font-semibold text-gray-900">{asset.name}</div>
+                       <div className="text-xs text-gray-500 mt-0.5">
+-                        {asset.categoryLabel} · {asset.rate}%/leto · Nabava: €{Number(asset.purchase_price).toFixed(2)}
++                        {asset.categoryLabel} · {asset.rate}%/leto · Nabava: €{formatEurNumber(Number(asset.purchase_price))}
+                       </div>
+                       <div className="text-xs text-gray-400 mt-0.5">
+                         {new Date(asset.purchase_date).toLocaleDateString('sl-SI')}
+@@ -318,7 +319,7 @@ export default function AmortizacijaPage() {
+                     <div className="flex items-start gap-3">
+                       <div className="text-right">
+                         <div className="text-xs text-gray-500">Strošek {currentYear}</div>
+-                        <div className="font-semibold text-red-500">€{(currentEntry?.amount || 0).toFixed(2)}</div>
++                        <div className="font-semibold text-red-500">€{formatEurNumber((currentEntry?.amount || 0))}</div>
+                       </div>
+                       <button onClick={() => deleteAsset(asset.id)}
+                         className="text-xs border border-red-100 text-red-400 rounded-lg px-2 py-1 hover:bg-red-50">
+@@ -330,8 +331,8 @@ export default function AmortizacijaPage() {
+                   {/* Progress bar */}
+                   <div className="mb-4">
+                     <div className="flex justify-between text-xs text-gray-500 mb-1">
+-                      <span>Odpisano: €{totalAmortized.toFixed(2)} ({pct.toFixed(0)}%)</span>
+-                      <span>Ostane: €{(currentEntry?.remaining || 0).toFixed(2)}</span>
++                      <span>Odpisano: €{formatEurNumber(totalAmortized)} ({pct.toFixed(0)}%)</span>
++                      <span>Ostane: €{formatEurNumber((currentEntry?.remaining || 0))}</span>
+                     </div>
+                     <div className="w-full bg-gray-100 rounded-full h-2">
+                       <div className="bg-gray-900 h-2 rounded-full" style={{width: `${Math.min(pct, 100)}%`}}></div>
+@@ -358,7 +359,7 @@ export default function AmortizacijaPage() {
+                   <div className="text-sm text-gray-400">Skupna amortizacija {currentYear}</div>
+                   <div className="text-xs text-gray-500 mt-0.5">Davčno priznavni strošek za DDD</div>
+                 </div>
+-                <div className="text-2xl font-semibold">€{currentYearExpense.toFixed(2)}</div>
++                <div className="text-2xl font-semibold">€{formatEurNumber(currentYearExpense)}</div>
+               </div>
+             </div>
+           </div>
+diff --git a/apps/web/app/avto/page.tsx b/apps/web/app/avto/page.tsx
+index 7798c53..bc2282d 100644
+--- a/apps/web/app/avto/page.tsx
++++ b/apps/web/app/avto/page.tsx
+@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
+ import Link from 'next/link'
+ import { getActiveMembership } from '@/lib/active-org'
+ import AppLayout from '@/components/AppLayout'
++import { formatEurNumber } from '@/lib/format'
+ 
+ const MONTHS = ['Januar','Februar','Marec','April','Maj','Junij','Julij','Avgust','September','Oktober','November','December']
+ 
+@@ -160,7 +161,7 @@ export default function AvtoPage() {
+           </div>
+           <div className="bg-white rounded-2xl border border-gray-100 p-5">
+             <div className="text-xs text-gray-500 mb-1">Skupna boniteta</div>
+-            <div className="text-2xl font-semibold text-red-500">€{totalBoniteta.toFixed(2)}</div>
++            <div className="text-2xl font-semibold text-red-500">€{formatEurNumber(totalBoniteta)}</div>
+             <div className="text-xs text-gray-400 mt-1">Poročati na REK-1</div>
+           </div>
+         </div>
+@@ -230,7 +231,7 @@ export default function AvtoPage() {
+                   </div>
+                   <div>
+                     <div className="text-xs text-gray-500 mb-1">Boniteta/mes</div>
+-                    <div className="font-semibold text-red-500">€{bonitetaMonthly.toFixed(2)}</div>
++                    <div className="font-semibold text-red-500">€{formatEurNumber(bonitetaMonthly)}</div>
+                   </div>
+                   <div>
+                     <div className="text-xs text-gray-500 mb-1">DDV odbitek</div>
+@@ -239,8 +240,8 @@ export default function AvtoPage() {
+                 </div>
+                 {carValue > 0 && (
+                   <div className="mt-3 text-xs text-gray-600 bg-white rounded-lg p-2">
+-                    Boniteta = €{carValue.toFixed(0)} × 1.5% × {privatePct}% = €{bonitetaMonthly.toFixed(2)}/mes
+-                    (letno: €{bonitetaAnnual.toFixed(2)})
++                    Boniteta = €{carValue.toFixed(0)} × 1.5% × {privatePct}% = €{formatEurNumber(bonitetaMonthly)}/mes
++                    (letno: €{formatEurNumber(bonitetaAnnual)})
+                   </div>
+                 )}
+               </div>
+@@ -293,7 +294,7 @@ export default function AvtoPage() {
+                 <div className="col-span-2 text-xs text-right text-green-600">{e.business_km} km</div>
+                 <div className="col-span-2 text-xs text-right text-orange-500">{e.private_km} km</div>
+                 <div className="col-span-1 text-xs text-right text-gray-600">{e.private_pct}%</div>
+-                <div className="col-span-2 text-xs text-right font-medium text-red-500">€{Number(e.boniteta_monthly || 0).toFixed(2)}</div>
++                <div className="col-span-2 text-xs text-right font-medium text-red-500">€{formatEurNumber(Number(e.boniteta_monthly || 0))}</div>
+                 <div className="col-span-1 flex justify-end">
+                   <button onClick={() => deleteEntry(e.id)}
+                     className="text-xs text-red-400 hover:text-red-600">✕</button>
+@@ -313,7 +314,7 @@ export default function AvtoPage() {
+               </div>
+               <div className="col-span-1"></div>
+               <div className="col-span-2 text-xs text-right font-semibold text-red-500">
+-                €{totalBoniteta.toFixed(2)}
++                €{formatEurNumber(totalBoniteta)}
+               </div>
+               <div className="col-span-1"></div>
+             </div>
+@@ -325,7 +326,7 @@ export default function AvtoPage() {
+           <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 mt-6">
+             <div className="font-medium text-blue-800 text-sm mb-1">📋 Boniteta na REK-1</div>
+             <div className="text-blue-700 text-xs leading-relaxed">
+-              Skupno boniteto <strong>€{totalBoniteta.toFixed(2)}</strong> morate vpisati v REK-1
++              Skupno boniteto <strong>€{formatEurNumber(totalBoniteta)}</strong> morate vpisati v REK-1
+               obrazec pod vrsto dohodka <strong>1150 — Boniteta</strong>.
+               Boniteta poveča davčno osnovo in se obdavči kot dohodek iz delovnega razmerja.
+             </div>
+diff --git a/apps/web/app/banka/page.tsx b/apps/web/app/banka/page.tsx
+index 63127d1..da5a9e3 100644
+--- a/apps/web/app/banka/page.tsx
++++ b/apps/web/app/banka/page.tsx
+@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
+ import Link from 'next/link'
+ import { getActiveMembership } from '@/lib/active-org'
+ import AppLayout from '@/components/AppLayout'
++import { formatEurNumber } from '@/lib/format'
+ 
+ // ================================================================
+ // FORMATI SLOVENSKIH BANK
+@@ -672,7 +673,7 @@ export default function BankaPage() {
+                         <td style={{ padding: '10px 14px', fontSize: 12, color: '#0D1F12', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.description}</td>
+                         <td style={{ padding: '10px 14px', fontSize: 11, color: '#888', fontFamily: 'monospace' }}>{t.reference || '—'}</td>
+                         <td style={{ padding: '10px 14px', fontSize: 13, fontWeight: 600, color: t.type === 'credit' ? '#1D9E75' : '#DC2626', whiteSpace: 'nowrap' }}>
+-                          {t.type === 'credit' ? '+' : '-'}€{t.amount.toFixed(2)}
++                          {t.type === 'credit' ? '+' : '-'}€{formatEurNumber(t.amount)}
+                         </td>
+                         <td style={{ padding: '10px 14px', fontSize: 12 }}>
+                           {t.isInternal ? (
+diff --git a/apps/web/app/blagajna/page.tsx b/apps/web/app/blagajna/page.tsx
+index 5940e8b..07aee2a 100644
+--- a/apps/web/app/blagajna/page.tsx
++++ b/apps/web/app/blagajna/page.tsx
+@@ -6,6 +6,7 @@ import { lokalniDatum } from '@/lib/tax-constants'
+ import { createClient } from '@/lib/supabase'
+ import Link from 'next/link'
+ import { getActiveMembership } from '@/lib/active-org'
++import { formatEurNumber } from '@/lib/format'
+ 
+ interface CartItem {
+   id: string
+@@ -171,15 +172,15 @@ export default function BlagajnaPage() {
+ <div class="center" style="font-size:10px">${new Date(receipt.date).toLocaleString('sl-SI')}</div>
+ <div class="line"></div>
+ ${receipt.items.map((item: CartItem) => `
+-  <div class="row"><span>${escapeHtml(item.name)} x${item.qty}</span><span>€${(item.price * item.qty).toFixed(2)}</span></div>
++  <div class="row"><span>${escapeHtml(item.name)} x${item.qty}</span><span>€${formatEurNumber((item.price * item.qty))}</span></div>
+ `).join('')}
+ <div class="line"></div>
+-${receipt.vat22 > 0 ? `<div class="row"><span>DDV 22%</span><span>€${receipt.vat22.toFixed(2)}</span></div>` : ''}
+-${receipt.vat95 > 0 ? `<div class="row"><span>DDV 9.5%</span><span>€${receipt.vat95.toFixed(2)}</span></div>` : ''}
++${receipt.vat22 > 0 ? `<div class="row"><span>DDV 22%</span><span>€${formatEurNumber(receipt.vat22)}</span></div>` : ''}
++${receipt.vat95 > 0 ? `<div class="row"><span>DDV 9.5%</span><span>€${formatEurNumber(receipt.vat95)}</span></div>` : ''}
+ <div class="line"></div>
+-<div class="row total"><span>SKUPAJ</span><span>€${receipt.total.toFixed(2)}</span></div>
+-<div class="row"><span>${receipt.paymentMethod === 'cash' ? 'Gotovina' : 'Kartica'}</span><span>€${receipt.total.toFixed(2)}</span></div>
+-${receipt.change > 0 ? `<div class="row"><span>Vračilo</span><span>€${receipt.change.toFixed(2)}</span></div>` : ''}
++<div class="row total"><span>SKUPAJ</span><span>€${formatEurNumber(receipt.total)}</span></div>
++<div class="row"><span>${receipt.paymentMethod === 'cash' ? 'Gotovina' : 'Kartica'}</span><span>€${formatEurNumber(receipt.total)}</span></div>
++${receipt.change > 0 ? `<div class="row"><span>Vračilo</span><span>€${formatEurNumber(receipt.change)}</span></div>` : ''}
+ <div class="line"></div>
+ <div class="center" style="font-size:10px">Hvala za obisk!</div>
+ <script>window.onload=function(){window.print()}</script>
+@@ -215,14 +216,14 @@ ${receipt.change > 0 ? `<div class="row"><span>Vračilo</span><span>€${receipt
+ <div class="line"></div>
+ <div class="row"><span>Število računov:</span><span>${todayReceipts.length}</span></div>
+ <div class="line"></div>
+-<div class="row"><span>Gotovina:</span><span>€${todayCash.toFixed(2)}</span></div>
+-<div class="row"><span>Kartica:</span><span>€${todayCard.toFixed(2)}</span></div>
++<div class="row"><span>Gotovina:</span><span>€${formatEurNumber(todayCash)}</span></div>
++<div class="row"><span>Kartica:</span><span>€${formatEurNumber(todayCard)}</span></div>
+ <div class="line"></div>
+-<div class="row"><span>Osnova brez DDV:</span><span>€${todayNet.toFixed(2)}</span></div>
+-${todayVat22 > 0 ? `<div class="row"><span>DDV 22%:</span><span>€${todayVat22.toFixed(2)}</span></div>` : ''}
+-${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95.toFixed(2)}</span></div>` : ''}
++<div class="row"><span>Osnova brez DDV:</span><span>€${formatEurNumber(todayNet)}</span></div>
++${todayVat22 > 0 ? `<div class="row"><span>DDV 22%:</span><span>€${formatEurNumber(todayVat22)}</span></div>` : ''}
++${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${formatEurNumber(todayVat95)}</span></div>` : ''}
+ <div class="line"></div>
+-<div class="row big"><span>SKUPAJ PROMET:</span><span>€${todayTotal.toFixed(2)}</span></div>
++<div class="row big"><span>SKUPAJ PROMET:</span><span>€${formatEurNumber(todayTotal)}</span></div>
+ <div class="line"></div>
+ <div class="center" style="font-size:9px;margin-top:8px">Dnevni zaključek blagajne</div>
+ <div class="center" style="font-size:9px">ZDavPR — davčna blagajna</div>
+@@ -251,9 +252,9 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95
+         </div>
+         <div className="flex items-center gap-3">
+           <div className="text-xs text-gray-400">
+-            Danes: <span className="text-white font-medium">€{todayTotal.toFixed(2)}</span>
+-            <span className="ml-2 text-green-400">💳 €{todayCard.toFixed(2)}</span>
+-            <span className="ml-2 text-yellow-400">💵 €{todayCash.toFixed(2)}</span>
++            Danes: <span className="text-white font-medium">€{formatEurNumber(todayTotal)}</span>
++            <span className="ml-2 text-green-400">💳 €{formatEurNumber(todayCard)}</span>
++            <span className="ml-2 text-yellow-400">💵 €{formatEurNumber(todayCash)}</span>
+           </div>
+           <button onClick={() => setShowReceipts(!showReceipts)}
+             className="border border-gray-700 text-gray-300 px-3 py-1.5 rounded-lg text-xs">
+@@ -310,7 +311,7 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95
+                 {products.map(p => (
+                   <div key={p.id} className={`${p.color} rounded-2xl p-4 relative`}>
+                     <div className="font-medium text-sm">{p.name}</div>
+-                    <div className="text-lg font-bold mt-1">€{p.price.toFixed(2)}</div>
++                    <div className="text-lg font-bold mt-1">€{formatEurNumber(p.price)}</div>
+                     <div className="text-xs opacity-75">{p.vat_rate}% DDV</div>
+                     <button onClick={() => saveProducts(products.filter(x => x.id !== p.id))}
+                       className="absolute top-2 right-2 text-white opacity-60 hover:opacity-100">✕</button>
+@@ -333,7 +334,7 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95
+                         <div className="text-xs text-gray-400">{r.items.map((i: CartItem) => i.name).join(', ')}</div>
+                       </div>
+                       <div className="text-right">
+-                        <div className="font-semibold">€{r.total.toFixed(2)}</div>
++                        <div className="font-semibold">€{formatEurNumber(r.total)}</div>
+                         <div className="text-xs text-gray-400">{r.paymentMethod === 'cash' ? '💵' : '💳'}</div>
+                         <button onClick={() => printReceipt(r)} className="text-xs text-blue-400 mt-1">🖨️ Natisni</button>
+                       </div>
+@@ -342,13 +343,13 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95
+                   <div className="bg-gray-700 rounded-xl p-4">
+                     <div className="flex justify-between font-semibold">
+                       <span>DNEVNI ZAKLJUČEK</span>
+-                      <span>€{todayTotal.toFixed(2)}</span>
++                      <span>€{formatEurNumber(todayTotal)}</span>
+                     </div>
+                     <div className="flex justify-between text-sm text-gray-400 mt-1">
+-                      <span>Gotovina</span><span>€{todayCash.toFixed(2)}</span>
++                      <span>Gotovina</span><span>€{formatEurNumber(todayCash)}</span>
+                     </div>
+                     <div className="flex justify-between text-sm text-gray-400">
+-                      <span>Kartica</span><span>€{todayCard.toFixed(2)}</span>
++                      <span>Kartica</span><span>€{formatEurNumber(todayCard)}</span>
+                     </div>
+                   </div>
+                 </div>
+@@ -372,7 +373,7 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95
+                       className={`${product.color} rounded-2xl p-5 text-left active:scale-95 transition-transform`}>
+                       <div className="font-medium text-sm mb-1">{product.name}</div>
+                       {product.category && <div className="text-xs opacity-75 mb-2">{product.category}</div>}
+-                      <div className="text-2xl font-bold">€{product.price.toFixed(2)}</div>
++                      <div className="text-2xl font-bold">€{formatEurNumber(product.price)}</div>
+                       <div className="text-xs opacity-75 mt-1">DDV {product.vat_rate}%</div>
+                     </button>
+                   ))}
+@@ -401,7 +402,7 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95
+                   <div key={item.id} className="flex items-center justify-between">
+                     <div className="flex-1">
+                       <div className="text-sm font-medium">{item.name}</div>
+-                      <div className="text-xs text-gray-400">€{item.price.toFixed(2)} × {item.qty}</div>
++                      <div className="text-xs text-gray-400">€{formatEurNumber(item.price)} × {item.qty}</div>
+                     </div>
+                     <div className="flex items-center gap-2">
+                       <button onClick={() => removeFromCart(item.id)}
+@@ -409,7 +410,7 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95
+                       <span className="text-sm font-medium w-6 text-center">{item.qty}</span>
+                       <button onClick={() => addToCart({id: item.id, name: item.name, price: item.price, vat_rate: item.vat_rate, category: '', color: ''})}
+                         className="w-6 h-6 bg-gray-700 rounded-full text-sm flex items-center justify-center">+</button>
+-                      <span className="text-sm font-semibold w-16 text-right">€{(item.price * item.qty).toFixed(2)}</span>
++                      <span className="text-sm font-semibold w-16 text-right">€{formatEurNumber((item.price * item.qty))}</span>
+                     </div>
+                   </div>
+                 ))}
+@@ -419,10 +420,10 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95
+ 
+           {cart.length > 0 && (
+             <div className="p-4 border-t border-gray-700">
+-              {vat22 > 0 && <div className="flex justify-between text-xs text-gray-400 mb-1"><span>DDV 22%</span><span>€{vat22.toFixed(2)}</span></div>}
+-              {vat95 > 0 && <div className="flex justify-between text-xs text-gray-400 mb-1"><span>DDV 9.5%</span><span>€{vat95.toFixed(2)}</span></div>}
++              {vat22 > 0 && <div className="flex justify-between text-xs text-gray-400 mb-1"><span>DDV 22%</span><span>€{formatEurNumber(vat22)}</span></div>}
++              {vat95 > 0 && <div className="flex justify-between text-xs text-gray-400 mb-1"><span>DDV 9.5%</span><span>€{formatEurNumber(vat95)}</span></div>}
+               <div className="flex justify-between text-xl font-bold mb-4">
+-                <span>SKUPAJ</span><span>€{total.toFixed(2)}</span>
++                <span>SKUPAJ</span><span>€{formatEurNumber(total)}</span>
+               </div>
+               <div className="grid grid-cols-2 gap-2 mb-3">
+                 <button onClick={() => setPaymentMethod('card')}
+@@ -442,7 +443,7 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95
+                     className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-2.5 text-sm focus:outline-none mb-2" />
+                   {cashGiven && parseFloat(cashGiven) >= total && (
+                     <div className="text-center text-green-400 font-semibold">
+-                      Vračilo: €{change.toFixed(2)}
++                      Vračilo: €{formatEurNumber(change)}
+                     </div>
+                   )}
+                 </div>
+@@ -457,7 +458,7 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${todayVat95
+ 
+           {showSuccess && lastReceipt && (
+             <div className="p-4 bg-green-600 text-center">
+-              <div className="font-semibold mb-1">✓ Plačano! €{lastReceipt.total.toFixed(2)}</div>
++              <div className="font-semibold mb-1">✓ Plačano! €{formatEurNumber(lastReceipt.total)}</div>
+               <button onClick={() => printReceipt(lastReceipt)} className="text-xs underline">
+                 🖨️ Natisni račun
+               </button>
+diff --git a/apps/web/app/ddv/page.tsx b/apps/web/app/ddv/page.tsx
+index 3247ed1..03f6020 100644
+--- a/apps/web/app/ddv/page.tsx
++++ b/apps/web/app/ddv/page.tsx
+@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
+ import Link from 'next/link'
+ import { getActiveMembership } from '@/lib/active-org'
+ import AppLayout from '@/components/AppLayout'
++import { formatEurNumber } from '@/lib/format'
+ 
+ // POPRAVLJENO (29.7.2026, audit portala):
+ //  1. VHODNI DDV: prej trdo kodiran na €0.00 (s komentarjem "za zdaj brez
+@@ -174,18 +175,18 @@ export default function DDVPage() {
+                 <div className="space-y-3">
+                   <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                     <span className="text-sm text-gray-600">DDV izhod (od prodaj)</span>
+-                    <span className="font-semibold text-red-500">€{vatOut.toFixed(2)}</span>
++                    <span className="font-semibold text-red-500">€{formatEurNumber(vatOut)}</span>
+                   </div>
+                   <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                     <span className="text-sm text-gray-600">DDV vhod (od nakupov)</span>
+-                    <span className="font-semibold text-green-600">−€{vatIn.toFixed(2)}</span>
++                    <span className="font-semibold text-green-600">−€{formatEurNumber(vatIn)}</span>
+                   </div>
+                   <div className="flex justify-between items-center py-3 bg-gray-50 rounded-xl px-3">
+                     <span className="font-medium text-gray-900">
+                       {isRefund ? 'FURS vam vrne' : 'Za plačilo FURS'}
+                     </span>
+                     <span className={`text-xl font-semibold ${isRefund ? 'text-green-600' : 'text-gray-900'}`}>
+-                      €{Math.abs(vatDue).toFixed(2)}
++                      €{formatEurNumber(Math.abs(vatDue))}
+                     </span>
+                   </div>
+                   {isRefund && (
+@@ -216,7 +217,7 @@ export default function DDVPage() {
+                   </div>
+                   <div className="flex justify-between">
+                     <span className="text-gray-500">Znesek</span>
+-                    <span className="font-semibold">€{vatDue.toFixed(2)}</span>
++                    <span className="font-semibold">€{formatEurNumber(vatDue)}</span>
+                   </div>
+                 </div>
+               </div>
+@@ -235,8 +236,8 @@ export default function DDVPage() {
+                       <div className="text-xs text-gray-500">#{inv.invoice_number} · {new Date(inv.issue_date).toLocaleDateString('sl-SI')}</div>
+                     </div>
+                     <div className="text-right">
+-                      <div className="text-sm">€{Number(inv.amount_total || 0).toFixed(2)}</div>
+-                      <div className="text-xs text-orange-500">DDV: €{Number(inv.vat_amount || 0).toFixed(2)}</div>
++                      <div className="text-sm">€{formatEurNumber(Number(inv.amount_total || 0))}</div>
++                      <div className="text-xs text-orange-500">DDV: €{formatEurNumber(Number(inv.vat_amount || 0))}</div>
+                     </div>
+                   </div>
+                 ))
+@@ -256,8 +257,8 @@ export default function DDVPage() {
+                       <div className="text-xs text-gray-500">{r.category} · {(r.receipt_date ? (r.receipt_date ? (r.receipt_date ? new Date(r.receipt_date).toLocaleDateString('sl-SI') : '—') : '—') : '—')}</div>
+                     </div>
+                     <div className="text-right">
+-                      <div className="text-sm">€{Number(r.amount_total || 0).toFixed(2)}</div>
+-                      <div className="text-xs text-green-600">DDV: €{Number(r.vat_amount || 0).toFixed(2)}</div>
++                      <div className="text-sm">€{formatEurNumber(Number(r.amount_total || 0))}</div>
++                      <div className="text-xs text-green-600">DDV: €{formatEurNumber(Number(r.vat_amount || 0))}</div>
+                     </div>
+                   </div>
+                 ))
+diff --git a/apps/web/app/dobavnice/new/page.tsx b/apps/web/app/dobavnice/new/page.tsx
+index f180148..0391052 100644
+--- a/apps/web/app/dobavnice/new/page.tsx
++++ b/apps/web/app/dobavnice/new/page.tsx
+@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase'
+ import Link from 'next/link'
+ import posthog from 'posthog-js'
+ import { getActiveMembership } from '@/lib/active-org'
++import { formatEurNumber } from '@/lib/format'
+ 
+ interface LineItem {
+   description: string
+@@ -383,9 +384,9 @@ export default function NewDobavnicaPage() {
+             <h3 className="font-medium text-gray-900 mb-4">Povzetek</h3>
+             <div className="space-y-2 text-sm">
+               <div className="flex justify-between text-gray-500"><span>Št. računa</span><span className="font-mono">{invoiceNumber}</span></div>
+-              <div className="flex justify-between text-gray-500"><span>Osnova</span><span>€{subtotal.toFixed(2)}</span></div>
+-              <div className="flex justify-between text-gray-500"><span>DDV</span><span>€{vatAmount.toFixed(2)}</span></div>
+-              <div className="border-t border-gray-100 pt-2 mt-2 flex justify-between font-semibold text-gray-900"><span>Skupaj</span><span>€{total.toFixed(2)}</span></div>
++              <div className="flex justify-between text-gray-500"><span>Osnova</span><span>€{formatEurNumber(subtotal)}</span></div>
++              <div className="flex justify-between text-gray-500"><span>DDV</span><span>€{formatEurNumber(vatAmount)}</span></div>
++              <div className="border-t border-gray-100 pt-2 mt-2 flex justify-between font-semibold text-gray-900"><span>Skupaj</span><span>€{formatEurNumber(total)}</span></div>
+             </div>
+             <div className="mt-4 pt-4 border-t border-gray-100">
+               <div className="text-xs text-gray-500 mb-1">Sklic</div>
+diff --git a/apps/web/app/dobavnice/page.tsx b/apps/web/app/dobavnice/page.tsx
+index 2c41252..a8d5dac 100644
+--- a/apps/web/app/dobavnice/page.tsx
++++ b/apps/web/app/dobavnice/page.tsx
+@@ -6,6 +6,7 @@ import Link from 'next/link'
+ import { useRouter } from 'next/navigation'
+ import { getActiveMembership } from '@/lib/active-org'
+ import AppLayout from '@/components/AppLayout'
++import { formatEurNumber } from '@/lib/format'
+ 
+ export default function DobavnicePage() {
+   const [org, setOrg] = useState<any>(null)
+@@ -147,7 +148,7 @@ export default function DobavnicePage() {
+                     <div className="flex justify-between items-start mb-3">
+                       <div>
+                         <div className="font-medium text-gray-900">{clientName}</div>
+-                        <div className="text-sm text-gray-500">{pending.length} dobavnic · €{total.toFixed(2)}</div>
++                        <div className="text-sm text-gray-500">{pending.length} dobavnic · €{formatEurNumber(total)}</div>
+                       </div>
+                       <button
+                         onClick={() => mergeToInvoice(clientName)}
+@@ -161,7 +162,7 @@ export default function DobavnicePage() {
+                       {pending.map((doc: any) => (
+                         <div key={doc.id} className="flex justify-between items-center text-sm py-2 border-t border-gray-50">
+                           <div className="text-gray-600">#{doc.invoice_number} · {doc.issue_date}</div>
+-                          <div className="font-medium">€{Number(doc.amount_total).toFixed(2)}</div>
++                          <div className="font-medium">€{formatEurNumber(Number(doc.amount_total))}</div>
+                         </div>
+                       ))}
+                     </div>
+@@ -193,7 +194,7 @@ export default function DobavnicePage() {
+                     <div className="text-sm text-gray-500">{doc.client_name} · {doc.issue_date}</div>
+                   </div>
+                   <div className="flex items-center gap-3">
+-                    <div className="font-medium">€{Number(doc.amount_total).toFixed(2)}</div>
++                    <div className="font-medium">€{formatEurNumber(Number(doc.amount_total))}</div>
+                     <span className={`text-xs px-2 py-1 rounded-full ${doc.status === 'sent' ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'}`}>
+                       {doc.status === 'sent' ? 'Zaračunana' : 'Čaka'}
+                     </span>
+diff --git a/apps/web/app/expenses/page.tsx b/apps/web/app/expenses/page.tsx
+index a39a6a3..e738f26 100644
+--- a/apps/web/app/expenses/page.tsx
++++ b/apps/web/app/expenses/page.tsx
+@@ -7,6 +7,7 @@ import Link from 'next/link'
+ import posthog from 'posthog-js'
+ import { getActiveMembership } from '@/lib/active-org'
+ import AppLayout from '@/components/AppLayout'
++import { formatEurNumber } from '@/lib/format'
+ 
+ const MONTHS = ['Januar','Februar','Marec','April','Maj','Junij','Julij','Avgust','September','Oktober','November','December']
+ 
+@@ -389,10 +390,10 @@ export default function ExpensesPage() {
+             {/* Predogled izračuna */}
+             {form.amount_net && (
+               <div className="bg-gray-50 rounded-xl p-3 mb-4 flex gap-6 text-sm">
+-                <div><span className="text-gray-500">Osnova: </span><span className="font-medium">€{parseFloat(form.amount_net).toFixed(2)}</span></div>
+-                <div><span className="text-gray-500">DDV: </span><span className="font-medium">€{(parseFloat(form.amount_net) * parseFloat(form.vat_rate) / 100).toFixed(2)}</span></div>
+-                <div><span className="text-gray-500">Skupaj: </span><span className="font-semibold">€{(parseFloat(form.amount_net) * (1 + parseFloat(form.vat_rate)/100)).toFixed(2)}</span></div>
+-                <div><span className="text-gray-500">DDV vračilo: </span><span className="font-medium text-green-600">€{(parseFloat(form.amount_net) * parseFloat(form.vat_rate) / 100).toFixed(2)}</span></div>
++                <div><span className="text-gray-500">Osnova: </span><span className="font-medium">€{formatEurNumber(parseFloat(form.amount_net))}</span></div>
++                <div><span className="text-gray-500">DDV: </span><span className="font-medium">€{formatEurNumber((parseFloat(form.amount_net) * parseFloat(form.vat_rate) / 100))}</span></div>
++                <div><span className="text-gray-500">Skupaj: </span><span className="font-semibold">€{formatEurNumber((parseFloat(form.amount_net) * (1 + parseFloat(form.vat_rate)/100)))}</span></div>
++                <div><span className="text-gray-500">DDV vračilo: </span><span className="font-medium text-green-600">€{formatEurNumber((parseFloat(form.amount_net) * parseFloat(form.vat_rate) / 100))}</span></div>
+               </div>
+             )}
+ 
+@@ -427,16 +428,16 @@ export default function ExpensesPage() {
+         <div className="grid grid-cols-3 gap-4 mb-6">
+           <div className="bg-white rounded-2xl border border-gray-100 p-5">
+             <div className="text-xs text-gray-500 mb-1">Skupaj odhodki</div>
+-            <div className="text-xl font-semibold text-red-500">€{totalNet.toFixed(2)}</div>
++            <div className="text-xl font-semibold text-red-500">€{formatEurNumber(totalNet)}</div>
+           </div>
+           <div className="bg-white rounded-2xl border border-gray-100 p-5">
+             <div className="text-xs text-gray-500 mb-1">DDV vhod (vračilo)</div>
+-            <div className="text-xl font-semibold text-green-600">€{totalVat.toFixed(2)}</div>
++            <div className="text-xl font-semibold text-green-600">€{formatEurNumber(totalVat)}</div>
+             <div className="text-xs text-gray-400 mt-1">Odšteje se od DDV dolga</div>
+           </div>
+           <div className="bg-white rounded-2xl border border-gray-100 p-5">
+             <div className="text-xs text-gray-500 mb-1">Skupaj plačano</div>
+-            <div className="text-xl font-semibold">€{totalGross.toFixed(2)}</div>
++            <div className="text-xl font-semibold">€{formatEurNumber(totalGross)}</div>
+           </div>
+         </div>
+ 
+@@ -473,16 +474,16 @@ export default function ExpensesPage() {
+                 </div>
+                 <div className="col-span-3 text-xs font-medium text-gray-900 truncate">{exp.vendor}</div>
+                 <div className="col-span-2 text-xs text-gray-500 truncate">{exp.category}</div>
+-                <div className="col-span-2 text-xs text-right text-red-500">€{Number(exp.amount_net).toFixed(2)}</div>
+-                <div className="col-span-2 text-xs text-right text-green-600">€{Number(exp.vat_amount).toFixed(2)}</div>
+-                <div className="col-span-1 text-xs text-right font-medium">€{Number(exp.amount_total).toFixed(2)}</div>
++                <div className="col-span-2 text-xs text-right text-red-500">€{formatEurNumber(Number(exp.amount_net))}</div>
++                <div className="col-span-2 text-xs text-right text-green-600">€{formatEurNumber(Number(exp.vat_amount))}</div>
++                <div className="col-span-1 text-xs text-right font-medium">€{formatEurNumber(Number(exp.amount_total))}</div>
+               </div>
+             ))}
+             <div className="grid grid-cols-12 gap-2 px-6 py-3 bg-gray-50 border-t border-gray-200">
+               <div className="col-span-7 text-xs font-medium text-gray-700">SKUPAJ</div>
+-              <div className="col-span-2 text-xs text-right font-semibold text-red-500">€{totalNet.toFixed(2)}</div>
+-              <div className="col-span-2 text-xs text-right font-semibold text-green-600">€{totalVat.toFixed(2)}</div>
+-              <div className="col-span-1 text-xs text-right font-semibold">€{totalGross.toFixed(2)}</div>
++              <div className="col-span-2 text-xs text-right font-semibold text-red-500">€{formatEurNumber(totalNet)}</div>
++              <div className="col-span-2 text-xs text-right font-semibold text-green-600">€{formatEurNumber(totalVat)}</div>
++              <div className="col-span-1 text-xs text-right font-semibold">€{formatEurNumber(totalGross)}</div>
+             </div>
+             </div>
+             </div>
+diff --git a/apps/web/app/invoices/edit/[id]/page.tsx b/apps/web/app/invoices/edit/[id]/page.tsx
+index 8a5be76..66b7637 100644
+--- a/apps/web/app/invoices/edit/[id]/page.tsx
++++ b/apps/web/app/invoices/edit/[id]/page.tsx
+@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase'
+ import Link from 'next/link'
+ import posthog from 'posthog-js'
+ import { getActiveMembership } from '@/lib/active-org'
++import { formatEurNumber } from '@/lib/format'
+ 
+ interface LineItem {
+   description: string
+@@ -259,7 +260,7 @@ export default function EditInvoicePage() {
+                       </div>
+                     </div>
+                     <div style={{ display:'flex', justifyContent:'flex-end', fontSize:'12px', color:'#888' }}>
+-                      Skupaj: <strong style={{ color:'#0D1F12', marginLeft:'4px' }}>€{(item.quantity * item.unit_price * (1 + item.vat_rate/100)).toFixed(2)}</strong>
++                      Skupaj: <strong style={{ color:'#0D1F12', marginLeft:'4px' }}>€{formatEurNumber((item.quantity * item.unit_price * (1 + item.vat_rate/100)))}</strong>
+                     </div>
+                   </div>
+                 </div>
+@@ -288,15 +289,15 @@ export default function EditInvoicePage() {
+               </div>
+               <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px' }}>
+                 <span style={{ color:'rgba(255,255,255,0.5)' }}>Osnova</span>
+-                <span style={{ color:'#fff' }}>€{subtotal.toFixed(2)}</span>
++                <span style={{ color:'#fff' }}>€{formatEurNumber(subtotal)}</span>
+               </div>
+               <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px' }}>
+                 <span style={{ color:'rgba(255,255,255,0.5)' }}>DDV</span>
+-                <span style={{ color:'#fff' }}>€{vatAmount.toFixed(2)}</span>
++                <span style={{ color:'#fff' }}>€{formatEurNumber(vatAmount)}</span>
+               </div>
+               <div style={{ borderTop:'0.5px solid rgba(255,255,255,0.1)', paddingTop:'8px', display:'flex', justifyContent:'space-between', fontSize:'16px', fontWeight:'500' }}>
+                 <span style={{ color:'rgba(255,255,255,0.7)' }}>Skupaj</span>
+-                <span style={{ color:'#9FE1CB' }}>€{total.toFixed(2)}</span>
++                <span style={{ color:'#9FE1CB' }}>€{formatEurNumber(total)}</span>
+               </div>
+               <div style={{ background:'rgba(255,255,255,0.06)', borderRadius:'8px', padding:'8px 12px', marginTop:'4px' }}>
+                 <div style={{ fontSize:'10px', color:'rgba(255,255,255,0.4)', marginBottom:'2px' }}>Sklic</div>
+@@ -469,9 +470,9 @@ export default function EditInvoicePage() {
+             <h3 className="font-medium text-gray-900 mb-4">Povzetek</h3>
+             <div className="space-y-2 text-sm">
+               <div className="flex justify-between text-gray-500"><span>Št. računa</span><span className="font-mono">{invoiceNumber}</span></div>
+-              <div className="flex justify-between text-gray-500"><span>Osnova</span><span>€{subtotal.toFixed(2)}</span></div>
+-              <div className="flex justify-between text-gray-500"><span>DDV</span><span>€{vatAmount.toFixed(2)}</span></div>
+-              <div className="border-t border-gray-100 pt-2 mt-2 flex justify-between font-semibold text-gray-900"><span>Skupaj</span><span>€{total.toFixed(2)}</span></div>
++              <div className="flex justify-between text-gray-500"><span>Osnova</span><span>€{formatEurNumber(subtotal)}</span></div>
++              <div className="flex justify-between text-gray-500"><span>DDV</span><span>€{formatEurNumber(vatAmount)}</span></div>
++              <div className="border-t border-gray-100 pt-2 mt-2 flex justify-between font-semibold text-gray-900"><span>Skupaj</span><span>€{formatEurNumber(total)}</span></div>
+             </div>
+             <div className="mt-4 pt-4 border-t border-gray-100">
+               <div className="text-xs text-gray-500 mb-1">Sklic</div>
+diff --git a/apps/web/app/invoices/edit/page.tsx b/apps/web/app/invoices/edit/page.tsx
+index cfdb7a0..463531c 100644
+--- a/apps/web/app/invoices/edit/page.tsx
++++ b/apps/web/app/invoices/edit/page.tsx
+@@ -8,6 +8,7 @@ import Link from 'next/link'
+ import posthog from 'posthog-js'
+ import { getActiveMembership } from '@/lib/active-org'
+ import AppLayout from '@/components/AppLayout'
++import { formatEurNumber } from '@/lib/format'
+ 
+ interface LineItem {
+   description: string
+@@ -260,7 +261,7 @@ export default function EditInvoicePage() {
+                       </div>
+                     </div>
+                     <div style={{ display:'flex', justifyContent:'flex-end', fontSize:'12px', color:'#888' }}>
+-                      Skupaj: <strong style={{ color:'#0D1F12', marginLeft:'4px' }}>€{(item.quantity * item.unit_price * (1 + item.vat_rate/100)).toFixed(2)}</strong>
++                      Skupaj: <strong style={{ color:'#0D1F12', marginLeft:'4px' }}>€{formatEurNumber((item.quantity * item.unit_price * (1 + item.vat_rate/100)))}</strong>
+                     </div>
+                   </div>
+                 </div>
+@@ -289,15 +290,15 @@ export default function EditInvoicePage() {
+               </div>
+               <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px' }}>
+                 <span style={{ color:'rgba(255,255,255,0.5)' }}>Osnova</span>
+-                <span style={{ color:'#fff' }}>€{subtotal.toFixed(2)}</span>
++                <span style={{ color:'#fff' }}>€{formatEurNumber(subtotal)}</span>
+               </div>
+               <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px' }}>
+                 <span style={{ color:'rgba(255,255,255,0.5)' }}>DDV</span>
+-                <span style={{ color:'#fff' }}>€{vatAmount.toFixed(2)}</span>
++                <span style={{ color:'#fff' }}>€{formatEurNumber(vatAmount)}</span>
+               </div>
+               <div style={{ borderTop:'0.5px solid rgba(255,255,255,0.1)', paddingTop:'8px', display:'flex', justifyContent:'space-between', fontSize:'16px', fontWeight:'500' }}>
+                 <span style={{ color:'rgba(255,255,255,0.7)' }}>Skupaj</span>
+-                <span style={{ color:'#9FE1CB' }}>€{total.toFixed(2)}</span>
++                <span style={{ color:'#9FE1CB' }}>€{formatEurNumber(total)}</span>
+               </div>
+               <div style={{ background:'rgba(255,255,255,0.06)', borderRadius:'8px', padding:'8px 12px', marginTop:'4px' }}>
+                 <div style={{ fontSize:'10px', color:'rgba(255,255,255,0.4)', marginBottom:'2px' }}>Sklic</div>
+@@ -471,9 +472,9 @@ export default function EditInvoicePage() {
+             <h3 className="font-medium text-gray-900 mb-4">Povzetek</h3>
+             <div className="space-y-2 text-sm">
+               <div className="flex justify-between text-gray-500"><span>Št. računa</span><span className="font-mono">{invoiceNumber}</span></div>
+-              <div className="flex justify-between text-gray-500"><span>Osnova</span><span>€{subtotal.toFixed(2)}</span></div>
+-              <div className="flex justify-between text-gray-500"><span>DDV</span><span>€{vatAmount.toFixed(2)}</span></div>
+-              <div className="border-t border-gray-100 pt-2 mt-2 flex justify-between font-semibold text-gray-900"><span>Skupaj</span><span>€{total.toFixed(2)}</span></div>
++              <div className="flex justify-between text-gray-500"><span>Osnova</span><span>€{formatEurNumber(subtotal)}</span></div>
++              <div className="flex justify-between text-gray-500"><span>DDV</span><span>€{formatEurNumber(vatAmount)}</span></div>
++              <div className="border-t border-gray-100 pt-2 mt-2 flex justify-between font-semibold text-gray-900"><span>Skupaj</span><span>€{formatEurNumber(total)}</span></div>
+             </div>
+             <div className="mt-4 pt-4 border-t border-gray-100">
+               <div className="text-xs text-gray-500 mb-1">Sklic</div>
+diff --git a/apps/web/app/invoices/new/page.tsx b/apps/web/app/invoices/new/page.tsx
+index c72b882..675a917 100644
+--- a/apps/web/app/invoices/new/page.tsx
++++ b/apps/web/app/invoices/new/page.tsx
+@@ -9,6 +9,7 @@ import Link from 'next/link'
+ import posthog from 'posthog-js'
+ import { getActiveMembership } from '@/lib/active-org'
+ import AppLayout from '@/components/AppLayout'
++import { formatEurNumber } from '@/lib/format'
+ 
+ interface LineItem {
+   description: string
+@@ -453,9 +454,9 @@ export default function NewInvoicePage() {
+             <h3 className="font-medium text-gray-900 mb-4">Povzetek</h3>
+             <div className="space-y-2 text-sm">
+               <div className="flex justify-between text-gray-500"><span>Št. računa</span><span className="font-mono">{invoiceNumber}</span></div>
+-              <div className="flex justify-between text-gray-500"><span>Osnova</span><span>€{subtotal.toFixed(2)}</span></div>
+-              <div className="flex justify-between text-gray-500"><span>DDV</span><span>€{vatAmount.toFixed(2)}</span></div>
+-              <div className="border-t border-gray-100 pt-2 mt-2 flex justify-between font-semibold text-gray-900"><span>Skupaj</span><span>€{total.toFixed(2)}</span></div>
++              <div className="flex justify-between text-gray-500"><span>Osnova</span><span>€{formatEurNumber(subtotal)}</span></div>
++              <div className="flex justify-between text-gray-500"><span>DDV</span><span>€{formatEurNumber(vatAmount)}</span></div>
++              <div className="border-t border-gray-100 pt-2 mt-2 flex justify-between font-semibold text-gray-900"><span>Skupaj</span><span>€{formatEurNumber(total)}</span></div>
+             </div>
+             <div className="mt-4 pt-4 border-t border-gray-100">
+               <div className="text-xs text-gray-500 mb-1">Sklic</div>
+diff --git a/apps/web/app/invoices/page.tsx b/apps/web/app/invoices/page.tsx
+index b412d7f..a7f064d 100644
+--- a/apps/web/app/invoices/page.tsx
++++ b/apps/web/app/invoices/page.tsx
+@@ -7,6 +7,7 @@ import Link from 'next/link'
+ import SendInvoiceModal from '@/components/SendInvoiceModal'
+ import { getActiveMembership } from '@/lib/active-org'
+ import AppLayout from '@/components/AppLayout'
++import { formatEurNumber } from '@/lib/format'
+ 
+ export default function InvoicesPage() {
+   const [invoices, setInvoices] = useState<any[]>([])
+@@ -279,15 +280,15 @@ export default function InvoicesPage() {
+         <div className="grid grid-cols-3 gap-4 mb-8">
+           <div className="bg-white rounded-2xl border border-gray-100 p-5">
+             <div className="text-xs text-gray-500 mb-1">Skupaj fakturirano</div>
+-            <div className="text-xl font-semibold">€{totalSent.toFixed(2)}</div>
++            <div className="text-xl font-semibold">€{formatEurNumber(totalSent)}</div>
+           </div>
+           <div className="bg-white rounded-2xl border border-gray-100 p-5">
+             <div className="text-xs text-gray-500 mb-1">Plačano</div>
+-            <div className="text-xl font-semibold text-green-600">€{totalPaid.toFixed(2)}</div>
++            <div className="text-xl font-semibold text-green-600">€{formatEurNumber(totalPaid)}</div>
+           </div>
+           <div className="bg-white rounded-2xl border border-gray-100 p-5">
+             <div className="text-xs text-gray-500 mb-1">Neplačano</div>
+-            <div className="text-xl font-semibold text-orange-500">€{totalUnpaid.toFixed(2)}</div>
++            <div className="text-xl font-semibold text-orange-500">€{formatEurNumber(totalUnpaid)}</div>
+           </div>
+         </div>
+ 
+@@ -321,7 +322,7 @@ export default function InvoicesPage() {
+                     </div>
+                   </div>
+                   <div className="text-right mr-2 flex-shrink-0">
+-                    <div className="font-semibold text-sm">€{Number(inv.amount_total).toFixed(2)}</div>
++                    <div className="font-semibold text-sm">€{formatEurNumber(Number(inv.amount_total))}</div>
+                     <div style={{ fontSize: '10px', marginTop: '2px', padding: '2px 8px', borderRadius: '20px', background: s.bg, color: s.color, display: 'inline-block', fontWeight: '500' }}>
+                       {s.label}
+                     </div>
+diff --git a/apps/web/app/kartice/page.tsx b/apps/web/app/kartice/page.tsx
+index bef59ac..a0cb31a 100644
+--- a/apps/web/app/kartice/page.tsx
++++ b/apps/web/app/kartice/page.tsx
+@@ -6,6 +6,7 @@ import Link from 'next/link'
+ import posthog from 'posthog-js'
+ import { getActiveMembership } from '@/lib/active-org'
+ import AppLayout from '@/components/AppLayout'
++import { formatEurNumber } from '@/lib/format'
+ 
+ const PROCESSORS = [
+   { value: 'sumup', label: 'SumUp', fee: 1.69 },
+@@ -365,7 +366,7 @@ export default function KarticeePage() {
+                       <span className="truncate flex-1">{f.file.name}</span>
+                       {f.status === 'pending' && <span className="text-gray-400 text-xs">čaka</span>}
+                       {f.status === 'scanning' && <span className="text-blue-600 text-xs">⟳ skenira...</span>}
+-                      {f.status === 'saved' && <span className="text-green-600 text-xs">✓ {f.processor} · €{f.gross?.toFixed(2)}</span>}
++                      {f.status === 'saved' && <span className="text-green-600 text-xs">✓ {f.processor} · €{formatEurNumber(f.gross)}</span>}
+                       {f.status === 'error' && <span className="text-red-600 text-xs" title={f.error}>✗ {f.error}</span>}
+                     </div>
+                   ))}
+@@ -408,17 +409,17 @@ export default function KarticeePage() {
+         <div className="grid grid-cols-3 gap-4 mb-6">
+           <div className="bg-white rounded-2xl border border-gray-100 p-5">
+             <div className="text-xs text-gray-500 mb-1">Bruto prodaja</div>
+-            <div className="text-2xl font-semibold text-green-600">€{totalGross.toFixed(2)}</div>
++            <div className="text-2xl font-semibold text-green-600">€{formatEurNumber(totalGross)}</div>
+             <div className="text-xs text-gray-400 mt-1">Kar so stranke plačale</div>
+           </div>
+           <div className="bg-white rounded-2xl border border-gray-100 p-5">
+             <div className="text-xs text-gray-500 mb-1">Skupne provizije</div>
+-            <div className="text-2xl font-semibold text-red-500">€{totalFees.toFixed(2)}</div>
++            <div className="text-2xl font-semibold text-red-500">€{formatEurNumber(totalFees)}</div>
+             <div className="text-xs text-gray-400 mt-1">Strošek procesorja</div>
+           </div>
+           <div className="bg-white rounded-2xl border border-gray-100 p-5">
+             <div className="text-xs text-gray-500 mb-1">Neto nakazilo</div>
+-            <div className="text-2xl font-semibold">€{totalNet.toFixed(2)}</div>
++            <div className="text-2xl font-semibold">€{formatEurNumber(totalNet)}</div>
+             <div className="text-xs text-gray-400 mt-1">Prejeto na TRR</div>
+           </div>
+         </div>
+@@ -499,23 +500,23 @@ export default function KarticeePage() {
+                 <div className="grid grid-cols-3 gap-4 text-center">
+                   <div>
+                     <div className="text-xs text-gray-500 mb-1">Bruto prodaja</div>
+-                    <div className="text-lg font-semibold text-green-600">€{gross.toFixed(2)}</div>
++                    <div className="text-lg font-semibold text-green-600">€{formatEurNumber(gross)}</div>
+                     <div className="text-xs text-gray-400">→ KPO prihodek</div>
+                   </div>
+                   <div>
+                     <div className="text-xs text-gray-500 mb-1">Provizija {feePct}%</div>
+-                    <div className="text-lg font-semibold text-red-500">€{autoFee.toFixed(2)}</div>
++                    <div className="text-lg font-semibold text-red-500">€{formatEurNumber(autoFee)}</div>
+                     <div className="text-xs text-gray-400">→ KPO strošek</div>
+                   </div>
+                   <div>
+                     <div className="text-xs text-gray-500 mb-1">Neto nakazilo</div>
+-                    <div className="text-lg font-semibold">€{autoNet.toFixed(2)}</div>
++                    <div className="text-lg font-semibold">€{formatEurNumber(autoNet)}</div>
+                     <div className="text-xs text-gray-400">→ na TRR</div>
+                   </div>
+                 </div>
+                 <div className="mt-3 text-xs text-blue-700 bg-blue-50 rounded-lg p-2">
+-                  ✓ Aplikacija bo samodejno poknjižila €{gross.toFixed(2)} kot prihodek
+-                  in €{autoFee.toFixed(2)} kot strošek v KPO knjigo.
++                  ✓ Aplikacija bo samodejno poknjižila €{formatEurNumber(gross)} kot prihodek
++                  in €{formatEurNumber(autoFee)} kot strošek v KPO knjigo.
+                 </div>
+               </div>
+             )}
+@@ -566,19 +567,19 @@ export default function KarticeePage() {
+                 </div>
+                 <div className="col-span-2 text-xs text-gray-600">{s.processor}</div>
+                 <div className="col-span-1 text-xs text-center text-gray-500">{s.transactions || '—'}</div>
+-                <div className="col-span-2 text-xs text-right font-medium text-green-600">€{s.gross_sales.toFixed(2)}</div>
++                <div className="col-span-2 text-xs text-right font-medium text-green-600">€{formatEurNumber(s.gross_sales)}</div>
+                 <div className="col-span-2 text-xs text-right text-red-500">
+-                  −€{s.fee_amount.toFixed(2)}
++                  −€{formatEurNumber(s.fee_amount)}
+                   <span className="text-gray-400 ml-1">({s.fee_pct}%)</span>
+                 </div>
+-                <div className="col-span-2 text-xs text-right font-semibold">€{s.net_payout.toFixed(2)}</div>
++                <div className="col-span-2 text-xs text-right font-semibold">€{formatEurNumber(s.net_payout)}</div>
+               </div>
+             ))}
+             <div className="grid grid-cols-12 gap-2 px-6 py-3 bg-gray-50 border-t border-gray-200">
+               <div className="col-span-6 text-xs font-medium text-gray-700">SKUPAJ</div>
+-              <div className="col-span-2 text-xs text-right font-semibold text-green-600">€{totalGross.toFixed(2)}</div>
+-              <div className="col-span-2 text-xs text-right font-semibold text-red-500">−€{totalFees.toFixed(2)}</div>
+-              <div className="col-span-2 text-xs text-right font-semibold">€{totalNet.toFixed(2)}</div>
++              <div className="col-span-2 text-xs text-right font-semibold text-green-600">€{formatEurNumber(totalGross)}</div>
++              <div className="col-span-2 text-xs text-right font-semibold text-red-500">−€{formatEurNumber(totalFees)}</div>
++              <div className="col-span-2 text-xs text-right font-semibold">€{formatEurNumber(totalNet)}</div>
+             </div>
+           </div>
+         )}
+diff --git a/apps/web/app/kilometrina/page.tsx b/apps/web/app/kilometrina/page.tsx
+index 0c533ce..0cd485c 100644
+--- a/apps/web/app/kilometrina/page.tsx
++++ b/apps/web/app/kilometrina/page.tsx
+@@ -6,6 +6,7 @@ import Link from 'next/link'
+ import { KM_RATE_BUSINESS as TC_KM_BUSINESS, KM_RATE_COMMUTE as TC_KM_COMMUTE , lokalniDatum} from '@/lib/tax-constants'
+ import { getActiveMembership } from '@/lib/active-org'
+ import AppLayout from '@/components/AppLayout'
++import { formatEurNumber } from '@/lib/format'
+ 
+ // POPRAVLJENO (30.7.2026, audit): Uredba o davčni obravnavi povračil
+ // stroškov določa DVE LOČENI stopnji, ki ju zakon strogo razlikuje.
+@@ -129,11 +130,11 @@ export default function KilometrinaPage() {
+     <td>${entry.description.split('—').slice(-1)[0]?.trim() || ''}</td>
+     <td>${entry.notes?.split(' km')[0] || ''}</td>
+     <td>${entry.notes?.match(/€([\d.]+)\/km/)?.[1] ? '€' + entry.notes.match(/€([\d.]+)\/km/)[1] : '—'}</td>
+-    <td>€${Number(entry.expense).toFixed(2)}</td>
++    <td>€${formatEurNumber(Number(entry.expense))}</td>
+   </tr>
+ </table>
+ 
+-<div class="total">Skupaj za povračilo: €${Number(entry.expense).toFixed(2)}</div>
++<div class="total">Skupaj za povračilo: €${formatEurNumber(Number(entry.expense))}</div>
+ 
+ <div class="footer">
+   <div>
+@@ -187,7 +188,7 @@ export default function KilometrinaPage() {
+           </div>
+           <div className="text-right">
+             <div className="text-xs text-blue-600">Skupaj letos</div>
+-            <div className="font-semibold text-blue-800">€{totalExpense.toFixed(2)}</div>
++            <div className="font-semibold text-blue-800">€{formatEurNumber(totalExpense)}</div>
+           </div>
+         </div>
+ 
+@@ -266,7 +267,7 @@ export default function KilometrinaPage() {
+             {totalKm > 0 && (
+               <div className="bg-gray-50 rounded-xl p-3 mb-4 flex gap-6 text-sm">
+                 <div><span className="text-gray-500">Skupaj km: </span><span className="font-semibold">{totalKm} km</span></div>
+-                <div><span className="text-gray-500">Znesek: </span><span className="font-semibold text-green-600">€{totalAmount.toFixed(2)}</span></div>
++                <div><span className="text-gray-500">Znesek: </span><span className="font-semibold text-green-600">€{formatEurNumber(totalAmount)}</span></div>
+                 <div><span className="text-gray-500">({totalKm} × €{activeRate})</span></div>
+               </div>
+             )}
+@@ -317,7 +318,7 @@ export default function KilometrinaPage() {
+                   {entry.notes?.split(' km')[0]} km
+                 </div>
+                 <div className="col-span-2 text-xs text-right font-medium">
+-                  €{Number(entry.expense).toFixed(2)}
++                  €{formatEurNumber(Number(entry.expense))}
+                 </div>
+                 <div className="col-span-1 flex justify-end">
+                   <button onClick={() => downloadPDF(entry)}
+@@ -330,7 +331,7 @@ export default function KilometrinaPage() {
+             <div className="grid grid-cols-12 gap-2 px-6 py-3 bg-gray-50 border-t border-gray-200">
+               <div className="col-span-7 text-xs font-medium text-gray-700">SKUPAJ</div>
+               <div className="col-span-2"></div>
+-              <div className="col-span-2 text-xs text-right font-semibold">€{totalExpense.toFixed(2)}</div>
++              <div className="col-span-2 text-xs text-right font-semibold">€{formatEurNumber(totalExpense)}</div>
+               <div className="col-span-1"></div>
+             </div>
+           </div>
+diff --git a/apps/web/app/kpo/page.tsx b/apps/web/app/kpo/page.tsx
+index 37228eb..d49f75a 100644
+--- a/apps/web/app/kpo/page.tsx
++++ b/apps/web/app/kpo/page.tsx
+@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
+ import Link from 'next/link'
+ import { getActiveMembership } from '@/lib/active-org'
+ import AppLayout from '@/components/AppLayout'
++import { formatEurNumber } from '@/lib/format'
+ 
+ const MONTHS = ['Januar', 'Februar', 'Marec', 'April', 'Maj', 'Junij', 'Julij', 'Avgust', 'September', 'Oktober', 'November', 'December']
+ 
+@@ -144,22 +145,22 @@ export default function KPOPage() {
+         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+           <div className="bg-white rounded-2xl border border-gray-100 p-5">
+             <div className="text-xs text-gray-500 mb-1">Prihodki</div>
+-            <div className="text-xl font-semibold text-green-600">€{totalIncome.toFixed(2)}</div>
++            <div className="text-xl font-semibold text-green-600">€{formatEurNumber(totalIncome)}</div>
+           </div>
+           <div className="bg-white rounded-2xl border border-gray-100 p-5">
+             <div className="text-xs text-gray-500 mb-1">Odhodki</div>
+-            <div className="text-xl font-semibold text-red-500">€{totalExpense.toFixed(2)}</div>
++            <div className="text-xl font-semibold text-red-500">€{formatEurNumber(totalExpense)}</div>
+           </div>
+           <div className="bg-white rounded-2xl border border-gray-100 p-5">
+             <div className="text-xs text-gray-500 mb-1">Dobiček</div>
+             <div className={`text-xl font-semibold ${profit >= 0 ? 'text-gray-900' : 'text-red-500'}`}>
+-              €{profit.toFixed(2)}
++              €{formatEurNumber(profit)}
+             </div>
+           </div>
+           <div className="bg-white rounded-2xl border border-gray-100 p-5">
+             <div className="text-xs text-gray-500 mb-1">DDV dolg</div>
+             <div className="text-xl font-semibold text-orange-500">
+-              €{(totalVatOut - totalVatIn).toFixed(2)}
++              €{formatEurNumber((totalVatOut - totalVatIn))}
+             </div>
+           </div>
+         </div>
+@@ -193,13 +194,13 @@ export default function KPOPage() {
+                 </div>
+                 <div className="col-span-4 text-gray-900 text-xs truncate">{entry.description}</div>
+                 <div className="col-span-2 text-right text-xs">
+-                  {entry.income > 0 ? <span className="text-green-600 font-medium">€{entry.income.toFixed(2)}</span> : <span className="text-gray-300">—</span>}
++                  {entry.income > 0 ? <span className="text-green-600 font-medium">€{formatEurNumber(entry.income)}</span> : <span className="text-gray-300">—</span>}
+                 </div>
+                 <div className="col-span-2 text-right text-xs">
+-                  {entry.expense > 0 ? <span className="text-red-500">€{entry.expense.toFixed(2)}</span> : <span className="text-gray-300">—</span>}
++                  {entry.expense > 0 ? <span className="text-red-500">€{formatEurNumber(entry.expense)}</span> : <span className="text-gray-300">—</span>}
+                 </div>
+                 <div className="col-span-2 text-right text-xs text-gray-500">
+-                  {(entry.vat_out || entry.vat_in) > 0 ? `€${(entry.vat_out || entry.vat_in).toFixed(2)}` : '—'}
++                  {(entry.vat_out || entry.vat_in) > 0 ? `€${formatEurNumber((entry.vat_out || entry.vat_in))}` : '—'}
+                 </div>
+               </div>
+             ))
+@@ -209,13 +210,13 @@ export default function KPOPage() {
+             <div className="grid grid-cols-12 gap-2 px-6 py-3 bg-gray-50 border-t border-gray-200">
+               <div className="col-span-2 text-xs font-medium text-gray-700">SKUPAJ</div>
+               <div className="col-span-4"></div>
+-              <div className="col-span-2 text-right text-xs font-semibold text-green-600">€{totalIncome.toFixed(2)}</div>
+-              <div className="col-span-2 text-right text-xs font-semibold text-red-500">€{totalExpense.toFixed(2)}</div>
++              <div className="col-span-2 text-right text-xs font-semibold text-green-600">€{formatEurNumber(totalIncome)}</div>
++              <div className="col-span-2 text-right text-xs font-semibold text-red-500">€{formatEurNumber(totalExpense)}</div>
+               {/* POPRAVLJENO (30.7.2026): SKUPAJ je sestevek vsega DDV, prikazanega
+                   v tem stolpcu (prihodek + strosek), NE neto obveznost -
+                   ta je pravilno ze zgoraj v kartici "DDV dolg". Prej je
+                   vrstica izpuscala DDV od stroskov v celoti. */}
+-              <div className="col-span-2 text-right text-xs font-semibold text-gray-700">€{(totalVatOut + totalVatIn).toFixed(2)}</div>
++              <div className="col-span-2 text-right text-xs font-semibold text-gray-700">€{formatEurNumber((totalVatOut + totalVatIn))}</div>
+             </div>
+           )}
+           </div>
+diff --git a/apps/web/app/letni-pregled/page.tsx b/apps/web/app/letni-pregled/page.tsx
+index bbebde5..f193416 100644
+--- a/apps/web/app/letni-pregled/page.tsx
++++ b/apps/web/app/letni-pregled/page.tsx
+@@ -7,6 +7,7 @@ import Link from 'next/link'
+ import { SP_MIN_CONTRIBUTIONS_YEAR, EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS } from '@/lib/tax-constants'
+ import { getActiveMembership } from '@/lib/active-org'
+ import AppLayout from '@/components/AppLayout'
++import { formatEurNumber } from '@/lib/format'
+ 
+ // POPRAVLJENO 30.7.2026 (audit): stari seznam razredov je imel MOCNO
+ // zastarele vrednosti (razred 1 = 215 EUR/mes, privzeti razred 8 = 450
+@@ -219,9 +220,9 @@ export default function LentniPregledPage() {
+ <div class="sub">${escapeHtml(org.name)} · Davčna številka: ${org.tax_number} · ${org.vat_registered ? `ID za DDV: SI${org.tax_number}` : 'Ni DDV zavezanec'} · Pripravljeno: ${new Date().toLocaleDateString('sl-SI')}</div>
+ 
+ <div class="summary-grid">
+-  <div class="s-box"><div class="s-title">Letni prihodki</div><div class="s-val green">€${data.totalRevenue.toFixed(2)}</div></div>
+-  <div class="s-box"><div class="s-title">Letni odhodki</div><div class="s-val red">€${data.totalExpenses.toFixed(2)}</div></div>
+-  <div class="s-box"><div class="s-title">Letni dobiček</div><div class="s-val ${data.totalRevenue - data.totalExpenses >= 0 ? 'green' : 'red'}">€${(data.totalRevenue - data.totalExpenses).toFixed(2)}</div></div>
++  <div class="s-box"><div class="s-title">Letni prihodki</div><div class="s-val green">€${formatEurNumber(data.totalRevenue)}</div></div>
++  <div class="s-box"><div class="s-title">Letni odhodki</div><div class="s-val red">€${formatEurNumber(data.totalExpenses)}</div></div>
++  <div class="s-box"><div class="s-title">Letni dobiček</div><div class="s-val ${data.totalRevenue - data.totalExpenses >= 0 ? 'green' : 'red'}">€${formatEurNumber((data.totalRevenue - data.totalExpenses))}</div></div>
+ </div>
+ 
+ <h2>1. PRIHODKI PO MESECIH</h2>
+@@ -231,20 +232,20 @@ export default function LentniPregledPage() {
+     ${data.monthly.map((m: any) => `
+       <tr>
+         <td>${MONTHS_FULL[m.month]}</td>
+-        <td class="r ${m.revenue > 0 ? 'green' : ''}">${m.revenue > 0 ? `€${m.revenue.toFixed(2)}` : '—'}</td>
+-        <td class="r ${m.expenses > 0 ? 'red' : ''}">${m.expenses > 0 ? `€${m.expenses.toFixed(2)}` : '—'}</td>
+-        <td class="r">${m.vatOut > 0 ? `€${m.vatOut.toFixed(2)}` : '—'}</td>
+-        <td class="r">${m.vatIn > 0 ? `€${m.vatIn.toFixed(2)}` : '—'}</td>
+-        <td class="r ${m.profit >= 0 ? 'green' : 'red'}">€${m.profit.toFixed(2)}</td>
++        <td class="r ${m.revenue > 0 ? 'green' : ''}">${m.revenue > 0 ? `€${formatEurNumber(m.revenue)}` : '—'}</td>
++        <td class="r ${m.expenses > 0 ? 'red' : ''}">${m.expenses > 0 ? `€${formatEurNumber(m.expenses)}` : '—'}</td>
++        <td class="r">${m.vatOut > 0 ? `€${formatEurNumber(m.vatOut)}` : '—'}</td>
++        <td class="r">${m.vatIn > 0 ? `€${formatEurNumber(m.vatIn)}` : '—'}</td>
++        <td class="r ${m.profit >= 0 ? 'green' : 'red'}">€${formatEurNumber(m.profit)}</td>
+       </tr>
+     `).join('')}
+     <tr class="total-row">
+       <td>SKUPAJ</td>
+-      <td class="r">€${data.totalRevenue.toFixed(2)}</td>
+-      <td class="r">€${data.totalExpenses.toFixed(2)}</td>
+-      <td class="r">€${data.totalVatOut.toFixed(2)}</td>
+-      <td class="r">€${data.totalVatIn.toFixed(2)}</td>
+-      <td class="r">€${(data.totalRevenue - data.totalExpenses).toFixed(2)}</td>
++      <td class="r">€${formatEurNumber(data.totalRevenue)}</td>
++      <td class="r">€${formatEurNumber(data.totalExpenses)}</td>
++      <td class="r">€${formatEurNumber(data.totalVatOut)}</td>
++      <td class="r">€${formatEurNumber(data.totalVatIn)}</td>
++      <td class="r">€${formatEurNumber((data.totalRevenue - data.totalExpenses))}</td>
+     </tr>
+   </tbody>
+ </table>
+@@ -256,11 +257,11 @@ export default function LentniPregledPage() {
+     ${Object.entries(data.expensesByCategory).sort((a: any, b: any) => b[1] - a[1]).map(([cat, amt]: any) => `
+       <tr>
+         <td>${cat}</td>
+-        <td class="r">€${amt.toFixed(2)}</td>
++        <td class="r">€${formatEurNumber(amt)}</td>
+         <td class="r">${data.totalExpenses > 0 ? ((amt/data.totalExpenses)*100).toFixed(1) : 0}%</td>
+       </tr>
+     `).join('')}
+-    <tr class="total-row"><td>SKUPAJ</td><td class="r">€${data.totalExpenses.toFixed(2)}</td><td class="r">100%</td></tr>
++    <tr class="total-row"><td>SKUPAJ</td><td class="r">€${formatEurNumber(data.totalExpenses)}</td><td class="r">100%</td></tr>
+   </tbody>
+ </table>
+ 
+@@ -268,23 +269,23 @@ export default function LentniPregledPage() {
+ <table>
+   <thead><tr><th>Postavka</th><th class="r">Znesek</th></tr></thead>
+   <tbody>
+-    <tr><td>Izhodni DDV (od prodaj)</td><td class="r">€${data.totalVatOut.toFixed(2)}</td></tr>
+-    <tr><td>Vhodni DDV (od nakupov)</td><td class="r">−€${data.totalVatIn.toFixed(2)}</td></tr>
+-    <tr class="total-row"><td>DDV dolg FURS</td><td class="r">€${data.vatDue.toFixed(2)}</td></tr>
++    <tr><td>Izhodni DDV (od prodaj)</td><td class="r">€${formatEurNumber(data.totalVatOut)}</td></tr>
++    <tr><td>Vhodni DDV (od nakupov)</td><td class="r">−€${formatEurNumber(data.totalVatIn)}</td></tr>
++    <tr class="total-row"><td>DDV dolg FURS</td><td class="r">€${formatEurNumber(data.vatDue)}</td></tr>
+   </tbody>
+ </table>
+ 
+ <h2>4. DDD — OSNOVA ZA DOHODNINSKO NAPOVED</h2>
+ <div class="ddd-box">
+-  <div class="ddd-row"><span class="ddd-label">Skupni prihodki</span><span>+ €${data.totalRevenue.toFixed(2)}</span></div>
+-  <div class="ddd-row"><span class="ddd-label">Skupni odhodki</span><span>− €${data.totalExpenses.toFixed(2)}</span></div>
+-  <div class="ddd-row"><span class="ddd-label">Prispevki s.p. (razred ${contributionClass})</span><span>− €${data.annualContributions.toFixed(2)}</span></div>
+-  ${data.salaryExpense > 0 ? `<div class="ddd-row"><span class="ddd-label">Strošek plač</span><span>− €${data.salaryExpense.toFixed(2)}</span></div>` : ''}
+-  <div class="ddd-row"><span class="ddd-label">Davčna osnova</span><span>€${data.taxableBase.toFixed(2)}</span></div>
+-  <div class="ddd-row"><span class="ddd-label">Splošna olajšava</span><span>− €${data.generalRelief.toFixed(2)}</span></div>
+-  <div class="ddd-row"><span class="ddd-label">Osnova za dohodnino</span><span>€${data.adjustedBase.toFixed(2)}</span></div>
+-  <div class="ddd-row"><span class="ddd-label">Dohodnina</span><span>− €${data.incomeTax.toFixed(2)}</span></div>
+-  <div class="ddd-row total"><span>NETO LETNI ZASLUŽEK</span><span style="color:#4ade80">€${data.netIncome.toFixed(2)}</span></div>
++  <div class="ddd-row"><span class="ddd-label">Skupni prihodki</span><span>+ €${formatEurNumber(data.totalRevenue)}</span></div>
++  <div class="ddd-row"><span class="ddd-label">Skupni odhodki</span><span>− €${formatEurNumber(data.totalExpenses)}</span></div>
++  <div class="ddd-row"><span class="ddd-label">Prispevki s.p. (razred ${contributionClass})</span><span>− €${formatEurNumber(data.annualContributions)}</span></div>
++  ${data.salaryExpense > 0 ? `<div class="ddd-row"><span class="ddd-label">Strošek plač</span><span>− €${formatEurNumber(data.salaryExpense)}</span></div>` : ''}
++  <div class="ddd-row"><span class="ddd-label">Davčna osnova</span><span>€${formatEurNumber(data.taxableBase)}</span></div>
++  <div class="ddd-row"><span class="ddd-label">Splošna olajšava</span><span>− €${formatEurNumber(data.generalRelief)}</span></div>
++  <div class="ddd-row"><span class="ddd-label">Osnova za dohodnino</span><span>€${formatEurNumber(data.adjustedBase)}</span></div>
++  <div class="ddd-row"><span class="ddd-label">Dohodnina</span><span>− €${formatEurNumber(data.incomeTax)}</span></div>
++  <div class="ddd-row total"><span>NETO LETNI ZASLUŽEK</span><span style="color:#4ade80">€${formatEurNumber(data.netIncome)}</span></div>
+ </div>
+ 
+ ${data.invoices.length > 0 ? `
+@@ -297,17 +298,17 @@ ${data.invoices.length > 0 ? `
+         <td>${new Date(inv.issue_date).toLocaleDateString('sl-SI')}</td>
+         <td>${inv.invoice_number}</td>
+         <td>${escapeHtml(inv.client_name)}</td>
+-        <td class="r">€${Number(inv.amount_net).toFixed(2)}</td>
+-        <td class="r">€${Number(inv.vat_amount).toFixed(2)}</td>
+-        <td class="r">€${Number(inv.amount_total).toFixed(2)}</td>
++        <td class="r">€${formatEurNumber(Number(inv.amount_net))}</td>
++        <td class="r">€${formatEurNumber(Number(inv.vat_amount))}</td>
++        <td class="r">€${formatEurNumber(Number(inv.amount_total))}</td>
+         <td>${inv.status === 'paid' ? 'Plačano' : 'Poslano'}</td>
+       </tr>
+     `).join('')}
+     <tr class="total-row">
+       <td colspan="3">SKUPAJ</td>
+-      <td class="r">€${data.totalRevenue.toFixed(2)}</td>
+-      <td class="r">€${data.totalVatOut.toFixed(2)}</td>
+-      <td class="r">€${(data.totalRevenue + data.totalVatOut).toFixed(2)}</td>
++      <td class="r">€${formatEurNumber(data.totalRevenue)}</td>
++      <td class="r">€${formatEurNumber(data.totalVatOut)}</td>
++      <td class="r">€${formatEurNumber((data.totalRevenue + data.totalVatOut))}</td>
+       <td></td>
+     </tr>
+   </tbody>
+@@ -324,16 +325,16 @@ ${data.receipts.length > 0 ? `
+         <td>${(r.receipt_date ? (r.receipt_date ? (r.receipt_date ? new Date(r.receipt_date).toLocaleDateString('sl-SI') : '—') : '—') : '—')}</td>
+         <td>${escapeHtml(r.vendor)}</td>
+         <td>${r.category || '—'}</td>
+-        <td class="r">€${Number(r.amount_net).toFixed(2)}</td>
+-        <td class="r">€${Number(r.vat_amount).toFixed(2)}</td>
+-        <td class="r">€${Number(r.amount_total).toFixed(2)}</td>
++        <td class="r">€${formatEurNumber(Number(r.amount_net))}</td>
++        <td class="r">€${formatEurNumber(Number(r.vat_amount))}</td>
++        <td class="r">€${formatEurNumber(Number(r.amount_total))}</td>
+       </tr>
+     `).join('')}
+     <tr class="total-row">
+       <td colspan="3">SKUPAJ</td>
+-      <td class="r">€${data.totalExpenses.toFixed(2)}</td>
+-      <td class="r">€${data.totalVatIn.toFixed(2)}</td>
+-      <td class="r">€${(data.totalExpenses + data.totalVatIn).toFixed(2)}</td>
++      <td class="r">€${formatEurNumber(data.totalExpenses)}</td>
++      <td class="r">€${formatEurNumber(data.totalVatIn)}</td>
++      <td class="r">€${formatEurNumber((data.totalExpenses + data.totalVatIn))}</td>
+     </tr>
+   </tbody>
+ </table>
+@@ -394,7 +395,7 @@ ${data.receipts.length > 0 ? `
+               className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none flex-1 min-w-0">
+               {Array.from({length: 15}, (_, i) => i+1).map(c => (
+                 <option key={c} value={c}>
+-                  Prispevni razred {c} — €{(SP_CONTRIBUTIONS[c]/12).toFixed(0)}/mes (€{SP_CONTRIBUTIONS[c].toFixed(2)}/leto)
++                  Prispevni razred {c} — €{(SP_CONTRIBUTIONS[c]/12).toFixed(0)}/mes (€{formatEurNumber(SP_CONTRIBUTIONS[c])}/leto)
+                 </option>
+               ))}
+             </select>
+@@ -411,17 +412,17 @@ ${data.receipts.length > 0 ? `
+             <div className="grid grid-cols-3 gap-4 mb-6">
+               <div className="bg-white rounded-2xl border border-gray-100 p-5">
+                 <div className="text-xs text-gray-500 mb-1">Letni prihodki</div>
+-                <div className="text-xl font-semibold text-green-600">€{data.totalRevenue.toFixed(2)}</div>
++                <div className="text-xl font-semibold text-green-600">€{formatEurNumber(data.totalRevenue)}</div>
+                 <div className="text-xs text-gray-400 mt-1">{data.invoices.length} računov</div>
+               </div>
+               <div className="bg-white rounded-2xl border border-gray-100 p-5">
+                 <div className="text-xs text-gray-500 mb-1">Letni odhodki</div>
+-                <div className="text-xl font-semibold text-red-500">€{data.totalExpenses.toFixed(2)}</div>
++                <div className="text-xl font-semibold text-red-500">€{formatEurNumber(data.totalExpenses)}</div>
+                 <div className="text-xs text-gray-400 mt-1">{data.receipts.length} stroškov</div>
+               </div>
+               <div className="bg-white rounded-2xl border border-gray-100 p-5">
+                 <div className="text-xs text-gray-500 mb-1">DDV dolg letno</div>
+-                <div className="text-xl font-semibold text-orange-500">€{data.vatDue.toFixed(2)}</div>
++                <div className="text-xl font-semibold text-orange-500">€{formatEurNumber(data.vatDue)}</div>
+               </div>
+             </div>
+ 
+@@ -431,33 +432,33 @@ ${data.receipts.length > 0 ? `
+               <div className="space-y-2 text-sm mb-4">
+                 <div className="flex justify-between">
+                   <span className="text-gray-400">Prihodki</span>
+-                  <span>+ €{data.totalRevenue.toFixed(2)}</span>
++                  <span>+ €{formatEurNumber(data.totalRevenue)}</span>
+                 </div>
+                 <div className="flex justify-between">
+                   <span className="text-gray-400">Odhodki</span>
+-                  <span>− €{data.totalExpenses.toFixed(2)}</span>
++                  <span>− €{formatEurNumber(data.totalExpenses)}</span>
+                 </div>
+                 <div className="flex justify-between">
+                   <span className="text-gray-400">Prispevki s.p.</span>
+-                  <span>− €{data.annualContributions.toFixed(2)}</span>
++                  <span>− €{formatEurNumber(data.annualContributions)}</span>
+                 </div>
+                 {data.salaryExpense > 0 && (
+                   <div className="flex justify-between">
+                     <span className="text-gray-400">Strošek plač</span>
+-                    <span>− €{data.salaryExpense.toFixed(2)}</span>
++                    <span>− €{formatEurNumber(data.salaryExpense)}</span>
+                   </div>
+                 )}
+                 <div className="flex justify-between">
+                   <span className="text-gray-400">Splošna olajšava</span>
+-                  <span>− €{data.generalRelief.toFixed(2)}</span>
++                  <span>− €{formatEurNumber(data.generalRelief)}</span>
+                 </div>
+                 <div className="flex justify-between">
+                   <span className="text-gray-400">Dohodnina</span>
+-                  <span>− €{data.incomeTax.toFixed(2)}</span>
++                  <span>− €{formatEurNumber(data.incomeTax)}</span>
+                 </div>
+                 <div className="flex justify-between text-lg font-semibold border-t border-gray-700 pt-3 mt-2">
+                   <span>Neto letni zaslužek</span>
+-                  <span className="text-green-400">€{data.netIncome.toFixed(2)}</span>
++                  <span className="text-green-400">€{formatEurNumber(data.netIncome)}</span>
+                 </div>
+               </div>
+               <div className="text-xs text-gray-500 bg-gray-800 rounded-xl p-3">
+diff --git a/apps/web/app/nastavitve/email-skeniranje/page.tsx b/apps/web/app/nastavitve/email-skeniranje/page.tsx
+index 3fa8b4c..e1e382d 100644
+--- a/apps/web/app/nastavitve/email-skeniranje/page.tsx
++++ b/apps/web/app/nastavitve/email-skeniranje/page.tsx
+@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
+ import { createClient } from '@/lib/supabase'
+ import Link from 'next/link'
+ import { getActiveMembership } from '@/lib/active-org'
++import { formatEurNumber } from '@/lib/format'
+ 
+ function EmailSkeniranjeContent() {
+   const [org, setOrg] = useState<any>(null)
+@@ -261,7 +262,7 @@ function EmailSkeniranjeContent() {
+                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
+                     <div><span style={{ fontSize: 10, color: '#999' }}>Dobavitelj</span><div style={{ fontSize: 13, fontWeight: 600 }}>{item.extracted.vendor}</div></div>
+                     <div><span style={{ fontSize: 10, color: '#999' }}>Datum</span><div style={{ fontSize: 13, fontWeight: 600 }}>{item.extracted.date}</div></div>
+-                    <div><span style={{ fontSize: 10, color: '#999' }}>Skupaj</span><div style={{ fontSize: 13, fontWeight: 700 }}>€{Number(item.extracted.amount_total || 0).toFixed(2)}</div></div>
++                    <div><span style={{ fontSize: 10, color: '#999' }}>Skupaj</span><div style={{ fontSize: 13, fontWeight: 700 }}>€{formatEurNumber(Number(item.extracted.amount_total || 0))}</div></div>
+                   </div>
+                   <div style={{ display: 'flex', gap: 8 }}>
+                     <button onClick={() => previewPdf(item)} style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600 }}>📄 Predogled</button>
+diff --git a/apps/web/app/opomniki/page.tsx b/apps/web/app/opomniki/page.tsx
+index ebfe7aa..09cf7fd 100644
+--- a/apps/web/app/opomniki/page.tsx
++++ b/apps/web/app/opomniki/page.tsx
+@@ -7,6 +7,7 @@ import Link from 'next/link'
+ import { getActiveMembership } from '@/lib/active-org'
+ import { LEGAL_DEFAULT_INTEREST_RATE, legalInterestRateOn , lokalniDatum} from '@/lib/tax-constants'
+ import AppLayout from '@/components/AppLayout'
++import { formatEurNumber } from '@/lib/format'
+ 
+ // POPRAVLJENO (30.7.2026): prej trdo kodirana 11% - napacna za oba dela
+ // 2026 (10,15% / 10,40%). Zdaj iz lib/tax-constants.ts, kjer je jasno
+@@ -117,10 +118,10 @@ Dni v zamudi: ${days} dni
+ 
+ ─────────────────────────────────────
+ 
+-ZNESEK RAČUNA:          €${Number(inv.amount_total).toFixed(2)}
+-Zamudne obresti (${(LEGAL_INTEREST_RATE * 100).toFixed(0)}%/leto, ${days} dni):  €${interest.toFixed(2)}
++ZNESEK RAČUNA:          €${formatEurNumber(Number(inv.amount_total))}
++Zamudne obresti (${(LEGAL_INTEREST_RATE * 100).toFixed(0)}%/leto, ${days} dni):  €${formatEurNumber(interest)}
+ ─────────────────────────────────────
+-SKUPAJ ZA PLAČILO:      €${total.toFixed(2)}
++SKUPAJ ZA PLAČILO:      €${formatEurNumber(total)}
+ 
+ ─────────────────────────────────────
+ 
+@@ -132,7 +133,7 @@ Plačilni podatki:
+ TRR: ${org.iban || ''}
+ Sklic: ${inv.reference || `SI00 ${inv.invoice_number}`}
+ Namen: Plačilo računa ${inv.invoice_number}
+-Znesek: €${total.toFixed(2)}
++Znesek: €${formatEurNumber(total)}
+ 
+ ─────────────────────────────────────
+ 
+@@ -192,9 +193,9 @@ ${org.phone || ''}`
+ <div class="row"><span style="color:#666">Rok plačila:</span><span style="color:#dc2626">${inv.due_date ? new Date(inv.due_date).toLocaleDateString('sl-SI') : '—'}</span></div>
+ <div class="row"><span style="color:#666">Dni v zamudi:</span><span style="color:#dc2626;font-weight:bold">${days} dni</span></div>
+ <hr>
+-<div class="row"><span>Znesek računa:</span><span>€${Number(inv.amount_total).toFixed(2)}</span></div>
+-<div class="row"><span>Zamudne obresti (${(LEGAL_INTEREST_RATE * 100).toFixed(0)}%/leto, ${days} dni):</span><span>€${interest.toFixed(2)}</span></div>
+-<div class="total"><span>SKUPAJ ZA PLAČILO:</span><span>€${total.toFixed(2)}</span></div>
++<div class="row"><span>Znesek računa:</span><span>€${formatEurNumber(Number(inv.amount_total))}</span></div>
++<div class="row"><span>Zamudne obresti (${(LEGAL_INTEREST_RATE * 100).toFixed(0)}%/leto, ${days} dni):</span><span>€${formatEurNumber(interest)}</span></div>
++<div class="total"><span>SKUPAJ ZA PLAČILO:</span><span>€${formatEurNumber(total)}</span></div>
+ 
+ <div class="warning">
+   ${level === 1 ? '🟢 Opažamo, da račun še ni bil poravnan. Prosimo vas, da poravnate obveznost v roku 8 dni. V primeru že izvedenega plačila prosimo, da opomnik prezrete.' :
+@@ -207,7 +208,7 @@ ${org.phone || ''}`
+   <div class="row"><span style="color:#666">TRR:</span><span style="font-family:monospace">${org.iban || ''}</span></div>
+   <div class="row"><span style="color:#666">Sklic:</span><span style="font-family:monospace">${inv.reference || `SI00 ${inv.invoice_number}`}</span></div>
+   <div class="row"><span style="color:#666">Namen:</span><span>Plačilo računa ${inv.invoice_number}</span></div>
+-  <div class="row"><span style="color:#666">Znesek:</span><span><strong>€${total.toFixed(2)}</strong></span></div>
++  <div class="row"><span style="color:#666">Znesek:</span><span><strong>€${formatEurNumber(total)}</strong></span></div>
+ </div>
+ 
+ <div class="footer">
+@@ -263,11 +264,11 @@ ${org.phone || ''}`
+             </div>
+             <div className="bg-orange-50 rounded-2xl border border-orange-100 p-5">
+               <div className="text-xs text-orange-600 mb-1">Skupaj dolg</div>
+-              <div className="text-2xl font-semibold text-orange-700">€{totalOverdue.toFixed(2)}</div>
++              <div className="text-2xl font-semibold text-orange-700">€{formatEurNumber(totalOverdue)}</div>
+             </div>
+             <div className="bg-yellow-50 rounded-2xl border border-yellow-100 p-5">
+               <div className="text-xs text-yellow-700 mb-1">Zamudne obresti ({(LEGAL_INTEREST_RATE*100).toFixed(0)}%/leto)</div>
+-              <div className="text-2xl font-semibold text-yellow-700">€{totalInterest.toFixed(2)}</div>
++              <div className="text-2xl font-semibold text-yellow-700">€{formatEurNumber(totalInterest)}</div>
+             </div>
+           </div>
+         )}
+@@ -319,15 +320,15 @@ ${org.phone || ''}`
+                   <div className="grid grid-cols-3 gap-3 mb-4">
+                     <div className="bg-gray-50 rounded-xl p-3 text-center">
+                       <div className="text-xs text-gray-500 mb-1">Znesek računa</div>
+-                      <div className="font-semibold">€{Number(inv.amount_total).toFixed(2)}</div>
++                      <div className="font-semibold">€{formatEurNumber(Number(inv.amount_total))}</div>
+                     </div>
+                     <div className="bg-orange-50 rounded-xl p-3 text-center">
+                       <div className="text-xs text-orange-600 mb-1">Zamudne obresti</div>
+-                      <div className="font-semibold text-orange-700">€{interest.toFixed(2)}</div>
++                      <div className="font-semibold text-orange-700">€{formatEurNumber(interest)}</div>
+                     </div>
+                     <div className="bg-red-50 rounded-xl p-3 text-center">
+                       <div className="text-xs text-red-600 mb-1">Skupaj za plačilo</div>
+-                      <div className="font-semibold text-red-700">€{total.toFixed(2)}</div>
++                      <div className="font-semibold text-red-700">€{formatEurNumber(total)}</div>
+                     </div>
+                   </div>
+ 
+diff --git a/apps/web/app/place/page.tsx b/apps/web/app/place/page.tsx
+index 86c5677..eaeeb62 100644
+--- a/apps/web/app/place/page.tsx
++++ b/apps/web/app/place/page.tsx
+@@ -7,6 +7,7 @@ import Link from 'next/link'
+ import { EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS, MANDATORY_HEALTH_CONTRIBUTION, GENERAL_RELIEF_MONTH, MIN_WAGE as TC_MIN_WAGE, INCOME_TAX_BRACKETS, REGRES_TAX_FREE_LIMIT, MEAL_ALLOWANCE, KM_RATE_COMMUTE , lokalniDatum} from '@/lib/tax-constants'
+ import { getActiveMembership } from '@/lib/active-org'
+ import AppLayout from '@/components/AppLayout'
++import { formatEurNumber } from '@/lib/format'
+ 
+ // POPRAVLJENO (26.7.2026): glej rek1/page.tsx za razlago (isti popravek)
+ const EE = { piz: EMPLOYEE_CONTRIBUTIONS.piz, zzzs: EMPLOYEE_CONTRIBUTIONS.zzzs, unemployment: EMPLOYEE_CONTRIBUTIONS.unemployment, parental: EMPLOYEE_CONTRIBUTIONS.parental, dolgotrajnaOskrba: EMPLOYEE_CONTRIBUTIONS.longTermCare } // iz lib/tax-constants.ts
+@@ -439,22 +440,22 @@ export default function PlacePage() {
+ </div>
+ 
+ <div class="legal">
+-  ⚖️ Pravna podlaga: 131. člen ZDR-1 — Regres za letni dopust mora biti izplačan najkasneje do 1. julija tekočega leta. Minimalni znesek je enak minimalni plači (€${MIN_WAGE.toFixed(2)}).
++  ⚖️ Pravna podlaga: 131. člen ZDR-1 — Regres za letni dopust mora biti izplačan najkasneje do 1. julija tekočega leta. Minimalni znesek je enak minimalni plači (€${formatEurNumber(MIN_WAGE)}).
+ </div>
+ 
+ <table>
+   <thead><tr><th>Postavka</th><th class="r">Znesek</th><th class="r">Opomba</th></tr></thead>
+   <tbody>
+-    <tr><td>Regres za letni dopust ${year}</td><td class="r">€${regres.amount.toFixed(2)}</td><td class="r">Bruto znesek</td></tr>
+-    <tr><td style="color:#16a34a">Neobdavčeni del (do min. plače)</td><td class="r" style="color:#16a34a">€${regres.taxFree.toFixed(2)}</td><td class="r" style="color:#16a34a">Neobdavčeno</td></tr>
+-    ${regres.taxable > 0 ? `<tr><td style="color:#666">Obdavčljivi del</td><td class="r" style="color:#666">€${regres.taxable.toFixed(2)}</td><td class="r" style="color:#666">—</td></tr>
+-    <tr><td style="color:#dc2626">− Dohodnina (~27%)</td><td class="r" style="color:#dc2626">−€${r(regres.taxable * 0.27).toFixed(2)}</td><td class="r" style="color:#dc2626">Akontacija</td></tr>` : ''}
++    <tr><td>Regres za letni dopust ${year}</td><td class="r">€${formatEurNumber(regres.amount)}</td><td class="r">Bruto znesek</td></tr>
++    <tr><td style="color:#16a34a">Neobdavčeni del (do min. plače)</td><td class="r" style="color:#16a34a">€${formatEurNumber(regres.taxFree)}</td><td class="r" style="color:#16a34a">Neobdavčeno</td></tr>
++    ${regres.taxable > 0 ? `<tr><td style="color:#666">Obdavčljivi del</td><td class="r" style="color:#666">€${formatEurNumber(regres.taxable)}</td><td class="r" style="color:#666">—</td></tr>
++    <tr><td style="color:#dc2626">− Dohodnina (~27%)</td><td class="r" style="color:#dc2626">−€${formatEurNumber(r(regres.taxable * 0.27))}</td><td class="r" style="color:#dc2626">Akontacija</td></tr>` : ''}
+   </tbody>
+ </table>
+ 
+ <div class="net-box">
+   <span style="font-size:13px">NETO IZPLAČILO</span>
+-  <span style="font-size:18px;font-weight:bold">€${regres.netAmount.toFixed(2)}</span>
++  <span style="font-size:18px;font-weight:bold">€${formatEurNumber(regres.netAmount)}</span>
+ </div>
+ 
+ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 12px;margin:8px 0;font-size:10px">
+@@ -517,31 +518,31 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
+ <table>
+   <thead><tr><th>Postavka</th><th class="r">Osnova</th><th class="r">Znesek</th></tr></thead>
+   <tbody>
+-    <tr><td>Osnovna plača</td><td class="r">—</td><td class="r">€${p.baseSalary.toFixed(2)}</td></tr>
+-    ${p.overtimeAmt > 0 ? `<tr><td>Nadure (30% dodatek)</td><td class="r">${getExtras(emp.id).overtime || 0} ur</td><td class="r">€${p.overtimeAmt.toFixed(2)}</td></tr>` : ''}
+-    ${p.nightAmt > 0 ? `<tr><td>Nočni dodatek (30%)</td><td class="r">${getExtras(emp.id).nightBonus || 0} ur</td><td class="r">€${p.nightAmt.toFixed(2)}</td></tr>` : ''}
+-    ${p.sundayAmt > 0 ? `<tr><td>Nedeljski dodatek (50%)</td><td class="r">${getExtras(emp.id).sundayBonus || 0} ur</td><td class="r">€${p.sundayAmt.toFixed(2)}</td></tr>` : ''}
+-    ${p.holidayAmt > 0 ? `<tr><td>Praznični dodatek (100%)</td><td class="r">${getExtras(emp.id).holidayBonus || 0} ur</td><td class="r">€${p.holidayAmt.toFixed(2)}</td></tr>` : ''}
+-    <tr class="total-row"><td>BRUTO PLAČA</td><td class="r">—</td><td class="r">€${p.taxableGross.toFixed(2)}</td></tr>
+-    <tr><td style="color:#666">− ZPIZ delavec (15.50%)</td><td class="r" style="color:#666">€${p.taxableGross.toFixed(2)}</td><td class="r" style="color:#dc2626">−€${Number(p.ee_piz || 0).toFixed(2)}</td></tr>
+-    <tr><td style="color:#666">− ZZZS delavec (6.36%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${Number(p.ee_zzzs || 0).toFixed(2)}</td></tr>
+-    <tr><td style="color:#666">− Brezposelnost (0.14%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${Number(p.ee_unemployment || 0).toFixed(2)}</td></tr>
+-    <tr><td style="color:#666">− Starševsko varstvo (0.10%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${p.ee_parental.toFixed(2)}</td></tr>
+-    <tr><td style="color:#666">− Dolgotrajna oskrba (1.00%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${p.ee_dolgotrajna.toFixed(2)}</td></tr>
+-    <tr><td style="color:#666">− Obvezni zdravstveni prispevek</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${p.ee_ozp.toFixed(2)}</td></tr>
+-    <tr><td style="color:#666">− Akontacija dohodnine</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${p.incomeTax.toFixed(2)}</td></tr>
+-    ${p.travelAmt > 0 ? `<tr><td style="color:#16a34a">+ Potni stroški</td><td class="r" style="color:#16a34a">—</td><td class="r" style="color:#16a34a">+€${p.travelAmt.toFixed(2)}</td></tr>` : ''}
++    <tr><td>Osnovna plača</td><td class="r">—</td><td class="r">€${formatEurNumber(p.baseSalary)}</td></tr>
++    ${p.overtimeAmt > 0 ? `<tr><td>Nadure (30% dodatek)</td><td class="r">${getExtras(emp.id).overtime || 0} ur</td><td class="r">€${formatEurNumber(p.overtimeAmt)}</td></tr>` : ''}
++    ${p.nightAmt > 0 ? `<tr><td>Nočni dodatek (30%)</td><td class="r">${getExtras(emp.id).nightBonus || 0} ur</td><td class="r">€${formatEurNumber(p.nightAmt)}</td></tr>` : ''}
++    ${p.sundayAmt > 0 ? `<tr><td>Nedeljski dodatek (50%)</td><td class="r">${getExtras(emp.id).sundayBonus || 0} ur</td><td class="r">€${formatEurNumber(p.sundayAmt)}</td></tr>` : ''}
++    ${p.holidayAmt > 0 ? `<tr><td>Praznični dodatek (100%)</td><td class="r">${getExtras(emp.id).holidayBonus || 0} ur</td><td class="r">€${formatEurNumber(p.holidayAmt)}</td></tr>` : ''}
++    <tr class="total-row"><td>BRUTO PLAČA</td><td class="r">—</td><td class="r">€${formatEurNumber(p.taxableGross)}</td></tr>
++    <tr><td style="color:#666">− ZPIZ delavec (15.50%)</td><td class="r" style="color:#666">€${formatEurNumber(p.taxableGross)}</td><td class="r" style="color:#dc2626">−€${formatEurNumber(Number(p.ee_piz || 0))}</td></tr>
++    <tr><td style="color:#666">− ZZZS delavec (6.36%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${formatEurNumber(Number(p.ee_zzzs || 0))}</td></tr>
++    <tr><td style="color:#666">− Brezposelnost (0.14%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${formatEurNumber(Number(p.ee_unemployment || 0))}</td></tr>
++    <tr><td style="color:#666">− Starševsko varstvo (0.10%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${formatEurNumber(p.ee_parental)}</td></tr>
++    <tr><td style="color:#666">− Dolgotrajna oskrba (1.00%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${formatEurNumber(p.ee_dolgotrajna)}</td></tr>
++    <tr><td style="color:#666">− Obvezni zdravstveni prispevek</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${formatEurNumber(p.ee_ozp)}</td></tr>
++    <tr><td style="color:#666">− Akontacija dohodnine</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${formatEurNumber(p.incomeTax)}</td></tr>
++    ${p.travelAmt > 0 ? `<tr><td style="color:#16a34a">+ Potni stroški</td><td class="r" style="color:#16a34a">—</td><td class="r" style="color:#16a34a">+€${formatEurNumber(p.travelAmt)}</td></tr>` : ''}
+   </tbody>
+ </table>
+-<div class="net-box"><span style="font-size:13px">NETO IZPLAČILO</span><span style="font-size:18px;font-weight:bold">€${p.netSalary.toFixed(2)}</span></div>
++<div class="net-box"><span style="font-size:13px">NETO IZPLAČILO</span><span style="font-size:18px;font-weight:bold">€${formatEurNumber(p.netSalary)}</span></div>
+ <table>
+   <thead><tr><th>Prispevki delodajalca</th><th class="r">Stopnja</th><th class="r">Znesek</th></tr></thead>
+   <tbody>
+-    <tr><td>ZPIZ delodajalec</td><td class="r">8.85%</td><td class="r">€${Number(p.er_piz || 0).toFixed(2)}</td></tr>
+-    <tr><td>ZZZS delodajalec</td><td class="r">6.56%</td><td class="r">€${Number(p.er_zzzs || 0).toFixed(2)}</td></tr>
+-    <tr><td>Poškodbe</td><td class="r">0.53%</td><td class="r">€${Number(p.er_injury || 0).toFixed(2)}</td></tr>
+-    <tr><td>Starševstvo</td><td class="r">0.10%</td><td class="r">€${Number(p.er_parental || 0).toFixed(2)}</td></tr>
+-    <tr class="total-row"><td>Skupni strošek delodajalca</td><td class="r">—</td><td class="r">€${p.totalCost.toFixed(2)}</td></tr>
++    <tr><td>ZPIZ delodajalec</td><td class="r">8.85%</td><td class="r">€${formatEurNumber(Number(p.er_piz || 0))}</td></tr>
++    <tr><td>ZZZS delodajalec</td><td class="r">6.56%</td><td class="r">€${formatEurNumber(Number(p.er_zzzs || 0))}</td></tr>
++    <tr><td>Poškodbe</td><td class="r">0.53%</td><td class="r">€${formatEurNumber(Number(p.er_injury || 0))}</td></tr>
++    <tr><td>Starševstvo</td><td class="r">0.10%</td><td class="r">€${formatEurNumber(Number(p.er_parental || 0))}</td></tr>
++    <tr class="total-row"><td>Skupni strošek delodajalca</td><td class="r">—</td><td class="r">€${formatEurNumber(p.totalCost)}</td></tr>
+   </tbody>
+ </table>
+ <div class="sign">
+@@ -704,9 +705,9 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
+             {calcResult && (
+               <div className="bg-gray-900 rounded-xl p-4 text-white">
+                 <div className="grid grid-cols-3 gap-4 text-center">
+-                  <div><div className="text-xs text-gray-400 mb-1">Delavec dobi</div><div className="text-2xl font-semibold text-green-400">€{calcResult.netSalary.toFixed(2)}</div></div>
+-                  <div><div className="text-xs text-gray-400 mb-1">Skupaj FURS</div><div className="text-2xl font-semibold text-orange-400">€{calcResult.totalFurs.toFixed(2)}</div></div>
+-                  <div><div className="text-xs text-gray-400 mb-1">Vaš strošek</div><div className="text-2xl font-semibold">€{calcResult.totalCost.toFixed(2)}</div></div>
++                  <div><div className="text-xs text-gray-400 mb-1">Delavec dobi</div><div className="text-2xl font-semibold text-green-400">€{formatEurNumber(calcResult.netSalary)}</div></div>
++                  <div><div className="text-xs text-gray-400 mb-1">Skupaj FURS</div><div className="text-2xl font-semibold text-orange-400">€{formatEurNumber(calcResult.totalFurs)}</div></div>
++                  <div><div className="text-xs text-gray-400 mb-1">Vaš strošek</div><div className="text-2xl font-semibold">€{formatEurNumber(calcResult.totalCost)}</div></div>
+                 </div>
+               </div>
+             )}
+@@ -756,7 +757,7 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
+                 Regres za letni dopust — rok čez <strong>{daysToJuly} dni</strong> (1. julij)
+               </div>
+               <div style={{ fontSize:'12px', color:'#92400E' }}>
+-                Minimalni znesek: <strong>€{MIN_WAGE.toFixed(2)}</strong> za vsakega zaposlenega.
++                Minimalni znesek: <strong>€{formatEurNumber(MIN_WAGE)}</strong> za vsakega zaposlenega.
+                 {Object.keys(regresIzplacila).length > 0 && ` Izplačano: ${Object.keys(regresIzplacila).length}/${employees.length} zaposlenih.`}
+               </div>
+             </div>
+@@ -846,19 +847,19 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
+                   <div className="grid grid-cols-4 gap-3">
+                     <div className="bg-blue-50 rounded-xl p-3 text-center">
+                       <div className="text-xs text-blue-600 mb-1">Bruto</div>
+-                      <div className="font-semibold text-blue-700">€{p.taxableGross.toFixed(2)}</div>
++                      <div className="font-semibold text-blue-700">€{formatEurNumber(p.taxableGross)}</div>
+                     </div>
+                     <div className="bg-green-50 rounded-xl p-3 text-center">
+                       <div className="text-xs text-green-600 mb-1">Neto plača</div>
+-                      <div className="font-semibold text-green-700">€{p.netSalary.toFixed(2)}</div>
++                      <div className="font-semibold text-green-700">€{formatEurNumber(p.netSalary)}</div>
+                     </div>
+                     <div className="bg-red-50 rounded-xl p-3 text-center">
+                       <div className="text-xs text-red-600 mb-1">FURS skupaj</div>
+-                      <div className="font-semibold text-red-700">€{p.totalFurs.toFixed(2)}</div>
++                      <div className="font-semibold text-red-700">€{formatEurNumber(p.totalFurs)}</div>
+                     </div>
+                     <div className="bg-gray-50 rounded-xl p-3 text-center">
+                       <div className="text-xs text-gray-600 mb-1">Vaš strošek</div>
+-                      <div className="font-semibold text-gray-900">€{p.totalCost.toFixed(2)}</div>
++                      <div className="font-semibold text-gray-900">€{formatEurNumber(p.totalCost)}</div>
+                     </div>
+                   </div>
+                 </div>
+@@ -869,9 +870,9 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
+               <div className="bg-gray-900 rounded-2xl p-5 text-white">
+                 <div className="text-sm text-gray-400 mb-3">Skupaj {MONTHS[selectedMonth]} {selectedYear}</div>
+                 <div className="grid grid-cols-3 gap-4 text-center">
+-                  <div><div className="text-xs text-gray-400 mb-1">Neto izplačilo</div><div className="text-xl font-semibold text-green-400">€{employees.reduce((s,e)=>s+calcPayroll(Number(e.gross_salary),e.dependents||0,getExtras(e.id)).netSalary,0).toFixed(2)}</div></div>
+-                  <div><div className="text-xs text-gray-400 mb-1">Skupaj FURS</div><div className="text-xl font-semibold text-orange-400">€{employees.reduce((s,e)=>s+calcPayroll(Number(e.gross_salary),e.dependents||0,getExtras(e.id)).totalFurs,0).toFixed(2)}</div></div>
+-                  <div><div className="text-xs text-gray-400 mb-1">Skupaj strošek</div><div className="text-xl font-semibold">€{employees.reduce((s,e)=>s+calcPayroll(Number(e.gross_salary),e.dependents||0,getExtras(e.id)).totalCost,0).toFixed(2)}</div></div>
++                  <div><div className="text-xs text-gray-400 mb-1">Neto izplačilo</div><div className="text-xl font-semibold text-green-400">€{formatEurNumber(employees.reduce((s,e)=>s+calcPayroll(Number(e.gross_salary),e.dependents||0,getExtras(e.id)).netSalary,0))}</div></div>
++                  <div><div className="text-xs text-gray-400 mb-1">Skupaj FURS</div><div className="text-xl font-semibold text-orange-400">€{formatEurNumber(employees.reduce((s,e)=>s+calcPayroll(Number(e.gross_salary),e.dependents||0,getExtras(e.id)).totalFurs,0))}</div></div>
++                  <div><div className="text-xs text-gray-400 mb-1">Skupaj strošek</div><div className="text-xl font-semibold">€{formatEurNumber(employees.reduce((s,e)=>s+calcPayroll(Number(e.gross_salary),e.dependents||0,getExtras(e.id)).totalCost,0))}</div></div>
+                 </div>
+               </div>
+             )}
+@@ -892,25 +893,25 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
+               <div style={{ display:'flex', flexDirection:'column', gap:'10px', marginBottom:'20px' }}>
+                 <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px', padding:'8px 0', borderBottom:'0.5px solid #f5f5f5' }}>
+                   <span style={{ color:'#666' }}>Bruto plača zaposlenega</span>
+-                  <span style={{ fontWeight:'500' }}>€{Number(regresModal.emp.gross_salary).toFixed(2)}</span>
++                  <span style={{ fontWeight:'500' }}>€{formatEurNumber(Number(regresModal.emp.gross_salary))}</span>
+                 </div>
+                 <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px', padding:'8px 0', borderBottom:'0.5px solid #f5f5f5' }}>
+                   <span style={{ color:'#666' }}>Minimalni regres (= min. plača)</span>
+-                  <span style={{ fontWeight:'500' }}>€{MIN_WAGE.toFixed(2)}</span>
++                  <span style={{ fontWeight:'500' }}>€{formatEurNumber(MIN_WAGE)}</span>
+                 </div>
+                 <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px', padding:'8px 0', borderBottom:'0.5px solid #f5f5f5' }}>
+                   <span style={{ color:'#16a34a' }}>Neobdavčeni del</span>
+-                  <span style={{ color:'#16a34a', fontWeight:'500' }}>€{regresModal.regres.taxFree.toFixed(2)}</span>
++                  <span style={{ color:'#16a34a', fontWeight:'500' }}>€{formatEurNumber(regresModal.regres.taxFree)}</span>
+                 </div>
+                 {regresModal.regres.taxable > 0 && (
+                   <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px', padding:'8px 0', borderBottom:'0.5px solid #f5f5f5' }}>
+                     <span style={{ color:'#dc2626' }}>Dohodnina (~27%)</span>
+-                    <span style={{ color:'#dc2626', fontWeight:'500' }}>−€{r(regresModal.regres.taxable * 0.27).toFixed(2)}</span>
++                    <span style={{ color:'#dc2626', fontWeight:'500' }}>−€{formatEurNumber(r(regresModal.regres.taxable * 0.27))}</span>
+                   </div>
+                 )}
+                 <div style={{ display:'flex', justifyContent:'space-between', fontSize:'15px', padding:'10px 14px', background:'#0D1F12', borderRadius:'10px', marginTop:'4px' }}>
+                   <span style={{ color:'rgba(255,255,255,0.7)' }}>Neto izplačilo</span>
+-                  <span style={{ color:'#9FE1CB', fontWeight:'500' }}>€{regresModal.regres.netAmount.toFixed(2)}</span>
++                  <span style={{ color:'#9FE1CB', fontWeight:'500' }}>€{formatEurNumber(regresModal.regres.netAmount)}</span>
+                 </div>
+               </div>
+               <div style={{ background:'#EAF3DE', borderRadius:'8px', padding:'10px 12px', marginBottom:'16px', fontSize:'11px', color:'#27500A' }}>
+diff --git a/apps/web/app/potni-stroski/page.tsx b/apps/web/app/potni-stroski/page.tsx
+index 63bb597..96e70b2 100644
+--- a/apps/web/app/potni-stroski/page.tsx
++++ b/apps/web/app/potni-stroski/page.tsx
+@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase'
+ import Link from 'next/link'
+ import { getActiveMembership } from '@/lib/active-org'
+ import AppLayout from '@/components/AppLayout'
++import { formatEurNumber } from '@/lib/format'
+ 
+ // Neobdavčeni zneski 2026 — POPRAVLJENO 30.7.2026 (audit)
+ // Vir: Uredba o davčni obravnavi povračil stroškov v zvezi z delom
+@@ -204,10 +205,10 @@ export default function PotniStroskiPage() {
+         <td>${e.destination}</td>
+         <td>${e.expense_label}</td>
+         <td class="r">${e.quantity} ${e.unit}</td>
+-        <td class="r">€${e.amount.toFixed(2)}</td>
++        <td class="r">€${formatEurNumber(e.amount)}</td>
+       </tr>
+     `).join('')}
+-    <tr class="total"><td colspan="4">SKUPAJ ZA POVRAČILO</td><td class="r">€${total.toFixed(2)}</td></tr>
++    <tr class="total"><td colspan="4">SKUPAJ ZA POVRAČILO</td><td class="r">€${formatEurNumber(total)}</td></tr>
+   </tbody>
+ </table>
+ <div class="sign">
+@@ -341,11 +342,11 @@ export default function PotniStroskiPage() {
+               <div className="bg-gray-50 rounded-xl p-3 mb-4 flex gap-6 text-sm">
+                 <div>
+                   <span className="text-gray-500">Neobdavčeni znesek: </span>
+-                  <span className="font-semibold text-green-600">€{calculatedAmount.toFixed(2)}</span>
++                  <span className="font-semibold text-green-600">€{formatEurNumber(calculatedAmount)}</span>
+                 </div>
+                 {form.expense_type === 'km' && (
+                   <div className="text-gray-400 text-xs">
+-                    {qty} km × €{RATES.km} = €{calculatedAmount.toFixed(2)}
++                    {qty} km × €{RATES.km} = €{formatEurNumber(calculatedAmount)}
+                   </div>
+                 )}
+               </div>
+@@ -383,7 +384,7 @@ export default function PotniStroskiPage() {
+                     <div className="flex items-center gap-3">
+                       <div className="text-right">
+                         <div className="text-xs text-gray-500">Za povračilo</div>
+-                        <div className="font-semibold text-green-600">€{empTotal.toFixed(2)}</div>
++                        <div className="font-semibold text-green-600">€{formatEurNumber(empTotal)}</div>
+                       </div>
+                       <button onClick={() => downloadPotniNalog(emp.id)}
+                         className="border border-gray-200 rounded-xl px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50">
+@@ -397,7 +398,7 @@ export default function PotniStroskiPage() {
+                       <div key={e.id} className="flex justify-between text-xs py-1 border-b border-gray-50">
+                         <span className="text-gray-500">{new Date(e.date_from).toLocaleDateString('sl-SI')}</span>
+                         <span className="text-gray-700 flex-1 mx-3 truncate">{e.destination} — {e.expense_label}</span>
+-                        <span className="font-medium">€{e.amount.toFixed(2)}</span>
++                        <span className="font-medium">€{formatEurNumber(e.amount)}</span>
+                       </div>
+                     ))}
+                     {empEntries.length > 5 && (
+@@ -431,7 +432,7 @@ export default function PotniStroskiPage() {
+                 <div className="text-sm text-gray-400">Skupaj potni stroški</div>
+                 <div className="text-xs text-gray-500 mt-0.5">Neobdavčeno povračilo zaposlenim</div>
+               </div>
+-              <div className="text-2xl font-semibold">€{totalAll.toFixed(2)}</div>
++              <div className="text-2xl font-semibold">€{formatEurNumber(totalAll)}</div>
+             </div>
+           </div>
+         )}
+diff --git a/apps/web/app/predracuni/new/page.tsx b/apps/web/app/predracuni/new/page.tsx
+index fe135fb..4ec206a 100644
+--- a/apps/web/app/predracuni/new/page.tsx
++++ b/apps/web/app/predracuni/new/page.tsx
+@@ -5,6 +5,7 @@ import { lokalniDatum } from '@/lib/tax-constants'
+ import { useRouter } from 'next/navigation'
+ import { createClient } from '@/lib/supabase'
+ import { getActiveMembership } from '@/lib/active-org'
++import { formatEurNumber } from '@/lib/format'
+ 
+ interface LineItem {
+   description: string
+@@ -181,7 +182,7 @@ export default function NewQuotePage() {
+                   <option value={9.5}>9.5%</option>
+                   <option value={22}>22%</option>
+                 </select>
+-                <div style={{ fontSize: 13, fontWeight: 600, textAlign: 'right', color: '#0D1F12' }}>€{(item.amount_net + item.vat_amount).toFixed(2)}</div>
++                <div style={{ fontSize: 13, fontWeight: 600, textAlign: 'right', color: '#0D1F12' }}>€{formatEurNumber((item.amount_net + item.vat_amount))}</div>
+                 <button onClick={() => removeItem(i)} style={{ background: 'none', border: 0, color: '#aaa', cursor: 'pointer', fontSize: 18, padding: 4 }}>×</button>
+               </div>
+             ))}
+@@ -201,15 +202,15 @@ export default function NewQuotePage() {
+             {isVatRegistered && (
+               <>
+                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#666', marginBottom: 4 }}>
+-                  <span>Neto</span><span>€{amountNet.toFixed(2)}</span>
++                  <span>Neto</span><span>€{formatEurNumber(amountNet)}</span>
+                 </div>
+                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#666', marginBottom: 8 }}>
+-                  <span>DDV</span><span>€{vatAmount.toFixed(2)}</span>
++                  <span>DDV</span><span>€{formatEurNumber(vatAmount)}</span>
+                 </div>
+               </>
+             )}
+             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 700, color: '#0D1F12' }}>
+-              <span>SKUPAJ</span><span>€{amountTotal.toFixed(2)}</span>
++              <span>SKUPAJ</span><span>€{formatEurNumber(amountTotal)}</span>
+             </div>
+           </div>
+         </div>
+diff --git a/apps/web/app/prispevki/page.tsx b/apps/web/app/prispevki/page.tsx
+index 0a119b8..e459964 100644
+--- a/apps/web/app/prispevki/page.tsx
++++ b/apps/web/app/prispevki/page.tsx
+@@ -5,6 +5,7 @@ import Link from 'next/link'
+ import QRCode from 'qrcode'
+ import { getActiveMembership } from '@/lib/active-org'
+ import AppLayout from '@/components/AppLayout'
++import { formatEurNumber } from '@/lib/format'
+ 
+ const MONTHS_FULL = ['Januar','Februar','Marec','April','Maj','Junij',
+                      'Julij','Avgust','September','Oktober','November','December']
+@@ -157,7 +158,7 @@ export default function PrispevkiPage() {
+           <div className="font-medium text-gray-900 text-sm">{title}</div>
+           <div className="text-xs text-gray-500">{subtitle}</div>
+         </div>
+-        <div className="text-lg font-semibold text-gray-900">€{Number(amount).toFixed(2)}</div>
++        <div className="text-lg font-semibold text-gray-900">€{formatEurNumber(Number(amount))}</div>
+       </div>
+       {qr && <img src={qr} alt={`QR ${title}`} className="w-full rounded-xl" />}
+       {!qr && <div className="h-32 bg-gray-50 rounded-xl flex items-center justify-center text-xs text-gray-400">Generiranje...</div>}
+@@ -205,10 +206,10 @@ export default function PrispevkiPage() {
+         {/* Skupni znesek */}
+         <div className="bg-gray-900 rounded-2xl p-5 mb-6 text-white">
+           <div className="text-sm text-gray-400 mb-1">Skupaj za plačilo ta mesec</div>
+-          <div className="text-4xl font-semibold">€{total.toFixed(2)}</div>
++          <div className="text-4xl font-semibold">€{formatEurNumber(total)}</div>
+           <div className="text-xs text-gray-500 mt-2">
+-            PIZ €{Number(contrib.piz).toFixed(2)} + ZZZS €{Number(contrib.zzzs).toFixed(2)} + Zaposl. €{Number(contrib.zaposlovanje ?? 3.04).toFixed(2)} + Starš. €{Number((contrib as any)['starševo'] ?? 3.04).toFixed(2)}
+-            {akAmt > 0 && ` + Akontacija €${akAmt.toFixed(2)}`}
++            PIZ €{formatEurNumber(Number(contrib.piz))} + ZZZS €{formatEurNumber(Number(contrib.zzzs))} + Zaposl. €{formatEurNumber(Number(contrib.zaposlovanje ?? 3.04))} + Starš. €{formatEurNumber(Number((contrib as any)['starševo'] ?? 3.04))}
++            {akAmt > 0 && ` + Akontacija €${formatEurNumber(akAmt)}`}
+           </div>
+         </div>
+ 
+diff --git a/apps/web/components/SendInvoiceModal.tsx b/apps/web/components/SendInvoiceModal.tsx
+index 5441fca..2e954c3 100644
+--- a/apps/web/components/SendInvoiceModal.tsx
++++ b/apps/web/components/SendInvoiceModal.tsx
+@@ -1,6 +1,7 @@
+ 'use client'
+ 
+ import { useState } from 'react'
++import { formatEurNumber } from '@/lib/format'
+ 
+ interface Props {
+   invoice: any
+@@ -14,7 +15,7 @@ export default function SendInvoiceModal({ invoice, orgName, onClose, onSent }:
+   const [cc, setCc] = useState('')
+   const [subject, setSubject] = useState(`Račun ${invoice.invoice_number} — ${orgName}`)
+   const [message, setMessage] = useState(
+-    `Pozdravljeni,\n\nV prilogi vam pošiljamo račun ${invoice.invoice_number} z dne ${new Date(invoice.issue_date).toLocaleDateString('sl-SI')}, v znesku €${Number(invoice.amount_total).toFixed(2)} z rokom plačila ${new Date(invoice.due_date).toLocaleDateString('sl-SI')}.\n\nPlačilo lahko opravite preko UPN QR kode v PDF-u.\n\nHvala in lep pozdrav,\n${orgName}`
++    `Pozdravljeni,\n\nV prilogi vam pošiljamo račun ${invoice.invoice_number} z dne ${new Date(invoice.issue_date).toLocaleDateString('sl-SI')}, v znesku €${formatEurNumber(Number(invoice.amount_total))} z rokom plačila ${new Date(invoice.due_date).toLocaleDateString('sl-SI')}.\n\nPlačilo lahko opravite preko UPN QR kode v PDF-u.\n\nHvala in lep pozdrav,\n${orgName}`
+   )
+   const [sendEslog, setSendEslog] = useState(false)
+   const [sending, setSending] = useState(false)

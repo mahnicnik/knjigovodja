@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS, MANDATORY_HEALTH_CONTRIBUTION, GENERAL_RELIEF_MONTH, MIN_WAGE as TC_MIN_WAGE, INCOME_TAX_BRACKETS, REGRES_TAX_FREE_LIMIT, MEAL_ALLOWANCE, KM_RATE_COMMUTE , lokalniDatum} from '@/lib/tax-constants'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import { formatEurNumber } from '@/lib/format'
 
 // POPRAVLJENO (26.7.2026): glej rek1/page.tsx za razlago (isti popravek)
 const EE = { piz: EMPLOYEE_CONTRIBUTIONS.piz, zzzs: EMPLOYEE_CONTRIBUTIONS.zzzs, unemployment: EMPLOYEE_CONTRIBUTIONS.unemployment, parental: EMPLOYEE_CONTRIBUTIONS.parental, dolgotrajnaOskrba: EMPLOYEE_CONTRIBUTIONS.longTermCare } // iz lib/tax-constants.ts
@@ -439,22 +440,22 @@ export default function PlacePage() {
 </div>
 
 <div class="legal">
-  ⚖️ Pravna podlaga: 131. člen ZDR-1 — Regres za letni dopust mora biti izplačan najkasneje do 1. julija tekočega leta. Minimalni znesek je enak minimalni plači (€${MIN_WAGE.toFixed(2)}).
+  ⚖️ Pravna podlaga: 131. člen ZDR-1 — Regres za letni dopust mora biti izplačan najkasneje do 1. julija tekočega leta. Minimalni znesek je enak minimalni plači (€${formatEurNumber(MIN_WAGE)}).
 </div>
 
 <table>
   <thead><tr><th>Postavka</th><th class="r">Znesek</th><th class="r">Opomba</th></tr></thead>
   <tbody>
-    <tr><td>Regres za letni dopust ${year}</td><td class="r">€${regres.amount.toFixed(2)}</td><td class="r">Bruto znesek</td></tr>
-    <tr><td style="color:#16a34a">Neobdavčeni del (do min. plače)</td><td class="r" style="color:#16a34a">€${regres.taxFree.toFixed(2)}</td><td class="r" style="color:#16a34a">Neobdavčeno</td></tr>
-    ${regres.taxable > 0 ? `<tr><td style="color:#666">Obdavčljivi del</td><td class="r" style="color:#666">€${regres.taxable.toFixed(2)}</td><td class="r" style="color:#666">—</td></tr>
-    <tr><td style="color:#dc2626">− Dohodnina (~27%)</td><td class="r" style="color:#dc2626">−€${r(regres.taxable * 0.27).toFixed(2)}</td><td class="r" style="color:#dc2626">Akontacija</td></tr>` : ''}
+    <tr><td>Regres za letni dopust ${year}</td><td class="r">€${formatEurNumber(regres.amount)}</td><td class="r">Bruto znesek</td></tr>
+    <tr><td style="color:#16a34a">Neobdavčeni del (do min. plače)</td><td class="r" style="color:#16a34a">€${formatEurNumber(regres.taxFree)}</td><td class="r" style="color:#16a34a">Neobdavčeno</td></tr>
+    ${regres.taxable > 0 ? `<tr><td style="color:#666">Obdavčljivi del</td><td class="r" style="color:#666">€${formatEurNumber(regres.taxable)}</td><td class="r" style="color:#666">—</td></tr>
+    <tr><td style="color:#dc2626">− Dohodnina (~27%)</td><td class="r" style="color:#dc2626">−€${formatEurNumber(r(regres.taxable * 0.27))}</td><td class="r" style="color:#dc2626">Akontacija</td></tr>` : ''}
   </tbody>
 </table>
 
 <div class="net-box">
   <span style="font-size:13px">NETO IZPLAČILO</span>
-  <span style="font-size:18px;font-weight:bold">€${regres.netAmount.toFixed(2)}</span>
+  <span style="font-size:18px;font-weight:bold">€${formatEurNumber(regres.netAmount)}</span>
 </div>
 
 ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 12px;margin:8px 0;font-size:10px">
@@ -517,31 +518,31 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
 <table>
   <thead><tr><th>Postavka</th><th class="r">Osnova</th><th class="r">Znesek</th></tr></thead>
   <tbody>
-    <tr><td>Osnovna plača</td><td class="r">—</td><td class="r">€${p.baseSalary.toFixed(2)}</td></tr>
-    ${p.overtimeAmt > 0 ? `<tr><td>Nadure (30% dodatek)</td><td class="r">${getExtras(emp.id).overtime || 0} ur</td><td class="r">€${p.overtimeAmt.toFixed(2)}</td></tr>` : ''}
-    ${p.nightAmt > 0 ? `<tr><td>Nočni dodatek (30%)</td><td class="r">${getExtras(emp.id).nightBonus || 0} ur</td><td class="r">€${p.nightAmt.toFixed(2)}</td></tr>` : ''}
-    ${p.sundayAmt > 0 ? `<tr><td>Nedeljski dodatek (50%)</td><td class="r">${getExtras(emp.id).sundayBonus || 0} ur</td><td class="r">€${p.sundayAmt.toFixed(2)}</td></tr>` : ''}
-    ${p.holidayAmt > 0 ? `<tr><td>Praznični dodatek (100%)</td><td class="r">${getExtras(emp.id).holidayBonus || 0} ur</td><td class="r">€${p.holidayAmt.toFixed(2)}</td></tr>` : ''}
-    <tr class="total-row"><td>BRUTO PLAČA</td><td class="r">—</td><td class="r">€${p.taxableGross.toFixed(2)}</td></tr>
-    <tr><td style="color:#666">− ZPIZ delavec (15.50%)</td><td class="r" style="color:#666">€${p.taxableGross.toFixed(2)}</td><td class="r" style="color:#dc2626">−€${Number(p.ee_piz || 0).toFixed(2)}</td></tr>
-    <tr><td style="color:#666">− ZZZS delavec (6.36%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${Number(p.ee_zzzs || 0).toFixed(2)}</td></tr>
-    <tr><td style="color:#666">− Brezposelnost (0.14%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${Number(p.ee_unemployment || 0).toFixed(2)}</td></tr>
-    <tr><td style="color:#666">− Starševsko varstvo (0.10%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${p.ee_parental.toFixed(2)}</td></tr>
-    <tr><td style="color:#666">− Dolgotrajna oskrba (1.00%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${p.ee_dolgotrajna.toFixed(2)}</td></tr>
-    <tr><td style="color:#666">− Obvezni zdravstveni prispevek</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${p.ee_ozp.toFixed(2)}</td></tr>
-    <tr><td style="color:#666">− Akontacija dohodnine</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${p.incomeTax.toFixed(2)}</td></tr>
-    ${p.travelAmt > 0 ? `<tr><td style="color:#16a34a">+ Potni stroški</td><td class="r" style="color:#16a34a">—</td><td class="r" style="color:#16a34a">+€${p.travelAmt.toFixed(2)}</td></tr>` : ''}
+    <tr><td>Osnovna plača</td><td class="r">—</td><td class="r">€${formatEurNumber(p.baseSalary)}</td></tr>
+    ${p.overtimeAmt > 0 ? `<tr><td>Nadure (30% dodatek)</td><td class="r">${getExtras(emp.id).overtime || 0} ur</td><td class="r">€${formatEurNumber(p.overtimeAmt)}</td></tr>` : ''}
+    ${p.nightAmt > 0 ? `<tr><td>Nočni dodatek (30%)</td><td class="r">${getExtras(emp.id).nightBonus || 0} ur</td><td class="r">€${formatEurNumber(p.nightAmt)}</td></tr>` : ''}
+    ${p.sundayAmt > 0 ? `<tr><td>Nedeljski dodatek (50%)</td><td class="r">${getExtras(emp.id).sundayBonus || 0} ur</td><td class="r">€${formatEurNumber(p.sundayAmt)}</td></tr>` : ''}
+    ${p.holidayAmt > 0 ? `<tr><td>Praznični dodatek (100%)</td><td class="r">${getExtras(emp.id).holidayBonus || 0} ur</td><td class="r">€${formatEurNumber(p.holidayAmt)}</td></tr>` : ''}
+    <tr class="total-row"><td>BRUTO PLAČA</td><td class="r">—</td><td class="r">€${formatEurNumber(p.taxableGross)}</td></tr>
+    <tr><td style="color:#666">− ZPIZ delavec (15.50%)</td><td class="r" style="color:#666">€${formatEurNumber(p.taxableGross)}</td><td class="r" style="color:#dc2626">−€${formatEurNumber(Number(p.ee_piz || 0))}</td></tr>
+    <tr><td style="color:#666">− ZZZS delavec (6.36%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${formatEurNumber(Number(p.ee_zzzs || 0))}</td></tr>
+    <tr><td style="color:#666">− Brezposelnost (0.14%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${formatEurNumber(Number(p.ee_unemployment || 0))}</td></tr>
+    <tr><td style="color:#666">− Starševsko varstvo (0.10%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${formatEurNumber(p.ee_parental)}</td></tr>
+    <tr><td style="color:#666">− Dolgotrajna oskrba (1.00%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${formatEurNumber(p.ee_dolgotrajna)}</td></tr>
+    <tr><td style="color:#666">− Obvezni zdravstveni prispevek</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${formatEurNumber(p.ee_ozp)}</td></tr>
+    <tr><td style="color:#666">− Akontacija dohodnine</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${formatEurNumber(p.incomeTax)}</td></tr>
+    ${p.travelAmt > 0 ? `<tr><td style="color:#16a34a">+ Potni stroški</td><td class="r" style="color:#16a34a">—</td><td class="r" style="color:#16a34a">+€${formatEurNumber(p.travelAmt)}</td></tr>` : ''}
   </tbody>
 </table>
-<div class="net-box"><span style="font-size:13px">NETO IZPLAČILO</span><span style="font-size:18px;font-weight:bold">€${p.netSalary.toFixed(2)}</span></div>
+<div class="net-box"><span style="font-size:13px">NETO IZPLAČILO</span><span style="font-size:18px;font-weight:bold">€${formatEurNumber(p.netSalary)}</span></div>
 <table>
   <thead><tr><th>Prispevki delodajalca</th><th class="r">Stopnja</th><th class="r">Znesek</th></tr></thead>
   <tbody>
-    <tr><td>ZPIZ delodajalec</td><td class="r">8.85%</td><td class="r">€${Number(p.er_piz || 0).toFixed(2)}</td></tr>
-    <tr><td>ZZZS delodajalec</td><td class="r">6.56%</td><td class="r">€${Number(p.er_zzzs || 0).toFixed(2)}</td></tr>
-    <tr><td>Poškodbe</td><td class="r">0.53%</td><td class="r">€${Number(p.er_injury || 0).toFixed(2)}</td></tr>
-    <tr><td>Starševstvo</td><td class="r">0.10%</td><td class="r">€${Number(p.er_parental || 0).toFixed(2)}</td></tr>
-    <tr class="total-row"><td>Skupni strošek delodajalca</td><td class="r">—</td><td class="r">€${p.totalCost.toFixed(2)}</td></tr>
+    <tr><td>ZPIZ delodajalec</td><td class="r">8.85%</td><td class="r">€${formatEurNumber(Number(p.er_piz || 0))}</td></tr>
+    <tr><td>ZZZS delodajalec</td><td class="r">6.56%</td><td class="r">€${formatEurNumber(Number(p.er_zzzs || 0))}</td></tr>
+    <tr><td>Poškodbe</td><td class="r">0.53%</td><td class="r">€${formatEurNumber(Number(p.er_injury || 0))}</td></tr>
+    <tr><td>Starševstvo</td><td class="r">0.10%</td><td class="r">€${formatEurNumber(Number(p.er_parental || 0))}</td></tr>
+    <tr class="total-row"><td>Skupni strošek delodajalca</td><td class="r">—</td><td class="r">€${formatEurNumber(p.totalCost)}</td></tr>
   </tbody>
 </table>
 <div class="sign">
@@ -704,9 +705,9 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
             {calcResult && (
               <div className="bg-gray-900 rounded-xl p-4 text-white">
                 <div className="grid grid-cols-3 gap-4 text-center">
-                  <div><div className="text-xs text-gray-400 mb-1">Delavec dobi</div><div className="text-2xl font-semibold text-green-400">€{calcResult.netSalary.toFixed(2)}</div></div>
-                  <div><div className="text-xs text-gray-400 mb-1">Skupaj FURS</div><div className="text-2xl font-semibold text-orange-400">€{calcResult.totalFurs.toFixed(2)}</div></div>
-                  <div><div className="text-xs text-gray-400 mb-1">Vaš strošek</div><div className="text-2xl font-semibold">€{calcResult.totalCost.toFixed(2)}</div></div>
+                  <div><div className="text-xs text-gray-400 mb-1">Delavec dobi</div><div className="text-2xl font-semibold text-green-400">€{formatEurNumber(calcResult.netSalary)}</div></div>
+                  <div><div className="text-xs text-gray-400 mb-1">Skupaj FURS</div><div className="text-2xl font-semibold text-orange-400">€{formatEurNumber(calcResult.totalFurs)}</div></div>
+                  <div><div className="text-xs text-gray-400 mb-1">Vaš strošek</div><div className="text-2xl font-semibold">€{formatEurNumber(calcResult.totalCost)}</div></div>
                 </div>
               </div>
             )}
@@ -756,7 +757,7 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
                 Regres za letni dopust — rok čez <strong>{daysToJuly} dni</strong> (1. julij)
               </div>
               <div style={{ fontSize:'12px', color:'#92400E' }}>
-                Minimalni znesek: <strong>€{MIN_WAGE.toFixed(2)}</strong> za vsakega zaposlenega.
+                Minimalni znesek: <strong>€{formatEurNumber(MIN_WAGE)}</strong> za vsakega zaposlenega.
                 {Object.keys(regresIzplacila).length > 0 && ` Izplačano: ${Object.keys(regresIzplacila).length}/${employees.length} zaposlenih.`}
               </div>
             </div>
@@ -846,19 +847,19 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
                   <div className="grid grid-cols-4 gap-3">
                     <div className="bg-blue-50 rounded-xl p-3 text-center">
                       <div className="text-xs text-blue-600 mb-1">Bruto</div>
-                      <div className="font-semibold text-blue-700">€{p.taxableGross.toFixed(2)}</div>
+                      <div className="font-semibold text-blue-700">€{formatEurNumber(p.taxableGross)}</div>
                     </div>
                     <div className="bg-green-50 rounded-xl p-3 text-center">
                       <div className="text-xs text-green-600 mb-1">Neto plača</div>
-                      <div className="font-semibold text-green-700">€{p.netSalary.toFixed(2)}</div>
+                      <div className="font-semibold text-green-700">€{formatEurNumber(p.netSalary)}</div>
                     </div>
                     <div className="bg-red-50 rounded-xl p-3 text-center">
                       <div className="text-xs text-red-600 mb-1">FURS skupaj</div>
-                      <div className="font-semibold text-red-700">€{p.totalFurs.toFixed(2)}</div>
+                      <div className="font-semibold text-red-700">€{formatEurNumber(p.totalFurs)}</div>
                     </div>
                     <div className="bg-gray-50 rounded-xl p-3 text-center">
                       <div className="text-xs text-gray-600 mb-1">Vaš strošek</div>
-                      <div className="font-semibold text-gray-900">€{p.totalCost.toFixed(2)}</div>
+                      <div className="font-semibold text-gray-900">€{formatEurNumber(p.totalCost)}</div>
                     </div>
                   </div>
                 </div>
@@ -869,9 +870,9 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
               <div className="bg-gray-900 rounded-2xl p-5 text-white">
                 <div className="text-sm text-gray-400 mb-3">Skupaj {MONTHS[selectedMonth]} {selectedYear}</div>
                 <div className="grid grid-cols-3 gap-4 text-center">
-                  <div><div className="text-xs text-gray-400 mb-1">Neto izplačilo</div><div className="text-xl font-semibold text-green-400">€{employees.reduce((s,e)=>s+calcPayroll(Number(e.gross_salary),e.dependents||0,getExtras(e.id)).netSalary,0).toFixed(2)}</div></div>
-                  <div><div className="text-xs text-gray-400 mb-1">Skupaj FURS</div><div className="text-xl font-semibold text-orange-400">€{employees.reduce((s,e)=>s+calcPayroll(Number(e.gross_salary),e.dependents||0,getExtras(e.id)).totalFurs,0).toFixed(2)}</div></div>
-                  <div><div className="text-xs text-gray-400 mb-1">Skupaj strošek</div><div className="text-xl font-semibold">€{employees.reduce((s,e)=>s+calcPayroll(Number(e.gross_salary),e.dependents||0,getExtras(e.id)).totalCost,0).toFixed(2)}</div></div>
+                  <div><div className="text-xs text-gray-400 mb-1">Neto izplačilo</div><div className="text-xl font-semibold text-green-400">€{formatEurNumber(employees.reduce((s,e)=>s+calcPayroll(Number(e.gross_salary),e.dependents||0,getExtras(e.id)).netSalary,0))}</div></div>
+                  <div><div className="text-xs text-gray-400 mb-1">Skupaj FURS</div><div className="text-xl font-semibold text-orange-400">€{formatEurNumber(employees.reduce((s,e)=>s+calcPayroll(Number(e.gross_salary),e.dependents||0,getExtras(e.id)).totalFurs,0))}</div></div>
+                  <div><div className="text-xs text-gray-400 mb-1">Skupaj strošek</div><div className="text-xl font-semibold">€{formatEurNumber(employees.reduce((s,e)=>s+calcPayroll(Number(e.gross_salary),e.dependents||0,getExtras(e.id)).totalCost,0))}</div></div>
                 </div>
               </div>
             )}
@@ -892,25 +893,25 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
               <div style={{ display:'flex', flexDirection:'column', gap:'10px', marginBottom:'20px' }}>
                 <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px', padding:'8px 0', borderBottom:'0.5px solid #f5f5f5' }}>
                   <span style={{ color:'#666' }}>Bruto plača zaposlenega</span>
-                  <span style={{ fontWeight:'500' }}>€{Number(regresModal.emp.gross_salary).toFixed(2)}</span>
+                  <span style={{ fontWeight:'500' }}>€{formatEurNumber(Number(regresModal.emp.gross_salary))}</span>
                 </div>
                 <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px', padding:'8px 0', borderBottom:'0.5px solid #f5f5f5' }}>
                   <span style={{ color:'#666' }}>Minimalni regres (= min. plača)</span>
-                  <span style={{ fontWeight:'500' }}>€{MIN_WAGE.toFixed(2)}</span>
+                  <span style={{ fontWeight:'500' }}>€{formatEurNumber(MIN_WAGE)}</span>
                 </div>
                 <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px', padding:'8px 0', borderBottom:'0.5px solid #f5f5f5' }}>
                   <span style={{ color:'#16a34a' }}>Neobdavčeni del</span>
-                  <span style={{ color:'#16a34a', fontWeight:'500' }}>€{regresModal.regres.taxFree.toFixed(2)}</span>
+                  <span style={{ color:'#16a34a', fontWeight:'500' }}>€{formatEurNumber(regresModal.regres.taxFree)}</span>
                 </div>
                 {regresModal.regres.taxable > 0 && (
                   <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px', padding:'8px 0', borderBottom:'0.5px solid #f5f5f5' }}>
                     <span style={{ color:'#dc2626' }}>Dohodnina (~27%)</span>
-                    <span style={{ color:'#dc2626', fontWeight:'500' }}>−€{r(regresModal.regres.taxable * 0.27).toFixed(2)}</span>
+                    <span style={{ color:'#dc2626', fontWeight:'500' }}>−€{formatEurNumber(r(regresModal.regres.taxable * 0.27))}</span>
                   </div>
                 )}
                 <div style={{ display:'flex', justifyContent:'space-between', fontSize:'15px', padding:'10px 14px', background:'#0D1F12', borderRadius:'10px', marginTop:'4px' }}>
                   <span style={{ color:'rgba(255,255,255,0.7)' }}>Neto izplačilo</span>
-                  <span style={{ color:'#9FE1CB', fontWeight:'500' }}>€{regresModal.regres.netAmount.toFixed(2)}</span>
+                  <span style={{ color:'#9FE1CB', fontWeight:'500' }}>€{formatEurNumber(regresModal.regres.netAmount)}</span>
                 </div>
               </div>
               <div style={{ background:'#EAF3DE', borderRadius:'8px', padding:'10px 12px', marginBottom:'16px', fontSize:'11px', color:'#27500A' }}>

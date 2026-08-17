@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { KM_RATE_BUSINESS as TC_KM_BUSINESS, KM_RATE_COMMUTE as TC_KM_COMMUTE , lokalniDatum} from '@/lib/tax-constants'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import { formatEurNumber } from '@/lib/format'
 
 // POPRAVLJENO (30.7.2026, audit): Uredba o davčni obravnavi povračil
 // stroškov določa DVE LOČENI stopnji, ki ju zakon strogo razlikuje.
@@ -129,11 +130,11 @@ export default function KilometrinaPage() {
     <td>${entry.description.split('—').slice(-1)[0]?.trim() || ''}</td>
     <td>${entry.notes?.split(' km')[0] || ''}</td>
     <td>${entry.notes?.match(/€([\d.]+)\/km/)?.[1] ? '€' + entry.notes.match(/€([\d.]+)\/km/)[1] : '—'}</td>
-    <td>€${Number(entry.expense).toFixed(2)}</td>
+    <td>€${formatEurNumber(Number(entry.expense))}</td>
   </tr>
 </table>
 
-<div class="total">Skupaj za povračilo: €${Number(entry.expense).toFixed(2)}</div>
+<div class="total">Skupaj za povračilo: €${formatEurNumber(Number(entry.expense))}</div>
 
 <div class="footer">
   <div>
@@ -187,7 +188,7 @@ export default function KilometrinaPage() {
           </div>
           <div className="text-right">
             <div className="text-xs text-blue-600">Skupaj letos</div>
-            <div className="font-semibold text-blue-800">€{totalExpense.toFixed(2)}</div>
+            <div className="font-semibold text-blue-800">€{formatEurNumber(totalExpense)}</div>
           </div>
         </div>
 
@@ -266,7 +267,7 @@ export default function KilometrinaPage() {
             {totalKm > 0 && (
               <div className="bg-gray-50 rounded-xl p-3 mb-4 flex gap-6 text-sm">
                 <div><span className="text-gray-500">Skupaj km: </span><span className="font-semibold">{totalKm} km</span></div>
-                <div><span className="text-gray-500">Znesek: </span><span className="font-semibold text-green-600">€{totalAmount.toFixed(2)}</span></div>
+                <div><span className="text-gray-500">Znesek: </span><span className="font-semibold text-green-600">€{formatEurNumber(totalAmount)}</span></div>
                 <div><span className="text-gray-500">({totalKm} × €{activeRate})</span></div>
               </div>
             )}
@@ -317,7 +318,7 @@ export default function KilometrinaPage() {
                   {entry.notes?.split(' km')[0]} km
                 </div>
                 <div className="col-span-2 text-xs text-right font-medium">
-                  €{Number(entry.expense).toFixed(2)}
+                  €{formatEurNumber(Number(entry.expense))}
                 </div>
                 <div className="col-span-1 flex justify-end">
                   <button onClick={() => downloadPDF(entry)}
@@ -330,7 +331,7 @@ export default function KilometrinaPage() {
             <div className="grid grid-cols-12 gap-2 px-6 py-3 bg-gray-50 border-t border-gray-200">
               <div className="col-span-7 text-xs font-medium text-gray-700">SKUPAJ</div>
               <div className="col-span-2"></div>
-              <div className="col-span-2 text-xs text-right font-semibold">€{totalExpense.toFixed(2)}</div>
+              <div className="col-span-2 text-xs text-right font-semibold">€{formatEurNumber(totalExpense)}</div>
               <div className="col-span-1"></div>
             </div>
           </div>

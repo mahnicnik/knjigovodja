@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import posthog from 'posthog-js'
 import { getActiveMembership } from '@/lib/active-org'
+import { formatEurNumber } from '@/lib/format'
 
 interface LineItem {
   description: string
@@ -259,7 +260,7 @@ export default function EditInvoicePage() {
                       </div>
                     </div>
                     <div style={{ display:'flex', justifyContent:'flex-end', fontSize:'12px', color:'#888' }}>
-                      Skupaj: <strong style={{ color:'#0D1F12', marginLeft:'4px' }}>€{(item.quantity * item.unit_price * (1 + item.vat_rate/100)).toFixed(2)}</strong>
+                      Skupaj: <strong style={{ color:'#0D1F12', marginLeft:'4px' }}>€{formatEurNumber((item.quantity * item.unit_price * (1 + item.vat_rate/100)))}</strong>
                     </div>
                   </div>
                 </div>
@@ -288,15 +289,15 @@ export default function EditInvoicePage() {
               </div>
               <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px' }}>
                 <span style={{ color:'rgba(255,255,255,0.5)' }}>Osnova</span>
-                <span style={{ color:'#fff' }}>€{subtotal.toFixed(2)}</span>
+                <span style={{ color:'#fff' }}>€{formatEurNumber(subtotal)}</span>
               </div>
               <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px' }}>
                 <span style={{ color:'rgba(255,255,255,0.5)' }}>DDV</span>
-                <span style={{ color:'#fff' }}>€{vatAmount.toFixed(2)}</span>
+                <span style={{ color:'#fff' }}>€{formatEurNumber(vatAmount)}</span>
               </div>
               <div style={{ borderTop:'0.5px solid rgba(255,255,255,0.1)', paddingTop:'8px', display:'flex', justifyContent:'space-between', fontSize:'16px', fontWeight:'500' }}>
                 <span style={{ color:'rgba(255,255,255,0.7)' }}>Skupaj</span>
-                <span style={{ color:'#9FE1CB' }}>€{total.toFixed(2)}</span>
+                <span style={{ color:'#9FE1CB' }}>€{formatEurNumber(total)}</span>
               </div>
               <div style={{ background:'rgba(255,255,255,0.06)', borderRadius:'8px', padding:'8px 12px', marginTop:'4px' }}>
                 <div style={{ fontSize:'10px', color:'rgba(255,255,255,0.4)', marginBottom:'2px' }}>Sklic</div>
@@ -469,9 +470,9 @@ export default function EditInvoicePage() {
             <h3 className="font-medium text-gray-900 mb-4">Povzetek</h3>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between text-gray-500"><span>Št. računa</span><span className="font-mono">{invoiceNumber}</span></div>
-              <div className="flex justify-between text-gray-500"><span>Osnova</span><span>€{subtotal.toFixed(2)}</span></div>
-              <div className="flex justify-between text-gray-500"><span>DDV</span><span>€{vatAmount.toFixed(2)}</span></div>
-              <div className="border-t border-gray-100 pt-2 mt-2 flex justify-between font-semibold text-gray-900"><span>Skupaj</span><span>€{total.toFixed(2)}</span></div>
+              <div className="flex justify-between text-gray-500"><span>Osnova</span><span>€{formatEurNumber(subtotal)}</span></div>
+              <div className="flex justify-between text-gray-500"><span>DDV</span><span>€{formatEurNumber(vatAmount)}</span></div>
+              <div className="border-t border-gray-100 pt-2 mt-2 flex justify-between font-semibold text-gray-900"><span>Skupaj</span><span>€{formatEurNumber(total)}</span></div>
             </div>
             <div className="mt-4 pt-4 border-t border-gray-100">
               <div className="text-xs text-gray-500 mb-1">Sklic</div>

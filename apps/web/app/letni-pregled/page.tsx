@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { SP_MIN_CONTRIBUTIONS_YEAR, EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS } from '@/lib/tax-constants'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import { formatEurNumber } from '@/lib/format'
 
 // POPRAVLJENO 30.7.2026 (audit): stari seznam razredov je imel MOCNO
 // zastarele vrednosti (razred 1 = 215 EUR/mes, privzeti razred 8 = 450
@@ -219,9 +220,9 @@ export default function LentniPregledPage() {
 <div class="sub">${escapeHtml(org.name)} · Davčna številka: ${org.tax_number} · ${org.vat_registered ? `ID za DDV: SI${org.tax_number}` : 'Ni DDV zavezanec'} · Pripravljeno: ${new Date().toLocaleDateString('sl-SI')}</div>
 
 <div class="summary-grid">
-  <div class="s-box"><div class="s-title">Letni prihodki</div><div class="s-val green">€${data.totalRevenue.toFixed(2)}</div></div>
-  <div class="s-box"><div class="s-title">Letni odhodki</div><div class="s-val red">€${data.totalExpenses.toFixed(2)}</div></div>
-  <div class="s-box"><div class="s-title">Letni dobiček</div><div class="s-val ${data.totalRevenue - data.totalExpenses >= 0 ? 'green' : 'red'}">€${(data.totalRevenue - data.totalExpenses).toFixed(2)}</div></div>
+  <div class="s-box"><div class="s-title">Letni prihodki</div><div class="s-val green">€${formatEurNumber(data.totalRevenue)}</div></div>
+  <div class="s-box"><div class="s-title">Letni odhodki</div><div class="s-val red">€${formatEurNumber(data.totalExpenses)}</div></div>
+  <div class="s-box"><div class="s-title">Letni dobiček</div><div class="s-val ${data.totalRevenue - data.totalExpenses >= 0 ? 'green' : 'red'}">€${formatEurNumber((data.totalRevenue - data.totalExpenses))}</div></div>
 </div>
 
 <h2>1. PRIHODKI PO MESECIH</h2>
@@ -231,20 +232,20 @@ export default function LentniPregledPage() {
     ${data.monthly.map((m: any) => `
       <tr>
         <td>${MONTHS_FULL[m.month]}</td>
-        <td class="r ${m.revenue > 0 ? 'green' : ''}">${m.revenue > 0 ? `€${m.revenue.toFixed(2)}` : '—'}</td>
-        <td class="r ${m.expenses > 0 ? 'red' : ''}">${m.expenses > 0 ? `€${m.expenses.toFixed(2)}` : '—'}</td>
-        <td class="r">${m.vatOut > 0 ? `€${m.vatOut.toFixed(2)}` : '—'}</td>
-        <td class="r">${m.vatIn > 0 ? `€${m.vatIn.toFixed(2)}` : '—'}</td>
-        <td class="r ${m.profit >= 0 ? 'green' : 'red'}">€${m.profit.toFixed(2)}</td>
+        <td class="r ${m.revenue > 0 ? 'green' : ''}">${m.revenue > 0 ? `€${formatEurNumber(m.revenue)}` : '—'}</td>
+        <td class="r ${m.expenses > 0 ? 'red' : ''}">${m.expenses > 0 ? `€${formatEurNumber(m.expenses)}` : '—'}</td>
+        <td class="r">${m.vatOut > 0 ? `€${formatEurNumber(m.vatOut)}` : '—'}</td>
+        <td class="r">${m.vatIn > 0 ? `€${formatEurNumber(m.vatIn)}` : '—'}</td>
+        <td class="r ${m.profit >= 0 ? 'green' : 'red'}">€${formatEurNumber(m.profit)}</td>
       </tr>
     `).join('')}
     <tr class="total-row">
       <td>SKUPAJ</td>
-      <td class="r">€${data.totalRevenue.toFixed(2)}</td>
-      <td class="r">€${data.totalExpenses.toFixed(2)}</td>
-      <td class="r">€${data.totalVatOut.toFixed(2)}</td>
-      <td class="r">€${data.totalVatIn.toFixed(2)}</td>
-      <td class="r">€${(data.totalRevenue - data.totalExpenses).toFixed(2)}</td>
+      <td class="r">€${formatEurNumber(data.totalRevenue)}</td>
+      <td class="r">€${formatEurNumber(data.totalExpenses)}</td>
+      <td class="r">€${formatEurNumber(data.totalVatOut)}</td>
+      <td class="r">€${formatEurNumber(data.totalVatIn)}</td>
+      <td class="r">€${formatEurNumber((data.totalRevenue - data.totalExpenses))}</td>
     </tr>
   </tbody>
 </table>
@@ -256,11 +257,11 @@ export default function LentniPregledPage() {
     ${Object.entries(data.expensesByCategory).sort((a: any, b: any) => b[1] - a[1]).map(([cat, amt]: any) => `
       <tr>
         <td>${cat}</td>
-        <td class="r">€${amt.toFixed(2)}</td>
+        <td class="r">€${formatEurNumber(amt)}</td>
         <td class="r">${data.totalExpenses > 0 ? ((amt/data.totalExpenses)*100).toFixed(1) : 0}%</td>
       </tr>
     `).join('')}
-    <tr class="total-row"><td>SKUPAJ</td><td class="r">€${data.totalExpenses.toFixed(2)}</td><td class="r">100%</td></tr>
+    <tr class="total-row"><td>SKUPAJ</td><td class="r">€${formatEurNumber(data.totalExpenses)}</td><td class="r">100%</td></tr>
   </tbody>
 </table>
 
@@ -268,23 +269,23 @@ export default function LentniPregledPage() {
 <table>
   <thead><tr><th>Postavka</th><th class="r">Znesek</th></tr></thead>
   <tbody>
-    <tr><td>Izhodni DDV (od prodaj)</td><td class="r">€${data.totalVatOut.toFixed(2)}</td></tr>
-    <tr><td>Vhodni DDV (od nakupov)</td><td class="r">−€${data.totalVatIn.toFixed(2)}</td></tr>
-    <tr class="total-row"><td>DDV dolg FURS</td><td class="r">€${data.vatDue.toFixed(2)}</td></tr>
+    <tr><td>Izhodni DDV (od prodaj)</td><td class="r">€${formatEurNumber(data.totalVatOut)}</td></tr>
+    <tr><td>Vhodni DDV (od nakupov)</td><td class="r">−€${formatEurNumber(data.totalVatIn)}</td></tr>
+    <tr class="total-row"><td>DDV dolg FURS</td><td class="r">€${formatEurNumber(data.vatDue)}</td></tr>
   </tbody>
 </table>
 
 <h2>4. DDD — OSNOVA ZA DOHODNINSKO NAPOVED</h2>
 <div class="ddd-box">
-  <div class="ddd-row"><span class="ddd-label">Skupni prihodki</span><span>+ €${data.totalRevenue.toFixed(2)}</span></div>
-  <div class="ddd-row"><span class="ddd-label">Skupni odhodki</span><span>− €${data.totalExpenses.toFixed(2)}</span></div>
-  <div class="ddd-row"><span class="ddd-label">Prispevki s.p. (razred ${contributionClass})</span><span>− €${data.annualContributions.toFixed(2)}</span></div>
-  ${data.salaryExpense > 0 ? `<div class="ddd-row"><span class="ddd-label">Strošek plač</span><span>− €${data.salaryExpense.toFixed(2)}</span></div>` : ''}
-  <div class="ddd-row"><span class="ddd-label">Davčna osnova</span><span>€${data.taxableBase.toFixed(2)}</span></div>
-  <div class="ddd-row"><span class="ddd-label">Splošna olajšava</span><span>− €${data.generalRelief.toFixed(2)}</span></div>
-  <div class="ddd-row"><span class="ddd-label">Osnova za dohodnino</span><span>€${data.adjustedBase.toFixed(2)}</span></div>
-  <div class="ddd-row"><span class="ddd-label">Dohodnina</span><span>− €${data.incomeTax.toFixed(2)}</span></div>
-  <div class="ddd-row total"><span>NETO LETNI ZASLUŽEK</span><span style="color:#4ade80">€${data.netIncome.toFixed(2)}</span></div>
+  <div class="ddd-row"><span class="ddd-label">Skupni prihodki</span><span>+ €${formatEurNumber(data.totalRevenue)}</span></div>
+  <div class="ddd-row"><span class="ddd-label">Skupni odhodki</span><span>− €${formatEurNumber(data.totalExpenses)}</span></div>
+  <div class="ddd-row"><span class="ddd-label">Prispevki s.p. (razred ${contributionClass})</span><span>− €${formatEurNumber(data.annualContributions)}</span></div>
+  ${data.salaryExpense > 0 ? `<div class="ddd-row"><span class="ddd-label">Strošek plač</span><span>− €${formatEurNumber(data.salaryExpense)}</span></div>` : ''}
+  <div class="ddd-row"><span class="ddd-label">Davčna osnova</span><span>€${formatEurNumber(data.taxableBase)}</span></div>
+  <div class="ddd-row"><span class="ddd-label">Splošna olajšava</span><span>− €${formatEurNumber(data.generalRelief)}</span></div>
+  <div class="ddd-row"><span class="ddd-label">Osnova za dohodnino</span><span>€${formatEurNumber(data.adjustedBase)}</span></div>
+  <div class="ddd-row"><span class="ddd-label">Dohodnina</span><span>− €${formatEurNumber(data.incomeTax)}</span></div>
+  <div class="ddd-row total"><span>NETO LETNI ZASLUŽEK</span><span style="color:#4ade80">€${formatEurNumber(data.netIncome)}</span></div>
 </div>
 
 ${data.invoices.length > 0 ? `
@@ -297,17 +298,17 @@ ${data.invoices.length > 0 ? `
         <td>${new Date(inv.issue_date).toLocaleDateString('sl-SI')}</td>
         <td>${inv.invoice_number}</td>
         <td>${escapeHtml(inv.client_name)}</td>
-        <td class="r">€${Number(inv.amount_net).toFixed(2)}</td>
-        <td class="r">€${Number(inv.vat_amount).toFixed(2)}</td>
-        <td class="r">€${Number(inv.amount_total).toFixed(2)}</td>
+        <td class="r">€${formatEurNumber(Number(inv.amount_net))}</td>
+        <td class="r">€${formatEurNumber(Number(inv.vat_amount))}</td>
+        <td class="r">€${formatEurNumber(Number(inv.amount_total))}</td>
         <td>${inv.status === 'paid' ? 'Plačano' : 'Poslano'}</td>
       </tr>
     `).join('')}
     <tr class="total-row">
       <td colspan="3">SKUPAJ</td>
-      <td class="r">€${data.totalRevenue.toFixed(2)}</td>
-      <td class="r">€${data.totalVatOut.toFixed(2)}</td>
-      <td class="r">€${(data.totalRevenue + data.totalVatOut).toFixed(2)}</td>
+      <td class="r">€${formatEurNumber(data.totalRevenue)}</td>
+      <td class="r">€${formatEurNumber(data.totalVatOut)}</td>
+      <td class="r">€${formatEurNumber((data.totalRevenue + data.totalVatOut))}</td>
       <td></td>
     </tr>
   </tbody>
@@ -324,16 +325,16 @@ ${data.receipts.length > 0 ? `
         <td>${(r.receipt_date ? (r.receipt_date ? (r.receipt_date ? new Date(r.receipt_date).toLocaleDateString('sl-SI') : '—') : '—') : '—')}</td>
         <td>${escapeHtml(r.vendor)}</td>
         <td>${r.category || '—'}</td>
-        <td class="r">€${Number(r.amount_net).toFixed(2)}</td>
-        <td class="r">€${Number(r.vat_amount).toFixed(2)}</td>
-        <td class="r">€${Number(r.amount_total).toFixed(2)}</td>
+        <td class="r">€${formatEurNumber(Number(r.amount_net))}</td>
+        <td class="r">€${formatEurNumber(Number(r.vat_amount))}</td>
+        <td class="r">€${formatEurNumber(Number(r.amount_total))}</td>
       </tr>
     `).join('')}
     <tr class="total-row">
       <td colspan="3">SKUPAJ</td>
-      <td class="r">€${data.totalExpenses.toFixed(2)}</td>
-      <td class="r">€${data.totalVatIn.toFixed(2)}</td>
-      <td class="r">€${(data.totalExpenses + data.totalVatIn).toFixed(2)}</td>
+      <td class="r">€${formatEurNumber(data.totalExpenses)}</td>
+      <td class="r">€${formatEurNumber(data.totalVatIn)}</td>
+      <td class="r">€${formatEurNumber((data.totalExpenses + data.totalVatIn))}</td>
     </tr>
   </tbody>
 </table>
@@ -394,7 +395,7 @@ ${data.receipts.length > 0 ? `
               className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none flex-1 min-w-0">
               {Array.from({length: 15}, (_, i) => i+1).map(c => (
                 <option key={c} value={c}>
-                  Prispevni razred {c} — €{(SP_CONTRIBUTIONS[c]/12).toFixed(0)}/mes (€{SP_CONTRIBUTIONS[c].toFixed(2)}/leto)
+                  Prispevni razred {c} — €{(SP_CONTRIBUTIONS[c]/12).toFixed(0)}/mes (€{formatEurNumber(SP_CONTRIBUTIONS[c])}/leto)
                 </option>
               ))}
             </select>
@@ -411,17 +412,17 @@ ${data.receipts.length > 0 ? `
             <div className="grid grid-cols-3 gap-4 mb-6">
               <div className="bg-white rounded-2xl border border-gray-100 p-5">
                 <div className="text-xs text-gray-500 mb-1">Letni prihodki</div>
-                <div className="text-xl font-semibold text-green-600">€{data.totalRevenue.toFixed(2)}</div>
+                <div className="text-xl font-semibold text-green-600">€{formatEurNumber(data.totalRevenue)}</div>
                 <div className="text-xs text-gray-400 mt-1">{data.invoices.length} računov</div>
               </div>
               <div className="bg-white rounded-2xl border border-gray-100 p-5">
                 <div className="text-xs text-gray-500 mb-1">Letni odhodki</div>
-                <div className="text-xl font-semibold text-red-500">€{data.totalExpenses.toFixed(2)}</div>
+                <div className="text-xl font-semibold text-red-500">€{formatEurNumber(data.totalExpenses)}</div>
                 <div className="text-xs text-gray-400 mt-1">{data.receipts.length} stroškov</div>
               </div>
               <div className="bg-white rounded-2xl border border-gray-100 p-5">
                 <div className="text-xs text-gray-500 mb-1">DDV dolg letno</div>
-                <div className="text-xl font-semibold text-orange-500">€{data.vatDue.toFixed(2)}</div>
+                <div className="text-xl font-semibold text-orange-500">€{formatEurNumber(data.vatDue)}</div>
               </div>
             </div>
 
@@ -431,33 +432,33 @@ ${data.receipts.length > 0 ? `
               <div className="space-y-2 text-sm mb-4">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Prihodki</span>
-                  <span>+ €{data.totalRevenue.toFixed(2)}</span>
+                  <span>+ €{formatEurNumber(data.totalRevenue)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Odhodki</span>
-                  <span>− €{data.totalExpenses.toFixed(2)}</span>
+                  <span>− €{formatEurNumber(data.totalExpenses)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Prispevki s.p.</span>
-                  <span>− €{data.annualContributions.toFixed(2)}</span>
+                  <span>− €{formatEurNumber(data.annualContributions)}</span>
                 </div>
                 {data.salaryExpense > 0 && (
                   <div className="flex justify-between">
                     <span className="text-gray-400">Strošek plač</span>
-                    <span>− €{data.salaryExpense.toFixed(2)}</span>
+                    <span>− €{formatEurNumber(data.salaryExpense)}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
                   <span className="text-gray-400">Splošna olajšava</span>
-                  <span>− €{data.generalRelief.toFixed(2)}</span>
+                  <span>− €{formatEurNumber(data.generalRelief)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Dohodnina</span>
-                  <span>− €{data.incomeTax.toFixed(2)}</span>
+                  <span>− €{formatEurNumber(data.incomeTax)}</span>
                 </div>
                 <div className="flex justify-between text-lg font-semibold border-t border-gray-700 pt-3 mt-2">
                   <span>Neto letni zaslužek</span>
-                  <span className="text-green-400">€{data.netIncome.toFixed(2)}</span>
+                  <span className="text-green-400">€{formatEurNumber(data.netIncome)}</span>
                 </div>
               </div>
               <div className="text-xs text-gray-500 bg-gray-800 rounded-xl p-3">

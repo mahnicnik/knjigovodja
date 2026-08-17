@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import { formatEurNumber } from '@/lib/format'
 
 // ================================================================
 // FORMATI SLOVENSKIH BANK
@@ -672,7 +673,7 @@ export default function BankaPage() {
                         <td style={{ padding: '10px 14px', fontSize: 12, color: '#0D1F12', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.description}</td>
                         <td style={{ padding: '10px 14px', fontSize: 11, color: '#888', fontFamily: 'monospace' }}>{t.reference || '—'}</td>
                         <td style={{ padding: '10px 14px', fontSize: 13, fontWeight: 600, color: t.type === 'credit' ? '#1D9E75' : '#DC2626', whiteSpace: 'nowrap' }}>
-                          {t.type === 'credit' ? '+' : '-'}€{t.amount.toFixed(2)}
+                          {t.type === 'credit' ? '+' : '-'}€{formatEurNumber(t.amount)}
                         </td>
                         <td style={{ padding: '10px 14px', fontSize: 12 }}>
                           {t.isInternal ? (

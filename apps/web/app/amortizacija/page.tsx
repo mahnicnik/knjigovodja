@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import { formatEurNumber } from '@/lib/format'
 
 // Amortizacijske stopnje po ZDoh-2
 const CATEGORIES = [
@@ -202,12 +203,12 @@ export default function AmortizacijaPage() {
           </div>
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-xs text-gray-500 mb-1">Amortizacija {currentYear}</div>
-            <div className="text-2xl font-semibold text-red-500">€{currentYearExpense.toFixed(2)}</div>
+            <div className="text-2xl font-semibold text-red-500">€{formatEurNumber(currentYearExpense)}</div>
             <div className="text-xs text-gray-400 mt-1">Davčno priznavni strošek</div>
           </div>
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-xs text-gray-500 mb-1">Neto vrednost sredstev</div>
-            <div className="text-2xl font-semibold">€{totalNetValue.toFixed(2)}</div>
+            <div className="text-2xl font-semibold">€{formatEurNumber(totalNetValue)}</div>
             <div className="text-xs text-gray-400 mt-1">Neodpisana vrednost</div>
           </div>
         </div>
@@ -262,8 +263,8 @@ export default function AmortizacijaPage() {
                   ).map(e => (
                     <div key={e.year} className={`flex justify-between text-xs px-2 py-1.5 rounded-lg ${e.year === currentYear ? 'bg-gray-900 text-white' : 'text-gray-600'}`}>
                       <span>{e.year}</span>
-                      <span>strošek: €{e.amount.toFixed(2)}</span>
-                      <span>ostane: €{e.remaining.toFixed(2)}</span>
+                      <span>strošek: €{formatEurNumber(e.amount)}</span>
+                      <span>ostane: €{formatEurNumber(e.remaining)}</span>
                     </div>
                   ))}
                 </div>
@@ -309,7 +310,7 @@ export default function AmortizacijaPage() {
                     <div>
                       <div className="font-semibold text-gray-900">{asset.name}</div>
                       <div className="text-xs text-gray-500 mt-0.5">
-                        {asset.categoryLabel} · {asset.rate}%/leto · Nabava: €{Number(asset.purchase_price).toFixed(2)}
+                        {asset.categoryLabel} · {asset.rate}%/leto · Nabava: €{formatEurNumber(Number(asset.purchase_price))}
                       </div>
                       <div className="text-xs text-gray-400 mt-0.5">
                         {new Date(asset.purchase_date).toLocaleDateString('sl-SI')}
@@ -318,7 +319,7 @@ export default function AmortizacijaPage() {
                     <div className="flex items-start gap-3">
                       <div className="text-right">
                         <div className="text-xs text-gray-500">Strošek {currentYear}</div>
-                        <div className="font-semibold text-red-500">€{(currentEntry?.amount || 0).toFixed(2)}</div>
+                        <div className="font-semibold text-red-500">€{formatEurNumber((currentEntry?.amount || 0))}</div>
                       </div>
                       <button onClick={() => deleteAsset(asset.id)}
                         className="text-xs border border-red-100 text-red-400 rounded-lg px-2 py-1 hover:bg-red-50">
@@ -330,8 +331,8 @@ export default function AmortizacijaPage() {
                   {/* Progress bar */}
                   <div className="mb-4">
                     <div className="flex justify-between text-xs text-gray-500 mb-1">
-                      <span>Odpisano: €{totalAmortized.toFixed(2)} ({pct.toFixed(0)}%)</span>
-                      <span>Ostane: €{(currentEntry?.remaining || 0).toFixed(2)}</span>
+                      <span>Odpisano: €{formatEurNumber(totalAmortized)} ({pct.toFixed(0)}%)</span>
+                      <span>Ostane: €{formatEurNumber((currentEntry?.remaining || 0))}</span>
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-2">
                       <div className="bg-gray-900 h-2 rounded-full" style={{width: `${Math.min(pct, 100)}%`}}></div>
@@ -358,7 +359,7 @@ export default function AmortizacijaPage() {
                   <div className="text-sm text-gray-400">Skupna amortizacija {currentYear}</div>
                   <div className="text-xs text-gray-500 mt-0.5">Davčno priznavni strošek za DDD</div>
                 </div>
-                <div className="text-2xl font-semibold">€{currentYearExpense.toFixed(2)}</div>
+                <div className="text-2xl font-semibold">€{formatEurNumber(currentYearExpense)}</div>
               </div>
             </div>
           </div>

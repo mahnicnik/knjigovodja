@@ -6,6 +6,7 @@ import Link from 'next/link'
 import posthog from 'posthog-js'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import { formatEurNumber } from '@/lib/format'
 
 const PROCESSORS = [
   { value: 'sumup', label: 'SumUp', fee: 1.69 },
@@ -365,7 +366,7 @@ export default function KarticeePage() {
                       <span className="truncate flex-1">{f.file.name}</span>
                       {f.status === 'pending' && <span className="text-gray-400 text-xs">čaka</span>}
                       {f.status === 'scanning' && <span className="text-blue-600 text-xs">⟳ skenira...</span>}
-                      {f.status === 'saved' && <span className="text-green-600 text-xs">✓ {f.processor} · €{f.gross?.toFixed(2)}</span>}
+                      {f.status === 'saved' && <span className="text-green-600 text-xs">✓ {f.processor} · €{formatEurNumber(f.gross)}</span>}
                       {f.status === 'error' && <span className="text-red-600 text-xs" title={f.error}>✗ {f.error}</span>}
                     </div>
                   ))}
@@ -408,17 +409,17 @@ export default function KarticeePage() {
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-xs text-gray-500 mb-1">Bruto prodaja</div>
-            <div className="text-2xl font-semibold text-green-600">€{totalGross.toFixed(2)}</div>
+            <div className="text-2xl font-semibold text-green-600">€{formatEurNumber(totalGross)}</div>
             <div className="text-xs text-gray-400 mt-1">Kar so stranke plačale</div>
           </div>
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-xs text-gray-500 mb-1">Skupne provizije</div>
-            <div className="text-2xl font-semibold text-red-500">€{totalFees.toFixed(2)}</div>
+            <div className="text-2xl font-semibold text-red-500">€{formatEurNumber(totalFees)}</div>
             <div className="text-xs text-gray-400 mt-1">Strošek procesorja</div>
           </div>
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-xs text-gray-500 mb-1">Neto nakazilo</div>
-            <div className="text-2xl font-semibold">€{totalNet.toFixed(2)}</div>
+            <div className="text-2xl font-semibold">€{formatEurNumber(totalNet)}</div>
             <div className="text-xs text-gray-400 mt-1">Prejeto na TRR</div>
           </div>
         </div>
@@ -499,23 +500,23 @@ export default function KarticeePage() {
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div>
                     <div className="text-xs text-gray-500 mb-1">Bruto prodaja</div>
-                    <div className="text-lg font-semibold text-green-600">€{gross.toFixed(2)}</div>
+                    <div className="text-lg font-semibold text-green-600">€{formatEurNumber(gross)}</div>
                     <div className="text-xs text-gray-400">→ KPO prihodek</div>
                   </div>
                   <div>
                     <div className="text-xs text-gray-500 mb-1">Provizija {feePct}%</div>
-                    <div className="text-lg font-semibold text-red-500">€{autoFee.toFixed(2)}</div>
+                    <div className="text-lg font-semibold text-red-500">€{formatEurNumber(autoFee)}</div>
                     <div className="text-xs text-gray-400">→ KPO strošek</div>
                   </div>
                   <div>
                     <div className="text-xs text-gray-500 mb-1">Neto nakazilo</div>
-                    <div className="text-lg font-semibold">€{autoNet.toFixed(2)}</div>
+                    <div className="text-lg font-semibold">€{formatEurNumber(autoNet)}</div>
                     <div className="text-xs text-gray-400">→ na TRR</div>
                   </div>
                 </div>
                 <div className="mt-3 text-xs text-blue-700 bg-blue-50 rounded-lg p-2">
-                  ✓ Aplikacija bo samodejno poknjižila €{gross.toFixed(2)} kot prihodek
-                  in €{autoFee.toFixed(2)} kot strošek v KPO knjigo.
+                  ✓ Aplikacija bo samodejno poknjižila €{formatEurNumber(gross)} kot prihodek
+                  in €{formatEurNumber(autoFee)} kot strošek v KPO knjigo.
                 </div>
               </div>
             )}
@@ -566,19 +567,19 @@ export default function KarticeePage() {
                 </div>
                 <div className="col-span-2 text-xs text-gray-600">{s.processor}</div>
                 <div className="col-span-1 text-xs text-center text-gray-500">{s.transactions || '—'}</div>
-                <div className="col-span-2 text-xs text-right font-medium text-green-600">€{s.gross_sales.toFixed(2)}</div>
+                <div className="col-span-2 text-xs text-right font-medium text-green-600">€{formatEurNumber(s.gross_sales)}</div>
                 <div className="col-span-2 text-xs text-right text-red-500">
-                  −€{s.fee_amount.toFixed(2)}
+                  −€{formatEurNumber(s.fee_amount)}
                   <span className="text-gray-400 ml-1">({s.fee_pct}%)</span>
                 </div>
-                <div className="col-span-2 text-xs text-right font-semibold">€{s.net_payout.toFixed(2)}</div>
+                <div className="col-span-2 text-xs text-right font-semibold">€{formatEurNumber(s.net_payout)}</div>
               </div>
             ))}
             <div className="grid grid-cols-12 gap-2 px-6 py-3 bg-gray-50 border-t border-gray-200">
               <div className="col-span-6 text-xs font-medium text-gray-700">SKUPAJ</div>
-              <div className="col-span-2 text-xs text-right font-semibold text-green-600">€{totalGross.toFixed(2)}</div>
-              <div className="col-span-2 text-xs text-right font-semibold text-red-500">−€{totalFees.toFixed(2)}</div>
-              <div className="col-span-2 text-xs text-right font-semibold">€{totalNet.toFixed(2)}</div>
+              <div className="col-span-2 text-xs text-right font-semibold text-green-600">€{formatEurNumber(totalGross)}</div>
+              <div className="col-span-2 text-xs text-right font-semibold text-red-500">−€{formatEurNumber(totalFees)}</div>
+              <div className="col-span-2 text-xs text-right font-semibold">€{formatEurNumber(totalNet)}</div>
             </div>
           </div>
         )}

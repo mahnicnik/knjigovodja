@@ -7,6 +7,7 @@ import Link from 'next/link'
 import posthog from 'posthog-js'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import { formatEurNumber } from '@/lib/format'
 
 const MONTHS = ['Januar','Februar','Marec','April','Maj','Junij','Julij','Avgust','September','Oktober','November','December']
 
@@ -389,10 +390,10 @@ export default function ExpensesPage() {
             {/* Predogled izračuna */}
             {form.amount_net && (
               <div className="bg-gray-50 rounded-xl p-3 mb-4 flex gap-6 text-sm">
-                <div><span className="text-gray-500">Osnova: </span><span className="font-medium">€{parseFloat(form.amount_net).toFixed(2)}</span></div>
-                <div><span className="text-gray-500">DDV: </span><span className="font-medium">€{(parseFloat(form.amount_net) * parseFloat(form.vat_rate) / 100).toFixed(2)}</span></div>
-                <div><span className="text-gray-500">Skupaj: </span><span className="font-semibold">€{(parseFloat(form.amount_net) * (1 + parseFloat(form.vat_rate)/100)).toFixed(2)}</span></div>
-                <div><span className="text-gray-500">DDV vračilo: </span><span className="font-medium text-green-600">€{(parseFloat(form.amount_net) * parseFloat(form.vat_rate) / 100).toFixed(2)}</span></div>
+                <div><span className="text-gray-500">Osnova: </span><span className="font-medium">€{formatEurNumber(parseFloat(form.amount_net))}</span></div>
+                <div><span className="text-gray-500">DDV: </span><span className="font-medium">€{formatEurNumber((parseFloat(form.amount_net) * parseFloat(form.vat_rate) / 100))}</span></div>
+                <div><span className="text-gray-500">Skupaj: </span><span className="font-semibold">€{formatEurNumber((parseFloat(form.amount_net) * (1 + parseFloat(form.vat_rate)/100)))}</span></div>
+                <div><span className="text-gray-500">DDV vračilo: </span><span className="font-medium text-green-600">€{formatEurNumber((parseFloat(form.amount_net) * parseFloat(form.vat_rate) / 100))}</span></div>
               </div>
             )}
 
@@ -427,16 +428,16 @@ export default function ExpensesPage() {
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-xs text-gray-500 mb-1">Skupaj odhodki</div>
-            <div className="text-xl font-semibold text-red-500">€{totalNet.toFixed(2)}</div>
+            <div className="text-xl font-semibold text-red-500">€{formatEurNumber(totalNet)}</div>
           </div>
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-xs text-gray-500 mb-1">DDV vhod (vračilo)</div>
-            <div className="text-xl font-semibold text-green-600">€{totalVat.toFixed(2)}</div>
+            <div className="text-xl font-semibold text-green-600">€{formatEurNumber(totalVat)}</div>
             <div className="text-xs text-gray-400 mt-1">Odšteje se od DDV dolga</div>
           </div>
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-xs text-gray-500 mb-1">Skupaj plačano</div>
-            <div className="text-xl font-semibold">€{totalGross.toFixed(2)}</div>
+            <div className="text-xl font-semibold">€{formatEurNumber(totalGross)}</div>
           </div>
         </div>
 
@@ -473,16 +474,16 @@ export default function ExpensesPage() {
                 </div>
                 <div className="col-span-3 text-xs font-medium text-gray-900 truncate">{exp.vendor}</div>
                 <div className="col-span-2 text-xs text-gray-500 truncate">{exp.category}</div>
-                <div className="col-span-2 text-xs text-right text-red-500">€{Number(exp.amount_net).toFixed(2)}</div>
-                <div className="col-span-2 text-xs text-right text-green-600">€{Number(exp.vat_amount).toFixed(2)}</div>
-                <div className="col-span-1 text-xs text-right font-medium">€{Number(exp.amount_total).toFixed(2)}</div>
+                <div className="col-span-2 text-xs text-right text-red-500">€{formatEurNumber(Number(exp.amount_net))}</div>
+                <div className="col-span-2 text-xs text-right text-green-600">€{formatEurNumber(Number(exp.vat_amount))}</div>
+                <div className="col-span-1 text-xs text-right font-medium">€{formatEurNumber(Number(exp.amount_total))}</div>
               </div>
             ))}
             <div className="grid grid-cols-12 gap-2 px-6 py-3 bg-gray-50 border-t border-gray-200">
               <div className="col-span-7 text-xs font-medium text-gray-700">SKUPAJ</div>
-              <div className="col-span-2 text-xs text-right font-semibold text-red-500">€{totalNet.toFixed(2)}</div>
-              <div className="col-span-2 text-xs text-right font-semibold text-green-600">€{totalVat.toFixed(2)}</div>
-              <div className="col-span-1 text-xs text-right font-semibold">€{totalGross.toFixed(2)}</div>
+              <div className="col-span-2 text-xs text-right font-semibold text-red-500">€{formatEurNumber(totalNet)}</div>
+              <div className="col-span-2 text-xs text-right font-semibold text-green-600">€{formatEurNumber(totalVat)}</div>
+              <div className="col-span-1 text-xs text-right font-semibold">€{formatEurNumber(totalGross)}</div>
             </div>
             </div>
             </div>

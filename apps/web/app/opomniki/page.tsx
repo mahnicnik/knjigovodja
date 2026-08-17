@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import { LEGAL_DEFAULT_INTEREST_RATE, legalInterestRateOn , lokalniDatum} from '@/lib/tax-constants'
 import AppLayout from '@/components/AppLayout'
+import { formatEurNumber } from '@/lib/format'
 
 // POPRAVLJENO (30.7.2026): prej trdo kodirana 11% - napacna za oba dela
 // 2026 (10,15% / 10,40%). Zdaj iz lib/tax-constants.ts, kjer je jasno
@@ -117,10 +118,10 @@ Dni v zamudi: ${days} dni
 
 ─────────────────────────────────────
 
-ZNESEK RAČUNA:          €${Number(inv.amount_total).toFixed(2)}
-Zamudne obresti (${(LEGAL_INTEREST_RATE * 100).toFixed(0)}%/leto, ${days} dni):  €${interest.toFixed(2)}
+ZNESEK RAČUNA:          €${formatEurNumber(Number(inv.amount_total))}
+Zamudne obresti (${(LEGAL_INTEREST_RATE * 100).toFixed(0)}%/leto, ${days} dni):  €${formatEurNumber(interest)}
 ─────────────────────────────────────
-SKUPAJ ZA PLAČILO:      €${total.toFixed(2)}
+SKUPAJ ZA PLAČILO:      €${formatEurNumber(total)}
 
 ─────────────────────────────────────
 
@@ -132,7 +133,7 @@ Plačilni podatki:
 TRR: ${org.iban || ''}
 Sklic: ${inv.reference || `SI00 ${inv.invoice_number}`}
 Namen: Plačilo računa ${inv.invoice_number}
-Znesek: €${total.toFixed(2)}
+Znesek: €${formatEurNumber(total)}
 
 ─────────────────────────────────────
 
@@ -192,9 +193,9 @@ ${org.phone || ''}`
 <div class="row"><span style="color:#666">Rok plačila:</span><span style="color:#dc2626">${inv.due_date ? new Date(inv.due_date).toLocaleDateString('sl-SI') : '—'}</span></div>
 <div class="row"><span style="color:#666">Dni v zamudi:</span><span style="color:#dc2626;font-weight:bold">${days} dni</span></div>
 <hr>
-<div class="row"><span>Znesek računa:</span><span>€${Number(inv.amount_total).toFixed(2)}</span></div>
-<div class="row"><span>Zamudne obresti (${(LEGAL_INTEREST_RATE * 100).toFixed(0)}%/leto, ${days} dni):</span><span>€${interest.toFixed(2)}</span></div>
-<div class="total"><span>SKUPAJ ZA PLAČILO:</span><span>€${total.toFixed(2)}</span></div>
+<div class="row"><span>Znesek računa:</span><span>€${formatEurNumber(Number(inv.amount_total))}</span></div>
+<div class="row"><span>Zamudne obresti (${(LEGAL_INTEREST_RATE * 100).toFixed(0)}%/leto, ${days} dni):</span><span>€${formatEurNumber(interest)}</span></div>
+<div class="total"><span>SKUPAJ ZA PLAČILO:</span><span>€${formatEurNumber(total)}</span></div>
 
 <div class="warning">
   ${level === 1 ? '🟢 Opažamo, da račun še ni bil poravnan. Prosimo vas, da poravnate obveznost v roku 8 dni. V primeru že izvedenega plačila prosimo, da opomnik prezrete.' :
@@ -207,7 +208,7 @@ ${org.phone || ''}`
   <div class="row"><span style="color:#666">TRR:</span><span style="font-family:monospace">${org.iban || ''}</span></div>
   <div class="row"><span style="color:#666">Sklic:</span><span style="font-family:monospace">${inv.reference || `SI00 ${inv.invoice_number}`}</span></div>
   <div class="row"><span style="color:#666">Namen:</span><span>Plačilo računa ${inv.invoice_number}</span></div>
-  <div class="row"><span style="color:#666">Znesek:</span><span><strong>€${total.toFixed(2)}</strong></span></div>
+  <div class="row"><span style="color:#666">Znesek:</span><span><strong>€${formatEurNumber(total)}</strong></span></div>
 </div>
 
 <div class="footer">
@@ -263,11 +264,11 @@ ${org.phone || ''}`
             </div>
             <div className="bg-orange-50 rounded-2xl border border-orange-100 p-5">
               <div className="text-xs text-orange-600 mb-1">Skupaj dolg</div>
-              <div className="text-2xl font-semibold text-orange-700">€{totalOverdue.toFixed(2)}</div>
+              <div className="text-2xl font-semibold text-orange-700">€{formatEurNumber(totalOverdue)}</div>
             </div>
             <div className="bg-yellow-50 rounded-2xl border border-yellow-100 p-5">
               <div className="text-xs text-yellow-700 mb-1">Zamudne obresti ({(LEGAL_INTEREST_RATE*100).toFixed(0)}%/leto)</div>
-              <div className="text-2xl font-semibold text-yellow-700">€{totalInterest.toFixed(2)}</div>
+              <div className="text-2xl font-semibold text-yellow-700">€{formatEurNumber(totalInterest)}</div>
             </div>
           </div>
         )}
@@ -319,15 +320,15 @@ ${org.phone || ''}`
                   <div className="grid grid-cols-3 gap-3 mb-4">
                     <div className="bg-gray-50 rounded-xl p-3 text-center">
                       <div className="text-xs text-gray-500 mb-1">Znesek računa</div>
-                      <div className="font-semibold">€{Number(inv.amount_total).toFixed(2)}</div>
+                      <div className="font-semibold">€{formatEurNumber(Number(inv.amount_total))}</div>
                     </div>
                     <div className="bg-orange-50 rounded-xl p-3 text-center">
                       <div className="text-xs text-orange-600 mb-1">Zamudne obresti</div>
-                      <div className="font-semibold text-orange-700">€{interest.toFixed(2)}</div>
+                      <div className="font-semibold text-orange-700">€{formatEurNumber(interest)}</div>
                     </div>
                     <div className="bg-red-50 rounded-xl p-3 text-center">
                       <div className="text-xs text-red-600 mb-1">Skupaj za plačilo</div>
-                      <div className="font-semibold text-red-700">€{total.toFixed(2)}</div>
+                      <div className="font-semibold text-red-700">€{formatEurNumber(total)}</div>
                     </div>
                   </div>
 

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import QRCode from 'qrcode'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import { formatEurNumber } from '@/lib/format'
 
 const MONTHS_FULL = ['Januar','Februar','Marec','April','Maj','Junij',
                      'Julij','Avgust','September','Oktober','November','December']
@@ -157,7 +158,7 @@ export default function PrispevkiPage() {
           <div className="font-medium text-gray-900 text-sm">{title}</div>
           <div className="text-xs text-gray-500">{subtitle}</div>
         </div>
-        <div className="text-lg font-semibold text-gray-900">€{Number(amount).toFixed(2)}</div>
+        <div className="text-lg font-semibold text-gray-900">€{formatEurNumber(Number(amount))}</div>
       </div>
       {qr && <img src={qr} alt={`QR ${title}`} className="w-full rounded-xl" />}
       {!qr && <div className="h-32 bg-gray-50 rounded-xl flex items-center justify-center text-xs text-gray-400">Generiranje...</div>}
@@ -205,10 +206,10 @@ export default function PrispevkiPage() {
         {/* Skupni znesek */}
         <div className="bg-gray-900 rounded-2xl p-5 mb-6 text-white">
           <div className="text-sm text-gray-400 mb-1">Skupaj za plačilo ta mesec</div>
-          <div className="text-4xl font-semibold">€{total.toFixed(2)}</div>
+          <div className="text-4xl font-semibold">€{formatEurNumber(total)}</div>
           <div className="text-xs text-gray-500 mt-2">
-            PIZ €{Number(contrib.piz).toFixed(2)} + ZZZS €{Number(contrib.zzzs).toFixed(2)} + Zaposl. €{Number(contrib.zaposlovanje ?? 3.04).toFixed(2)} + Starš. €{Number((contrib as any)['starševo'] ?? 3.04).toFixed(2)}
-            {akAmt > 0 && ` + Akontacija €${akAmt.toFixed(2)}`}
+            PIZ €{formatEurNumber(Number(contrib.piz))} + ZZZS €{formatEurNumber(Number(contrib.zzzs))} + Zaposl. €{formatEurNumber(Number(contrib.zaposlovanje ?? 3.04))} + Starš. €{formatEurNumber(Number((contrib as any)['starševo'] ?? 3.04))}
+            {akAmt > 0 && ` + Akontacija €${formatEurNumber(akAmt)}`}
           </div>
         </div>
 

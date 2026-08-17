@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import { formatEurNumber } from '@/lib/format'
 
 // Neobdavčeni zneski 2026 — POPRAVLJENO 30.7.2026 (audit)
 // Vir: Uredba o davčni obravnavi povračil stroškov v zvezi z delom
@@ -204,10 +205,10 @@ export default function PotniStroskiPage() {
         <td>${e.destination}</td>
         <td>${e.expense_label}</td>
         <td class="r">${e.quantity} ${e.unit}</td>
-        <td class="r">€${e.amount.toFixed(2)}</td>
+        <td class="r">€${formatEurNumber(e.amount)}</td>
       </tr>
     `).join('')}
-    <tr class="total"><td colspan="4">SKUPAJ ZA POVRAČILO</td><td class="r">€${total.toFixed(2)}</td></tr>
+    <tr class="total"><td colspan="4">SKUPAJ ZA POVRAČILO</td><td class="r">€${formatEurNumber(total)}</td></tr>
   </tbody>
 </table>
 <div class="sign">
@@ -341,11 +342,11 @@ export default function PotniStroskiPage() {
               <div className="bg-gray-50 rounded-xl p-3 mb-4 flex gap-6 text-sm">
                 <div>
                   <span className="text-gray-500">Neobdavčeni znesek: </span>
-                  <span className="font-semibold text-green-600">€{calculatedAmount.toFixed(2)}</span>
+                  <span className="font-semibold text-green-600">€{formatEurNumber(calculatedAmount)}</span>
                 </div>
                 {form.expense_type === 'km' && (
                   <div className="text-gray-400 text-xs">
-                    {qty} km × €{RATES.km} = €{calculatedAmount.toFixed(2)}
+                    {qty} km × €{RATES.km} = €{formatEurNumber(calculatedAmount)}
                   </div>
                 )}
               </div>
@@ -383,7 +384,7 @@ export default function PotniStroskiPage() {
                     <div className="flex items-center gap-3">
                       <div className="text-right">
                         <div className="text-xs text-gray-500">Za povračilo</div>
-                        <div className="font-semibold text-green-600">€{empTotal.toFixed(2)}</div>
+                        <div className="font-semibold text-green-600">€{formatEurNumber(empTotal)}</div>
                       </div>
                       <button onClick={() => downloadPotniNalog(emp.id)}
                         className="border border-gray-200 rounded-xl px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50">
@@ -397,7 +398,7 @@ export default function PotniStroskiPage() {
                       <div key={e.id} className="flex justify-between text-xs py-1 border-b border-gray-50">
                         <span className="text-gray-500">{new Date(e.date_from).toLocaleDateString('sl-SI')}</span>
                         <span className="text-gray-700 flex-1 mx-3 truncate">{e.destination} — {e.expense_label}</span>
-                        <span className="font-medium">€{e.amount.toFixed(2)}</span>
+                        <span className="font-medium">€{formatEurNumber(e.amount)}</span>
                       </div>
                     ))}
                     {empEntries.length > 5 && (
@@ -431,7 +432,7 @@ export default function PotniStroskiPage() {
                 <div className="text-sm text-gray-400">Skupaj potni stroški</div>
                 <div className="text-xs text-gray-500 mt-0.5">Neobdavčeno povračilo zaposlenim</div>
               </div>
-              <div className="text-2xl font-semibold">€{totalAll.toFixed(2)}</div>
+              <div className="text-2xl font-semibold">€{formatEurNumber(totalAll)}</div>
             </div>
           </div>
         )}
