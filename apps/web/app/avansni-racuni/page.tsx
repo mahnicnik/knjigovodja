@@ -7,6 +7,8 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import PeriodFilter from '@/components/PeriodFilter'
+import { type PeriodMode, getPeriodRange } from '@/lib/period-filter'
 
 interface Invoice {
   id: string
@@ -53,6 +55,14 @@ export default function AvansniRacuniPage() {
   // Za finalni račun
   const [selectedAdvance, setSelectedAdvance] = useState<Invoice | null>(null)
 
+  // DODANO (Prelet 17, 17.8.2026): izbirnik obdobja za hitrejsi pregled.
+  // Privzeto 'all' (kot doslej) - odprti avansi (se ne pretvorjeni v
+  // finalni racun) in neplacani finalni racuni morajo ostati vidni ne
+  // glede na starost, zato ozji filter NI privzet.
+  const [periodMode, setPeriodMode] = useState<PeriodMode>('all')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3500) }
 
   useEffect(() => {
@@ -64,17 +74,20 @@ export default function AvansniRacuniPage() {
       setOrgId(member.org_id)
       const { data: org } = await supabase.from('organizations').select('vat_registered').eq('id', member.org_id).single()
       setIsVatRegistered(org?.vat_registered ?? false)
-      const { data } = await supabase
+      const { from, to } = getPeriodRange(periodMode, customFrom, customTo)
+      let query = supabase
         .from('issued_invoices')
         .select('*')
         .eq('org_id', member.org_id)
         .in('invoice_subtype', ['advance', 'final'])
-        .order('created_at', { ascending: false })
+      if (from) query = query.gte('issue_date', from)
+      if (to) query = query.lte('issue_date', to)
+      const { data } = await query.order('created_at', { ascending: false })
       setInvoices(data ?? [])
       setLoading(false)
     }
     load()
-  }, [router, supabase])
+  }, [router, supabase, periodMode, customFrom, customTo])
 
   async function saveAdvance() {
     if (!orgId || !clientName.trim() || totalAmount <= 0) { showToast('Izpolnite vsa polja'); return }
@@ -214,6 +227,20 @@ export default function AvansniRacuniPage() {
       </div>
 
       <div style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px' }}>
+
+        <div style={{ marginBottom: 16 }}>
+          <PeriodFilter
+            mode={periodMode}
+            onModeChange={setPeriodMode}
+            customFrom={customFrom}
+            customTo={customTo}
+            onCustomFromChange={setCustomFrom}
+            onCustomToChange={setCustomTo}
+          />
+          {periodMode !== 'all' && (
+            <div style={{ fontSize: 12, color: '#999', marginTop: 8 }}>Opozorilo: pri izbranem obdobju se odprti avansi in neplačani finalni računi izven obdobja ne prikažejo. Za popoln pregled odprtih postavk uporabite "Vse".</div>
+          )}
+        </div>
 
         {/* INFO */}
         <div style={{ background: '#E1F5EE', borderRadius: 12, padding: '14px 18px', marginBottom: 16, fontSize: 13, color: '#0E5E3B', lineHeight: 1.6 }}>

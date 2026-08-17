@@ -7,6 +7,8 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import PeriodFilter from '@/components/PeriodFilter'
+import { type PeriodMode, getPeriodRange } from '@/lib/period-filter'
 
 interface Quote {
   id: string
@@ -43,6 +45,14 @@ export default function PredracuniPage() {
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState<string | null>(null)
 
+  // DODANO (Prelet 17, 17.8.2026): izbirnik obdobja za hitrejsi pregled.
+  // Privzeto 'all' (kot doslej) - predracuni s statusom 'sent' cakajo na
+  // odgovor stranke in so lahko stari mesece; ozji privzeti filter bi jih
+  // skril iz pogleda brez opozorila.
+  const [periodMode, setPeriodMode] = useState<PeriodMode>('all')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3500) }
 
   useEffect(() => {
@@ -52,12 +62,31 @@ export default function PredracuniPage() {
       const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
       if (!member) return
       setOrgId(member.org_id)
-      const { data } = await supabase.from('quotes').select('*').eq('org_id', member.org_id).order('created_at', { ascending: false })
-      setQuotes(data ?? [])
+      const { from, to } = getPeriodRange(periodMode, customFrom, customTo)
+      if (periodMode === 'all') {
+        const { data } = await supabase.from('quotes').select('*').eq('org_id', member.org_id).order('created_at', { ascending: false })
+        setQuotes(data ?? [])
+      } else {
+        // VEDNO pridobi vse se odprte (sent) predracune, poleg tistih
+        // znotraj izbranega obdobja - zdruzi po id, da ni podvojenih.
+        let periodQuery = supabase.from('quotes').select('*').eq('org_id', member.org_id)
+        if (from) periodQuery = periodQuery.gte('issue_date', from)
+        if (to) periodQuery = periodQuery.lte('issue_date', to)
+        const [{ data: openAlways }, { data: periodQuotes }] = await Promise.all([
+          supabase.from('quotes').select('*').eq('org_id', member.org_id).eq('status', 'sent'),
+          periodQuery,
+        ])
+        const merged = new Map<string, any>()
+        ;(openAlways || []).forEach((q: any) => merged.set(q.id, q))
+        ;(periodQuotes || []).forEach((q: any) => merged.set(q.id, q))
+        const data = Array.from(merged.values()).sort((a: any, b: any) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        setQuotes(data as Quote[])
+      }
       setLoading(false)
     }
     load()
-  }, [router, supabase])
+  }, [router, supabase, periodMode, customFrom, customTo])
 
   async function convertToInvoice(quote: Quote) {
     if (!confirm(`Pretvori predračun ${quote.quote_number} v račun?`)) return
@@ -163,6 +192,19 @@ export default function PredracuniPage() {
       </div>
 
       <div style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px' }}>
+        <div style={{ marginBottom: 16 }}>
+          <PeriodFilter
+            mode={periodMode}
+            onModeChange={setPeriodMode}
+            customFrom={customFrom}
+            customTo={customTo}
+            onCustomFromChange={setCustomFrom}
+            onCustomToChange={setCustomTo}
+          />
+          {periodMode !== 'all' && (
+            <div style={{ fontSize: 12, color: '#999', marginTop: 8 }}>Predračuni, ki čakajo na odgovor stranke, so vedno prikazani ne glede na izbrano obdobje.</div>
+          )}
+        </div>
         {quotes.length === 0 ? (
           <div style={{ background: '#fff', borderRadius: 16, padding: 48, textAlign: 'center', border: '0.5px solid rgba(0,0,0,0.08)' }}>
             <div style={{ fontSize: 48, marginBottom: 16 }}>📋</div>

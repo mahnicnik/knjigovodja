@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 import { formatEurNumber } from '@/lib/format'
+import PeriodFilter from '@/components/PeriodFilter'
+import { type PeriodMode, getPeriodRange } from '@/lib/period-filter'
 
 export default function DobavnicePage() {
   const [org, setOrg] = useState<any>(null)
@@ -17,22 +19,53 @@ export default function DobavnicePage() {
   const router = useRouter()
   const supabase = createClient()
 
-  useEffect(() => { load() }, [])
+  // DODANO (Prelet 17, 17.8.2026): izbirnik obdobja za hitrejsi pregled.
+  // Privzeto 'all' (kot doslej). POMEMBNO: dobavnice, ki se cakajo na
+  // izstavitev racuna (status='draft'), MORAJO ostati vidne ne glede na
+  // izbrano obdobje - drugace bi stara neprefakturirana dobavnica tiho
+  // izginila iz delovne vrste "Ceaka na racun".
+  const [periodMode, setPeriodMode] = useState<PeriodMode>('all')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+
+  useEffect(() => { load() }, [periodMode, customFrom, customTo])
 
   async function load() {
+    setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) { setLoading(false); return }
     const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
     if (member) {
       const o = (member as any).organizations
       setOrg(o)
-      const { data } = await supabase
-        .from('issued_invoices')
-        .select('*')
-        .eq('org_id', o.id)
-        .eq('invoice_type', 'delivery_note')
-        .order('issue_date', { ascending: false })
-      setDocs(data || [])
+      const { from, to } = getPeriodRange(periodMode, customFrom, customTo)
+      if (periodMode === 'all') {
+        const { data } = await supabase
+          .from('issued_invoices')
+          .select('*')
+          .eq('org_id', o.id)
+          .eq('invoice_type', 'delivery_note')
+          .order('issue_date', { ascending: false })
+        setDocs(data || [])
+      } else {
+        // VEDNO pridobi vse se neprefakturirane (draft) dobavnice, poleg
+        // tistih znotraj izbranega obdobja - zdruzi po id, da ni podvojenih.
+        let periodQuery = supabase.from('issued_invoices').select('*')
+          .eq('org_id', o.id).eq('invoice_type', 'delivery_note')
+        if (from) periodQuery = periodQuery.gte('issue_date', from)
+        if (to) periodQuery = periodQuery.lte('issue_date', to)
+        const [{ data: pendingAlways }, { data: periodDocs }] = await Promise.all([
+          supabase.from('issued_invoices').select('*')
+            .eq('org_id', o.id).eq('invoice_type', 'delivery_note').eq('status', 'draft'),
+          periodQuery,
+        ])
+        const merged = new Map<string, any>()
+        ;(pendingAlways || []).forEach((d: any) => merged.set(d.id, d))
+        ;(periodDocs || []).forEach((d: any) => merged.set(d.id, d))
+        const data = Array.from(merged.values()).sort((a: any, b: any) =>
+          new Date(b.issue_date).getTime() - new Date(a.issue_date).getTime())
+        setDocs(data)
+      }
     }
     setLoading(false)
   }
@@ -117,6 +150,20 @@ export default function DobavnicePage() {
       </div>
 
       <div className="max-w-4xl mx-auto px-6 py-8">
+
+        <div className="mb-6">
+          <PeriodFilter
+            mode={periodMode}
+            onModeChange={setPeriodMode}
+            customFrom={customFrom}
+            customTo={customTo}
+            onCustomFromChange={setCustomFrom}
+            onCustomToChange={setCustomTo}
+          />
+          {periodMode !== 'all' && (
+            <div className="text-xs text-gray-400 mt-2">Dobavnice, ki čakajo na račun, so vedno prikazane ne glede na izbrano obdobje.</div>
+          )}
+        </div>
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-8">

@@ -1,0 +1,470 @@
+diff --git a/apps/web/app/avansni-racuni/page.tsx b/apps/web/app/avansni-racuni/page.tsx
+index c589c4c..9fb23cc 100644
+--- a/apps/web/app/avansni-racuni/page.tsx
++++ b/apps/web/app/avansni-racuni/page.tsx
+@@ -7,6 +7,8 @@ import { createClient } from '@/lib/supabase'
+ import Link from 'next/link'
+ import { getActiveMembership } from '@/lib/active-org'
+ import AppLayout from '@/components/AppLayout'
++import PeriodFilter from '@/components/PeriodFilter'
++import { type PeriodMode, getPeriodRange } from '@/lib/period-filter'
+ 
+ interface Invoice {
+   id: string
+@@ -53,6 +55,14 @@ export default function AvansniRacuniPage() {
+   // Za finalni račun
+   const [selectedAdvance, setSelectedAdvance] = useState<Invoice | null>(null)
+ 
++  // DODANO (Prelet 17, 17.8.2026): izbirnik obdobja za hitrejsi pregled.
++  // Privzeto 'all' (kot doslej) - odprti avansi (se ne pretvorjeni v
++  // finalni racun) in neplacani finalni racuni morajo ostati vidni ne
++  // glede na starost, zato ozji filter NI privzet.
++  const [periodMode, setPeriodMode] = useState<PeriodMode>('all')
++  const [customFrom, setCustomFrom] = useState('')
++  const [customTo, setCustomTo] = useState('')
++
+   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3500) }
+ 
+   useEffect(() => {
+@@ -64,17 +74,20 @@ export default function AvansniRacuniPage() {
+       setOrgId(member.org_id)
+       const { data: org } = await supabase.from('organizations').select('vat_registered').eq('id', member.org_id).single()
+       setIsVatRegistered(org?.vat_registered ?? false)
+-      const { data } = await supabase
++      const { from, to } = getPeriodRange(periodMode, customFrom, customTo)
++      let query = supabase
+         .from('issued_invoices')
+         .select('*')
+         .eq('org_id', member.org_id)
+         .in('invoice_subtype', ['advance', 'final'])
+-        .order('created_at', { ascending: false })
++      if (from) query = query.gte('issue_date', from)
++      if (to) query = query.lte('issue_date', to)
++      const { data } = await query.order('created_at', { ascending: false })
+       setInvoices(data ?? [])
+       setLoading(false)
+     }
+     load()
+-  }, [router, supabase])
++  }, [router, supabase, periodMode, customFrom, customTo])
+ 
+   async function saveAdvance() {
+     if (!orgId || !clientName.trim() || totalAmount <= 0) { showToast('Izpolnite vsa polja'); return }
+@@ -215,6 +228,20 @@ export default function AvansniRacuniPage() {
+ 
+       <div style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px' }}>
+ 
++        <div style={{ marginBottom: 16 }}>
++          <PeriodFilter
++            mode={periodMode}
++            onModeChange={setPeriodMode}
++            customFrom={customFrom}
++            customTo={customTo}
++            onCustomFromChange={setCustomFrom}
++            onCustomToChange={setCustomTo}
++          />
++          {periodMode !== 'all' && (
++            <div style={{ fontSize: 12, color: '#999', marginTop: 8 }}>Opozorilo: pri izbranem obdobju se odprti avansi in neplačani finalni računi izven obdobja ne prikažejo. Za popoln pregled odprtih postavk uporabite "Vse".</div>
++          )}
++        </div>
++
+         {/* INFO */}
+         <div style={{ background: '#E1F5EE', borderRadius: 12, padding: '14px 18px', marginBottom: 16, fontSize: 13, color: '#0E5E3B', lineHeight: 1.6 }}>
+           💡 <strong>Avansni račun</strong> se izda pred opravljeno storitvijo (predplačilo). Ko je storitev opravljena, izdate <strong>finalni račun</strong> z odbitkom avansa.
+diff --git a/apps/web/app/dobavnice/page.tsx b/apps/web/app/dobavnice/page.tsx
+index a8d5dac..739d8c8 100644
+--- a/apps/web/app/dobavnice/page.tsx
++++ b/apps/web/app/dobavnice/page.tsx
+@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation'
+ import { getActiveMembership } from '@/lib/active-org'
+ import AppLayout from '@/components/AppLayout'
+ import { formatEurNumber } from '@/lib/format'
++import PeriodFilter from '@/components/PeriodFilter'
++import { type PeriodMode, getPeriodRange } from '@/lib/period-filter'
+ 
+ export default function DobavnicePage() {
+   const [org, setOrg] = useState<any>(null)
+@@ -17,22 +19,53 @@ export default function DobavnicePage() {
+   const router = useRouter()
+   const supabase = createClient()
+ 
+-  useEffect(() => { load() }, [])
++  // DODANO (Prelet 17, 17.8.2026): izbirnik obdobja za hitrejsi pregled.
++  // Privzeto 'all' (kot doslej). POMEMBNO: dobavnice, ki se cakajo na
++  // izstavitev racuna (status='draft'), MORAJO ostati vidne ne glede na
++  // izbrano obdobje - drugace bi stara neprefakturirana dobavnica tiho
++  // izginila iz delovne vrste "Ceaka na racun".
++  const [periodMode, setPeriodMode] = useState<PeriodMode>('all')
++  const [customFrom, setCustomFrom] = useState('')
++  const [customTo, setCustomTo] = useState('')
++
++  useEffect(() => { load() }, [periodMode, customFrom, customTo])
+ 
+   async function load() {
++    setLoading(true)
+     const { data: { user } } = await supabase.auth.getUser()
+-    if (!user) return
++    if (!user) { setLoading(false); return }
+     const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
+     if (member) {
+       const o = (member as any).organizations
+       setOrg(o)
+-      const { data } = await supabase
+-        .from('issued_invoices')
+-        .select('*')
+-        .eq('org_id', o.id)
+-        .eq('invoice_type', 'delivery_note')
+-        .order('issue_date', { ascending: false })
+-      setDocs(data || [])
++      const { from, to } = getPeriodRange(periodMode, customFrom, customTo)
++      if (periodMode === 'all') {
++        const { data } = await supabase
++          .from('issued_invoices')
++          .select('*')
++          .eq('org_id', o.id)
++          .eq('invoice_type', 'delivery_note')
++          .order('issue_date', { ascending: false })
++        setDocs(data || [])
++      } else {
++        // VEDNO pridobi vse se neprefakturirane (draft) dobavnice, poleg
++        // tistih znotraj izbranega obdobja - zdruzi po id, da ni podvojenih.
++        let periodQuery = supabase.from('issued_invoices').select('*')
++          .eq('org_id', o.id).eq('invoice_type', 'delivery_note')
++        if (from) periodQuery = periodQuery.gte('issue_date', from)
++        if (to) periodQuery = periodQuery.lte('issue_date', to)
++        const [{ data: pendingAlways }, { data: periodDocs }] = await Promise.all([
++          supabase.from('issued_invoices').select('*')
++            .eq('org_id', o.id).eq('invoice_type', 'delivery_note').eq('status', 'draft'),
++          periodQuery,
++        ])
++        const merged = new Map<string, any>()
++        ;(pendingAlways || []).forEach((d: any) => merged.set(d.id, d))
++        ;(periodDocs || []).forEach((d: any) => merged.set(d.id, d))
++        const data = Array.from(merged.values()).sort((a: any, b: any) =>
++          new Date(b.issue_date).getTime() - new Date(a.issue_date).getTime())
++        setDocs(data)
++      }
+     }
+     setLoading(false)
+   }
+@@ -118,6 +151,20 @@ export default function DobavnicePage() {
+ 
+       <div className="max-w-4xl mx-auto px-6 py-8">
+ 
++        <div className="mb-6">
++          <PeriodFilter
++            mode={periodMode}
++            onModeChange={setPeriodMode}
++            customFrom={customFrom}
++            customTo={customTo}
++            onCustomFromChange={setCustomFrom}
++            onCustomToChange={setCustomTo}
++          />
++          {periodMode !== 'all' && (
++            <div className="text-xs text-gray-400 mt-2">Dobavnice, ki čakajo na račun, so vedno prikazane ne glede na izbrano obdobje.</div>
++          )}
++        </div>
++
+         {/* Stats */}
+         <div className="grid grid-cols-3 gap-4 mb-8">
+           <div className="bg-white rounded-2xl border border-gray-100 p-5">
+diff --git a/apps/web/app/invoices/page.tsx b/apps/web/app/invoices/page.tsx
+index a7f064d..e4376fe 100644
+--- a/apps/web/app/invoices/page.tsx
++++ b/apps/web/app/invoices/page.tsx
+@@ -8,6 +8,8 @@ import SendInvoiceModal from '@/components/SendInvoiceModal'
+ import { getActiveMembership } from '@/lib/active-org'
+ import AppLayout from '@/components/AppLayout'
+ import { formatEurNumber } from '@/lib/format'
++import PeriodFilter from '@/components/PeriodFilter'
++import { type PeriodMode, getPeriodRange } from '@/lib/period-filter'
+ 
+ export default function InvoicesPage() {
+   const [invoices, setInvoices] = useState<any[]>([])
+@@ -22,19 +24,32 @@ export default function InvoicesPage() {
+   const [sendSuccess, setSendSuccess] = useState('')
+   const supabase = createClient()
+ 
+-  useEffect(() => { load() }, [])
++  // DODANO (Prelet 17, 17.8.2026): izbirnik obdobja za hitrejsi pregled,
++  // ko racunov postane veliko. Glej lib/period-filter.ts.
++  // POMEMBNO: privzeto 'all' (kot doslej) - NE 'month'. Zgornji seznam
++  // sesteva "Neplacano" iz vseh racunov s statusom sent/overdue; ce bi bil
++  // privzet ozji filter, bi stari neplacan racun tiho izginil iz pogleda
++  // in bi ostal brez opomina. Filter je na voljo za hiter pregled, a ga
++  // mora oseba izbrati sama.
++  const [periodMode, setPeriodMode] = useState<PeriodMode>('all')
++  const [customFrom, setCustomFrom] = useState('')
++  const [customTo, setCustomTo] = useState('')
++
++  useEffect(() => { load() }, [periodMode, customFrom, customTo])
+ 
+   async function load() {
++    setLoading(true)
+     const { data: { user } } = await supabase.auth.getUser()
+-    if (!user) return
++    if (!user) { setLoading(false); return }
+     const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
+     if (member) {
+       const o = (member as any).organizations
+       setOrg(o)
+-      const { data: inv } = await supabase
+-        .from('issued_invoices').select('*')
+-        .eq('org_id', o.id)
+-        .order('created_at', { ascending: false })
++      const { from, to } = getPeriodRange(periodMode, customFrom, customTo)
++      let query = supabase.from('issued_invoices').select('*').eq('org_id', o.id)
++      if (from) query = query.gte('issue_date', from)
++      if (to) query = query.lte('issue_date', to)
++      const { data: inv } = await query.order('issue_date', { ascending: false })
+       setInvoices(inv || [])
+     }
+     setLoading(false)
+@@ -277,6 +292,17 @@ export default function InvoicesPage() {
+       </div>
+ 
+       <div className="max-w-4xl mx-auto px-6 py-8">
++        <div className="mb-6">
++          <PeriodFilter
++            mode={periodMode}
++            onModeChange={setPeriodMode}
++            customFrom={customFrom}
++            customTo={customTo}
++            onCustomFromChange={setCustomFrom}
++            onCustomToChange={setCustomTo}
++          />
++        </div>
++
+         <div className="grid grid-cols-3 gap-4 mb-8">
+           <div className="bg-white rounded-2xl border border-gray-100 p-5">
+             <div className="text-xs text-gray-500 mb-1">Skupaj fakturirano</div>
+diff --git a/apps/web/app/predracuni/page.tsx b/apps/web/app/predracuni/page.tsx
+index 00f9c7a..971f5ad 100644
+--- a/apps/web/app/predracuni/page.tsx
++++ b/apps/web/app/predracuni/page.tsx
+@@ -7,6 +7,8 @@ import { createClient } from '@/lib/supabase'
+ import Link from 'next/link'
+ import { getActiveMembership } from '@/lib/active-org'
+ import AppLayout from '@/components/AppLayout'
++import PeriodFilter from '@/components/PeriodFilter'
++import { type PeriodMode, getPeriodRange } from '@/lib/period-filter'
+ 
+ interface Quote {
+   id: string
+@@ -43,6 +45,14 @@ export default function PredracuniPage() {
+   const [loading, setLoading] = useState(true)
+   const [toast, setToast] = useState<string | null>(null)
+ 
++  // DODANO (Prelet 17, 17.8.2026): izbirnik obdobja za hitrejsi pregled.
++  // Privzeto 'all' (kot doslej) - predracuni s statusom 'sent' cakajo na
++  // odgovor stranke in so lahko stari mesece; ozji privzeti filter bi jih
++  // skril iz pogleda brez opozorila.
++  const [periodMode, setPeriodMode] = useState<PeriodMode>('all')
++  const [customFrom, setCustomFrom] = useState('')
++  const [customTo, setCustomTo] = useState('')
++
+   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3500) }
+ 
+   useEffect(() => {
+@@ -52,12 +62,31 @@ export default function PredracuniPage() {
+       const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
+       if (!member) return
+       setOrgId(member.org_id)
+-      const { data } = await supabase.from('quotes').select('*').eq('org_id', member.org_id).order('created_at', { ascending: false })
+-      setQuotes(data ?? [])
++      const { from, to } = getPeriodRange(periodMode, customFrom, customTo)
++      if (periodMode === 'all') {
++        const { data } = await supabase.from('quotes').select('*').eq('org_id', member.org_id).order('created_at', { ascending: false })
++        setQuotes(data ?? [])
++      } else {
++        // VEDNO pridobi vse se odprte (sent) predracune, poleg tistih
++        // znotraj izbranega obdobja - zdruzi po id, da ni podvojenih.
++        let periodQuery = supabase.from('quotes').select('*').eq('org_id', member.org_id)
++        if (from) periodQuery = periodQuery.gte('issue_date', from)
++        if (to) periodQuery = periodQuery.lte('issue_date', to)
++        const [{ data: openAlways }, { data: periodQuotes }] = await Promise.all([
++          supabase.from('quotes').select('*').eq('org_id', member.org_id).eq('status', 'sent'),
++          periodQuery,
++        ])
++        const merged = new Map<string, any>()
++        ;(openAlways || []).forEach((q: any) => merged.set(q.id, q))
++        ;(periodQuotes || []).forEach((q: any) => merged.set(q.id, q))
++        const data = Array.from(merged.values()).sort((a: any, b: any) =>
++          new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
++        setQuotes(data as Quote[])
++      }
+       setLoading(false)
+     }
+     load()
+-  }, [router, supabase])
++  }, [router, supabase, periodMode, customFrom, customTo])
+ 
+   async function convertToInvoice(quote: Quote) {
+     if (!confirm(`Pretvori predračun ${quote.quote_number} v račun?`)) return
+@@ -163,6 +192,19 @@ export default function PredracuniPage() {
+       </div>
+ 
+       <div style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px' }}>
++        <div style={{ marginBottom: 16 }}>
++          <PeriodFilter
++            mode={periodMode}
++            onModeChange={setPeriodMode}
++            customFrom={customFrom}
++            customTo={customTo}
++            onCustomFromChange={setCustomFrom}
++            onCustomToChange={setCustomTo}
++          />
++          {periodMode !== 'all' && (
++            <div style={{ fontSize: 12, color: '#999', marginTop: 8 }}>Predračuni, ki čakajo na odgovor stranke, so vedno prikazani ne glede na izbrano obdobje.</div>
++          )}
++        </div>
+         {quotes.length === 0 ? (
+           <div style={{ background: '#fff', borderRadius: 16, padding: 48, textAlign: 'center', border: '0.5px solid rgba(0,0,0,0.08)' }}>
+             <div style={{ fontSize: 48, marginBottom: 16 }}>📋</div>
+diff --git a/apps/web/components/PeriodFilter.tsx b/apps/web/components/PeriodFilter.tsx
+new file mode 100644
+index 0000000..cf79656
+--- /dev/null
++++ b/apps/web/components/PeriodFilter.tsx
+@@ -0,0 +1,71 @@
++'use client'
++
++import type { PeriodMode } from '@/lib/period-filter'
++
++const OPTIONS: { value: PeriodMode; label: string }[] = [
++  { value: 'today', label: 'Danes' },
++  { value: 'week', label: 'Ta teden' },
++  { value: 'month', label: 'Ta mesec' },
++  { value: 'year', label: 'To leto' },
++  { value: 'all', label: 'Vse' },
++  { value: 'custom', label: 'Po meri' },
++]
++
++/**
++ * Skupna komponenta izbirnika obdobja (Prelet 17, 17.8.2026).
++ * Glej lib/period-filter.ts za logiko izracuna datumov.
++ */
++export default function PeriodFilter({
++  mode,
++  onModeChange,
++  customFrom,
++  customTo,
++  onCustomFromChange,
++  onCustomToChange,
++}: {
++  mode: PeriodMode
++  onModeChange: (m: PeriodMode) => void
++  customFrom: string
++  customTo: string
++  onCustomFromChange: (v: string) => void
++  onCustomToChange: (v: string) => void
++}) {
++  return (
++    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
++      {OPTIONS.map(opt => (
++        <button
++          key={opt.value}
++          onClick={() => onModeChange(opt.value)}
++          style={{
++            padding: '6px 12px',
++            borderRadius: 8,
++            fontSize: 13,
++            cursor: 'pointer',
++            border: mode === opt.value ? '1px solid #111' : '1px solid rgba(0,0,0,0.12)',
++            background: mode === opt.value ? '#111' : '#fff',
++            color: mode === opt.value ? '#fff' : '#333',
++          }}
++        >
++          {opt.label}
++        </button>
++      ))}
++      {mode === 'custom' && (
++        <>
++          <input
++            type="date"
++            value={customFrom}
++            onChange={e => onCustomFromChange(e.target.value)}
++            style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.15)', fontSize: 13 }}
++          />
++          <span style={{ color: '#999' }}>–</span>
++          <input
++            type="date"
++            value={customTo}
++            onChange={e => onCustomToChange(e.target.value)}
++            style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.15)', fontSize: 13 }}
++          />
++        </>
++      )}
++    </div>
++  )
++}
+diff --git a/apps/web/lib/period-filter.ts b/apps/web/lib/period-filter.ts
+new file mode 100644
+index 0000000..b2b95cb
+--- /dev/null
++++ b/apps/web/lib/period-filter.ts
+@@ -0,0 +1,64 @@
++/**
++ * Skupna logika za izbirnik obdobja na seznamih (Prelet 17, 17.8.2026).
++ *
++ * Zakaj obstaja: vec strani (izdani racuni, dobavnice, predracuni, avansni
++ * racuni) je ob nalaganju vleklo VSE zapise iz baze brez kakrsnegakoli
++ * datumskega filtra ali strancenja. Dokler je zapisov malo, to ni opazno -
++ * ko jih bo vec (racuni cez vec let poslovanja), pa postane stran pocasna
++ * (poizvedba in izris tisocih vrstic naenkrat).
++ *
++ * Vzorec je povzet po ze obstojeci resitvi v expenses/page.tsx (30.7.2026),
++ * samo poenoten na eno mesto namesto vsake strani svoje kopije.
++ */
++export type PeriodMode = 'today' | 'week' | 'month' | 'year' | 'all' | 'custom'
++
++export interface PeriodRange {
++  from: string | null
++  to: string | null
++  label: string
++}
++
++function pad(n: number): string {
++  return String(n).padStart(2, '0')
++}
++
++function toISODate(d: Date): string {
++  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
++}
++
++export function getPeriodRange(mode: PeriodMode, customFrom: string, customTo: string): PeriodRange {
++  const now = new Date()
++
++  if (mode === 'all') return { from: null, to: null, label: 'Vse' }
++
++  if (mode === 'today') {
++    const d = toISODate(now)
++    return { from: d, to: d, label: 'Danes' }
++  }
++
++  if (mode === 'week') {
++    // ISO teden: ponedeljek - nedelja
++    const dayNum = now.getDay() === 0 ? 7 : now.getDay() // nedelja=0 -> 7
++    const monday = new Date(now)
++    monday.setDate(now.getDate() - (dayNum - 1))
++    const sunday = new Date(monday)
++    sunday.setDate(monday.getDate() + 6)
++    return { from: toISODate(monday), to: toISODate(sunday), label: 'Ta teden' }
++  }
++
++  if (mode === 'year') {
++    return { from: `${now.getFullYear()}-01-01`, to: `${now.getFullYear()}-12-31`, label: `Leto ${now.getFullYear()}` }
++  }
++
++  if (mode === 'custom') {
++    return { from: customFrom || null, to: customTo || null, label: 'Po meri' }
++  }
++
++  // 'month' (privzeto)
++  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
++  return {
++    from: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`,
++    to: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(lastDay)}`,
++    label: 'Ta mesec',
++  }
++}

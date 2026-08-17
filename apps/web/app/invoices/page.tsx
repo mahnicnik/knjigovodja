@@ -8,6 +8,8 @@ import SendInvoiceModal from '@/components/SendInvoiceModal'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 import { formatEurNumber } from '@/lib/format'
+import PeriodFilter from '@/components/PeriodFilter'
+import { type PeriodMode, getPeriodRange } from '@/lib/period-filter'
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<any[]>([])
@@ -22,19 +24,32 @@ export default function InvoicesPage() {
   const [sendSuccess, setSendSuccess] = useState('')
   const supabase = createClient()
 
-  useEffect(() => { load() }, [])
+  // DODANO (Prelet 17, 17.8.2026): izbirnik obdobja za hitrejsi pregled,
+  // ko racunov postane veliko. Glej lib/period-filter.ts.
+  // POMEMBNO: privzeto 'all' (kot doslej) - NE 'month'. Zgornji seznam
+  // sesteva "Neplacano" iz vseh racunov s statusom sent/overdue; ce bi bil
+  // privzet ozji filter, bi stari neplacan racun tiho izginil iz pogleda
+  // in bi ostal brez opomina. Filter je na voljo za hiter pregled, a ga
+  // mora oseba izbrati sama.
+  const [periodMode, setPeriodMode] = useState<PeriodMode>('all')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+
+  useEffect(() => { load() }, [periodMode, customFrom, customTo])
 
   async function load() {
+    setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) { setLoading(false); return }
     const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
     if (member) {
       const o = (member as any).organizations
       setOrg(o)
-      const { data: inv } = await supabase
-        .from('issued_invoices').select('*')
-        .eq('org_id', o.id)
-        .order('created_at', { ascending: false })
+      const { from, to } = getPeriodRange(periodMode, customFrom, customTo)
+      let query = supabase.from('issued_invoices').select('*').eq('org_id', o.id)
+      if (from) query = query.gte('issue_date', from)
+      if (to) query = query.lte('issue_date', to)
+      const { data: inv } = await query.order('issue_date', { ascending: false })
       setInvoices(inv || [])
     }
     setLoading(false)
@@ -277,6 +292,17 @@ export default function InvoicesPage() {
       </div>
 
       <div className="max-w-4xl mx-auto px-6 py-8">
+        <div className="mb-6">
+          <PeriodFilter
+            mode={periodMode}
+            onModeChange={setPeriodMode}
+            customFrom={customFrom}
+            customTo={customTo}
+            onCustomFromChange={setCustomFrom}
+            onCustomToChange={setCustomTo}
+          />
+        </div>
+
         <div className="grid grid-cols-3 gap-4 mb-8">
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-xs text-gray-500 mb-1">Skupaj fakturirano</div>
