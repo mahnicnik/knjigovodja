@@ -1554,13 +1554,6 @@ function WriteoffModal({ cart, auth, onClose, onDone }) {
     try {
       const { data: { user } } = await createClient().auth.getUser()
       if (!user) throw new Error('Niste prijavljeni')
-      // POPRAVLJENO (16.8.2026, KRITICNO): spodaj se je uporabljal
-      // "updatedSession", ki je bil definiran SELE 10 vrstic nizje. JavaScript
-      // to zavrne z napako "Cannot access before initialization", zato prenos
-      // prometa v knjigo prihodkov NIKOLI ni uspel - napaka se je ujela in
-      // zapisala samo v konzolo.
-      const casZakljucka = new Date().toISOString()
-
       const member = await getActiveMembership().then(m => m ? { org_id: m.org_id } : null) // POPRAVLJENO 16.8.2026: vec-org varno
       const { error: err } = await createClient().from('stock_writeoffs').insert({
         business_id: BUSINESS_ID,
@@ -5029,6 +5022,13 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
           return
         }
       }
+
+      // POPRAVLJENO (17.8.2026): cas zakljucka je definiran TU, pred vsemi
+      // uporabami. Prej se je spodaj uporabljal "updatedSession", ki je nastal
+      // sele pozneje, zato je prenos prometa v knjigo prihodkov vedno padel z
+      // napako "Cannot access before initialization" - in ker se je zapisala
+      // samo v konzolo, tega nihce ni opazil.
+      const casZakljucka = new Date().toISOString()
 
       // POPRAVLJENO (13.8.2026, KRITICNO): closedBy uporablja PRAVO PIN
       // identiteto (auth.user) za Z-porocilo staff_id - prej Supabase auth
@@ -9816,9 +9816,13 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
       // poskus prisel.
       const { count } = await createClient()
         .from('payments')
-        .select('id, orders!inner(business_id)', { count: 'exact', head: true })
+        .select('id, orders!inner(business_id,status)', { count: 'exact', head: true })
         .is('furs_eor', null)
         .eq('orders.business_id', BUSINESS_ID)
+        // DODANO (17.8.2026): stornirani racuni NE potrebujejo potrditve - so
+        // ze razveljavljeni. Prej jih je zvonec stel med nepotrjene in kazal
+        // stiri "nepotrjene" racune, ki so bili v resnici stornirani.
+        .neq('orders.status', 'voided')
       setUnconfirmed(count || 0)
     } catch { /* tiho */ }
   }, [])
