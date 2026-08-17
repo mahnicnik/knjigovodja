@@ -846,21 +846,38 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
       // Odstevanje zdaj v celoti opravi baza: atomarno, brez zastarelih vrednosti.
       // Odštej surovine za recipe artikle
       try {
-        for (const line of cart) {
-          if (line.item_type === 'recipe') {
-            const {data: normLines} = await createClient().from('item_ingredients').select('ingredient_id, qty_used').eq('item_id', line.id)
-            if (normLines && normLines.length > 0) {
-              for (const nl of normLines) {
-                // POPRAVLJENO (16.8.2026): prej SELECT + izracun + UPDATE - pri
-                // dveh hkratnih blagajnah je druga povozila prvo (lost update).
-                // Zdaj atomarno v bazi, v enem koraku.
-                await createClient().rpc('decrement_ingredient_stock', {
-                  p_ingredient_id: nl.ingredient_id,
-                  p_qty: nl.qty_used * line.qty,
-                })
-              }
+        // POPRAVLJENO (17.8.2026): prej gnezdena zanka z LOCENIM klicem na bazo
+        // za vsak recept in nato za vsako sestavino - pri desetih izdelkih s po
+        // petimi sestavinami je to petdeset zaporednih klicev, vsak s svojo
+        // zakasnitvijo. Blagajna je pri vecji kosarici opazno cakala PO tem, ko
+        // je bila prodaja ze zakljucena.
+        //
+        // Zdaj: normativi vseh receptov v ENI poizvedbi, odstevanja pa vzporedno.
+        const recepti = cart.filter(l => l.item_type === 'recipe')
+        if (recepti.length > 0) {
+          const db = createClient()
+          const { data: vsiNormativi } = await db
+            .from('item_ingredients')
+            .select('item_id, ingredient_id, qty_used')
+            .in('item_id', recepti.map(l => l.id))
+
+          // Sestej porabo po sestavini: ce se ista sestavina pojavi v vec
+          // receptih, jo odstejemo ENKRAT s skupno kolicino.
+          const poSestavini = new Map<string, number>()
+          for (const linija of recepti) {
+            for (const nl of (vsiNormativi || [])) {
+              if (nl.item_id !== linija.id) continue
+              const skupaj = (poSestavini.get(nl.ingredient_id) || 0) + Number(nl.qty_used) * linija.qty
+              poSestavini.set(nl.ingredient_id, skupaj)
             }
           }
+
+          // POPRAVLJENO (16.8.2026): odstevanje atomarno v bazi - prej
+          // SELECT + izracun + UPDATE, kar je pri dveh hkratnih blagajnah
+          // pomenilo, da je druga povozila prvo.
+          await Promise.all(Array.from(poSestavini.entries()).map(([id, qty]) =>
+            db.rpc('decrement_ingredient_stock', { p_ingredient_id: id, p_qty: qty })
+          ))
         }
       } catch(normErr) { console.warn('Normativ odštevanje ni uspelo:', normErr) }
 
