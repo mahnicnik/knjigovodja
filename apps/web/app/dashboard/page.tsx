@@ -219,6 +219,13 @@ export default function DashboardPage() {
   const monthStart = `${year}-${String(month+1).padStart(2,'0')}-01`
   const monthEnd = `${year}-${String(month+1).padStart(2,'0')}-${new Date(year,month+1,0).getDate()}`
   const yearStart = `${year}-01-01`
+  // DODANO (17.8.2026): obdobje TEKOCEGA CETRTLETJA. Obveznost za DDV se je
+  // racunala iz VSEH racunov od zacetka poslovanja, prikazana pa kot znesek za
+  // tekoce cetrtletje - kar je bilo napacno v obe smeri.
+  const kvartal = Math.floor(month / 3)
+  const quarterStart = `${year}-${String(kvartal * 3 + 1).padStart(2,'0')}-01`
+  const quarterEndDate = new Date(year, kvartal * 3 + 3, 0)
+  const quarterEnd = `${year}-${String(kvartal * 3 + 3).padStart(2,'0')}-${String(quarterEndDate.getDate()).padStart(2,'0')}`
   // POPRAVLJENO (16.8.2026): prispevki in akontacija zapadejo 20. v mesecu,
   // ne 15. Preverjeno z dejanskimi placilnimi nalogi FURS. Ime spremenljivke
   // ohranjeno, da se popravek ne razlije po celotni datoteki.
@@ -346,8 +353,17 @@ export default function DashboardPage() {
         .reduce((s: number, e: any) => s + Number(e.income || 0), 0)
       const yearRevenue = yearInv.reduce((s:number,i:any) => s + Number(i.amount_net), 0) + kpoYearIncomeForLimit
       const expenses = receipts.filter((r:any) => r.receipt_date >= monthStart && r.receipt_date <= monthEnd).reduce((s:number,r:any) => s + Number(r.amount_net), 0)
-      const vatOut = invoices.reduce((s:number,i:any) => s + Number(i.vat_amount), 0)
-      const vatIn = receipts.reduce((s:number,r:any) => s + Number(r.vat_amount), 0)
+      // POPRAVLJENO (17.8.2026): DDV samo za TEKOCE CETRTLETJE. Prej so se
+      // sestevali VSI racuni in stroski od zacetka poslovanja, rezultat pa se
+      // je prikazal kot obveznost za tekoce cetrtletje - torej povsem druga
+      // stevilka. Pri Niku je vsota padla v minus, zato je Dashboard kazal
+      // niclo namesto 470,87 EUR.
+      const vatOut = invoices
+        .filter((i:any) => i.issue_date >= quarterStart && i.issue_date <= quarterEnd)
+        .reduce((s:number,i:any) => s + Number(i.vat_amount), 0)
+      const vatIn = receipts
+        .filter((r:any) => r.receipt_date >= quarterStart && r.receipt_date <= quarterEnd)
+        .reduce((s:number,r:any) => s + Number(r.vat_amount), 0)
       const unpaid = invoices.filter((i:any) => i.status === 'sent')
       const overdue = invoices.filter((i:any) => i.status === 'sent' && i.due_date < today)
       const recent = [...invoices].sort((a:any,b:any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 5)
