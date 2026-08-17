@@ -29,7 +29,7 @@ export default function NewQuotePage() {
   const [clientAddress, setClientAddress] = useState('')
   const [clientTax, setClientTax] = useState('')
   const [issueDate, setIssueDate] = useState(lokalniDatum())
-  const [validUntil, setValidUntil] = useState(new lokalniDatum(Date(Date.now() + 30 * 864e5)))
+  const [validUntil, setValidUntil] = useState(lokalniDatum(new Date(Date.now() + 30 * 864e5)))
   const [notes, setNotes] = useState('')
   const [items, setItems] = useState<LineItem[]>([
     { description: '', quantity: 1, unit_price: 0, vat_rate: 0, discount_pct: 0, amount_net: 0, vat_amount: 0 }

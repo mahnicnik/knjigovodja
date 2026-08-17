@@ -48,7 +48,7 @@ export default function AvansniRacuniPage() {
   const [totalAmount, setTotalAmount] = useState(0)
   const [advancePct, setAdvancePct] = useState(50)
   const [issueDate, setIssueDate] = useState(lokalniDatum())
-  const [dueDate, setDueDate] = useState(new lokalniDatum(Date(Date.now() + 15 * 864e5)))
+  const [dueDate, setDueDate] = useState(lokalniDatum(new Date(Date.now() + 15 * 864e5)))
 
   // Za finalni račun
   const [selectedAdvance, setSelectedAdvance] = useState<Invoice | null>(null)
@@ -154,7 +154,7 @@ export default function AvansniRacuniPage() {
         client_name: advance.client_name,
         client_email: advance.client_email,
         issue_date: today,
-        due_date: new lokalniDatum(Date(Date.now() + 30 * 864e5)),
+        due_date: lokalniDatum(new Date(Date.now() + 30 * 864e5)),
         line_items: [
           { description: advance.line_items[0]?.description?.replace('Avans za: ', '') ?? 'Storitev', quantity: 1, unit_price: contractValue, amount_net: isVatRegistered ? contractValue / 1.22 : contractValue, vat_rate: isVatRegistered ? 22 : 0, vat_amount: isVatRegistered ? contractValue - contractValue / 1.22 : 0 },
           { description: `Odbitek avansa (${advance.invoice_number})`, quantity: 1, unit_price: -(advance.advance_amount ?? 0), amount_net: isVatRegistered ? -(advance.advance_amount ?? 0) / 1.22 : -(advance.advance_amount ?? 0), vat_rate: isVatRegistered ? 22 : 0, vat_amount: isVatRegistered ? -(advance.advance_amount ?? 0) + (advance.advance_amount ?? 0) / 1.22 : 0 },

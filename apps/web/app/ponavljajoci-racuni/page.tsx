@@ -52,7 +52,7 @@ export default function PonavljajoceRacunePage() {
   const [clientName, setClientName] = useState('')
   const [clientEmail, setClientEmail] = useState('')
   const [frequency, setFrequency] = useState<'weekly'|'monthly'|'quarterly'|'yearly'>('monthly')
-  const [nextDate, setNextDate] = useState(new lokalniDatum(Date(Date.now() + 30 * 864e5)))
+  const [nextDate, setNextDate] = useState(lokalniDatum(new Date(Date.now() + 30 * 864e5)))
   const [endDate, setEndDate] = useState('')
   const [description, setDescription] = useState('')
   const [unitPrice, setUnitPrice] = useState(0)
@@ -126,7 +126,7 @@ export default function PonavljajoceRacunePage() {
       const seq = String((count ?? 0) + 1).padStart(4, '0')
       const invoiceNumber = `${year}-${seq}`
       const today = lokalniDatum()
-      const due = new lokalniDatum(Date(Date.now() + 30 * 864e5))
+      const due = lokalniDatum(new Date(Date.now() + 30 * 864e5))
 
       // POPRAVLJENO (16.8.2026): prej brez preverbe napake - ce racun ni nastal,
       // se je datum naslednje izdaje VSEENO premaknil naprej, zato stranka tega
@@ -150,7 +150,7 @@ export default function PonavljajoceRacunePage() {
 
       // Nastavi naslednji datum
       const nextDays = FREQ[rec.frequency].days
-      const nextDate = new lokalniDatum(Date(Date.now() + nextDays * 864e5))
+      const nextDate = lokalniDatum(new Date(Date.now() + nextDays * 864e5))
       const { error: nextErr } = await supabase.from('recurring_invoices').update({ last_issued_at: new Date().toISOString(), next_issue_date: nextDate }).eq('id', rec.id)
       if (nextErr) showToast('Račun je izdan, datuma naslednje izdaje pa ni bilo mogoče posodobiti: ' + nextErr.message)
       setRecurring(prev => prev.map(r => r.id === rec.id ? { ...r, last_issued_at: new Date().toISOString(), next_issue_date: nextDate } : r))

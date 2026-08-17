@@ -1,0 +1,267 @@
+diff --git a/apps/web/app/api/cron/recurring-invoices/route.ts b/apps/web/app/api/cron/recurring-invoices/route.ts
+index 93f7089..918ad75 100644
+--- a/apps/web/app/api/cron/recurring-invoices/route.ts
++++ b/apps/web/app/api/cron/recurring-invoices/route.ts
+@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
+       const vatRate = rec.line_items?.[0]?.vat_rate ?? 0
+       const amountNet = rec.amount_total / (1 + vatRate / 100)
+       const vatAmount = rec.amount_total - amountNet
+-      const dueDate = new lokalniDatum(Date(Date.now() + 30 * 864e5))
++      const dueDate = lokalniDatum(new Date(Date.now() + 30 * 864e5))
+ 
+       const { error: insErr } = await supabase.from('issued_invoices').insert({
+         org_id: rec.org_id,
+@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
+       // NACRTOVANEGA datuma. Ce je cron zamujal (izpad, praznik), se je urnik
+       // trajno zamaknil - mesecni racun bi cez leto zdrsnil za vec dni.
+       const osnova = rec.next_issue_date ? new Date(rec.next_issue_date) : new Date()
+-      const nextDate = new lokalniDatum(Date(osnova.getTime() + (FREQ_DAYS[rec.frequency] || 30) * 864e5))
++      const nextDate = lokalniDatum(new Date(osnova.getTime() + (FREQ_DAYS[rec.frequency] || 30) * 864e5))
+       // POPRAVLJENO (16.8.2026, POMEMBNO): prej brez preverbe napake - ce
+       // posodobitev datuma spodleti, racun ostane izdan, next_issue_date pa v
+       // preteklosti, zato bi NASLEDNJI zagon cron-a izdal SE EN racun za isto
+diff --git a/apps/web/app/api/furs/resubmit/route.ts b/apps/web/app/api/furs/resubmit/route.ts
+index 2096b52..b59e534 100644
+--- a/apps/web/app/api/furs/resubmit/route.ts
++++ b/apps/web/app/api/furs/resubmit/route.ts
+@@ -129,6 +129,13 @@ export async function POST(req: NextRequest) {
+   const p12Buffer = Buffer.from(cert.certificate_data, 'base64')
+   const { privateKeyPem, certificatePem } = extractFromP12(p12Buffer, cert.certificate_password ?? '')
+ 
++  // VAROVALKA (17.8.2026): brez davcne stevilke na certifikatu ne gre naprej -
++  // prej bi se poslal prazen niz in FURS bi (ali pa sploh ne bi) zavrnil zahtevek
++  // sele na svoji strani, potem ko je stevilka ze porabljena.
++  if (!cert.tax_number) {
++    return NextResponse.json({ error: 'Davcna stevilka na certifikatu ni nastavljena - ponovna oddaja zavrnjena, ni bilo poslano nic na FURS.' }, { status: 400 })
++  }
++
+   const results: any[] = []
+   for (const inv of preview) {
+     // Preskoci racune brez prave FURS stevilke (glej parseInvoiceNumber popravek 21.7.2026)
+@@ -137,10 +144,10 @@ export async function POST(req: NextRequest) {
+       continue
+     }
+     const config: FursConfig = {
+-            // POPRAVLJENO (17.8.2026): tu je bila kot rezervna vrednost TUJA DAVCNA
++      // POPRAVLJENO (17.8.2026): tu je bila kot rezervna vrednost TUJA DAVCNA
+       // STEVILKA. Ce podjetje nima svoje, bi svoj racun prijavilo pri FURS
+       // pod tujo. Bolje je zavrniti z razlago kot prijaviti napacno.
+-      taxNumber: cert.tax_number || '', // POPRAVLJENO 29.7.2026
++      taxNumber: cert.tax_number, // POPRAVLJENO 29.7.2026 / VAROVALKA 17.8.2026
+       premiseId: inv.premiseId,
+       deviceId: inv.deviceId,
+       privateKeyPem,
+diff --git a/apps/web/app/api/furs/test/route.ts b/apps/web/app/api/furs/test/route.ts
+index f2a2939..5dd5d8a 100644
+--- a/apps/web/app/api/furs/test/route.ts
++++ b/apps/web/app/api/furs/test/route.ts
+@@ -66,11 +66,22 @@ export async function POST(req: NextRequest) {
+       }, { status: 400 })
+     }
+ 
++    // VAROVALKA (17.8.2026): ce ni ne certifikatne ne organizacijske davcne
++    // stevilke, taxNumber spodaj pristane kot prazen niz in bi se tak (napacen)
++    // zahtevek vseeno poslal na FURS. Zavrni prej, z jasno razlago.
++    const resolvedTaxNumber = cert.tax_number || org?.tax_number || ''
++    if (!resolvedTaxNumber) {
++      return NextResponse.json({
++        success: false,
++        error: 'Davcna stevilka ni nastavljena (ne na certifikatu ne na organizaciji) - preizkus FURS zavrnjen.'
++      }, { status: 400 })
++    }
++
+     const config: FursConfig = {
+-            // POPRAVLJENO (17.8.2026): tu je bila kot rezervna vrednost TUJA DAVCNA
++      // POPRAVLJENO (17.8.2026): tu je bila kot rezervna vrednost TUJA DAVCNA
+       // STEVILKA. Ce podjetje nima svoje, bi svoj racun prijavilo pri FURS
+       // pod tujo. Bolje je zavrniti z razlago kot prijaviti napacno.
+-      taxNumber: cert.tax_number || org?.tax_number || '', // POPRAVLJENO 29.7.2026
++      taxNumber: resolvedTaxNumber, // POPRAVLJENO 29.7.2026
+       premiseId: premise?.premise_id ?? '',
+       deviceId: device?.device_id ?? 'RACUNKO01',
+       privateKeyPem,
+diff --git a/apps/web/app/avansni-racuni/page.tsx b/apps/web/app/avansni-racuni/page.tsx
+index 1e196e6..c589c4c 100644
+--- a/apps/web/app/avansni-racuni/page.tsx
++++ b/apps/web/app/avansni-racuni/page.tsx
+@@ -48,7 +48,7 @@ export default function AvansniRacuniPage() {
+   const [totalAmount, setTotalAmount] = useState(0)
+   const [advancePct, setAdvancePct] = useState(50)
+   const [issueDate, setIssueDate] = useState(lokalniDatum())
+-  const [dueDate, setDueDate] = useState(new lokalniDatum(Date(Date.now() + 15 * 864e5)))
++  const [dueDate, setDueDate] = useState(lokalniDatum(new Date(Date.now() + 15 * 864e5)))
+ 
+   // Za finalni račun
+   const [selectedAdvance, setSelectedAdvance] = useState<Invoice | null>(null)
+@@ -154,7 +154,7 @@ export default function AvansniRacuniPage() {
+         client_name: advance.client_name,
+         client_email: advance.client_email,
+         issue_date: today,
+-        due_date: new lokalniDatum(Date(Date.now() + 30 * 864e5)),
++        due_date: lokalniDatum(new Date(Date.now() + 30 * 864e5)),
+         line_items: [
+           { description: advance.line_items[0]?.description?.replace('Avans za: ', '') ?? 'Storitev', quantity: 1, unit_price: contractValue, amount_net: isVatRegistered ? contractValue / 1.22 : contractValue, vat_rate: isVatRegistered ? 22 : 0, vat_amount: isVatRegistered ? contractValue - contractValue / 1.22 : 0 },
+           { description: `Odbitek avansa (${advance.invoice_number})`, quantity: 1, unit_price: -(advance.advance_amount ?? 0), amount_net: isVatRegistered ? -(advance.advance_amount ?? 0) / 1.22 : -(advance.advance_amount ?? 0), vat_rate: isVatRegistered ? 22 : 0, vat_amount: isVatRegistered ? -(advance.advance_amount ?? 0) + (advance.advance_amount ?? 0) / 1.22 : 0 },
+diff --git a/apps/web/app/cas/page.tsx b/apps/web/app/cas/page.tsx
+index caed87d..2c9dec8 100644
+--- a/apps/web/app/cas/page.tsx
++++ b/apps/web/app/cas/page.tsx
+@@ -116,7 +116,7 @@ export default function CasPage() {
+       invoice_type: 'invoice',
+       client_name: entry.client_name ?? 'Stranka',
+       issue_date: lokalniDatum(),
+-      due_date: new lokalniDatum(Date(Date.now() + 30 * 864e5)),
++      due_date: lokalniDatum(new Date(Date.now() + 30 * 864e5)),
+       line_items: [{ description: entry.description, quantity: entry.hours, unit_price: entry.hourly_rate, amount_net: amount, vat_amount: 0 }],
+       amount_net: amount, vat_amount: 0, amount_total: amount,
+       status: 'draft',
+diff --git a/apps/web/app/dobavnice/new/page.tsx b/apps/web/app/dobavnice/new/page.tsx
+index fa27ab7..f180148 100644
+--- a/apps/web/app/dobavnice/new/page.tsx
++++ b/apps/web/app/dobavnice/new/page.tsx
+@@ -28,7 +28,7 @@ export default function NewDobavnicaPage() {
+   const [taxLookupLoading, setTaxLookupLoading] = useState(false)
+   const [taxLookupError, setTaxLookupError] = useState('')
+   const [issueDate, setIssueDate] = useState(lokalniDatum())
+-  const [dueDate, setDueDate] = useState(new lokalniDatum(Date(Date.now() + 30*24*60*60*1000)))
++  const [dueDate, setDueDate] = useState(lokalniDatum(new Date(Date.now() + 30*24*60*60*1000)))
+   const [items, setItems] = useState<LineItem[]>([{ description: '', quantity: 1, unit_price: 0, vat_rate: 22 }])
+   const [notes, setNotes] = useState('')
+   const [serviceDate, setServiceDate] = useState('')
+diff --git a/apps/web/app/dobavnice/page.tsx b/apps/web/app/dobavnice/page.tsx
+index 6633390..2c41252 100644
+--- a/apps/web/app/dobavnice/page.tsx
++++ b/apps/web/app/dobavnice/page.tsx
+@@ -74,7 +74,7 @@ export default function DobavnicePage() {
+       client_address: firstDoc.client_address,
+       client_iban: firstDoc.client_iban,
+       issue_date: lokalniDatum(),
+-      due_date: new lokalniDatum(Date(Date.now() + 30*24*60*60*1000)),
++      due_date: lokalniDatum(new Date(Date.now() + 30*24*60*60*1000)),
+       line_items: allItems,
+       amount_net: subtotal,
+       vat_amount: vatAmount,
+diff --git a/apps/web/app/invoices/edit/[id]/page.tsx b/apps/web/app/invoices/edit/[id]/page.tsx
+index 77d55ce..8a5be76 100644
+--- a/apps/web/app/invoices/edit/[id]/page.tsx
++++ b/apps/web/app/invoices/edit/[id]/page.tsx
+@@ -31,7 +31,7 @@ export default function EditInvoicePage() {
+   const [taxLookupLoading, setTaxLookupLoading] = useState(false)
+   const [taxLookupError, setTaxLookupError] = useState('')
+   const [issueDate, setIssueDate] = useState(lokalniDatum())
+-  const [dueDate, setDueDate] = useState(new lokalniDatum(Date(Date.now() + 30*24*60*60*1000)))
++  const [dueDate, setDueDate] = useState(lokalniDatum(new Date(Date.now() + 30*24*60*60*1000)))
+   const [items, setItems] = useState<LineItem[]>([{ description: '', quantity: 1, unit_price: 0, vat_rate: 22 }])
+   const [notes, setNotes] = useState('')
+   const [serviceDate, setServiceDate] = useState('')
+diff --git a/apps/web/app/invoices/edit/page.tsx b/apps/web/app/invoices/edit/page.tsx
+index dc1cdb9..cfdb7a0 100644
+--- a/apps/web/app/invoices/edit/page.tsx
++++ b/apps/web/app/invoices/edit/page.tsx
+@@ -32,7 +32,7 @@ export default function EditInvoicePage() {
+   const [taxLookupLoading, setTaxLookupLoading] = useState(false)
+   const [taxLookupError, setTaxLookupError] = useState('')
+   const [issueDate, setIssueDate] = useState(lokalniDatum())
+-  const [dueDate, setDueDate] = useState(new lokalniDatum(Date(Date.now() + 30*24*60*60*1000)))
++  const [dueDate, setDueDate] = useState(lokalniDatum(new Date(Date.now() + 30*24*60*60*1000)))
+   const [items, setItems] = useState<LineItem[]>([{ description: '', quantity: 1, unit_price: 0, vat_rate: 22 }])
+   const [notes, setNotes] = useState('')
+   const [serviceDate, setServiceDate] = useState('')
+diff --git a/apps/web/app/invoices/new/page.tsx b/apps/web/app/invoices/new/page.tsx
+index aff4883..c72b882 100644
+--- a/apps/web/app/invoices/new/page.tsx
++++ b/apps/web/app/invoices/new/page.tsx
+@@ -36,7 +36,7 @@ export default function NewInvoicePage() {
+   const [taxLookupLoading, setTaxLookupLoading] = useState(false)
+   const [taxLookupError, setTaxLookupError] = useState('')
+   const [issueDate, setIssueDate] = useState(lokalniDatum())
+-  const [dueDate, setDueDate] = useState(new lokalniDatum(Date(Date.now() + 14*24*60*60*1000)))
++  const [dueDate, setDueDate] = useState(lokalniDatum(new Date(Date.now() + 14*24*60*60*1000)))
+   const [items, setItems] = useState<LineItem[]>([{ description: '', quantity: 1, unit_price: 0, vat_rate: 22, discount_pct: 0 }])
+   const [notes, setNotes] = useState('')
+   const [serviceDate, setServiceDate] = useState('')
+diff --git a/apps/web/app/invoices/page.tsx b/apps/web/app/invoices/page.tsx
+index f481a98..b412d7f 100644
+--- a/apps/web/app/invoices/page.tsx
++++ b/apps/web/app/invoices/page.tsx
+@@ -152,7 +152,7 @@ export default function InvoicesPage() {
+       client_email: inv.client_email,
+       client_tax_number: inv.client_tax_number,
+       issue_date: lokalniDatum(),
+-      due_date: new lokalniDatum(Date(Date.now() + 30*24*60*60*1000)),
++      due_date: lokalniDatum(new Date(Date.now() + 30*24*60*60*1000)),
+       line_items: inv.line_items || [],
+       amount_net: inv.amount_net,
+       vat_amount: inv.vat_amount,
+diff --git a/apps/web/app/ponavljajoci-racuni/page.tsx b/apps/web/app/ponavljajoci-racuni/page.tsx
+index 6eb2668..0a8b92c 100644
+--- a/apps/web/app/ponavljajoci-racuni/page.tsx
++++ b/apps/web/app/ponavljajoci-racuni/page.tsx
+@@ -52,7 +52,7 @@ export default function PonavljajoceRacunePage() {
+   const [clientName, setClientName] = useState('')
+   const [clientEmail, setClientEmail] = useState('')
+   const [frequency, setFrequency] = useState<'weekly'|'monthly'|'quarterly'|'yearly'>('monthly')
+-  const [nextDate, setNextDate] = useState(new lokalniDatum(Date(Date.now() + 30 * 864e5)))
++  const [nextDate, setNextDate] = useState(lokalniDatum(new Date(Date.now() + 30 * 864e5)))
+   const [endDate, setEndDate] = useState('')
+   const [description, setDescription] = useState('')
+   const [unitPrice, setUnitPrice] = useState(0)
+@@ -126,7 +126,7 @@ export default function PonavljajoceRacunePage() {
+       const seq = String((count ?? 0) + 1).padStart(4, '0')
+       const invoiceNumber = `${year}-${seq}`
+       const today = lokalniDatum()
+-      const due = new lokalniDatum(Date(Date.now() + 30 * 864e5))
++      const due = lokalniDatum(new Date(Date.now() + 30 * 864e5))
+ 
+       // POPRAVLJENO (16.8.2026): prej brez preverbe napake - ce racun ni nastal,
+       // se je datum naslednje izdaje VSEENO premaknil naprej, zato stranka tega
+@@ -150,7 +150,7 @@ export default function PonavljajoceRacunePage() {
+ 
+       // Nastavi naslednji datum
+       const nextDays = FREQ[rec.frequency].days
+-      const nextDate = new lokalniDatum(Date(Date.now() + nextDays * 864e5))
++      const nextDate = lokalniDatum(new Date(Date.now() + nextDays * 864e5))
+       const { error: nextErr } = await supabase.from('recurring_invoices').update({ last_issued_at: new Date().toISOString(), next_issue_date: nextDate }).eq('id', rec.id)
+       if (nextErr) showToast('Račun je izdan, datuma naslednje izdaje pa ni bilo mogoče posodobiti: ' + nextErr.message)
+       setRecurring(prev => prev.map(r => r.id === rec.id ? { ...r, last_issued_at: new Date().toISOString(), next_issue_date: nextDate } : r))
+diff --git a/apps/web/app/predracuni/new/page.tsx b/apps/web/app/predracuni/new/page.tsx
+index 8b643fc..fe135fb 100644
+--- a/apps/web/app/predracuni/new/page.tsx
++++ b/apps/web/app/predracuni/new/page.tsx
+@@ -29,7 +29,7 @@ export default function NewQuotePage() {
+   const [clientAddress, setClientAddress] = useState('')
+   const [clientTax, setClientTax] = useState('')
+   const [issueDate, setIssueDate] = useState(lokalniDatum())
+-  const [validUntil, setValidUntil] = useState(new lokalniDatum(Date(Date.now() + 30 * 864e5)))
++  const [validUntil, setValidUntil] = useState(lokalniDatum(new Date(Date.now() + 30 * 864e5)))
+   const [notes, setNotes] = useState('')
+   const [items, setItems] = useState<LineItem[]>([
+     { description: '', quantity: 1, unit_price: 0, vat_rate: 0, discount_pct: 0, amount_net: 0, vat_amount: 0 }
+diff --git a/apps/web/app/predracuni/page.tsx b/apps/web/app/predracuni/page.tsx
+index 323c4f5..00f9c7a 100644
+--- a/apps/web/app/predracuni/page.tsx
++++ b/apps/web/app/predracuni/page.tsx
+@@ -85,7 +85,7 @@ export default function PredracuniPage() {
+         client_email: q.client_email,
+         client_tax_number: q.client_tax_number,
+         issue_date: lokalniDatum(),
+-        due_date: new lokalniDatum(Date(Date.now() + 30 * 864e5)),
++        due_date: lokalniDatum(new Date(Date.now() + 30 * 864e5)),
+         line_items: q.line_items,
+         amount_net: q.amount_net,
+         vat_amount: q.vat_amount,
+diff --git a/apps/web/app/racunovodja/page.tsx b/apps/web/app/racunovodja/page.tsx
+index 78a9f80..be9eaca 100644
+--- a/apps/web/app/racunovodja/page.tsx
++++ b/apps/web/app/racunovodja/page.tsx
+@@ -35,8 +35,8 @@ const TAX_SYSTEM_LABELS: Record<string, string> = {
+ 
+ function getMonthRange() {
+   const now = new Date()
+-  const from = new lokalniDatum(Date(now.getFullYear(), now.getMonth(), 1))
+-  const to = new lokalniDatum(Date(now.getFullYear(), now.getMonth() + 1, 0))
++  const from = lokalniDatum(new Date(now.getFullYear(), now.getMonth(), 1))
++  const to = lokalniDatum(new Date(now.getFullYear(), now.getMonth() + 1, 0))
+   const label = now.toLocaleDateString('sl-SI', { month: 'long', year: 'numeric' })
+   return { from, to, label }
+ }

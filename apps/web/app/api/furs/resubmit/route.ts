@@ -129,6 +129,13 @@ export async function POST(req: NextRequest) {
   const p12Buffer = Buffer.from(cert.certificate_data, 'base64')
   const { privateKeyPem, certificatePem } = extractFromP12(p12Buffer, cert.certificate_password ?? '')
 
+  // VAROVALKA (17.8.2026): brez davcne stevilke na certifikatu ne gre naprej -
+  // prej bi se poslal prazen niz in FURS bi (ali pa sploh ne bi) zavrnil zahtevek
+  // sele na svoji strani, potem ko je stevilka ze porabljena.
+  if (!cert.tax_number) {
+    return NextResponse.json({ error: 'Davcna stevilka na certifikatu ni nastavljena - ponovna oddaja zavrnjena, ni bilo poslano nic na FURS.' }, { status: 400 })
+  }
+
   const results: any[] = []
   for (const inv of preview) {
     // Preskoci racune brez prave FURS stevilke (glej parseInvoiceNumber popravek 21.7.2026)
@@ -137,10 +144,10 @@ export async function POST(req: NextRequest) {
       continue
     }
     const config: FursConfig = {
-            // POPRAVLJENO (17.8.2026): tu je bila kot rezervna vrednost TUJA DAVCNA
+      // POPRAVLJENO (17.8.2026): tu je bila kot rezervna vrednost TUJA DAVCNA
       // STEVILKA. Ce podjetje nima svoje, bi svoj racun prijavilo pri FURS
       // pod tujo. Bolje je zavrniti z razlago kot prijaviti napacno.
-      taxNumber: cert.tax_number || '', // POPRAVLJENO 29.7.2026
+      taxNumber: cert.tax_number, // POPRAVLJENO 29.7.2026 / VAROVALKA 17.8.2026
       premiseId: inv.premiseId,
       deviceId: inv.deviceId,
       privateKeyPem,

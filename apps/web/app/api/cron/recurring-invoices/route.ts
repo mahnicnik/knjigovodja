@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
       const vatRate = rec.line_items?.[0]?.vat_rate ?? 0
       const amountNet = rec.amount_total / (1 + vatRate / 100)
       const vatAmount = rec.amount_total - amountNet
-      const dueDate = new lokalniDatum(Date(Date.now() + 30 * 864e5))
+      const dueDate = lokalniDatum(new Date(Date.now() + 30 * 864e5))
 
       const { error: insErr } = await supabase.from('issued_invoices').insert({
         org_id: rec.org_id,
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
       // NACRTOVANEGA datuma. Ce je cron zamujal (izpad, praznik), se je urnik
       // trajno zamaknil - mesecni racun bi cez leto zdrsnil za vec dni.
       const osnova = rec.next_issue_date ? new Date(rec.next_issue_date) : new Date()
-      const nextDate = new lokalniDatum(Date(osnova.getTime() + (FREQ_DAYS[rec.frequency] || 30) * 864e5))
+      const nextDate = lokalniDatum(new Date(osnova.getTime() + (FREQ_DAYS[rec.frequency] || 30) * 864e5))
       // POPRAVLJENO (16.8.2026, POMEMBNO): prej brez preverbe napake - ce
       // posodobitev datuma spodleti, racun ostane izdan, next_issue_date pa v
       // preteklosti, zato bi NASLEDNJI zagon cron-a izdal SE EN racun za isto

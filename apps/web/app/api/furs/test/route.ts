@@ -66,11 +66,22 @@ export async function POST(req: NextRequest) {
       }, { status: 400 })
     }
 
+    // VAROVALKA (17.8.2026): ce ni ne certifikatne ne organizacijske davcne
+    // stevilke, taxNumber spodaj pristane kot prazen niz in bi se tak (napacen)
+    // zahtevek vseeno poslal na FURS. Zavrni prej, z jasno razlago.
+    const resolvedTaxNumber = cert.tax_number || org?.tax_number || ''
+    if (!resolvedTaxNumber) {
+      return NextResponse.json({
+        success: false,
+        error: 'Davcna stevilka ni nastavljena (ne na certifikatu ne na organizaciji) - preizkus FURS zavrnjen.'
+      }, { status: 400 })
+    }
+
     const config: FursConfig = {
-            // POPRAVLJENO (17.8.2026): tu je bila kot rezervna vrednost TUJA DAVCNA
+      // POPRAVLJENO (17.8.2026): tu je bila kot rezervna vrednost TUJA DAVCNA
       // STEVILKA. Ce podjetje nima svoje, bi svoj racun prijavilo pri FURS
       // pod tujo. Bolje je zavrniti z razlago kot prijaviti napacno.
-      taxNumber: cert.tax_number || org?.tax_number || '', // POPRAVLJENO 29.7.2026
+      taxNumber: resolvedTaxNumber, // POPRAVLJENO 29.7.2026
       premiseId: premise?.premise_id ?? '',
       deviceId: device?.device_id ?? 'RACUNKO01',
       privateKeyPem,
