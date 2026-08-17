@@ -1,3 +1,9 @@
+// POPRAVLJENO (17.8.2026): escapeHtml se je v tej datoteki na treh mestih
+// UPORABLJAL, a ni bil nikoli uvozen (dodano ob preletu za ubezanje HTML, uvoz
+// pozabljen). Posledica: ReferenceError pri gradnji e-poste z racunom - torej
+// pri posiljanju racuna stranki, pri Stripe webhooku in pri obrocnih racunih.
+import { escapeHtml } from '@/lib/html-escape'
+
 interface Props {
   orgName: string
   invoiceNumber: string

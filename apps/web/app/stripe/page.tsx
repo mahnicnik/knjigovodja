@@ -41,6 +41,11 @@ export default function StripePage() {
     // PREDNOSTNO preberemo od tam, da obe strani prikazujeta ISTO stanje.
     const { data: integ } = await supabase.from('integrations').select('webhook_secret').eq('org_id', o.id).eq('type', 'stripe').maybeSingle()
     const effectiveWebhookSecret = integ?.webhook_secret || s?.webhook_secret
+    // POPRAVLJENO (17.8.2026): spodaj se je na 4 mestih uporabljal `zadnji4`, ki
+    // pa nikoli ni bil definiran - stran Stripe nastavitev se je zato ob vsakem
+    // odpiranju sesula (ReferenceError). Namen je ocitno prikaz zadnjih stirih
+    // znakov skrivnosti za preverjanje, brez razkritja cele vrednosti.
+    const zadnji4 = effectiveWebhookSecret ? String(effectiveWebhookSecret).slice(-4) : ''
     if (s) {
       setSettings(s)
       setForm({

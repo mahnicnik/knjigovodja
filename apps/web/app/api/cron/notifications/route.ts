@@ -29,6 +29,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ message: 'No businesses found', sent: 0 })
     }
 
+    // DODANO (17.8.2026): zemljevid podatkov o podjetju/organizaciji po business_id.
+    // Razdelek 2 spodaj (predracuni za podaljsanje) je v e-postni predlogi
+    // uporabljal `biz` in `orgForBiz`, ceprav se zanka po podjetjih tam ze zakljuci
+    // - kar je pomenilo ReferenceError in sesut cron ob vsakem podaljsanju.
+    // Zdaj si kontekst shranimo tukaj in ga spodaj poiscemo po stranki.
+    const bizContext = new Map<string, { biz: any; org: any }>()
+
     for (const biz of businesses) {
       // POPRAVLJENO (30.7.2026, audit K10): naloži PRAVE podatke
       // organizacije - prej trdo kodiran (nicelni!) IBAN in Nikovi
@@ -49,6 +56,8 @@ export async function GET(req: NextRequest) {
           orgForBiz = o
         }
       }
+
+      bizContext.set(biz.id, { biz, org: orgForBiz })
 
       // 2. Generiraj notifikacije za ta business
       await supabase.rpc('generate_pos_notifications', { p_business_id: biz.id })
@@ -160,7 +169,7 @@ export async function GET(req: NextRequest) {
       .from('customer_packages')
       .select(`
         id, name, expires, remaining, total, purchase_price,
-        customers (id, name, email, notification_email),
+        customers (id, name, email, notification_email, business_id),
         package_templates (id, name, price, validity_days, auto_renew, notify_before_days, recurring)
       `)
       .eq('active', true)
@@ -170,6 +179,16 @@ export async function GET(req: NextRequest) {
     for (const pkg of (expiringPkgs || [])) {
       const tmpl = pkg.package_templates as any
       const cust = pkg.customers as any
+
+      // DODANO (17.8.2026): poisci podjetje/organizacijo te stranke (glej
+      // bizContext zgoraj). Brez tega sta `biz` in `orgForBiz` spodaj
+      // nedefinirana in cron se sesuje.
+      const ctx = cust?.business_id ? bizContext.get(cust.business_id) : undefined
+      const biz = ctx?.biz
+      const orgForBiz = ctx?.org
+      // Brez podatkov o podjetju ne moremo sestaviti verodostojne e-poste
+      // (ime izdajatelja, IBAN) - raje preskocimo, kot da posljemo prazno.
+      if (!biz) continue
 
       // Preskoči če ni recurring ali auto_renew
       if (!tmpl?.recurring && !tmpl?.auto_renew) continue

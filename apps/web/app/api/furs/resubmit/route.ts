@@ -10,7 +10,10 @@ export const maxDuration = 300 // dolg zaporeden postopek
 
 const ORG_ID = '1d406efe-58d0-4573-8679-d9f666fce964'
 
-async function assertOwner() {
+// POPRAVLJENO (17.8.2026): funkcija je uporabljala `req`, a ga ni prejela kot
+// parameter (ReferenceError ob vsakem klicu -> ponovna oddaja na FURS je bila
+// popolnoma nedelujoca). Zdaj ga prejme od klicatelja.
+async function assertOwner(req: NextRequest) {
   const cookieStore = await cookies()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -36,7 +39,7 @@ async function assertOwner() {
  * - dryRun=false: zaporedno posiljanje s porocilom; pravi EOR se zapise v payments
  */
 export async function POST(req: NextRequest) {
-  const user = await assertOwner()
+  const user = await assertOwner(req)
   if (!user) return NextResponse.json({ error: 'Ni dostopa' }, { status: 401 })
 
   const body = await req.json().catch(() => ({}))

@@ -138,8 +138,15 @@ export default function RacunovodjaPortal() {
     </AppLayout>
   )
 
+  // POPRAVLJENO (17.8.2026): spodaj je bilo `<AppLayout org={org}>`, a `org` v tej
+  // komponenti sploh ne obstaja - edini `org` je parameter znotraj .map() zgoraj,
+  // ki je tukaj izven dosega. Posledica: ReferenceError ob izrisu ("Application
+  // error: a client-side exception has occurred") za VSAKEGA racunovodjo, saj ga
+  // middleware ob vsakem kliku preusmeri prav sem. Build tega ni ujel, ker ima
+  // next.config `typescript: { ignoreBuildErrors: true }`.
+  // org je v AppLayout neobvezen (org?: any), zato ga preprosto izpustimo.
   return (
-    <AppLayout org={org}>
+    <AppLayout>
     <div style={{ minHeight: '100vh', background: '#F7F6F2' }}>
 
       {/* HEADER */}
@@ -151,8 +158,8 @@ export default function RacunovodjaPortal() {
               <div style={{ fontSize: 20, color: '#fff', fontWeight: 500, marginTop: 4 }}>Dobrodošli, {userName}</div>
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
-              <Link href="/dashboard" style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)', padding: '8px 16px', borderRadius: 8, fontSize: 13, textDecoration: 'none' }}>
-                Moj račun
+              <Link href="/izvoz" style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)', padding: '8px 16px', borderRadius: 8, fontSize: 13, textDecoration: 'none' }}>
+                Izvoz podatkov
               </Link>
             </div>
           </div>

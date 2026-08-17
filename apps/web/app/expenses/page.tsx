@@ -125,7 +125,10 @@ export default function ExpensesPage() {
     setShowForm(false)
     setEditingId(null)
     setSaving(false)
-    load()
+    // POPRAVLJENO (17.8.2026): tu je bilo `load()`, funkcija s tem imenom pa ne
+    // obstaja - prava se imenuje loadExpenses(). Po brisanju stroska se je stran
+    // sesula (ReferenceError) namesto da bi osvezila seznam.
+    loadExpenses()
   }
 
   async function handleSave() {

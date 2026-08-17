@@ -16,21 +16,15 @@ import { createServerClient } from '@supabase/ssr'
  * vsaka posamezna stran to sama preverila (kar se je izkazalo za nezanesljivo).
  */
 
-// Predpone poti, ki jih sme obiskati posamezna vloga.
-// Poti, ki niso navedene za nobeno vlogo spodaj, so na voljo VSEM prijavljenim
-// (npr. /dashboard, /profil) - belezimo samo OMEJITVE za obcutljive vloge.
-const ROLE_ALLOWED_PREFIXES: Record<string, string[]> = {
-  accountant: ['/racunovodja', '/izvoz', '/invite', '/profil', '/dashboard'],
-  cashier: ['/pos', '/invite', '/profil', '/dashboard'],
-  viewer: ['/racunovodja', '/izvoz', '/pos', '/invite', '/profil', '/dashboard'],
-}
-
-// Kam preusmeriti vlogo, ce poskusa dostopati do poti, ki ji ni dovoljena.
-const ROLE_HOME: Record<string, string> = {
-  accountant: '/racunovodja',
-  cashier: '/pos',
-  viewer: '/racunovodja',
-}
+// SPREMENJENO (Prelet 18, 17.8.2026): definicije so se preselile v
+// lib/role-access.ts, da jih lahko uporablja tudi stranski meni (AppLayout).
+// Prej je meni prikazoval VSE povezave tudi racunovodji, ki pa ga je klik
+// vrgel nazaj sem - aplikacija je delovala kot pokvarjena.
+//
+// Hkrati je bil odstranjen '/dashboard' iz seznama za accountant/cashier:
+// dashboard je lastnikov pregled poslovanja, racunovodja ima svoj portal
+// na /racunovodja.
+import { ROLE_ALLOWED_PREFIXES, ROLE_HOME } from '@/lib/role-access'
 
 // Poti, ki jih middleware sploh ne preverja (javne strani, staticne datoteke, auth).
 const PUBLIC_PREFIXES = [
@@ -81,17 +75,26 @@ export async function middleware(req: NextRequest) {
   // izognemo podvajanju logike prijave).
   if (!user) return res
 
-  const { data: member } = await supabase
+  // POPRAVLJENO (Prelet 18, 17.8.2026): tu je bil `.maybeSingle()`, ki ob VEC
+  // clanstvih (racunovodja z dvema strankama - tocno primer, za katerega ta
+  // vloga obstaja) vrne napako, ne prve vrstice. `member` je bil takrat null,
+  // `role` undefined in middleware je vrnil `res` BREZ VSAKRSNE OMEJITVE -
+  // torej ravno v primeru, ko so omejitve najbolj potrebne, jih ni bilo.
+  const { data: members } = await supabase
     .from('org_members')
     .select('role')
     .eq('user_id', user.id)
-    .maybeSingle()
 
-  const role = member?.role
-  if (!role) return res // ni clan organizacije - naj to obravnava sama stran
+  const roles = (members ?? []).map((m: any) => m.role).filter(Boolean)
+  if (roles.length === 0) return res // ni clan organizacije - naj to obravnava sama stran
 
+  // Ce je uporabnik nekje lastnik/admin, ima poln dostop (svoje podjetje) -
+  // omejimo samo, kadar so VSA clanstva omejenih vlog.
+  const hasUnrestricted = roles.some((r: string) => !ROLE_ALLOWED_PREFIXES[r])
+  if (hasUnrestricted) return res
+
+  const role = roles[0]
   const allowed = ROLE_ALLOWED_PREFIXES[role]
-  if (!allowed) return res // vloga (owner/admin) brez omejitev
 
   const isAllowed = allowed.some((p) => pathname.startsWith(p))
   if (isAllowed) return res

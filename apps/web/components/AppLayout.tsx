@@ -3,6 +3,8 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { getActiveMembership } from '@/lib/active-org'
+import { isPathAllowedForRole } from '@/lib/role-access'
 import { useEffect, useRef, useState } from 'react'
 
 const NAV_DEFAULT = [
@@ -49,6 +51,14 @@ const NAV_DEFAULT = [
     { href: '/pos', icon: 'ti-building-store', label: 'POS blagajna' },
     { href: '/eslog',    icon: 'ti-file-invoice',   label: 'e-Račun' },
   ]},
+  // DODANO (Prelet 18, 17.8.2026): te poti prej sploh niso bile v meniju,
+  // ceprav sta /racunovodja in /izvoz edini strani, do katerih ima vloga
+  // "accountant" dostop. Ob filtriranju menija po vlogi bi racunovodja
+  // drugace ostal s praznim menijem.
+  { label: 'Računovodstvo', items: [
+    { href: '/racunovodja', icon: 'ti-briefcase',   label: 'Portal strank' },
+    { href: '/izvoz',       icon: 'ti-file-export', label: 'Izvoz podatkov' },
+  ]},
 ]
 
 const QA_DEFAULT = [
@@ -89,6 +99,10 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
 
   const [orgData, setOrgData] = useState<any>(org || null)
   const [userId, setUserId] = useState<string | null>(null)
+  // DODANO (Prelet 18, 17.8.2026): vloga prijavljenega, da meni ne prikazuje
+  // povezav, do katerih ta vloga nima dostopa (racunovodja je prej videl CEL
+  // lastnikov meni, klik pa ga je vrgel nazaj na /racunovodja).
+  const [role, setRole] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -116,12 +130,17 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
       if (!user) return
       setUserId(user.id)
 
+      // POPRAVLJENO (Prelet 18, 17.8.2026): tu je bil `.single()` na org_members,
+      // ki ob VEC clanstvih vrne napako namesto prve vrstice. Racunovodja z
+      // dvema strankama je zato dobil member=null in bil PREUSMERJEN NA
+      // /onboarding, kot da sploh ni clan nobene organizacije.
+      // getActiveMembership() to obravnava pravilno (glej lib/active-org.ts).
+      const membership = await getActiveMembership()
+      setRole(membership?.role ?? null)
+
       if (!org) {
-        const { data: member } = await supabase
-          .from('org_members').select('organizations(*)')
-          .eq('user_id', user.id).single()
-        if (member) {
-          setOrgData((member as any).organizations)
+        if (membership) {
+          setOrgData(membership.organizations)
         } else {
           const path = window.location.pathname
           if (!path.startsWith('/onboarding') && !path.startsWith('/login') && !path.startsWith('/register')) {
@@ -133,7 +152,7 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
 
       const { data: prefs } = await supabase
         .from('user_preferences').select('*')
-        .eq('user_id', user.id).single()
+        .eq('user_id', user.id).maybeSingle()
 
       if (prefs) {
         if (Array.isArray(prefs.nav_hidden)) setHiddenHrefs(new Set(prefs.nav_hidden))
@@ -167,13 +186,31 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
     ? orgData.name.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()
     : 'SP'
 
-  const orderedNav: NavSection[] = sectionOrder
+  // SPREMENJENO (Prelet 18, 17.8.2026): meni se filtrira po vlogi. Prej je
+  // racunovodja videl vse povezave (Blagajna, Nastavitve, Place...), klik pa ga
+  // je vrgel nazaj na /racunovodja - videti je bilo kot pokvarjena aplikacija.
+  // Sekcije, ki po filtriranju ostanejo prazne, se sploh ne prikazejo.
+  // Shranjen vrstni red (user_preferences.nav_order) ne pozna sekcij, dodanih
+  // po tem, ko ga je uporabnik shranil - zato manjkajoce pripnemo na konec,
+  // sicer bi bile za obstojece uporabnike nevidne.
+  const effectiveSectionOrder = [
+    ...sectionOrder,
+    ...NAV_DEFAULT.map(s => s.label).filter(l => !sectionOrder.includes(l)),
+  ]
+
+  const orderedNav: NavSection[] = effectiveSectionOrder
     .map(label => NAV_DEFAULT.find(s => s.label === label))
-    .filter(Boolean) as NavSection[]
+    .filter(Boolean)
+    .map(section => ({
+      ...(section as NavSection),
+      items: (section as NavSection).items.filter(item => isPathAllowedForRole(item.href, role)),
+    }))
+    .filter(section => section.items.length > 0) as NavSection[]
 
   const qaItems = qaHrefs
     .map(href => QA_DEFAULT.find(q => q.href === href))
-    .filter(Boolean) as NavItem[]
+    .filter(Boolean)
+    .filter(item => isPathAllowedForRole((item as NavItem).href, role)) as NavItem[]
 
   function handleSectionDragStart(idx: number) { dragItem.current = { type: 'section', index: idx } }
   function handleSectionDragOver(e: React.DragEvent, idx: number) { e.preventDefault(); dragOver.current = idx }

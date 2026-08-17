@@ -62,23 +62,29 @@ export default function ZalogePage() {
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3500) }
 
-  useEffect(() => {
-    async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
-      const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
-      if (!member) return
-      setOrgId(member.org_id)
+  // POPRAVLJENO (17.8.2026): `load` je bil prej definiran ZNOTRAJ useEffect, zato
+  // ga deleteItem() ni videl - po brisanju artikla se je stran sesula
+  // (ReferenceError: load is not defined) namesto da bi osvezila seznam.
+  // Zdaj je na ravni komponente in dosegljiv od vsepovsod.
+  async function load() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { router.push('/login'); return }
+    const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
+    if (!member) return
+    setOrgId(member.org_id)
 
-      const [itemRes, movRes] = await Promise.all([
-        supabase.from('inventory_items').select('*').eq('org_id', member.org_id).order('name'),
-        supabase.from('inventory_movements').select('*').eq('org_id', member.org_id).order('created_at', { ascending: false }).limit(100),
-      ])
-      setItems(itemRes.data ?? [])
-      setMovements(movRes.data ?? [])
-      setLoading(false)
-    }
+    const [itemRes, movRes] = await Promise.all([
+      supabase.from('inventory_items').select('*').eq('org_id', member.org_id).order('name'),
+      supabase.from('inventory_movements').select('*').eq('org_id', member.org_id).order('created_at', { ascending: false }).limit(100),
+    ])
+    setItems(itemRes.data ?? [])
+    setMovements(movRes.data ?? [])
+    setLoading(false)
+  }
+
+  useEffect(() => {
     load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, supabase])
 
   // DODANO (11.8.2026): manjkala je moznost brisanja artikla - uporabnik
