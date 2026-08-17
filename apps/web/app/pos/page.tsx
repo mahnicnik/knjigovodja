@@ -5671,8 +5671,12 @@ function TableActionsModal({ activeTable, posData, auth, onClose, onDone }) {
       if (!source) throw new Error('Izbrana miza nima odprtega naročila')
       const { error: err } = await db.from('order_lines').update({ order_id: current.id }).eq('order_id', source.id)
       if (err) throw err
-      await db.from('orders').update({ status: 'cancelled' }).eq('id', source.id)
-      await db.from('tables').update({ status: 'free' }).eq('id', sourceTableId)
+      // POPRAVLJENO (17.8.2026): prej brez preverbe - ce se izvorno narocilo ne
+      // zapre, ostane na mizi "duh" z vrsticami, ki so ze na drugi mizi.
+      const { error: srcErr } = await db.from('orders').update({ status: 'cancelled' }).eq('id', source.id)
+      if (srcErr) throw new Error('Izvornega računa ni bilo mogoče zapreti: ' + srcErr.message)
+      const { error: tblErr } = await db.from('tables').update({ status: 'free' }).eq('id', sourceTableId)
+      if (tblErr) console.warn('Mize ni bilo mogoce sprostiti:', tblErr)
       onDone()
       onClose()
     } catch (e: any) { setError(e.message || 'Napaka') }

@@ -261,6 +261,9 @@ export default function ScanPage() {
   // Zaporedno (NE vzporedno - da ne preobremeni AI klicev) obdela vse
   // datoteke v paketu: skeniraj -> ce uspesno prepoznano, SAMODEJNO shrani.
   async function processBatch() {
+    // DODANO (17.8.2026): zbiranje napak pri paketnem skeniranju - prej so
+    // posamezni neuspesni racuni ostali neopazeni.
+    const napake: string[] = []
     if (!org) return
     setBatchProcessing(true)
     const maxPdfBytes = 4 * 1024 * 1024 // isti limit kot pri enojnem nalaganju
@@ -292,7 +295,10 @@ export default function ScanPage() {
         const receiptDate = data.date || new Date().toISOString().split('T')[0]
         const category = data.category || 'Drugo'
 
-        await supabase.from('receipts').insert({
+        // POPRAVLJENO (17.8.2026): prej brez preverbe - pri paketnem skeniranju
+        // je posamezen neuspesen racun ostal neopazen, uporabnik pa je videl,
+        // da so vsi uvozeni.
+        const { error: rcpErr2 } = await supabase.from('receipts').insert({
           org_id: org.id,
           vendor: data.vendor,
           receipt_date: receiptDate,
@@ -307,7 +313,8 @@ export default function ScanPage() {
           attachment_base64: base64,
           attachment_type: 'pdf',
         })
-        await supabase.from('kpo_entries').insert({
+        if (rcpErr2) { console.error('Računa ni bilo mogoče shraniti:', rcpErr2); napake.push('Računa ni bilo mogoče shraniti: ' + rcpErr2.message); continue }
+        const { error: kpoErr3 } = await supabase.from('kpo_entries').insert({
           org_id: org.id,
           entry_date: receiptDate,
           description: `${data.vendor} — ${category}`,
@@ -318,11 +325,15 @@ export default function ScanPage() {
           vat_out: 0,
           category,
         })
+        if (kpoErr3) { console.error('Vnosa v knjigo ni bilo mogoče shraniti:', kpoErr3); napake.push('Vnosa v knjigo ni bilo mogoče shraniti: ' + kpoErr3.message); continue }
         posthog.capture('receipt_saved', { category, amount_net: amountNet, amount_total: amountTotal, vat_rate: vatRate, ai_scanned: true, batch: true })
         setBatchFiles(prev => prev.map((f, idx) => idx === i ? { ...f, status: 'saved', vendor: data.vendor, amount: amountTotal } : f))
       } catch (err: any) {
         setBatchFiles(prev => prev.map((f, idx) => idx === i ? { ...f, status: 'error', error: err.message || 'Neznana napaka' } : f))
       }
+    }
+    if (napake.length > 0) {
+      alert(`${napake.length} računov ni bilo mogoče shraniti:\n\n${napake.slice(0,6).join('\n')}${napake.length > 6 ? `\n… in še ${napake.length - 6}` : ''}\n\nTe vnesite ročno.`)
     }
     setBatchProcessing(false)
   }

@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
       throw new Error(`Napaka pri ustvarjanju testnega računa: ${invErr?.message}`)
     }
 
-    await supabase.from('kpo_entries').insert({
+    const { error: simKpoErr } = await supabase.from('kpo_entries').insert({
       org_id: orgId,
       entry_date: issueDate,
       description: `🧪 Simulacija — ${customerName}`,
@@ -155,6 +155,7 @@ export async function POST(req: NextRequest) {
       category: 'spletna_prodaja',
       notes: 'Simuliran vnos (Računko sandbox) — ni pravo plačilo',
     })
+    if (simKpoErr) console.error('Simulacija: vnosa v knjigo ni bilo mogoce shraniti:', simKpoErr)
 
     // ── FURS potrditev (uporabi demo nacin, ce je vklopljen) ──
     let fursResult: Awaited<ReturnType<typeof confirmIssuedInvoiceWithFurs>> | null = null

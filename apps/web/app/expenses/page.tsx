@@ -185,10 +185,12 @@ export default function ExpensesPage() {
         if (kpoUpdErr) throw new Error('Vnosa v knjigi ni bilo mogoče posodobiti: ' + kpoUpdErr.message)
       } else {
         // Star vnos brez povezave (pred tem popravkom) - ustvari novega
-        await supabase.from('kpo_entries').insert(kpoPayload)
+        const { error: kpoNovErr } = await supabase.from('kpo_entries').insert(kpoPayload)
+        if (kpoNovErr) throw new Error('Vnosa v knjigo ni bilo mogoče shraniti: ' + kpoNovErr.message)
       }
     } else {
-      await supabase.from('kpo_entries').insert(kpoPayload)
+      const { error: kpoErr2 } = await supabase.from('kpo_entries').insert(kpoPayload)
+      if (kpoErr2) throw new Error('Vnosa v knjigo ni bilo mogoče shraniti: ' + kpoErr2.message)
     }
 
     posthog.capture('expense_added', {

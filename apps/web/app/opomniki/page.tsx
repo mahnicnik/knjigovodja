@@ -224,7 +224,9 @@ ${org.phone || ''}`
   }
 
   async function markAsPaid(invId: string) {
-    await supabase.from('issued_invoices')
+    // POPRAVLJENO (17.8.2026): prej brez preverbe - racun je ostal neplacan,
+    // z zaslona pa je izginil, ker se seznam osvezi ne glede na izid.
+    const { error: paidErr } = await supabase.from('issued_invoices')
       .update({ status: 'paid', paid_at: new Date().toISOString() })
       .eq('id', invId)
     load()
