@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { escapeHtml } from '@/lib/html-escape'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { SP_MIN_CONTRIBUTIONS_YEAR, EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS } from '@/lib/tax-constants'
@@ -215,7 +216,7 @@ export default function LentniPregledPage() {
 <body>
 
 <h1>LETNI PREGLED ${selectedYear}</h1>
-<div class="sub">${org.name} · Davčna številka: ${org.tax_number} · ${org.vat_registered ? `ID za DDV: SI${org.tax_number}` : 'Ni DDV zavezanec'} · Pripravljeno: ${new Date().toLocaleDateString('sl-SI')}</div>
+<div class="sub">${escapeHtml(org.name)} · Davčna številka: ${org.tax_number} · ${org.vat_registered ? `ID za DDV: SI${org.tax_number}` : 'Ni DDV zavezanec'} · Pripravljeno: ${new Date().toLocaleDateString('sl-SI')}</div>
 
 <div class="summary-grid">
   <div class="s-box"><div class="s-title">Letni prihodki</div><div class="s-val green">€${data.totalRevenue.toFixed(2)}</div></div>
@@ -295,7 +296,7 @@ ${data.invoices.length > 0 ? `
       <tr>
         <td>${new Date(inv.issue_date).toLocaleDateString('sl-SI')}</td>
         <td>${inv.invoice_number}</td>
-        <td>${inv.client_name}</td>
+        <td>${escapeHtml(inv.client_name)}</td>
         <td class="r">€${Number(inv.amount_net).toFixed(2)}</td>
         <td class="r">€${Number(inv.vat_amount).toFixed(2)}</td>
         <td class="r">€${Number(inv.amount_total).toFixed(2)}</td>
@@ -321,7 +322,7 @@ ${data.receipts.length > 0 ? `
     ${data.receipts.map((r: any) => `
       <tr>
         <td>${(r.receipt_date ? (r.receipt_date ? (r.receipt_date ? new Date(r.receipt_date).toLocaleDateString('sl-SI') : '—') : '—') : '—')}</td>
-        <td>${r.vendor}</td>
+        <td>${escapeHtml(r.vendor)}</td>
         <td>${r.category || '—'}</td>
         <td class="r">€${Number(r.amount_net).toFixed(2)}</td>
         <td class="r">€${Number(r.vat_amount).toFixed(2)}</td>
@@ -339,7 +340,7 @@ ${data.receipts.length > 0 ? `
 ` : ''}
 
 <div class="footer">
-  Letni pregled ${selectedYear} · ${org.name} · Generirano z Računko · ${new Date().toLocaleString('sl-SI')}
+  Letni pregled ${selectedYear} · ${escapeHtml(org.name)} · Generirano z Računko · ${new Date().toLocaleString('sl-SI')}
 </div>
 
 <script>window.onload=function(){window.print()}</script>

@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { escapeHtml } from '@/lib/html-escape'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { pos, BUSINESS_ID, resolveBusinessId, imaOsebje, ustvariPrvegaUporabnika } from '@/lib/pos-client'
@@ -1822,20 +1823,20 @@ th{background:#f5f5f5;font-weight:bold}.right{text-align:right}.total-row{font-s
 .stamp{border:2px dashed #999;padding:20px;text-align:center;margin:24px 0;color:#999;font-size:14px}
 </style></head><body>
 <div class="header">
-  <div style="font-size:18px;font-weight:bold">${pp.ime}</div>
-  ${pp.naslov ? `<div>${pp.naslov}</div>` : ''}
+  <div style="font-size:18px;font-weight:bold">${escapeHtml(pp.ime)}</div>
+  ${pp.naslov ? `<div>${escapeHtml(pp.naslov)}</div>` : ''}
 </div>
 <div style="display:flex;justify-content:space-between;margin-bottom:16px">
   <div><div class="title">PREDRACUN</div><div>St. ${num}</div></div>
   <div style="text-align:right"><div>Datum: ${new Date().toLocaleDateString('sl-SI')}</div>${label !== 'Predracun' ? '<div>Miza: '+label+'</div>' : ''}</div>
 </div>
 <table><thead><tr><th>Artikel</th><th class="right">Kol.</th><th class="right">Cena</th><th class="right">Skupaj</th></tr></thead>
-<tbody>${cart.map((l:any) => `<tr><td>${l.name}</td><td class="right">${l.qty}</td><td class="right">${eur2(Number(l.price))}</td><td class="right">${eur2(Number(l.price)*Number(l.qty))}</td></tr>`).join('')}
+<tbody>${cart.map((l:any) => `<tr><td>${escapeHtml(l.name)}</td><td class="right">${l.qty}</td><td class="right">${eur2(Number(l.price))}</td><td class="right">${eur2(Number(l.price)*Number(l.qty))}</td></tr>`).join('')}
 </tbody></table>
 ${cartDiscount > 0 ? `<div style="text-align:right;color:#666">Popust ${cartDiscount}%: -${eur2(totals.total-total)}</div>` : ''}
 <div class="total-row" style="text-align:right;font-size:18px;margin:12px 0">SKUPAJ: ${eur2(total)}</div>
 <div class="stamp">Predracun ni davčno potrjen. Velja do: ${new Date(Date.now()+7*86400000).toLocaleDateString('sl-SI')}</div>
-<div class="footer">${pp.ime} · www.racunko.si<br>Predracun izdan s sistemom RACUNKO</div>
+<div class="footer">${escapeHtml(pp.ime)} · www.racunko.si<br>Predracun izdan s sistemom RACUNKO</div>
 <script>window.addEventListener('load',function(){setTimeout(function(){window.print()},300)})</script>
 </body></html>`
           const w = window.open('','_blank','width=800,height=900')
@@ -1885,8 +1886,8 @@ ${cartDiscount > 0 ? `<div style="text-align:right;color:#666">Popust ${cartDisc
                 const recipientHtml = r.name ? `
                   <div style="border:1px solid #ddd;padding:14px;border-radius:6px;margin-bottom:16px">
                     <div style="font-size:11px;color:#999;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.06em">PREJEMNIK</div>
-                    <div style="font-weight:bold;font-size:14px">${r.name}</div>
-                    ${r.address ? `<div>${r.address}</div>` : ''}
+                    <div style="font-weight:bold;font-size:14px">${escapeHtml(r.name)}</div>
+                    ${r.address ? `<div>${escapeHtml(r.address)}</div>` : ''}
                     ${r.tax_number ? `<div>Davčna: ${r.tax_number}</div>` : ''}
                     ${r.vat_id ? `<div>ID DDV: ${r.vat_id}</div>` : ''}
                   </div>` : ''
@@ -1899,8 +1900,8 @@ th{background:#f5f5f5;font-weight:bold}.right{text-align:right}
 </style></head><body>
 <div style="display:flex;justify-content:space-between;margin-bottom:24px;border-bottom:2px solid #000;padding-bottom:16px">
   <div>
-    <div style="font-size:20px;font-weight:bold">${pp.ime}</div>
-    ${pp.naslov ? `<div style="color:#666">${pp.naslov}</div>` : ''}
+    <div style="font-size:20px;font-weight:bold">${escapeHtml(pp.ime)}</div>
+    ${pp.naslov ? `<div style="color:#666">${escapeHtml(pp.naslov)}</div>` : ''}
     <div style="color:#666">www.racunko.si</div>
   </div>
   <div style="text-align:right">
@@ -1913,7 +1914,7 @@ th{background:#f5f5f5;font-weight:bold}.right{text-align:right}
 </div>
 ${recipientHtml}
 <table><thead><tr><th>Artikel</th><th class="right">Kol.</th><th class="right">Cena/kos</th><th class="right">DDV%</th><th class="right">Skupaj</th></tr></thead>
-<tbody>${cart.map((l:any) => `<tr><td>${l.name}</td><td class="right">${l.qty}</td><td class="right">${eur2(Number(l.price))}</td><td class="right">${l.vat_rate||22}%</td><td class="right">${eur2(Number(l.price)*Number(l.qty))}</td></tr>`).join('')}
+<tbody>${cart.map((l:any) => `<tr><td>${escapeHtml(l.name)}</td><td class="right">${l.qty}</td><td class="right">${eur2(Number(l.price))}</td><td class="right">${l.vat_rate||22}%</td><td class="right">${eur2(Number(l.price)*Number(l.qty))}</td></tr>`).join('')}
 </tbody></table>
 <div style="display:flex;justify-content:flex-end">
   <div style="min-width:280px">
@@ -1924,7 +1925,7 @@ ${recipientHtml}
   </div>
 </div>
 <div class="stamp">Ta predračun ni davčno potrjen račun.<br>Po plačilu izstavimo uradni davčni račun.</div>
-<div class="footer">${pp.ime}${pp.davcna ? ' · Davčna: ' + pp.davcna : ''}<br>Izdano s sistemom RAČUNKO · www.racunko.si</div>
+<div class="footer">${escapeHtml(pp.ime)}${pp.davcna ? ' · Davčna: ' + pp.davcna : ''}<br>Izdano s sistemom RAČUNKO · www.racunko.si</div>
 <script>window.addEventListener('load',function(){setTimeout(function(){window.print()},300)})</script>
 </body></html>`
                 const w = window.open('','_blank','width=820,height=960')
@@ -2711,7 +2712,7 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
                   ${data.duration_min ? ` · ${data.duration_min} min` : ''}
                 </div>
                 <p>V primeru odpovedi nas prosimo obvestite vsaj 24 ur vnaprej.</p>
-                <p>Lep pozdrav,<br/><b>${pp.ime}</b></p>
+                <p>Lep pozdrav,<br/><b>${escapeHtml(pp.ime)}</b></p>
               </div>`
             })
           }).catch(()=>{})
@@ -3376,7 +3377,7 @@ function BulkEmailModal({ customers, onClose, posData }) {
               <h2 style="color:#0d2818">${subject}</h2>
               <div style="font-size:15px;line-height:1.7;color:#444">${body.split(String.fromCharCode(10)).join('<br/>')}</div>
               <hr style="margin:24px 0;border-color:#e5e1d8"/>
-              <p style="font-size:12px;color:#999">${pp.ime}${pp.naslov ? ' · ' + pp.naslov : ''}</p>
+              <p style="font-size:12px;color:#999">${escapeHtml(pp.ime)}${pp.naslov ? ' · ' + pp.naslov : ''}</p>
             </div>`,
           })
         })
@@ -5478,8 +5479,8 @@ function ZReportModal({ posData, onClose }) {
 <head><meta charset="UTF-8"><title>Z-poročilo #${num}</title></head>
 <body style="font-family:monospace;max-width:400px;margin:0 auto;padding:20px;background:#fff;color:#000">
 <div style="text-align:center;border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:16px">
-  <div style="font-size:18px;font-weight:bold">${pp.ime}</div>
-  ${pp.naslov ? `<div style="font-size:12px">${pp.naslov}</div>` : ''}
+  <div style="font-size:18px;font-weight:bold">${escapeHtml(pp.ime)}</div>
+  ${pp.naslov ? `<div style="font-size:12px">${escapeHtml(pp.naslov)}</div>` : ''}
   <div style="font-size:12px">ID: ${new Date().getTime()}</div>
 </div>
 <div style="text-align:center;margin-bottom:16px">
@@ -6162,11 +6163,11 @@ function buildStornoReceiptHTML({ order, lines, payment, org, cashierName, voidE
 <div class="l"></div>
 <div class="r"><span>Storno računa:</span><span class="b">#${order.number || order.id.slice(-6)}</span></div>
 <div class="r"><span>Datum:</span><span>${new Date().toLocaleString('sl-SI')}</span></div>
-<div class="r"><span>Blagajnik:</span><span>${cashierName}</span></div>
-<div class="r"><span>Razlog:</span><span>${reason}</span></div>
+<div class="r"><span>Blagajnik:</span><span>${escapeHtml(cashierName)}</span></div>
+<div class="r"><span>Razlog:</span><span>${escapeHtml(reason)}</span></div>
 <div class="l"></div>
 ${lines.map(l => `
-<div class="r"><span>${l.name}</span><span>-${eur(Number(l.qty)*Number(l.unit_price))}</span></div>
+<div class="r"><span>${escapeHtml(l.name)}</span><span>-${eur(Number(l.qty)*Number(l.unit_price))}</span></div>
 <div class="r s"><span>  ${l.qty} × ${eur(l.unit_price)}</span><span></span></div>
 `).join('')}
 <div class="dl"></div>
@@ -6204,8 +6205,8 @@ function buildRefundReceiptHTML({ order, refundAmount, reason, cashierName }) {
 <div class="l"></div>
 <div class="r"><span>Orig. račun:</span><span class="b">#${order.number || order.id.slice(-6)}</span></div>
 <div class="r"><span>Datum:</span><span>${new Date().toLocaleString('sl-SI')}</span></div>
-<div class="r"><span>Blagajnik:</span><span>${cashierName}</span></div>
-<div class="r"><span>Razlog:</span><span>${reason}</span></div>
+<div class="r"><span>Blagajnik:</span><span>${escapeHtml(cashierName)}</span></div>
+<div class="r"><span>Razlog:</span><span>${escapeHtml(reason)}</span></div>
 <div class="dl"></div>
 <div class="r b" style="font-size:14px"><span>VRAČILO:</span><span style="color:#2563eb">${eur(refundAmount)}</span></div>
 <div class="dl"></div>
@@ -11146,7 +11147,7 @@ function KlasikApp() {
                     <div style={{ fontWeight:800, fontSize:18 }}>€{total.toFixed(2).replace('.',',')}</div>
                   </div>
                   <div style={{ fontSize:12, color:T.muted, marginBottom:10 }}>
-                    {lines.slice(0,3).map((l:any) => `${l.name} ×${l.qty}`).join(', ')}{lines.length>3?'...':''}
+                    {lines.slice(0,3).map((l:any) => `${escapeHtml(l.name)} ×${l.qty}`).join(', ')}{lines.length>3?'...':''}
                   </div>
                   <div style={{ display:'flex', gap:8 }}>
                     <button onClick={async()=>{
@@ -11324,7 +11325,7 @@ function ManualAddCardModal({ customer, posData, onClose, onDone }) {
         expires,
         activated_at: now,
         purchase_price: 0,
-        notes: `[ROCNO BREZ RACUNA] ${reason}`,
+        notes: `[ROCNO BREZ RACUNA] ${escapeHtml(reason)}`,
       })
       if (err) throw err
       onDone()

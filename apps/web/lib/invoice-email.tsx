@@ -54,7 +54,7 @@ export function buildInvoiceEmailHtml({
           <!-- Header -->
           <tr>
             <td style="padding:28px 32px 20px 32px;border-bottom:1px solid #f0f0f0;">
-              <div style="font-size:18px;font-weight:600;color:#0D1F12;">${orgName}</div>
+              <div style="font-size:18px;font-weight:600;color:#0D1F12;">${escapeHtml(orgName)}</div>
               <div style="font-size:13px;color:#888;margin-top:2px;">vam pošilja račun</div>
             </td>
           </tr>
@@ -120,7 +120,7 @@ export function buildInvoiceEmailHtml({
                     <table role="presentation" style="border-collapse:collapse;width:100%;">
                       <tr>
                         <td style="font-size:12px;color:#666;padding-bottom:4px;width:100px;">Prejemnik:</td>
-                        <td style="font-size:12px;color:#0D1F12;font-weight:500;padding-bottom:4px;">${orgName}</td>
+                        <td style="font-size:12px;color:#0D1F12;font-weight:500;padding-bottom:4px;">${escapeHtml(orgName)}</td>
                       </tr>
                       <tr>
                         <td style="font-size:12px;color:#666;padding-bottom:4px;">IBAN:</td>
@@ -170,7 +170,7 @@ export function buildInvoiceEmailHtml({
             <td style="padding:18px 32px 28px 32px;border-top:1px solid #f0f0f0;">
               <div style="font-size:13px;color:#444;line-height:1.6;">
                 Lep pozdrav,<br>
-                <strong style="color:#0D1F12;">${orgName}</strong>
+                <strong style="color:#0D1F12;">${escapeHtml(orgName)}</strong>
               </div>
               <div style="font-size:11px;color:#aaa;margin-top:12px;">
                 V primeru vprašanj odgovorite na ta email.

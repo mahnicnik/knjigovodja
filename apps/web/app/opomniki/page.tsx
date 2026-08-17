@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { escapeHtml } from '@/lib/html-escape'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
@@ -100,7 +101,7 @@ export default function OpomnikPage() {
 
     return `${l.title}
 
-Izdajatelj: ${org.name}
+Izdajatelj: ${escapeHtml(org.name)}
 Davčna številka: ${org.tax_number}
 ${org.address || ''}, ${org.post_code || ''} ${org.city || ''}
 
@@ -138,7 +139,7 @@ Znesek: €${total.toFixed(2)}
 V primeru že izvedenega plačila prosimo, da sporočilo prezrete.
 
 S spoštovanjem,
-${org.name}
+${escapeHtml(org.name)}
 ${org.email || ''}
 ${org.phone || ''}`
   }
@@ -170,7 +171,7 @@ ${org.phone || ''}`
 <body>
 <div class="header">
   <div>
-    <div class="company">${org.name}</div>
+    <div class="company">${escapeHtml(org.name)}</div>
     <div class="company-info">
       ${org.address || ''}<br>
       ${org.post_code || ''} ${org.city || ''}<br>
@@ -210,7 +211,7 @@ ${org.phone || ''}`
 </div>
 
 <div class="footer">
-  ${org.name} · ${org.email || ''} · ${org.phone || ''}<br>
+  ${escapeHtml(org.name)} · ${org.email || ''} · ${org.phone || ''}<br>
   Zamudne obresti obračunane po zakonski stopnji TOM+8% (ZOR člen 277)
 </div>
 <script>window.onload=function(){window.print()}</script>
