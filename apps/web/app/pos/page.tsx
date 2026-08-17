@@ -882,11 +882,21 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
       // Racun je vseeno izdan (denar je prejet), zato ne ustavljamo prodaje;
       // opozorimo pa, da ga je treba naknadno potrditi.
       if (furs && fursNapaka) {
+        // POPRAVLJENO (17.8.2026): locimo, ali je racun sploh nastal. Ce klic
+        // pade PRED dodelitvijo stevilke, racuna ni in navodilo o naknadni
+        // potrditvi je zavajajoce - blagajnik bi iskal zapis, ki ne obstaja.
+        const racunObstaja = !!fursInvoiceNumber
         alert(
-          'Račun je izdan, DAVČNO POTRJEVANJE pa NI uspelo.\n\n' +
-          'Razlog: ' + fursNapaka + '\n\n' +
-          'Račun je treba potrditi v dveh delovnih dneh. To storite prek zvonca ' +
-          'v glavi blagajne — gumb "Pošlji v potrditev".'
+          racunObstaja
+            ? 'Račun ' + fursInvoiceNumber + ' je izdan, DAVČNO POTRJEVANJE pa NI uspelo.\n\n' +
+              'Razlog: ' + fursNapaka + '\n\n' +
+              'Potrdite ga prek zvonca v glavi blagajne — gumb "Pošlji v potrditev". ' +
+              'Po zakonu v dveh delovnih dneh.'
+            : 'Račun NI bil izdan.\n\n' +
+              'Razlog: ' + fursNapaka + '\n\n' +
+              'Davčno potrjevanje ni uspelo že pred dodelitvijo številke računa, ' +
+              'zato račun ni nastal in zaporedna številka ni bila porabljena. ' +
+              'Prodajo ponovite.'
         )
       }
 
@@ -1202,8 +1212,30 @@ function ReceiptToast({ data, onClose }) {
           </div>
         )}
         {fursFailed && (
-          <div style={{ fontSize:12, color:T.danger, marginTop:8, background:'rgba(168,50,50,0.08)', padding:'8px 12px', borderRadius:8 }}>
-            ⚠️ FURS potrjevanje ni uspelo. Racun je shranjen, potrdi ga rocno v zavihku Racuni.
+          /* POPRAVLJENO (17.8.2026): prej je pisalo "Racun je shranjen, potrdi
+             ga rocno v zavihku Racuni". To je bilo ZAVAJAJOCE na dva nacina:
+             ce klic pade PRED dodelitvijo stevilke, se racun sploh ne shrani in
+             ga v zavihku Racuni NI - rocna potrditev torej ni mogoca, ker
+             zapisa ni. Blagajnik je iskal nekaj, cesar ni bilo.
+
+             Zdaj locimo dva primera: racun z dodeljeno stevilko RES obstaja in
+             ga je mogoce naknadno potrditi prek zvonca; racun brez stevilke pa
+             ni nastal in prodajo je treba ponoviti. */
+          <div style={{ fontSize:12, color:T.danger, marginTop:8, background:'rgba(168,50,50,0.08)', padding:'10px 12px', borderRadius:8, lineHeight:1.6, textAlign:'left' }}>
+            {data.invoiceNumber && !String(data.invoiceNumber).startsWith('RAC-') ? (
+              <>
+                <b>⚠️ Davčno potrjevanje ni uspelo.</b><br/>
+                Račun je izdan in shranjen. Potrdite ga prek <b>zvonca</b> v glavi
+                blagajne — gumb „Pošlji v potrditev". Po zakonu v dveh delovnih dneh.
+              </>
+            ) : (
+              <>
+                <b>⚠️ Račun NI bil izdan.</b><br/>
+                Davčno potrjevanje ni uspelo že pred dodelitvijo številke, zato
+                račun ni nastal. Prodajo <b>ponovite</b> — zaporedna številka ni
+                bila porabljena.
+              </>
+            )}
           </div>
         )}
         <div style={{ fontSize:13, fontWeight:600, color:T.muted, marginTop:4 }}>{data.invoiceNumber}</div>
