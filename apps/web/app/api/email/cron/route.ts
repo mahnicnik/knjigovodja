@@ -1,3 +1,10 @@
+// UVODNA E-POSTA NOVIM UPORABNIKOM (2. in 5. dan po registraciji)
+//
+// POPRAVLJENO (17.8.2026): ta datoteka je bila v mapi "crom" namesto "cron",
+// zato je nihce ni mogel poklicati - uvodna e-posta se ni NIKOLI poslala.
+// Napacno ime je bilo hkrati v datoteki z urnikom (vrcel.json namesto
+// vercel.json), zato napake ni bilo videti: urnik ni deloval, pot pa tudi ne
+// bi obstajala.
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
@@ -7,8 +14,12 @@ const sb = createClient(
 )
 
 export async function GET(request: NextRequest) {
-  // Preveri secret da ne more kdorkoli klicati tega endpointa
+  // POPRAVLJENO (17.8.2026): sprejmi OBE obliki glave. Vercel poslje
+  // "Authorization: Bearer <skrivnost>", ta endpoint pa je pricakoval samo
+  // lastno glavo "x-cron-secret" - torej ga samodejni zagon ne bi mogel poklicati
+  // niti ce bi bila pot pravilna.
   const secret = request.headers.get('x-cron-secret')
+    || (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
   if (secret !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }

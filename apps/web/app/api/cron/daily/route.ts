@@ -4,6 +4,9 @@ import { GET as emailScanGET } from '@/app/api/email-scan/cron/route'
 import { GET as unfreezeGET } from '../unfreeze-packages/route'
 import { GET as installmentsGET } from '../installments/route'
 import { GET as recurringInvoicesGET } from '../recurring-invoices/route'
+// DODANO (17.8.2026): uvodna e-posta novim uporabnikom. Ta datoteka je bila v
+// mapi "crom" namesto "cron", zato se ni nikoli izvajala.
+import { GET as uvodnaPostaGET } from '@/app/api/email/cron/route'
 
 /**
  * En sam dnevni cron, ki zaporedoma pokliCe vse stiri loceno testirane
@@ -48,6 +51,13 @@ export async function GET(request: NextRequest) {
     results.recurringInvoices = await res.json()
   } catch (e: any) {
     results.recurringInvoices = { error: e.message }
+  }
+
+  try {
+    const res = await uvodnaPostaGET(request)
+    results.uvodnaPosta = await res.json()
+  } catch (e: any) {
+    results.uvodnaPosta = { error: e.message }
   }
 
   return NextResponse.json({ success: true, results })
