@@ -14,29 +14,85 @@ export default function ResetPasswordPage() {
   const supabase = createClient()
 
   useEffect(() => {
-    // POPRAVLJENO (30.7.2026): prej getSession() preveril SAMO, ali
-    // obstaja KATERAKOLI seja - to je vkljucevalo tudi ze prijavljene
-    // uporabnike, ki so obiskali to stran po nesreci (brez pravega
-    // tokena). Zdaj poslusa specificen 'PASSWORD_RECOVERY' dogodek, ki
-    // ga Supabase sprozi SAMO ob obdelavi pravega tokena za ponastavitev.
+    // POPRAVLJENO (18.8.2026): prejsnja razlicica je cakala IZKLJUCNO na dogodek
+    // 'PASSWORD_RECOVERY'. Tega Supabase sprozi samo v starem (implicit) toku z
+    // zetonom v #hash. Ker lib/supabase.ts uporablja createBrowserClient iz
+    // @supabase/ssr, tece PKCE tok: povezava pripelje na ?code=... in odjemalec
+    // sprozi 'SIGNED_IN', nikoli 'PASSWORD_RECOVERY'. Varovalka po 3 sekundah je
+    // zato VEDNO pokazala "Neveljavna ali potekla povezava" - ponastavitev gesla
+    // je bila popolnoma nedelujoca.
+    //
+    // Zdaj podpiramo oba tokova. Ohranjamo tudi prvotni namen popravka z dne
+    // 30.7.2026: ne zadostuje katerakoli seja - v naslovu mora biti dokazilo o
+    // ponastavitvi (?code= ali #type=recovery), sicer stran zavrnemo.
     let resolved = false
-    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
+    let odjava: (() => void) | null = null
+
+    async function pripravi() {
+      const url = new URL(window.location.href)
+      const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+
+      // Supabase lahko vrne napako ze v naslovu (npr. potekla povezava).
+      const napakaVUrl = url.searchParams.get('error_description') || hash.get('error_description')
+      if (napakaVUrl) {
+        setError(decodeURIComponent(napakaVUrl))
+        return
+      }
+
+      const koda = url.searchParams.get('code')
+      const jeRecovery = hash.get('type') === 'recovery' || !!hash.get('access_token')
+
+      if (!koda && !jeRecovery) {
+        setError('Neveljavna ali potekla povezava. Zahtevajte novo ponastavitev gesla.')
+        return
+      }
+
+      // Odjemalec (detectSessionInUrl) ponavadi zeton obdela sam. Pockajmo na
+      // sejo prek dogodka ali neposredne poizvedbe.
+      const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+        if (!resolved && session && (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
+          resolved = true
+          setReady(true)
+        }
+      })
+      odjava = () => authListener.subscription.unsubscribe()
+
+      const { data: obstojeca } = await supabase.auth.getSession()
+      if (obstojeca.session) {
         resolved = true
         setReady(true)
+        return
       }
-    })
 
-    // Varovalka: ce dogodek PASSWORD_RECOVERY ne pride v razumnem casu,
-    // predpostavi neveljaven/manjkajoc token.
+      // Rezerva: ce samodejna obdelava ni stekla, kodo zamenjamo rocno.
+      if (koda) {
+        const { error: zamenjavaErr } = await supabase.auth.exchangeCodeForSession(koda)
+        if (!zamenjavaErr) {
+          resolved = true
+          setReady(true)
+          return
+        }
+        // Ce je odjemalec kodo ze porabil, seja obstaja - preverimo se enkrat.
+        const { data: poZamenjavi } = await supabase.auth.getSession()
+        if (poZamenjavi.session) {
+          resolved = true
+          setReady(true)
+          return
+        }
+        setError('Neveljavna ali potekla povezava. Zahtevajte novo ponastavitev gesla.')
+      }
+    }
+
+    pripravi()
+
     const timeout = setTimeout(() => {
       if (!resolved) {
         setError('Neveljavna ali potekla povezava. Zahtevajte novo ponastavitev gesla.')
       }
-    }, 3000)
+    }, 8000)
 
     return () => {
-      authListener.subscription.unsubscribe()
+      if (odjava) odjava()
       clearTimeout(timeout)
     }
   }, [])
