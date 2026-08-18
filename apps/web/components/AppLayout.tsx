@@ -49,6 +49,8 @@ const NAV_DEFAULT = [
   ]},
   { label: 'Blagajna', items: [
     { href: '/pos', icon: 'ti-building-store', label: 'POS blagajna' },
+    // DODANO (18.8.2026): dnevni zakljucki so bili vidni SAMO znotraj blagajne.
+    { href: '/zakljucki', icon: 'ti-report-money', label: 'Dnevni zaključki' },
     { href: '/eslog',    icon: 'ti-file-invoice',   label: 'e-Račun' },
   ]},
   // DODANO (Prelet 18, 17.8.2026): te poti prej sploh niso bile v meniju,
