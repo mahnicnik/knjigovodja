@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { getActiveMembership } from '@/lib/active-org'
-import { isPathAllowedForRole } from '@/lib/role-access'
+import { isPathAllowedForRole, ROLE_ALLOWED_PREFIXES } from '@/lib/role-access'
 import { useEffect, useRef, useState } from 'react'
 
 const NAV_DEFAULT = [
@@ -256,7 +256,10 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
         )}
       </div>
 
-      {/* Prilagodi gumb */}
+      {/* Prilagodi gumb — SPREMENJENO (17.8.2026): omejene vloge (racunovodja,
+          blagajnik, viewer) imajo tako ali tako le nekaj postavk in prilagajanja
+          ne potrebujejo, zato se gumb zanje sploh ne prikaze. */}
+      {!role || !ROLE_ALLOWED_PREFIXES[role] ? (
       <div style={{ padding: '10px 18px 0' }}>
         <button onClick={() => setShowModal(true)} style={{
           width: '100%', padding: '5px 8px',
@@ -267,6 +270,7 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
           <Icon name="ti-settings" style={{ fontSize: '13px' }} /> Prilagodi meni
         </button>
       </div>
+      ) : null}
 
       {/* Quick actions */}
       {qaItems.length > 0 && (
