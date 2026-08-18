@@ -14,7 +14,13 @@ export default function ForgotPasswordPage() {
     setLoading(true)
     setError('')
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      // POPRAVLJENO (18.8.2026): tu je bil `window.location.origin`. Pri sumniski
+      // domeni racunko.si (tehnicno xn--raunko-j2a.si) brskalnik vrne enkrat eno,
+      // enkrat drugo obliko. Ce dana oblika ni na seznamu dovoljenih preusmeritev
+      // v Supabase, ta zahtevo tiho zavrne in preusmeri na domaco stran - kar je
+      // pomenilo, da ponastavitev gesla NI DELOVALA (zeton se je ob tem porabil).
+      // Zdaj isti vzorec kot povsod drugod v aplikaciji (Stripe, Gmail, povabila).
+      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'https://xn--raunko-j2a.si'}/reset-password`,
     })
     if (error) {
       setError(error.message)

@@ -23,7 +23,9 @@ export default function RegisterPage() {
       password,
       options: {
         data: { full_name: name },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        // POPRAVLJENO (18.8.2026): enak razlog kot pri ponastavitvi gesla -
+        // window.location.origin pri sumniski domeni ni zanesljiv.
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'https://xn--raunko-j2a.si'}/auth/callback`,
       }
     })
     if (error) {
