@@ -79,6 +79,27 @@ export interface ExportInput {
   // bancni uvoz, kartice, place, amortizacija itd. (13 razlicnih virov,
   // ki jih izdani/prejeti racuni sami po sebi ne pokrijejo).
   kpoEntries: KPOEntryRow[]
+  // DODANO (18.8.2026): dnevni zakljucki blagajne (Z-porocila). Doslej jih
+  // racunovodja NI dobil nikjer - v KPO se zapise samo ena vrstica dnevnega
+  // prihodka, razclenitev po DDV stopnjah pa je ostala zaprta v z_reports.
+  zReports?: ZReportRow[]
+}
+
+export interface ZReportRow {
+  report_number: number
+  closed_at: string | null
+  opened_at: string | null
+  total_revenue: number
+  total_cash: number
+  total_card: number
+  total_bon: number | null
+  total_other: number | null
+  total_refunds: number | null
+  total_vat_95: number
+  total_vat_22: number
+  total_vat_base_0: number | null
+  total_vat_base_other: number | null
+  order_count: number
 }
 
 // ===== POMOŽNE FUNKCIJE =====
@@ -393,6 +414,55 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
 
   XLSX.utils.book_append_sheet(wb, wsKpo, 'KPO evidenca')
 
+  // ===== DNEVNI ZAKLJUCKI BLAGAJNE (Z-porocila) — DODANO 18.8.2026 =====
+  // V KPO knjigi je dnevni promet ena sama vrstica. Racunovodja za DDV
+  // obracun potrebuje razclenitev po stopnjah, ta pa je doslej ostala samo
+  // v blagajni. Ta list jo prinese na mizo.
+  const zRows = input.zReports ?? []
+  if (zRows.length > 0) {
+    const zData: any[][] = [
+      ['DNEVNI ZAKLJUČKI BLAGAJNE (Z-poročila)'],
+      [`${input.orgName} — ${input.periodLabel}`],
+      [],
+      ['Št. Z', 'Datum', 'Računov', 'Promet skupaj', 'Gotovina', 'Kartica', 'Boni', 'Drugo', 'Vračila',
+       'DDV 22 %', 'DDV 9,5 %', 'Osnova 0 %', 'Osnova ostalo'],
+    ]
+    for (const z of zRows) {
+      const datum = (z.closed_at ?? z.opened_at ?? '').slice(0, 10)
+      zData.push([
+        z.report_number,
+        datum,
+        z.order_count ?? 0,
+        Number(z.total_revenue ?? 0),
+        Number(z.total_cash ?? 0),
+        Number(z.total_card ?? 0),
+        Number(z.total_bon ?? 0),
+        Number(z.total_other ?? 0),
+        Number(z.total_refunds ?? 0),
+        Number(z.total_vat_22 ?? 0),
+        Number(z.total_vat_95 ?? 0),
+        Number(z.total_vat_base_0 ?? 0),
+        Number(z.total_vat_base_other ?? 0),
+      ])
+    }
+    const vsota = (f: (z: ZReportRow) => number) => zRows.reduce((s2, z) => s2 + Number(f(z) ?? 0), 0)
+    zData.push([])
+    zData.push([
+      'SKUPAJ', '', zRows.reduce((s2, z) => s2 + Number(z.order_count ?? 0), 0),
+      vsota(z => z.total_revenue), vsota(z => z.total_cash), vsota(z => z.total_card),
+      vsota(z => z.total_bon ?? 0), vsota(z => z.total_other ?? 0), vsota(z => z.total_refunds ?? 0),
+      vsota(z => z.total_vat_22), vsota(z => z.total_vat_95),
+      vsota(z => z.total_vat_base_0 ?? 0), vsota(z => z.total_vat_base_other ?? 0),
+    ])
+
+    const wsZ = XLSX.utils.aoa_to_sheet(zData)
+    wsZ['!cols'] = [
+      { wch: 7 }, { wch: 12 }, { wch: 9 }, { wch: 14 }, { wch: 12 }, { wch: 12 },
+      { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 11 }, { wch: 11 }, { wch: 12 }, { wch: 13 },
+    ]
+    XLSX.utils.book_append_sheet(wb, wsZ, 'Dnevni zaključki')
+  }
+
   // Generate buffer
   const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
   return buf as Buffer
@@ -467,6 +537,45 @@ export function generateAccountingCSV_KPR(input: ExportInput): string {
       r.is_deductible ? 'Da' : 'Ne',
       statusLabel(r.status),
       r.has_image ? 'Da' : 'Ne',
+    ].join(';')
+  })
+
+  return [header, ...rows].join('\r\n')
+}
+/**
+ * CSV dnevnih zakljuckov blagajne (Z-porocila) — DODANO 18.8.2026.
+ *
+ * Zakaj: v KPO knjigi je dnevni promet ena sama vrstica prihodka. Racunovodja
+ * za DDV obracun potrebuje razclenitev po stopnjah in po dnevih, ta pa je bila
+ * doslej dostopna samo v sami blagajni. Isti podatki kot v XLSX listu
+ * "Dnevni zakljucki", v obliki, ki jo poznajo Vasco/Pantheon (podpicje,
+ * vejica kot decimalno locilo).
+ */
+export function generateAccountingCSV_ZPOROCILA(input: ExportInput): string {
+  const header = [
+    'Stevilka_Z', 'Datum', 'Stevilo_racunov', 'Promet_skupaj',
+    'Gotovina', 'Kartica', 'Boni', 'Drugo', 'Vracila',
+    'DDV_22', 'DDV_95', 'Osnova_0', 'Osnova_ostalo',
+  ].join(';')
+
+  const rows = (input.zReports ?? []).map(z => {
+    const datum = (z.closed_at ?? z.opened_at ?? '').slice(0, 10)
+    const st = (n: number | null | undefined) =>
+      formatAmount(Number(n ?? 0)).toString().replace('.', ',')
+    return [
+      z.report_number,
+      formatDate(datum),
+      z.order_count ?? 0,
+      st(z.total_revenue),
+      st(z.total_cash),
+      st(z.total_card),
+      st(z.total_bon),
+      st(z.total_other),
+      st(z.total_refunds),
+      st(z.total_vat_22),
+      st(z.total_vat_95),
+      st(z.total_vat_base_0),
+      st(z.total_vat_base_other),
     ].join(';')
   })
 

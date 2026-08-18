@@ -4,6 +4,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import {
   generateAccountingXLSX,
+  generateAccountingCSV_ZPOROCILA,
   generateAccountingCSV_KIR,
   generateAccountingCSV_KPR,
   type KPOEntryRow,
@@ -134,6 +135,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Napaka pri branju KPO evidence: ${kpoErr.message}` }, { status: 500 })
     }
 
+    // ===== Dnevni zakljucki blagajne (Z-porocila) — DODANO 18.8.2026 =====
+    // Doslej jih izvoz NI vseboval: v KPO je dnevni promet ena sama vrstica,
+    // razclenitev po DDV stopnjah pa je ostala zaprta v blagajni.
+    // Z-porocila so vezana na business_id, organizacija ga ima v pos_business_id.
+    let zReportsData: any[] = []
+    if (org.pos_business_id) {
+      const { data: zData } = await supabase
+        .from('z_reports')
+        .select('report_number, opened_at, closed_at, total_revenue, total_cash, total_card, total_bon, total_other, total_refunds, total_vat_95, total_vat_22, total_vat_base_0, total_vat_base_other, order_count')
+        .eq('business_id', org.pos_business_id)
+        .gte('closed_at', `${periodFrom}T00:00:00`)
+        .lte('closed_at', `${periodTo}T23:59:59`)
+        .order('report_number', { ascending: true })
+      zReportsData = zData ?? []
+    }
+
     // ===== Pripravi podatke za export =====
     const issuedInvoices: IssuedInvoiceRow[] = (invoicesData ?? []).map((i: any) => ({
       invoice_number: i.invoice_number,
@@ -198,6 +215,7 @@ export async function POST(req: NextRequest) {
       issuedInvoices,
       receipts,
       kpoEntries,
+      zReports: zReportsData,
     }
 
     // ===== Save accountant info =====
@@ -218,6 +236,11 @@ export async function POST(req: NextRequest) {
 
     const csvKir = format === 'csv' || format === 'both'
       ? generateAccountingCSV_KIR(exportInput)
+      : null
+
+    // DODANO (18.8.2026): CSV dnevnih zakljuckov - samo ce Z-porocila obstajajo.
+    const csvZ = (format === 'csv' || format === 'both') && zReportsData.length > 0
+      ? generateAccountingCSV_ZPOROCILA(exportInput)
       : null
 
     const csvKpr = format === 'csv' || format === 'both'
@@ -244,6 +267,12 @@ export async function POST(req: NextRequest) {
         attachments.push({
           filename: `${fileBaseName}_izdani_racuni.csv`,
           content: '\ufeff' + csvKir, // BOM for Excel UTF-8 recognition
+        })
+      }
+      if (csvZ) {
+        attachments.push({
+          filename: `${fileBaseName}_dnevni_zakljucki.csv`,
+          content: '\ufeff' + csvZ,
         })
       }
       if (csvKpr) {
@@ -280,8 +309,9 @@ export async function POST(req: NextRequest) {
     </p>
     
     <ul style="font-size: 14px; line-height: 1.8;">
-      ${xlsxBuffer ? '<li><strong>XLSX</strong> — 4 sheet-i (Izdani računi, Prejeti računi, KPO evidenca, Rekapitulacija)</li>' : ''}
+      ${xlsxBuffer ? '<li><strong>XLSX</strong> — ' + (zReportsData.length > 0 ? '5 sheet-ov (Izdani računi, Prejeti računi, KPO evidenca, Rekapitulacija, Dnevni zaključki)' : '4 sheet-i (Izdani računi, Prejeti računi, KPO evidenca, Rekapitulacija)') + '</li>' : ''}
       ${csvKir ? '<li><strong>CSV izdani računi</strong> — semicolon separator za Vasco/Pantheon</li>' : ''}
+      ${csvZ ? '<li><strong>CSV dnevni zaključki</strong> — Z-poročila blagajne z DDV po stopnjah</li>' : ''}
       ${csvKpr ? '<li><strong>CSV prejeti računi</strong> — semicolon separator</li>' : ''}
     </ul>
     

@@ -127,7 +127,11 @@ export default function RacunovodjaClientPage() {
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [comments, setComments] = useState<Comment[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'invoices'|'receipts'|'documents'|'comments'>('invoices')
+  const [tab, setTab] = useState<'invoices'|'receipts'|'documents'|'zreports'|'comments'>('invoices')
+  // DODANO (18.8.2026): dnevni zakljucki blagajne. V KPO je dnevni promet ena
+  // sama vrstica - razclenitev po DDV stopnjah je bila doslej vidna samo v
+  // sami blagajni, racunovodja pa je za DDV obracun potrebuje.
+  const [zReports, setZReports] = useState<any[]>([])
   // DODANO (18.8.2026): bancni izpiski in karticni obracuni - doslej se izvirne
   // datoteke sploh niso shranjevale, zato jih racunovodja ni mogel dobiti.
   const [documents, setDocuments] = useState<any[]>([])
@@ -170,7 +174,7 @@ export default function RacunovodjaClientPage() {
     const yearStart = `${now.getFullYear()}-01-01`
 
     const [orgRes, invRes, recRes, comRes, docRes] = await Promise.all([
-      supabase.from('organizations').select('id,name,tax_number,tax_system,vat_registered,address,city').eq('id', orgId).single(),
+      supabase.from('organizations').select('id,name,tax_number,tax_system,vat_registered,address,city,pos_business_id').eq('id', orgId).single(),
       supabase.from('issued_invoices').select('*').eq('org_id', orgId).gte('issue_date', yearStart).neq('status', 'draft').or('zoi.is.null,zoi.not.like.DEMO-%').order('issue_date', { ascending: false }),
       supabase.from('receipts').select('*').eq('org_id', orgId).gte('receipt_date', yearStart).order('receipt_date', { ascending: false }),
       supabase.from('accountant_comments').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
@@ -181,6 +185,18 @@ export default function RacunovodjaClientPage() {
     setInvoices(invRes.data ?? [])
     setReceipts(recRes.data ?? [])
     setDocuments(docRes.data ?? [])
+
+    // Z-porocila so vezana na business_id (blagajna), ne na org_id.
+    const posBizId = (orgRes.data as any)?.pos_business_id
+    if (posBizId) {
+      const { data: zData } = await supabase
+        .from('z_reports')
+        .select('*')
+        .eq('business_id', posBizId)
+        .gte('closed_at', `${yearStart}T00:00:00`)
+        .order('report_number', { ascending: false })
+      setZReports(zData ?? [])
+    }
     setComments(comRes.data ?? [])
     setLoading(false)
   }, [orgId, router, supabase])
@@ -313,6 +329,7 @@ export default function RacunovodjaClientPage() {
             { id: 'invoices', label: `Izdani računi (${invoices.length})` },
             { id: 'receipts', label: `Prejeti računi (${receipts.length})${unconfirmedReceipts.length > 0 ? ` ⚠️${unconfirmedReceipts.length}` : ''}` },
             { id: 'documents', label: `Izpiski (${documents.length})` },
+            { id: 'zreports', label: `Dnevni zaključki (${zReports.length})` },
             { id: 'comments', label: `Opombe (${openComments.length})` },
           ] as const).map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
@@ -445,6 +462,59 @@ export default function RacunovodjaClientPage() {
                   ))}
                 </tbody>
               </table>
+            )}
+          </div>
+        )}
+
+        {/* DNEVNI ZAKLJUCKI BLAGAJNE (18.8.2026) */}
+        {tab === 'zreports' && (
+          <div style={{ background: '#fff', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+            {zReports.length === 0 ? (
+              <div style={{ padding: 40, textAlign: 'center', color: '#aaa', fontSize: 14 }}>
+                Ni dnevnih zaključkov v tem letu.
+              </div>
+            ) : (
+              <>
+                <div style={{ padding: '12px 16px', background: '#F7F6F2', fontSize: 12, color: '#666', borderBottom: '0.5px solid rgba(0,0,0,0.08)' }}>
+                  Z-poročila blagajne z razčlenitvijo DDV po stopnjah. Isti podatki so v izvozu (list „Dnevni zaključki“ oz. CSV).
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
+                    <thead>
+                      <tr style={{ borderBottom: '0.5px solid rgba(0,0,0,0.08)', background: '#F7F6F2' }}>
+                        {['Št. Z', 'Datum', 'Rač.', 'Promet', 'Gotovina', 'Kartica', 'DDV 22 %', 'DDV 9,5 %'].map(h => (
+                          <th key={h} style={{ padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#888', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '.04em', whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {zReports.map(z => (
+                        <tr key={z.id} style={{ borderBottom: '0.5px solid rgba(0,0,0,0.05)' }}>
+                          <td style={{ padding: '11px 14px', fontSize: 13, fontWeight: 600 }}>#{z.report_number}</td>
+                          <td style={{ padding: '11px 14px', fontSize: 13 }}>{fmtDate((z.closed_at ?? z.opened_at ?? '').slice(0, 10))}</td>
+                          <td style={{ padding: '11px 14px', fontSize: 13, color: '#555' }}>{z.order_count ?? 0}</td>
+                          <td style={{ padding: '11px 14px', fontSize: 13, fontWeight: 600 }}>{fmt(z.total_revenue)}</td>
+                          <td style={{ padding: '11px 14px', fontSize: 13, color: '#555' }}>{fmt(z.total_cash)}</td>
+                          <td style={{ padding: '11px 14px', fontSize: 13, color: '#555' }}>{fmt(z.total_card)}</td>
+                          <td style={{ padding: '11px 14px', fontSize: 13, color: '#555' }}>{fmt(z.total_vat_22)}</td>
+                          <td style={{ padding: '11px 14px', fontSize: 13, color: '#555' }}>{fmt(z.total_vat_95)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ background: '#F7F6F2', fontWeight: 700 }}>
+                        <td style={{ padding: '11px 14px', fontSize: 13 }} colSpan={2}>SKUPAJ</td>
+                        <td style={{ padding: '11px 14px', fontSize: 13 }}>{zReports.reduce((a, z) => a + Number(z.order_count ?? 0), 0)}</td>
+                        <td style={{ padding: '11px 14px', fontSize: 13 }}>{fmt(zReports.reduce((a, z) => a + Number(z.total_revenue ?? 0), 0))}</td>
+                        <td style={{ padding: '11px 14px', fontSize: 13 }}>{fmt(zReports.reduce((a, z) => a + Number(z.total_cash ?? 0), 0))}</td>
+                        <td style={{ padding: '11px 14px', fontSize: 13 }}>{fmt(zReports.reduce((a, z) => a + Number(z.total_card ?? 0), 0))}</td>
+                        <td style={{ padding: '11px 14px', fontSize: 13 }}>{fmt(zReports.reduce((a, z) => a + Number(z.total_vat_22 ?? 0), 0))}</td>
+                        <td style={{ padding: '11px 14px', fontSize: 13 }}>{fmt(zReports.reduce((a, z) => a + Number(z.total_vat_95 ?? 0), 0))}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </>
             )}
           </div>
         )}
