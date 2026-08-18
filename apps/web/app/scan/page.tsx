@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import posthog from 'posthog-js'
 import { getActiveMembership } from '@/lib/active-org'
+import { naloziListino, base64VBlob } from '@/lib/listine'
 import AppLayout from '@/components/AppLayout'
 
 // Varna base64 pretvorba za VELIKE datoteke (24.7.2026). btoa(String.
@@ -213,6 +214,25 @@ export default function ScanPage() {
 
     // POPRAVLJENO (16.8.2026): prej brez preverbe - skeniran racun se ni shranil,
       // uporabnik pa je videl potrditev in dokumenta ne bi skeniral znova.
+      // SPREMENJENO (17.8.2026): listina gre v storage bucket "listine", v bazo
+      // shranimo samo pot. Prej je sla cela datoteka v `attachment_base64` -
+      // 71 listin je pomenilo 21 MB besedila V BAZI.
+      // Ce nalaganje spodleti, zapis vseeno shranimo (bolje strosek brez
+      // listine kot izgubljen strosek), uporabnika pa opozorimo.
+      const surovaListina: string | null = (window as any).__pdfBase64 || image || null
+      const jePdf = !!(window as any).__pdfBase64
+      let potListine: string | null = null
+      let napakaListine: string | null = null
+
+      if (surovaListina && org?.id) {
+        const blob = base64VBlob(surovaListina, jePdf ? 'application/pdf' : 'image/jpeg')
+        const koncnica = jePdf ? 'pdf' : 'jpg'
+        const ime = `${form.receipt_date}-${form.vendor || 'listina'}.${koncnica}`
+        const rez = await naloziListino(org.id, 'racuni', blob, ime)
+        potListine = rez.path
+        napakaListine = rez.napaka
+      }
+
       const { error: rcpErr } = await supabase.from('receipts').insert({
       org_id: org.id,
       vendor: form.vendor,
@@ -225,10 +245,16 @@ export default function ScanPage() {
       category: form.category,
       status: 'confirmed',
       is_deductible: true,
-      attachment_base64: (window as any).__pdfBase64 || image || null,
-      attachment_type: (window as any).__pdfBase64 ? 'pdf' : (image ? 'image' : null),
+      attachment_path: potListine,
+      // Ce je nalaganje v storage spodletelo, listino izjemoma se vedno
+      // shranimo v bazo — da se ne izgubi.
+      attachment_base64: potListine ? null : surovaListina,
+      attachment_type: jePdf ? 'pdf' : (image ? 'image' : null),
     })
     if (rcpErr) { alert('Računa ni bilo mogoče shraniti: ' + rcpErr.message); return }
+    if (napakaListine) {
+      alert('Strošek je shranjen, listine pa ni bilo mogoče naložiti v hrambo: ' + napakaListine + '\n\nListina je shranjena v bazi kot rezerva.')
+    }
 
     const { error: kpoErr } = await supabase.from('kpo_entries').insert({
       org_id: org.id,
@@ -304,6 +330,10 @@ export default function ScanPage() {
         // POPRAVLJENO (17.8.2026): prej brez preverbe - pri paketnem skeniranju
         // je posamezen neuspesen racun ostal neopazen, uporabnik pa je videl,
         // da so vsi uvozeni.
+        // SPREMENJENO (17.8.2026): listina v storage, ne v bazo (glej lib/listine.ts).
+        const blobP = base64VBlob(base64, 'application/pdf')
+        const rezP = await naloziListino(org.id, 'racuni', blobP, `${receiptDate}-${data.vendor || 'listina'}.pdf`)
+
         const { error: rcpErr2 } = await supabase.from('receipts').insert({
           org_id: org.id,
           vendor: data.vendor,
@@ -316,7 +346,8 @@ export default function ScanPage() {
           category,
           status: 'confirmed',
           is_deductible: true,
-          attachment_base64: base64,
+          attachment_path: rezP.path,
+          attachment_base64: rezP.path ? null : base64, // rezerva, ce storage odpove
           attachment_type: 'pdf',
         })
         if (rcpErr2) { console.error('Računa ni bilo mogoče shraniti:', rcpErr2); napake.push('Računa ni bilo mogoče shraniti: ' + rcpErr2.message); continue }
