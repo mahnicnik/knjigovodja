@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { lokalniDatum } from '@/lib/tax-constants'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { odpriListino } from '@/lib/listine'
+import { odpriListino, povezavaDoListine } from '@/lib/listine'
 import Link from 'next/link'
 
 interface Invoice {
@@ -46,6 +46,12 @@ async function openReceiptPdf(
   const uspelo = await odpriListino(attachmentPath, attachmentBase64, attachmentType)
   if (!uspelo) alert('Dokument ni na voljo za ta strosek')
 }
+async function openDocument(storagePath: string) {
+  const url = await povezavaDoListine(storagePath)
+  if (url) window.open(url, '_blank')
+  else alert('Dokumenta ni bilo mogoce odpreti')
+}
+
 async function openInvoicePdf(invoiceId: string) {
   try {
     const res = await fetch(`/api/racunovodja/invoice-pdf?id=${invoiceId}`)
@@ -121,7 +127,10 @@ export default function RacunovodjaClientPage() {
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [comments, setComments] = useState<Comment[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'invoices'|'receipts'|'comments'>('invoices')
+  const [tab, setTab] = useState<'invoices'|'receipts'|'documents'|'comments'>('invoices')
+  // DODANO (18.8.2026): bancni izpiski in karticni obracuni - doslej se izvirne
+  // datoteke sploh niso shranjevale, zato jih racunovodja ni mogel dobiti.
+  const [documents, setDocuments] = useState<any[]>([])
   const [exporting, setExporting] = useState(false)
 
   // Comment form
@@ -160,16 +169,18 @@ export default function RacunovodjaClientPage() {
     const now = new Date()
     const yearStart = `${now.getFullYear()}-01-01`
 
-    const [orgRes, invRes, recRes, comRes] = await Promise.all([
+    const [orgRes, invRes, recRes, comRes, docRes] = await Promise.all([
       supabase.from('organizations').select('id,name,tax_number,tax_system,vat_registered,address,city').eq('id', orgId).single(),
       supabase.from('issued_invoices').select('*').eq('org_id', orgId).gte('issue_date', yearStart).neq('status', 'draft').or('zoi.is.null,zoi.not.like.DEMO-%').order('issue_date', { ascending: false }),
       supabase.from('receipts').select('*').eq('org_id', orgId).gte('receipt_date', yearStart).order('receipt_date', { ascending: false }),
       supabase.from('accountant_comments').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+      supabase.from('org_documents').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
     ])
 
     setOrg(orgRes.data)
     setInvoices(invRes.data ?? [])
     setReceipts(recRes.data ?? [])
+    setDocuments(docRes.data ?? [])
     setComments(comRes.data ?? [])
     setLoading(false)
   }, [orgId, router, supabase])
@@ -301,6 +312,7 @@ export default function RacunovodjaClientPage() {
           {([
             { id: 'invoices', label: `Izdani računi (${invoices.length})` },
             { id: 'receipts', label: `Prejeti računi (${receipts.length})${unconfirmedReceipts.length > 0 ? ` ⚠️${unconfirmedReceipts.length}` : ''}` },
+            { id: 'documents', label: `Izpiski (${documents.length})` },
             { id: 'comments', label: `Opombe (${openComments.length})` },
           ] as const).map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
@@ -385,6 +397,48 @@ export default function RacunovodjaClientPage() {
                         )}
                         <button onClick={() => { setTab('comments'); setCommentDocType('receipt'); setCommentDocId(r.id); setNewComment(`Strošek ${r.vendor ?? ''}: `) }} style={{ background: 'none', border: 0, color: '#1D9E75', cursor: 'pointer', fontSize: 12, fontWeight: 500 }}>
                           + Opomba
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
+        {/* BANCNI IZPISKI IN KARTICNI OBRACUNI (18.8.2026) */}
+        {tab === 'documents' && (
+          <div style={{ background: '#fff', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+            {documents.length === 0 ? (
+              <div style={{ padding: 40, textAlign: 'center', color: '#aaa', fontSize: 14 }}>
+                Ni naloženih izpiskov.<br />
+                <span style={{ fontSize: 12 }}>Bančni izpiski in kartični obračuni se shranijo ob uvozu na straneh Banka in Kartice.</span>
+              </div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '0.5px solid rgba(0,0,0,0.08)', background: '#F7F6F2' }}>
+                    {['Naloženo', 'Vrsta', 'Datoteka', 'Obdobje', 'Postavk', ''].map(h => (
+                      <th key={h} style={{ padding: '10px 16px', fontSize: 11, fontWeight: 700, color: '#888', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '.04em' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {documents.map(d => (
+                    <tr key={d.id} style={{ borderBottom: '0.5px solid rgba(0,0,0,0.05)' }}>
+                      <td style={{ padding: '12px 16px', fontSize: 13 }}>{fmtDate(d.created_at)}</td>
+                      <td style={{ padding: '12px 16px', fontSize: 13 }}>
+                        {d.kind === 'banka' ? '🏦 Bančni izpisek' : '💳 Kartični obračun'}
+                      </td>
+                      <td style={{ padding: '12px 16px', fontSize: 13, color: '#555' }}>{d.file_name}</td>
+                      <td style={{ padding: '12px 16px', fontSize: 13, color: '#555' }}>
+                        {d.period_from ? `${fmtDate(d.period_from)}${d.period_to && d.period_to !== d.period_from ? ' – ' + fmtDate(d.period_to) : ''}` : '—'}
+                      </td>
+                      <td style={{ padding: '12px 16px', fontSize: 13, color: '#555' }}>{d.imported_count ?? '—'}</td>
+                      <td style={{ padding: '12px 16px' }}>
+                        <button onClick={() => openDocument(d.storage_path)} style={{ background: 'none', border: 0, color: '#0D1F12', cursor: 'pointer', fontSize: 12, fontWeight: 500 }}>
+                          📄 Prenesi
                         </button>
                       </td>
                     </tr>

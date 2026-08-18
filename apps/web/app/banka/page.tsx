@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 import { formatEurNumber } from '@/lib/format'
+import { naloziListino } from '@/lib/listine'
 
 // ================================================================
 // FORMATI SLOVENSKIH BANK
@@ -395,6 +396,24 @@ export default function BankaPage() {
       for (const file of files) {
         const fileTransactions = await parseOneFile(file)
         parsed = parsed.concat(fileTransactions)
+
+        // DODANO (18.8.2026): shrani IZVIRNI izpisek. Doslej se je datoteka
+        // samo razclenila in zavrgla - racunovodja je videl vnose v knjigi,
+        // ne pa izpiska, iz katerega so nastali.
+        if (orgId) {
+          const rez = await naloziListino(orgId, 'banka', file, file.name)
+          if (rez.path) {
+            await supabase.from('org_documents').insert({
+              org_id: orgId,
+              kind: 'banka',
+              file_name: file.name,
+              storage_path: rez.path,
+              file_size: file.size,
+              mime_type: file.type || null,
+              imported_count: fileTransactions.length,
+            })
+          }
+        }
       }
 
       if (parsed.length === 0) {

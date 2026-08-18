@@ -7,6 +7,7 @@ import posthog from 'posthog-js'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 import { formatEurNumber } from '@/lib/format'
+import { naloziListino } from '@/lib/listine'
 
 const PROCESSORS = [
   { value: 'sumup', label: 'SumUp', fee: 1.69 },
@@ -175,6 +176,26 @@ export default function KarticeePage() {
       })
       const data = await res.json()
       if (!res.ok) { setScanError(data.error || 'Napaka pri skeniranju'); setScanning(false); return }
+
+      // DODANO (18.8.2026): shrani IZVIRNI obracun ponudnika. Doslej se je
+      // datoteka samo prebrala z AI in zavrgla - racunovodja je videl vnose
+      // v knjigi, ne pa poracuna, iz katerega so nastali.
+      if (org?.id) {
+        const rez = await naloziListino(org.id, 'kartice', file, file.name)
+        if (rez.path) {
+          await supabase.from('org_documents').insert({
+            org_id: org.id,
+            kind: 'kartice',
+            file_name: file.name,
+            storage_path: rez.path,
+            file_size: file.size,
+            mime_type: file.type || null,
+            period_from: data.settlement?.period_from || null,
+            period_to: data.settlement?.period_to || data.settlement?.period_from || null,
+          })
+        }
+      }
+
       const s = data.settlement
       if (s.processor_guess && PROCESSORS.some(p => p.value === s.processor_guess)) {
         setProcessor(s.processor_guess)
@@ -232,6 +253,23 @@ export default function KarticeePage() {
         if (!res.ok || !s || s.gross_sales == null || !s.period_from) {
           setBatchFiles(prev => prev.map((f, idx) => idx === i ? { ...f, status: 'error', error: data.error || 'AI ni prepoznal podatkov na izpisku' } : f))
           continue
+        }
+
+        // DODANO (18.8.2026): shrani izvirni obracun tudi pri paketnem uvozu.
+        if (org?.id) {
+          const rezB = await naloziListino(org.id, 'kartice', item.file, item.file.name)
+          if (rezB.path) {
+            await supabase.from('org_documents').insert({
+              org_id: org.id,
+              kind: 'kartice',
+              file_name: item.file.name,
+              storage_path: rezB.path,
+              file_size: item.file.size,
+              mime_type: item.file.type || null,
+              period_from: s.period_from || null,
+              period_to: s.period_to || s.period_from || null,
+            })
+          }
         }
 
         const proc = PROCESSORS.find(p => p.value === s.processor_guess) || PROCESSORS.find(p => p.value === 'drugo')!
