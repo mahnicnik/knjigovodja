@@ -397,6 +397,10 @@ export default function VodicPage() {
   })
   const [currentStep, setCurrentStep] = useState(0)
   const [completed, setCompleted] = useState<Set<string>>(new Set())
+  // DODANO (18.8.2026): posamicne postavke kontrolnega seznama. Prej so bili
+  // krogci le okras (navaden div brez klika) - odkljukati se je dalo samo cel
+  // korak, kar je pomenilo vse ali nic. Kljuc je `${stepId}:${indeks}`.
+  const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set())
   const [tempProfile, setTempProfile] = useState<Profile>({ ...profile })
   const supabase = createClient()
   const now = new Date()
@@ -448,6 +452,12 @@ export default function VodicPage() {
       try { setCompleted(new Set(JSON.parse(savedProgress))) }
       catch { localStorage.removeItem(storageKey) }
     }
+
+    const savedChecks = localStorage.getItem(`${storageKey}_checks`)
+    if (savedChecks) {
+      try { setCheckedItems(new Set(JSON.parse(savedChecks))) }
+      catch { localStorage.removeItem(`${storageKey}_checks`) }
+    }
     setLoading(false)
   }
 
@@ -455,6 +465,25 @@ export default function VodicPage() {
     localStorage.setItem('vodic_profile', JSON.stringify(p))
     setProfile(p)
     setShowProfileSetup(false)
+  }
+
+  function toggleCheckItem(stepId: string, index: number, totalChecks: number) {
+    const key = `${stepId}:${index}`
+    const newSet = new Set(checkedItems)
+    if (newSet.has(key)) newSet.delete(key)
+    else newSet.add(key)
+    setCheckedItems(newSet)
+    localStorage.setItem(`${storageKey}_checks`, JSON.stringify([...newSet]))
+
+    // Ko so odkljukane VSE postavke koraka, se korak sam oznaci kot opravljen -
+    // in obratno, ce katero odkljukas nazaj.
+    const vseOdkljukane = Array.from({ length: totalChecks }, (_, i) => `${stepId}:${i}`)
+      .every(k => newSet.has(k))
+    const novoOpravljeno = new Set(completed)
+    if (vseOdkljukane) novoOpravljeno.add(stepId)
+    else novoOpravljeno.delete(stepId)
+    setCompleted(novoOpravljeno)
+    localStorage.setItem(storageKey, JSON.stringify([...novoOpravljeno]))
   }
 
   function toggleCompleted(stepId: string) {
@@ -620,12 +649,21 @@ export default function VodicPage() {
           <div style={{ padding:'12px 16px', borderBottom:'0.5px solid rgba(0,0,0,0.06)', fontSize:'12px', fontWeight:'500', color:'#0D1F12' }}>
             Kontrolni seznam
           </div>
-          {step.checks.map((check, i) => (
-            <div key={i} style={{ display:'flex', alignItems:'center', gap:'12px', padding:'11px 16px', borderBottom: i < step.checks.length-1 ? '0.5px solid rgba(0,0,0,0.04)' : 'none' }}>
-              <div style={{ width:'18px', height:'18px', borderRadius:'50%', border:'1.5px solid #ddd', flexShrink:0 }} />
-              <div style={{ fontSize:'13px', color:'#0D1F12' }}>{check}</div>
-            </div>
-          ))}
+          {step.checks.map((check, i) => {
+            const odkljukana = checkedItems.has(`${step.id}:${i}`)
+            return (
+              <div
+                key={i}
+                onClick={() => toggleCheckItem(step.id, i, step.checks.length)}
+                style={{ display:'flex', alignItems:'center', gap:'12px', padding:'11px 16px', cursor:'pointer', background: odkljukana ? '#F6FAF2' : 'transparent', borderBottom: i < step.checks.length-1 ? '0.5px solid rgba(0,0,0,0.04)' : 'none' }}
+              >
+                <div style={{ width:'18px', height:'18px', borderRadius:'50%', border: odkljukana ? '1.5px solid #1D9E75' : '1.5px solid #ddd', background: odkljukana ? '#1D9E75' : 'transparent', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  {odkljukana && <span style={{ color:'#fff', fontSize:'11px', lineHeight:1 }}>✓</span>}
+                </div>
+                <div style={{ fontSize:'13px', color: odkljukana ? '#7A8B7F' : '#0D1F12', textDecoration: odkljukana ? 'line-through' : 'none' }}>{check}</div>
+              </div>
+            )
+          })}
         </div>
 
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingTop:'16px', borderTop:'0.5px solid rgba(0,0,0,0.06)' }}>
@@ -653,6 +691,48 @@ export default function VodicPage() {
             Naprej →
           </button>
         </div>
+
+        {/* DODANO (18.8.2026): pregled tega, kar se ostaja. Prej si lahko sel skozi
+            vse korake in nikjer ni bilo vidno, kaj si preskocil. Zdaj so
+            nedokoncane postavke zbrane na enem mestu; klik skoci na njihov korak. */}
+        {(() => {
+          const preostalo = steps.flatMap((st, stepIndex) =>
+            st.checks
+              .map((c, i) => ({ stepId: st.id, stepTitle: st.title, stepIndex, check: c, i, required: st.required }))
+              .filter(x => !checkedItems.has(`${x.stepId}:${x.i}`))
+          )
+          if (preostalo.length === 0) {
+            return (
+              <div style={{ marginTop:'24px', background:'#EAF3DE', border:'0.5px solid #CFE3BC', borderRadius:'12px', padding:'16px 18px' }}>
+                <div style={{ fontSize:'13px', fontWeight:600, color:'#27500A' }}>Vse opravljeno za ta mesec.</div>
+                <div style={{ fontSize:'12px', color:'#3B6D11', marginTop:'4px' }}>Nič ti ne ostaja na seznamu.</div>
+              </div>
+            )
+          }
+          return (
+            <div style={{ marginTop:'24px', background:'#fff', border:'0.5px solid rgba(0,0,0,0.08)', borderRadius:'12px', overflow:'hidden' }}>
+              <div style={{ padding:'12px 16px', borderBottom:'0.5px solid rgba(0,0,0,0.06)', fontSize:'12px', fontWeight:600, color:'#0D1F12', display:'flex', justifyContent:'space-between' }}>
+                <span>Še za postoriti</span>
+                <span style={{ color:'#A32D2D' }}>{preostalo.length}</span>
+              </div>
+              {preostalo.slice(0, 20).map((x, idx) => (
+                <div
+                  key={`${x.stepId}-${x.i}`}
+                  onClick={() => setCurrentStep(x.stepIndex)}
+                  style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', padding:'10px 16px', cursor:'pointer', borderBottom: idx < Math.min(preostalo.length, 20) - 1 ? '0.5px solid rgba(0,0,0,0.04)' : 'none' }}
+                >
+                  <div style={{ fontSize:'13px', color:'#0D1F12' }}>{x.check}</div>
+                  <div style={{ fontSize:'11px', color:'#888', whiteSpace:'nowrap' }}>
+                    {x.stepTitle}{x.required ? '' : ' · neobvezno'}
+                  </div>
+                </div>
+              ))}
+              {preostalo.length > 20 && (
+                <div style={{ padding:'10px 16px', fontSize:'12px', color:'#888' }}>… in še {preostalo.length - 20}</div>
+              )}
+            </div>
+          )
+        })()}
       </div>
     </AppLayout>
   )
