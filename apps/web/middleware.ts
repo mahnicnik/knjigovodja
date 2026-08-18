@@ -75,6 +75,21 @@ export async function middleware(req: NextRequest) {
   // izognemo podvajanju logike prijave).
   if (!user) return res
 
+  // POPRAVLJENO (18.8.2026): API poti gredo skozi osvezitev seje (zato smo prisli
+  // do sem), NE pa skozi omejevanje po vlogah.
+  //
+  // Omejitve delujejo po predponah brskalnih poti (/kpo, /invoices, ...). Klic na
+  // /api/racunovodja/invoice-pdf se zacne z "/api" in se ni ujemal z nobeno
+  // dovoljeno predpono, zato je racunovodja dobil 307 preusmeritev. Brskalnik ji
+  // je sledil, prejel HTML strani namesto PDF in gumb za PDF je obvisel brez
+  // sporocila (potrjeno v Vercel dnevnikih 18.8.2026).
+  //
+  // Vsaka API pot preverja dostop sama, in to natancneje: invoice-pdf preveri
+  // clanstvo prav v TISTI organizaciji, ki ji racun pripada - cesar middleware
+  // ne more vedeti, ker gleda samo pot. Preusmerjanje API klicev tu ni varnostni
+  // ukrep, ampak okvara.
+  if (pathname.startsWith('/api/')) return res
+
   // POPRAVLJENO (Prelet 18, 17.8.2026): tu je bil `.maybeSingle()`, ki ob VEC
   // clanstvih (racunovodja z dvema strankama - tocno primer, za katerega ta
   // vloga obstaja) vrne napako, ne prve vrstice. `member` je bil takrat null,
