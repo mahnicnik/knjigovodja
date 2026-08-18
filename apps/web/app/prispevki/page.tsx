@@ -192,7 +192,10 @@ export default function PrispevkiPage() {
             </select>
           </div>
           <div className="mt-3 text-xs text-gray-500">
-            ⚠️ Rok plačila: <strong>15. {MONTHS_FULL[selectedMonth]} {selectedYear}</strong>
+            {/* POPRAVLJENO (18.8.2026): prikaz je se vedno kazal 15. dan ISTEGA meseca,
+                ceprav je bil izracun (dueDate zgoraj) 16.8.2026 ze popravljen na 20. v
+                NASLEDNJEM mesecu. Stran je torej racunala en rok, prikazovala pa drugega. */}
+            ⚠️ Rok plačila: <strong>20. {MONTHS_FULL[(selectedMonth + 1) % 12]} {selectedMonth === 11 ? selectedYear + 1 : selectedYear}</strong>
             &nbsp;·&nbsp; Prispevni razred {cc}
             &nbsp;·&nbsp; <Link href="/nastavitve" className="text-blue-600 underline">Spremenite v nastavitvah</Link>
           </div>
@@ -267,7 +270,7 @@ export default function PrispevkiPage() {
             2. Izberite "Plačilo" → "Skeniraj QR"<br/>
             3. Skenirajte QR kodo — vsi podatki se samodejno izpolnijo<br/>
             4. Preverite znesek in potrdite plačilo<br/>
-            5. Rok: do <strong>15. v mesecu</strong>
+            5. Rok: do <strong>20. v naslednjem mesecu</strong>
           </div>
         </div>
 

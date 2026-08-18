@@ -187,9 +187,12 @@ function getSteps(profile: Profile, org: any, month: number, year: number): Step
     id: 'prispevki',
     icon: '💰',
     title: 'Prispevki s.p.',
-    subtitle: 'ZPIZ + ZZZS — rok 15. v mesecu',
-    why: 'Prispevki za socialno varnost so obvezni vsak mesec do 15.',
-    urgent: `Rok: 15. ${m}`,
+    // POPRAVLJENO (18.8.2026): tu je pisalo 15., rok pa je 20. v NASLEDNJEM mesecu
+    // (glej rokovnik/page.tsx, popravljeno 16.8.2026). Vodic je torej navajal
+    // prezgodnji in napacen rok.
+    subtitle: 'ZPIZ + ZZZS — rok 20. v naslednjem mesecu',
+    why: 'Prispevki za socialno varnost se placajo do 20. v naslednjem mesecu.',
+    urgent: `Rok: 20. ${m}`,
     required: true,
     href: '/prispevki',
     hrefLabel: 'Generiraj QR nalog',

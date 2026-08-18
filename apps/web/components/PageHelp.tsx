@@ -56,7 +56,8 @@ const PAGE_HELP: Record<string, PageHelpContent> = {
     steps: [
       { icon: '📊', title: 'Preverite zneske', desc: 'Znesek prispevkov je odvisen od vaše prispevne osnove (razred). Preverite v nastavitvah.' },
       { icon: '📱', title: 'Skenirajte QR kodo', desc: 'Vsaka kartica ima UPN QR kodo — skenirajte jo v mobilni banki za hitro plačilo.' },
-      { icon: '📅', title: 'Rok plačila', desc: 'Prispevki morajo biti plačani do 15. v mesecu za pretekli mesec.' },
+      // POPRAVLJENO (18.8.2026): rok je 20., ne 15. (glej prispevki/page.tsx, 16.8.2026)
+      { icon: '📅', title: 'Rok plačila', desc: 'Prispevki morajo biti plačani do 20. v naslednjem mesecu za pretekli mesec.' },
       { icon: '⚙️', title: 'Popoldanski s.p.', desc: 'Če ste zaposleni drugje, nastavite zaposlovanje in starševstvo na 0€ v nastavitvah.' },
     ],
     tip: 'Prispevki se samodejno prikažejo v rokovniku z opozorilom 7 dni pred rokom.',
@@ -68,7 +69,7 @@ const PAGE_HELP: Record<string, PageHelpContent> = {
       { icon: '💰', title: 'Vnesite prihodke', desc: 'Vnesite letne prihodke (YTD) ali povprečni mesečni prihodek za napoved.' },
       { icon: '💸', title: 'Vnesite odhodke', desc: 'Dejanski poslovni stroški zmanjšajo davčno osnovo.' },
       { icon: '👨‍👩‍👧', title: 'Vzdrževani otroci', desc: 'Dodajte vzdrževane družinske člane za davčne olajšave.' },
-      { icon: '📋', title: 'Mesečna akontacija', desc: 'Izračunani znesek plačujete mesečno do 15. v mesecu skupaj s prispevki.' },
+      { icon: '📋', title: 'Mesečna akontacija', desc: 'Izračunani znesek plačujete mesečno do 20. v naslednjem mesecu skupaj s prispevki.' },
     ],
     tip: 'Dejanski znesek akontacije določi FURS z odločbo — ta kalkulator je samo ocena.',
   },

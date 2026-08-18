@@ -359,13 +359,17 @@ export default function RokovnikPage() {
         <div className="bg-gray-900 rounded-2xl p-5 mt-6 text-white">
           <div className="font-medium text-sm mb-3">📅 Ključni letni roki</div>
           <div className="space-y-2 text-xs text-gray-400">
+            {/* POPRAVLJENO (18.8.2026): tu je pisalo "Do 15. vsak mesec", medtem ko je
+                bil glavni seznam zgoraj ze 16.8.2026 popravljen na 20. v NASLEDNJEM
+                mesecu. Ista stran je torej navajala dva razlicna roka - uporabnik bi
+                po tem povzetku placal prepozno oz. bi bil po nepotrebnem v skrbeh. */}
             <div className="flex justify-between">
               <span>Prispevki s.p.</span>
-              <span className="text-white">Do 15. vsak mesec</span>
+              <span className="text-white">Do 20. v naslednjem mesecu</span>
             </div>
             <div className="flex justify-between">
               <span>Akontacija dohodnine</span>
-              <span className="text-white">Do 15. vsak mesec</span>
+              <span className="text-white">Do 20. v naslednjem mesecu</span>
             </div>
             {hasEmployees && (
               <div className="flex justify-between">
