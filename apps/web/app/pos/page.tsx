@@ -5803,8 +5803,18 @@ function ChangePaymentModal({ order, payment, onClose, onChanged }) {
         if (prepErr) throw new Error(prepErr.message || 'Stanja predplačila ni bilo mogoče popraviti')
       }
 
-      const { error: err } = await createClient().from('payments').update({ method }).eq('id', payment.id)
+      // DODANO (19.8.2026): varovalka. Prej je manjkal `id` v poizvedbi placil,
+      // zato je bil payment.id undefined - update ni zadel nobene vrstice,
+      // napake pa ni bilo (Supabase update brez zadetka NI napaka), zato je
+      // videti, kot da je shranjeno, v resnici pa se ni spremenilo nic.
+      if (!payment?.id) throw new Error('Plačila ni bilo mogoče prepoznati (manjka identifikator). Osvežite seznam računov in poskusite znova.')
+
+      const { data: posodobljeno, error: err } = await createClient()
+        .from('payments').update({ method }).eq('id', payment.id).select('id')
       if (err) throw err
+      if (!posodobljeno || posodobljeno.length === 0) {
+        throw new Error('Sprememba ni bila shranjena — plačilo ni bilo najdeno.')
+      }
       onChanged()
       onClose()
     } catch (e: any) {
@@ -6443,7 +6453,11 @@ function OrdersScreen({ posData, auth }) {
     // "Storniran" znacka (voided_at) jih jasno oznaci ob odprtju.
     let q = sb
       .from('orders')
-      .select('*, payments(method, amount, furs_zoi, furs_eor, paid_at)')
+      // POPRAVLJENO (19.8.2026): manjkal je `id` placila. Modal "Spremeni nacin
+      // placila" shranjuje z `.eq('id', payment.id)` - ker id ni bil izbran, je
+      // bil undefined, poizvedba ni zadela nobene vrstice in sprememba se ni
+      // shranila. Napake ni javilo, ker Supabase update brez zadetka NI napaka.
+      .select('*, payments(id, method, amount, furs_zoi, furs_eor, paid_at)')
       .eq('business_id', BUSINESS_ID)
       .in('status', ['paid', 'voided'])
       .order('closed_at', { ascending: false })
