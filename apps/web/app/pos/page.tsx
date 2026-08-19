@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { escapeHtml } from '@/lib/html-escape'
+import { zesekVrstice, razclenitevDdv, popustEurVOdstotek } from '@/lib/pos-calc'
 import VatExemptionPicker from '@/components/VatExemptionPicker'
 import { vatExemptionText } from '@/lib/vat-exemptions'
 import { useRouter } from 'next/navigation'
@@ -43,28 +44,12 @@ const T = {
 // Ta funkcija racuna DDV PRAVILNO po dejanski stopnji vsake vrstice.
 // scale (0-1) omogoca sorazmerno prilagoditev za popust/napitnino,
 // uporabljeno na celotnem znesku (ne po posamezni vrstici).
+// SPREMENJENO (19.8.2026): izracun se je preselil v lib/pos-calc.ts, da ga
+// lahko preverijo testi (tests/blagajna.spec.ts). Ta datoteka ima 11.000
+// vrstic in je odjemalska komponenta - testi je niso mogli uvoziti, zato ta
+// izracun ni bil nikoli preverjen, ceprav doloca DDV na racunu in na FURS.
 function vatBreakdownForCart(cart, scale = 1) {
-  let net = 0, vat = 0
-  const byRateMap = {}
-  for (const l of (cart || [])) {
-    // POPRAVLJENO (16.8.2026, DDV): prej "price * qty" - BREZ doplacil
-    // modifikatorjev in BREZ happy hour popusta. H.lineTotal oboje upostevaje,
-    // zato se je osnova za DDV na racunu razlikovala od dejansko placanega
-    // zneska (npr. kava 2,00 + mleko 0,50, 2x: osnova racunana od 4,00 namesto
-    // od 5,00). To je davcno pomembno - osnova in DDV na racunu morata ustrezati
-    // placanemu znesku. Zdaj uporabimo isti izracun kot za vsoto vrstice.
-    const gross = H.lineTotal(l) * scale
-    const rate = Number(l.vat_rate ?? 22)
-    const lineNet = gross / (1 + rate / 100)
-    const lineVat = gross - lineNet
-    net += lineNet
-    vat += lineVat
-    if (!byRateMap[rate]) byRateMap[rate] = { rate, net: 0, vat: 0 }
-    byRateMap[rate].net += lineNet
-    byRateMap[rate].vat += lineVat
-  }
-  const byRate = Object.values(byRateMap).sort((a, b) => b.rate - a.rate)
-  return { net, vat, byRate }
+  return razclenitevDdv(cart, scale)
 }
 
 // ================================================================
@@ -158,22 +143,10 @@ const fmtPct = (v) => {
 }
 
 const H = {
-  lineTotal: (l) => {
-    // POPRAVLJENO (17.8.2026): varovalke za robne primere. Prej so manjkajoca
-    // cena dala "ni stevilo", negativno doplacilo ali popust nad 100% pa
-    // NEGATIVEN znesek - kar pri davcnem dokumentu ne sme biti mogoce.
-    const cena = Number(l.price) || 0
-    const kolicina = Math.max(0, Number(l.qty) || 0)
-    const doplacila = (l.mods || []).reduce((s, m) => s + (Number(m.delta) || 0), 0)
-    const base = Math.max(0, (cena + doplacila) * kolicina)
-
-    // POPRAVLJENO (16.8.2026): popust se bere iz PRAVILA (shranjen na vrstici ob
-    // dodajanju), prej trdo kodiranih 20% ne glede na nastavitve.
-    if (!l.happyHourApplied) return base
-    // Popust omejimo na 0-100 %: nad 100 % bi znesek postal negativen.
-    const pct = Math.min(100, Math.max(0, Number(l.happyHourPct ?? 20) || 0))
-    return base * (1 - pct / 100)
-  },
+  // SPREMENJENO (19.8.2026): izracun se je preselil v lib/pos-calc.ts, da ga
+  // lahko preverijo testi. Vsebina je enaka, vkljucno z varovalkami proti
+  // negativnim zneskom (17.8.2026).
+  lineTotal: (l) => zesekVrstice(l),
   orderTotals: (cart) => {
     const sub = cart.reduce((s, l) => s + H.lineTotal(l), 0)
     // KLJUCNO: DDV se izracuna PO POSAMEZNI VRSTICI glede na njeno dejansko vat_rate,

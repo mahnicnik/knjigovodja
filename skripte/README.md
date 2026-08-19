@@ -74,10 +74,38 @@ Prvo je obvezno (sicer build ne bo šel skozi), drugo traja sekundo.
 
 ---
 
+## 4. Testi izračunov
+
+```bash
+cd apps/web && npx playwright test tests/ --reporter=list
+```
+
+Tečejo v ~6 sekundah, brez brskalnika — uvozijo prave funkcije in preverijo
+rezultat.
+
+- `tests/blagajna.spec.ts` — DDV po vseh treh stopnjah, mešan račun, popust
+  v evrih, storno, zaključek z vračili
+- `tests/davki.spec.ts` — normirani odhodki, dohodninska lestvica, zamudne
+  obresti
+
+**Vsak test pokriva napako, ki je bila dejansko najdena.** Zato je ob padcu
+iz opisa razvidno, kaj se je pokvarilo nazaj.
+
+Preverjeno je bilo, da testi res ujamejo napako: ob namerni vrnitvi vzorca
+`vat_rate || 22` so padli štirje testi, med njimi »celotna pot: oproščena
+fizioterapija«.
+
+Izračuni blagajne živijo v `lib/pos-calc.ts` — prej so bili znotraj
+`app/pos/page.tsx` (11.000 vrstic, odjemalska komponenta) in jih testi niso
+mogli uvoziti.
+
+---
+
 ## Kar še ni pokrito
 
 - **Tipi iz Supabase** (`supabase gen types typescript`) — potem bi napačna
   imena stolpcev ujel prevajalnik in skripta 2 ne bi bila potrebna.
-- **Testi kritičnih poti** — prodaja, DDV po vseh treh stopnjah,
-  fiskalizacija, storno, zaključek blagajne z vračilom. Playwright je že
-  nastavljen (`apps/web/tests`), manjkajo pa testi za te poti.
+- **Fiskalizacija** — pravilnost ZOI podpisa in XML sporočila za FURS ni
+  pokrita s testi; preverjena je bila ročno v testnem okolju FURS.
+- **Obračun plač** — regres, dodatna splošna olajšava in minimalna osnova
+  imajo odprta vprašanja za računovodkinjo, zato testov zanje še ni.
