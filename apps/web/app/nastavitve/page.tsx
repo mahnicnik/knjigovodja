@@ -23,6 +23,7 @@ function stStevilo(v: any): number {
   return parseFloat(String(v).replace(',', '.')) || 0
 }
 import AppLayout from '@/components/AppLayout'
+import { VAT_EXEMPTIONS } from '@/lib/vat-exemptions'
 
 const SP_CONTRIBUTIONS: Record<number, number> = {
   1: 2584.92, 2: 3012.36, 3: 3439.20, 4: 3866.04, 5: 4293.00,
@@ -86,6 +87,7 @@ export default function NastavitevPage() {
   const [showSuccess, setShowSuccess] = useState(false)
   const [form, setForm] = useState({
     name: '', tax_number: '', vat_number: '', vat_registered: false,
+    vat_exemption_code: '', vat_exemption_custom_text: '',
     iban: '', bic: '', address: '', post_code: '', city: '',
     phone: '', email: '', contribution_class: 8, contrib_piz: 0, contrib_zzzs: 0, contrib_zaposlovanje: 0, contrib_starsevstvo: 0, contrib_akontacija: 0,
   })
@@ -114,6 +116,7 @@ export default function NastavitevPage() {
       setForm({
         name: o.name || '', tax_number: o.tax_number || '',
         vat_number: o.vat_number || '', vat_registered: o.vat_registered || false,
+        vat_exemption_code: o.vat_exemption_code || '', vat_exemption_custom_text: o.vat_exemption_custom_text || '',
         iban: o.iban || '', bic: o.bic || '', address: o.address || '',
         post_code: o.post_code || '', city: o.city || '',
         phone: o.phone || '', email: o.email || '',
@@ -134,6 +137,8 @@ export default function NastavitevPage() {
     const { error } = await supabase.from('organizations').update({
       name: form.name, tax_number: form.tax_number, vat_number: form.vat_number,
       vat_registered: form.vat_registered, iban: form.iban, bic: form.bic,
+      vat_exemption_code: form.vat_exemption_code || null,
+      vat_exemption_custom_text: form.vat_exemption_custom_text || null,
       address: form.address, post_code: form.post_code, city: form.city,
       phone: form.phone, email: form.email, contribution_class: form.contribution_class, // POPRAVLJENO (16.8.2026): polja med tipkanjem hranijo BESEDILO, sicer
       // pretvorba ob vsakem znaku poje decimalno piko ("274.45" -> "27445").
@@ -301,6 +306,46 @@ export default function NastavitevPage() {
                     <input value={form.vat_number} onChange={e => setForm({...form, vat_number: e.target.value})} placeholder="SI12345678" className={inp}/>
                   </div>
                 )}
+
+                {/* PRIVZETA KLAVZULA O NEOBRACUNANEM DDV — DODANO 19.8.2026.
+                    ZDDV-1 zahteva, da racun brez obracunanega DDV navaja razlog.
+                    Mali zavezanec ga ima na VSEH racunih (94. clen), zato ga
+                    nastavi enkrat tukaj namesto pri vsakem racunu posebej.
+                    Zavezanec ga nastavi le, ce ima oproscene dejavnosti. */}
+                <div style={{ marginTop: 14 }}>
+                  <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>
+                    Privzeti razlog za neobračunan DDV {form.vat_registered ? '(če imate oproščene storitve)' : '(obvezno za male zavezance)'}
+                  </label>
+                  <select
+                    value={form.vat_exemption_code || ''}
+                    onChange={e => setForm({...form, vat_exemption_code: e.target.value})}
+                    className={inp}
+                    style={{ background: '#fff' }}
+                  >
+                    <option value="">— brez privzetega —</option>
+                    {VAT_EXEMPTIONS.map(ex => (
+                      <option key={ex.code} value={ex.code}>{ex.label}</option>
+                    ))}
+                  </select>
+                  {form.vat_exemption_code && form.vat_exemption_code !== 'custom' && (
+                    <div style={{ marginTop: 8, padding: 10, background: '#F7F6F2', borderRadius: 8, fontSize: 11, color: '#555', lineHeight: 1.5 }}>
+                      {VAT_EXEMPTIONS.find(ex => ex.code === form.vat_exemption_code)?.text}
+                    </div>
+                  )}
+                  {form.vat_exemption_code === 'custom' && (
+                    <textarea
+                      value={form.vat_exemption_custom_text || ''}
+                      onChange={e => setForm({...form, vat_exemption_custom_text: e.target.value})}
+                      placeholder="Besedilo, ki vam ga je svetoval računovodja..."
+                      rows={2}
+                      className={inp}
+                      style={{ marginTop: 8, resize: 'vertical' as any }}
+                    />
+                  )}
+                  <div style={{ fontSize: 11, color: '#aaa', marginTop: 6, lineHeight: 1.5 }}>
+                    Ta razlog se samodejno predlaga na novih računih. Pri posameznem računu ga lahko spremenite.
+                  </div>
+                </div>
               </div>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Mesečni prispevki</div>

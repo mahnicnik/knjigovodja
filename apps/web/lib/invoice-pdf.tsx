@@ -181,6 +181,20 @@ export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
           </View>
         </View>
 
+        {/* KLAVZULA O NEOBRACUNANEM DDV — DODANO 19.8.2026.
+            ZDDV-1 zahteva, da racun brez obracunanega DDV navaja RAZLOG
+            (sklic na clen zakona oz. direktive). Prej se je dalo izbrati
+            stopnjo 0 %, razloga pa ni bilo nikjer - racun je bil formalno
+            pomanjkljiv. Besedilo je shranjeno NA RACUNU (ne le koda), da
+            sprememba zakonodaje ne spremeni ze izdanih racunov. */}
+        {invoice.vat_exemption_text && (
+          <View style={{ marginTop: 12, padding: 10, backgroundColor: '#f7f6f2', borderRadius: 4, borderLeftWidth: 2, borderLeftColor: '#0D1F12' }}>
+            <Text style={{ fontSize: 9, color: '#333', lineHeight: 1.4 }}>
+              {invoice.vat_exemption_text}
+            </Text>
+          </View>
+        )}
+
         {!isStorno && !isDobropis && invoice.status === 'paid' && (
           <View style={{ marginTop: 16, padding: 14, backgroundColor: '#e8f5ee', borderRadius: 6, borderWidth: 1, borderColor: '#1f6b3a', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text style={{ fontSize: 13, fontWeight: 700, color: '#1f6b3a' }}>PLAČANO</Text>

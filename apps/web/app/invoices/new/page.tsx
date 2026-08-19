@@ -9,6 +9,7 @@ import Link from 'next/link'
 import posthog from 'posthog-js'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import { VAT_EXEMPTIONS, vatExemptionText } from '@/lib/vat-exemptions'
 import { formatEurNumber } from '@/lib/format'
 
 interface LineItem {
@@ -40,6 +41,10 @@ export default function NewInvoicePage() {
   const [dueDate, setDueDate] = useState(lokalniDatum(new Date(Date.now() + 14*24*60*60*1000)))
   const [items, setItems] = useState<LineItem[]>([{ description: '', quantity: 1, unit_price: 0, vat_rate: 22, discount_pct: 0 }])
   const [notes, setNotes] = useState('')
+  // DODANO (19.8.2026): klavzula o neobracunanem DDV. ZDDV-1 zahteva navedbo
+  // razloga na racunu brez DDV; prej se je dalo izbrati 0 %, razloga pa ni bilo.
+  const [vatExemptionCode, setVatExemptionCode] = useState('')
+  const [vatExemptionCustom, setVatExemptionCustom] = useState('')
   const [serviceDate, setServiceDate] = useState('')
   const [serviceDateTo, setServiceDateTo] = useState('')
   const [headerText, setHeaderText] = useState('')
@@ -67,6 +72,12 @@ export default function NewInvoicePage() {
       if (member) {
         const o = (member as any).organizations
         setOrg(o)
+        // Privzeta klavzula organizacije (npr. mali zavezanec: 94. clen) -
+        // da uporabniku ni treba izbirati pri vsakem racunu posebej.
+        if (o?.vat_exemption_code) {
+          setVatExemptionCode(o.vat_exemption_code)
+          if (o.vat_exemption_custom_text) setVatExemptionCustom(o.vat_exemption_custom_text)
+        }
         if (!o.vat_registered) {
           setItems(prev => prev.map(item => ({ ...item, vat_rate: 0 })))
         }
@@ -180,6 +191,10 @@ export default function NewInvoicePage() {
       service_date: serviceDate || null,
       service_date_to: serviceDateTo || null,
       header_text: headerText || null,
+      // Shranimo KODO in BESEDILO. Besedilo zato, da sprememba zakonodaje
+      // ne spremeni ze izdanih racunov (zakonska hramba).
+      vat_exemption_code: vatExemptionCode || null,
+      vat_exemption_text: vatExemptionText(vatExemptionCode, vatExemptionCustom),
     })
     if (error) {
       const isDuplicate = error.message.includes('issued_invoices_org_id_invoice_number_key') || error.message.includes('duplicate key')
@@ -346,6 +361,46 @@ export default function NewInvoicePage() {
             </div>
             <button onClick={addItem} style={{ width:'100%', marginTop:'10px', padding:'12px', border:'0.5px dashed rgba(0,0,0,0.2)', borderRadius:'10px', background:'none', fontSize:'13px', color:'#888', cursor:'pointer' }}>+ Dodaj postavko</button>
           </div>
+          {/* KLAVZULA O NEOBRACUNANEM DDV — DODANO 19.8.2026.
+              Prikaze se SAMO, kadar je dejansko potrebna: ce je katera postavka
+              po 0 % ali ce izdajatelj ni zavezanec za DDV. Drugace bi po
+              nepotrebnem obremenjevala vsak racun. */}
+          {(items.some(it => Number(it.vat_rate) === 0) || org?.vat_registered === false) && (
+            <div style={{ background:'#fff', borderRadius:'12px', border:'0.5px solid rgba(0,0,0,0.08)', padding:'16px' }}>
+              <div style={{ fontSize:'13px', fontWeight:'500', color:'#0D1F12', marginBottom:'4px' }}>Razlog za neobračunan DDV</div>
+              <div style={{ fontSize:'11px', color:'#888', marginBottom:'12px', lineHeight:1.5 }}>
+                Zakon zahteva, da račun brez DDV navaja razlog. Če niste prepričani, katera možnost je prava, vprašajte računovodjo.
+              </div>
+              <select
+                value={vatExemptionCode}
+                onChange={e => setVatExemptionCode(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none"
+                style={{ background:'#fff' }}
+              >
+                <option value="">— izberite razlog —</option>
+                {VAT_EXEMPTIONS.map(e => (
+                  <option key={e.code} value={e.code}>{e.label}</option>
+                ))}
+              </select>
+              {vatExemptionCode && vatExemptionCode !== 'custom' && (
+                <div style={{ marginTop:'10px', padding:'10px', background:'#F7F6F2', borderRadius:'8px', fontSize:'12px', color:'#444', lineHeight:1.5 }}>
+                  <div style={{ marginBottom:'6px' }}>{VAT_EXEMPTIONS.find(e => e.code === vatExemptionCode)?.text}</div>
+                  <div style={{ fontSize:'11px', color:'#888' }}>{VAT_EXEMPTIONS.find(e => e.code === vatExemptionCode)?.hint}</div>
+                </div>
+              )}
+              {vatExemptionCode === 'custom' && (
+                <textarea
+                  value={vatExemptionCustom}
+                  onChange={e => setVatExemptionCustom(e.target.value)}
+                  placeholder="Vpišite besedilo, ki vam ga je svetoval računovodja..."
+                  rows={2}
+                  style={{ marginTop:'10px' }}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"
+                />
+              )}
+            </div>
+          )}
+
           <div style={{ background:'#fff', borderRadius:'12px', border:'0.5px solid rgba(0,0,0,0.08)', padding:'16px' }}>
             <div style={{ fontSize:'13px', fontWeight:'500', color:'#0D1F12', marginBottom:'12px' }}>Opombe</div>
             <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Dodatne opombe..." rows={3} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none resize-none" />
