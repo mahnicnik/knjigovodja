@@ -144,6 +144,16 @@ function podatkiPodjetja(org: any) {
 // HELPERS
 // ================================================================
 const eur = (v) => '€ ' + Number(v).toFixed(2).replace('.', ',')
+/**
+ * Izpis odstotka popusta (19.8.2026). Ko uporabnik vnese popust v EVRIH, se
+ * ta pretvori v odstotek in ima lahko dolge decimalke (npr. 25.031289...).
+ * Tu jih porezemo: cela stevila brez decimalk, ostalo na dve mesti.
+ */
+const fmtPct = (v) => {
+  const n = Number(v) || 0
+  const s = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')
+  return s.replace('.', ',')
+}
 
 const H = {
   lineTotal: (l) => {
@@ -1909,7 +1919,7 @@ th{background:#f5f5f5;font-weight:bold}.right{text-align:right}.total-row{font-s
 <table><thead><tr><th>Artikel</th><th class="right">Kol.</th><th class="right">Cena</th><th class="right">Skupaj</th></tr></thead>
 <tbody>${cart.map((l:any) => `<tr><td>${escapeHtml(l.name)}</td><td class="right">${l.qty}</td><td class="right">${eur2(Number(l.price))}</td><td class="right">${eur2(Number(l.price)*Number(l.qty))}</td></tr>`).join('')}
 </tbody></table>
-${cartDiscount > 0 ? `<div style="text-align:right;color:#666">Popust ${cartDiscount}%: -${eur2(totals.total-total)}</div>` : ''}
+${cartDiscount > 0 ? `<div style="text-align:right;color:#666">Popust ${fmtPct(cartDiscount)}%: -${eur2(totals.total-total)}</div>` : ''}
 <div class="total-row" style="text-align:right;font-size:18px;margin:12px 0">SKUPAJ: ${eur2(total)}</div>
 <div class="stamp">Predracun ni davčno potrjen. Velja do: ${new Date(Date.now()+7*86400000).toLocaleDateString('sl-SI')}</div>
 <div class="footer">${escapeHtml(pp.ime)} · www.racunko.si<br>Predracun izdan s sistemom RACUNKO</div>
@@ -1994,7 +2004,7 @@ ${recipientHtml}
 </tbody></table>
 <div style="display:flex;justify-content:flex-end">
   <div style="min-width:280px">
-    ${cartDiscount > 0 ? `<div style="display:flex;justify-content:space-between;color:#666;padding:4px 0"><span>Popust ${cartDiscount}%:</span><span>-${eur2(totals.total-total)}</span></div>` : ''}
+    ${cartDiscount > 0 ? `<div style="display:flex;justify-content:space-between;color:#666;padding:4px 0"><span>Popust ${fmtPct(cartDiscount)}%:</span><span>-${eur2(totals.total-total)}</span></div>` : ''}
     <div style="display:flex;justify-content:space-between;color:#666;padding:4px 0;border-top:1px solid #ddd;margin-top:4px"><span>Osnova (brez DDV):</span><span>${eur2(vatBreakdownForCart(cart, totals.total > 0 ? total / totals.total : 1).net)}</span></div>
     ${vatBreakdownForCart(cart, totals.total > 0 ? total / totals.total : 1).byRate.map(r => `<div style="display:flex;justify-content:space-between;color:#666;padding:4px 0"><span>DDV ${r.rate}%:</span><span>${eur2(r.vat)}</span></div>`).join('')}
     <div style="display:flex;justify-content:space-between;font-size:18px;font-weight:bold;border-top:2px solid #000;padding-top:8px;margin-top:4px"><span>SKUPAJ:</span><span>${eur2(total)}</span></div>
@@ -2027,6 +2037,8 @@ ${recipientHtml}
 function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPaymentOpen, totals, setActiveCustomer, customers, cartDiscount, setCartDiscount, cashSession, onNeedOpenCash, onHoldOrder, onProforma, onWriteoff, auth }) {
   const [discountOpen, setDiscountOpen] = useState(false)
   const [discountInput, setDiscountInput] = useState('')
+  // DODANO (19.8.2026): nacin vnosa popusta - odstotek ali znesek v evrih.
+  const [discountMode, setDiscountMode] = useState('pct')
   const [splitOpen, setSplitOpen] = useState(false)
   const [splitParts, setSplitParts] = useState(2)
   const [splitPaid, setSplitPaid] = useState([])
@@ -2090,7 +2102,7 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
             <KI name="user" size={14}/>Stranka
           </button>
           <button onClick={()=>{setDiscountInput(cartDiscount>0?String(cartDiscount):'');setDiscountOpen(true)}} style={{ flex:1, padding:'8px 4px', borderRadius:7, background:cartDiscount>0?T.accentSoft:T.chipBg, border:'none', cursor:'pointer', color:cartDiscount>0?T.accent:T.muted, fontFamily:'inherit', display:'flex', flexDirection:'column', alignItems:'center', gap:3, fontSize:10, fontWeight:700 }}>
-            <KI name="percent" size={14}/>{cartDiscount>0?`-${cartDiscount}%`:'Popust'}
+            <KI name="percent" size={14}/>{cartDiscount>0?`-${fmtPct(cartDiscount)}%`:'Popust'}
           </button>
           <button onClick={()=>setSplitOpen(true)} style={{ flex:1, padding:'8px 4px', borderRadius:7, background:T.chipBg, border:'none', cursor:'pointer', color:T.muted, fontFamily:'inherit', display:'flex', flexDirection:'column', alignItems:'center', gap:3, fontSize:10, fontWeight:700 }}>
             <KI name="split" size={14}/>Razdeli
@@ -2121,7 +2133,7 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
         </div>
         {cartDiscount>0 && (
           <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:4, color:T.accent }}>
-            <span>Popust {cartDiscount}%</span><span>-{eur(totals.total*cartDiscount/100)}</span>
+            <span>Popust {fmtPct(cartDiscount)}%</span><span>-{eur(totals.total*cartDiscount/100)}</span>
           </div>
         )}
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline' }}>
@@ -2153,19 +2165,64 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
         <Modal open onClose={()=>setDiscountOpen(false)} width={320}>
           <ModalHeader title="Popust na račun" onClose={()=>setDiscountOpen(false)}/>
           <div style={{ padding:'20px 22px' }}>
-            <div style={{ fontSize:13, color:T.muted, marginBottom:12 }}>Vnesi % popust na celoten račun</div>
-            <div style={{ display:'flex', gap:8, marginBottom:16 }}>
-              {[5,10,15,20,25].map(p=>(
-                <button key={p} onClick={()=>setDiscountInput(String(p))} style={{ flex:1, padding:'8px 4px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:13, background:discountInput===String(p)?T.accentSoft:T.chipBg, color:discountInput===String(p)?T.accent:T.ink }}>
-                  {p}%
+            {/* DODANO (19.8.2026): popust v EVRIH, ne samo v odstotkih.
+                Popust je v celotni kodi (listki, racuni, placilo, FURS) vezan
+                na ODSTOTEK, zato vneseni znesek tu pretvorimo v odstotek -
+                predelava vseh odjemalcev bi bila v blagajni prevec tvegana.
+                Znesek popusta zato ostane natancen, na listku pa se izpise
+                odstotek (lahko z decimalkami). */}
+            <div style={{ display:'flex', gap:6, marginBottom:14 }}>
+              {[['pct','V odstotkih (%)'],['eur','V evrih (€)']].map(([m,label])=>(
+                <button key={m} onClick={()=>{setDiscountMode(m);setDiscountInput('')}}
+                  style={{ flex:1, padding:'8px 4px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:12, background:discountMode===m?T.accentSoft:T.chipBg, color:discountMode===m?T.accent:T.muted }}>
+                  {label}
                 </button>
               ))}
             </div>
-            <input type="number" onFocus={e => e.target.select()} min="0" max="100" value={discountInput} onChange={e=>setDiscountInput(e.target.value)}
-              placeholder="Ali vnesi ročno..." style={{ width:'100%', padding:'10px 12px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:14, background:T.inputBg, outline:'none', boxSizing:'border-box', marginBottom:12 }}/>
+
+            <div style={{ fontSize:13, color:T.muted, marginBottom:12 }}>
+              {discountMode==='eur' ? 'Vnesi znesek popusta v evrih' : 'Vnesi % popust na celoten račun'}
+            </div>
+
+            <div style={{ display:'flex', gap:8, marginBottom:16 }}>
+              {(discountMode==='eur' ? [1,2,5,10,20] : [5,10,15,20,25]).map(p=>(
+                <button key={p} onClick={()=>setDiscountInput(String(p))} style={{ flex:1, padding:'8px 4px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:13, background:discountInput===String(p)?T.accentSoft:T.chipBg, color:discountInput===String(p)?T.accent:T.ink }}>
+                  {discountMode==='eur' ? `${p} €` : `${p}%`}
+                </button>
+              ))}
+            </div>
+
+            <input type="number" onFocus={e => e.target.select()} min="0" max={discountMode==='eur'?undefined:"100"} step={discountMode==='eur'?'0.01':'1'} value={discountInput} onChange={e=>setDiscountInput(e.target.value)}
+              placeholder={discountMode==='eur' ? 'Znesek v €...' : 'Ali vnesi ročno...'} style={{ width:'100%', padding:'10px 12px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:14, background:T.inputBg, outline:'none', boxSizing:'border-box', marginBottom:10 }}/>
+
+            {/* Predogled - da uporabnik takoj vidi, koliko bo dejansko odbito. */}
+            {Number(discountInput) > 0 && totals.total > 0 && (
+              <div style={{ fontSize:12, color:T.muted, marginBottom:12, padding:'8px 10px', background:T.chipBg, borderRadius:7 }}>
+                {discountMode==='eur'
+                  ? <>Popust {eur(Math.min(Number(discountInput), totals.total))} od {eur(totals.total)} · <strong>{(Math.min(Number(discountInput), totals.total)/totals.total*100).toFixed(1)} %</strong></>
+                  : <>Popust {Number(discountInput)} % · <strong>{eur(totals.total*Number(discountInput)/100)}</strong></>}
+                {discountMode==='eur' && Number(discountInput) > totals.total && (
+                  <div style={{ color:T.danger, marginTop:4 }}>Znesek presega vrednost računa — omejeno na {eur(totals.total)}.</div>
+                )}
+              </div>
+            )}
+
             <div style={{ display:'flex', gap:8 }}>
               <button onClick={()=>{setCartDiscount(0);setDiscountOpen(false)}} style={{ flex:1, padding:'10px', borderRadius:8, border:'1px solid '+T.line, background:'transparent', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:13 }}>Odstrani</button>
-              <button onClick={()=>{setCartDiscount(Number(discountInput)||0);setDiscountOpen(false)}} style={{ flex:1, padding:'10px', borderRadius:8, border:'none', background:T.accent, color:'#fff', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:13 }}>Potrdi</button>
+              <button onClick={()=>{
+                const vneseno = Number(discountInput) || 0
+                let pct = 0
+                if (discountMode === 'eur') {
+                  // Znesek -> odstotek. Omejimo na vrednost racuna, da popust
+                  // ne more preseci zneska (negativen racun).
+                  const znesek = Math.min(vneseno, totals.total)
+                  pct = totals.total > 0 ? Number((znesek / totals.total * 100).toFixed(4)) : 0
+                } else {
+                  pct = Math.min(vneseno, 100)
+                }
+                setCartDiscount(pct)
+                setDiscountOpen(false)
+              }} style={{ flex:1, padding:'10px', borderRadius:8, border:'none', background:T.accent, color:'#fff', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:13 }}>Potrdi</button>
             </div>
           </div>
         </Modal>

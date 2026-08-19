@@ -270,6 +270,7 @@ export default function PageHelp() {
   const [open, setOpen] = useState(false)
 
   const help = PAGE_HELP[pathname] || DEFAULT_HELP
+  const jeBlagajna = pathname?.startsWith('/pos') ?? false
 
   return (
     <>
@@ -300,7 +301,11 @@ export default function PageHelp() {
           // POPRAVLJENO (11.8.2026): premaknjeno na desno - left:24 je
           // padlo ZNOTRAJ novega 220px stranskega menija (AppLayout),
           // uvedenega danes na vseh straneh - gumb je bil za njim skrit.
-          right: 24,
+          //
+          // POPRAVLJENO (19.8.2026): na BLAGAJNI je desni rob zaseden - tam je
+          // povzetek narocila s ceno ("Skupaj"), ki ga je gumb prekrival.
+          // Blagajna ima svoj ozji levi meni (~130px), zato je tam prostor.
+          ...(jeBlagajna ? { left: 150 } : { right: 24 }),
           width: 44,
           height: 44,
           borderRadius: '50%',
