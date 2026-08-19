@@ -6,6 +6,8 @@
 
 import { createClient } from '@/lib/supabase'
 import { lokalniDatum } from '@/lib/tax-constants'
+import { vatExemptionText } from '@/lib/vat-exemptions'
+import { jeStoritevVrstica } from '@/lib/pos-calc'
 
 // ─── Business ID — multi-tenant: dinamično nastavljen glede na org ──
 // Live binding: ko resolveBusinessId() spremeni to vrednost, se sprememba
@@ -477,7 +479,14 @@ export const pos = {
       // Pridobi vse plačane naročitve v tem sessionu, z vrsticami in tipom artikla
       const { data: orders } = await db
         .from('orders')
-        .select('id, closed_at, cashier_id, order_lines(qty, unit_price, total, vat_rate, voided, item_id, service_id)')
+        // DODANO (19.8.2026): items(bookable, vat_exemption_code).
+        //  • `bookable` loci STORITEV od izdelka: storitev se ob shranjevanju
+        //    sinhronizira v katalog artiklov, zato se v blagajni proda kot
+        //    ARTIKEL in `order_lines.service_id` ostane prazen - fizioterapija
+        //    je bila v KPO knjizena kot "prodaja izdelkov".
+        //  • `vat_exemption_code` prinese razlog za neobracunan DDV, ki ga
+        //    racunovodja doslej iz knjige ni videl.
+        .select('id, closed_at, cashier_id, order_lines(qty, unit_price, total, vat_rate, voided, item_id, service_id, items(bookable, vat_exemption_code, vat_exemption_custom_text))')
         .eq('business_id', BUSINESS_ID)
         .eq('status', 'paid')
         .gte('closed_at', sessionFrom)
@@ -498,7 +507,9 @@ export const pos = {
       // storitve), stopnje DDV pa so se pri tem POMESALE - obrazec DDV-O
       // zahteva LOCENI vrstici za 22% in 9,5%. Zdaj grupiramo po vrsti IN
       // stopnji, tako da vsak zapis nosi svojo stopnjo.
-      const skupine = new Map<string, { net: number; vat: number; rate: number; jeStoritev: boolean }>()
+      const skupine = new Map<string, {
+        net: number; vat: number; rate: number; jeStoritev: boolean; klavzule: Set<string>
+      }>()
       for (const o of mojaNarocila) {
         for (const l of o.order_lines || []) {
           if (l.voided) continue
@@ -508,11 +519,31 @@ export const pos = {
           const rate = Number(l.vat_rate ?? 22)
           const net = rate > 0 ? lineTotal / (1 + rate / 100) : lineTotal
           const vat = lineTotal - net
-          const jeStoritev = !!l.service_id
+
+          // POPRAVLJENO (19.8.2026): prej samo `!!l.service_id`. Storitev se ob
+          // shranjevanju sinhronizira v katalog artiklov in se proda kot ARTIKEL,
+          // zato service_id ostane prazen - fizioterapija je bila v KPO knjizena
+          // kot "prodaja izdelkov", kategorija pa `pos_prodaja` namesto
+          // `pos_storitve`. Artikel, ki je nastal iz storitve, ima `bookable`.
+          const artikel: any = (l as any).items
+          const jeStoritev = jeStoritevVrstica(l as any)
+
           const kljuc = `${jeStoritev ? 'storitev' : 'izdelek'}|${rate}`
-          const obstoj = skupine.get(kljuc) || { net: 0, vat: 0, rate, jeStoritev }
+          const obstoj = skupine.get(kljuc)
+            || { net: 0, vat: 0, rate, jeStoritev, klavzule: new Set<string>() }
           obstoj.net += net
           obstoj.vat += vat
+
+          // Razlog za neobracunan DDV (samo pri 0 %). Ce je v isti skupini vec
+          // razlicnih razlogov, se zapisejo vsi.
+          if (rate === 0) {
+            const besedilo = vatExemptionText(
+              artikel?.vat_exemption_code,
+              artikel?.vat_exemption_custom_text,
+            )
+            if (besedilo) obstoj.klavzule.add(besedilo)
+          }
+
           skupine.set(kljuc, obstoj)
           if (jeStoritev) { serviceNet += net; serviceVat += vat }
           else { productNet += net; productVat += vat }
@@ -533,7 +564,12 @@ export const pos = {
           vat_out: Math.round(s.vat * 100) / 100,
           vat_rate: s.rate,
           category: s.jeStoritev ? 'pos_storitve' : 'pos_prodaja',
-          notes: 'Avtomatski dnevni povzetek iz POS blagajne',
+          // DODANO (19.8.2026): pri oproscenem prometu se zapise RAZLOG. Prej je
+          // vnos imel 0 % DDV brez pojasnila, zakaj - racunovodja iz knjige ni
+          // videl, ali gre za oprostitev po 42. clenu ali za neobdavcen bon.
+          notes: s.klavzule.size > 0
+            ? 'Avtomatski dnevni povzetek iz POS blagajne. ' + Array.from(s.klavzule).join(' ')
+            : 'Avtomatski dnevni povzetek iz POS blagajne',
         })
         if (kpoErr) console.error('POS -> KPO: zapisa za stopnjo', s.rate, 'ni bilo mogoce shraniti:', kpoErr)
       }

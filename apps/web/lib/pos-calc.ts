@@ -116,3 +116,20 @@ export function pricakovanaGotovina(params: {
     + Number(params.gotovinskiPromet || 0)
     - Number(params.gotovinskaVracila || 0)
 }
+
+/**
+ * Ali je prodana vrstica STORITEV ali izdelek — za pravilno kategorijo v KPO
+ * (`pos_storitve` proti `pos_prodaja`).
+ *
+ * ⚠️ Ne zadošča `service_id`: storitev se ob shranjevanju sinhronizira v
+ * katalog artiklov in se v blagajni proda kot ARTIKEL, zato `service_id` na
+ * vrstici ostane prazen. Fizioterapija je bila zato v KPO knjižena kot
+ * "prodaja izdelkov" (popravljeno 19.8.2026). Artikel, ki je nastal iz
+ * storitve, ima zastavico `bookable`.
+ */
+export function jeStoritevVrstica(vrstica: {
+  service_id?: string | null
+  items?: { bookable?: boolean | null } | null
+}): boolean {
+  return !!vrstica.service_id || !!vrstica.items?.bookable
+}

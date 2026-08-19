@@ -170,3 +170,23 @@ test('celotna pot: oproščena fizioterapija 50 € → 0 € DDV, skupaj 50 €
   // Klavzula mora biti prisotna — brez nje je račun formalno pomanjkljiv.
   expect(kosarica[0].vat_exemption_code).toBeTruthy()
 })
+
+// ═══════════════════ KPO: STORITEV PROTI IZDELKU ═══════════════════
+
+test('KPO: storitev, prodana kot artikel, se prepozna kot STORITEV', () => {
+  // NAPAKA (popravljeno 19.8.2026): prepoznava je bila samo `!!service_id`.
+  // Storitev se ob shranjevanju sinhronizira v katalog artiklov in se proda
+  // kot ARTIKEL, zato service_id ostane prazen — fizioterapija je bila v KPO
+  // knjižena kot "prodaja izdelkov", kategorija pa `pos_prodaja`.
+  const { jeStoritevVrstica } = require('../lib/pos-calc')
+
+  // fizioterapija: prodana kot artikel, a ima bookable
+  expect(jeStoritevVrstica({ service_id: null, items: { bookable: true } })).toBe(true)
+
+  // rezervacija: klasična pot prek service_id
+  expect(jeStoritevVrstica({ service_id: 'abc', items: null })).toBe(true)
+
+  // kava: navaden izdelek
+  expect(jeStoritevVrstica({ service_id: null, items: { bookable: false } })).toBe(false)
+  expect(jeStoritevVrstica({ service_id: null, items: null })).toBe(false)
+})
