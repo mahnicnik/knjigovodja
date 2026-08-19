@@ -316,7 +316,11 @@ export default function DashboardPage() {
       // Load all data in parallel
       const [invRes, expRes, empRes, cliRes, prefsRes2, emailPendRes, emailConnRes, kpoRes, pendingRecurringRes] = await Promise.all([
         supabase.from('issued_invoices').select('*').eq('org_id', o.id).neq('status','draft').or('zoi.is.null,zoi.not.like.DEMO-%'),
-        supabase.from('receipts').select('*').eq('org_id', o.id),
+        // POPRAVLJENO (19.8.2026, HITROST): `select('*')` je prenasal tudi stolpec
+        // `attachment_base64` - pri Niku 21 MB skeniranih listin, ki jih ta stran
+        // sploh ne uporablja. To se je preneslo ob VSAKEM odprtju strani, tudi
+        // po mobilnih podatkih. Zdaj nastejemo samo stolpce, ki jih rabimo.
+        supabase.from('receipts').select('id, org_id, vendor, vendor_tax_num, receipt_date, receipt_number, amount_net, vat_rate, vat_amount, amount_total, category, description, is_deductible, status, kpo_entry_id, created_at, updated_at, attachment_type, attachment_path, image_url').eq('org_id', o.id),
         supabase.from('employees').select('id, gross_salary').eq('org_id', o.id).eq('status','active'), // POPRAVLJENO 11.8.2026: dodan gross_salary za pravi izracun strosk place
         supabase.from('invoice_partners').select('id').eq('org_id', o.id).limit(1), // POPRAVLJENO 26.7.2026: 'clients' tabela ne obstaja (404), prava je invoice_partners
         supabase.from('user_preferences').select('onboarding_answers').eq('user_id', user.id).maybeSingle(),

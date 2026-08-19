@@ -70,7 +70,7 @@ export default function StatistikaPage() {
     const [invRes, expRes, kpoIncRes, kpoExpRes] = await Promise.all([
       supabase.from('issued_invoices').select('*').eq('org_id', o.id)
         .neq('status','draft').or('zoi.is.null,zoi.not.like.DEMO-%').gte('issue_date', yearStart).lte('issue_date', yearEnd),
-      supabase.from('receipts').select('*').eq('org_id', o.id)
+      supabase.from('receipts').select('id, org_id, vendor, vendor_tax_num, receipt_date, receipt_number, amount_net, vat_rate, vat_amount, amount_total, category, description, is_deductible, status, kpo_entry_id, created_at, updated_at, attachment_type, attachment_path, image_url').eq('org_id', o.id)
         .gte('receipt_date', yearStart).lte('receipt_date', yearEnd),
       // DODANO (30.7.2026): KPO prihodki (POS, banka, kartice...) - SAMO
       // brez invoice_id (izognemo se dvojnemu stetju s placili ze

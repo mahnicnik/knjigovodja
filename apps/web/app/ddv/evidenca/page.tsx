@@ -44,7 +44,7 @@ export default function DDVEvidencaPage() {
     const [invoicesRes, receiptsRes, kpoRes] = await Promise.all([
       supabase.from('issued_invoices').select('*').eq('org_id', org.id)
         .neq('status', 'draft').or('zoi.is.null,zoi.not.like.DEMO-%').gte('issue_date', from).lte('issue_date', to),
-      supabase.from('receipts').select('*').eq('org_id', org.id)
+      supabase.from('receipts').select('id, org_id, vendor, vendor_tax_num, receipt_date, receipt_number, amount_net, vat_rate, vat_amount, amount_total, category, description, is_deductible, status, kpo_entry_id, created_at, updated_at, attachment_type, attachment_path, image_url').eq('org_id', org.id)
         .gte('receipt_date', from).lte('receipt_date', to),
       // DODANO (16.8.2026, KRITICNO): promet iz POS blagajne, banke in kartic
       // se knjizi v kpo_entries, ne kot izdan racun. Evidenca ga ni zajela,

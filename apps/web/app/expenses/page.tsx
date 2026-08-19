@@ -82,7 +82,10 @@ export default function ExpensesPage() {
   async function loadExpenses() {
     setLoading(true)
     const { from, to } = getPeriodRange()
-    let query = supabase.from('receipts').select('*').eq('org_id', org.id)
+    // POPRAVLJENO (19.8.2026, HITROST): `select('*')` je prenasal tudi
+    // `attachment_base64` (21 MB skeniranih listin), ceprav ta stran prilog
+    // sploh ne prikazuje - samo seznam stroskov.
+    let query = supabase.from('receipts').select('id, org_id, vendor, vendor_tax_num, receipt_date, receipt_number, amount_net, vat_rate, vat_amount, amount_total, category, description, is_deductible, status, kpo_entry_id, created_at, updated_at, attachment_type, attachment_path, image_url').eq('org_id', org.id)
     if (from) query = query.gte('receipt_date', from)
     if (to) query = query.lte('receipt_date', to)
     const { data } = await query.order('receipt_date', { ascending: false })

@@ -28,7 +28,11 @@ function EmailSkeniranjeContent() {
       setOrg((member as any).organizations)
       const { data: conns } = await supabase.from('email_connections').select('*').eq('org_id', member.org_id).order('created_at', { ascending: false })
       setConnections(conns || [])
-      const { data: pend } = await supabase.from('email_scan_pending').select('*').eq('org_id', member.org_id).eq('status', 'pending').order('created_at', { ascending: false })
+      // POPRAVLJENO (19.8.2026, HITROST): `select('*')` je prenasal tudi
+      // `pdf_base64` - pri Niku 6,8 MB PDF-jev za 26 cakajocih predlogov.
+      // PDF potrebujemo SAMO ob predogledu in ob potrditvi, zato ga naloz(imo
+      // takrat (glej nalozi PDF spodaj).
+      const { data: pend } = await supabase.from('email_scan_pending').select('id, org_id, connection_id, email_subject, email_from, email_date, attachment_name, extracted, status, created_at').eq('org_id', member.org_id).eq('status', 'pending').order('created_at', { ascending: false })
       setPending(pend || [])
       setLoading(false)
     }
@@ -70,7 +74,11 @@ function EmailSkeniranjeContent() {
       if (user) {
         const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
         if (member) {
-          const { data: pend } = await supabase.from('email_scan_pending').select('*').eq('org_id', member.org_id).eq('status', 'pending').order('created_at', { ascending: false })
+          // POPRAVLJENO (19.8.2026, HITROST): `select('*')` je prenasal tudi
+      // `pdf_base64` - pri Niku 6,8 MB PDF-jev za 26 cakajocih predlogov.
+      // PDF potrebujemo SAMO ob predogledu in ob potrditvi, zato ga naloz(imo
+      // takrat (glej nalozi PDF spodaj).
+      const { data: pend } = await supabase.from('email_scan_pending').select('id, org_id, connection_id, email_subject, email_from, email_date, attachment_name, extracted, status, created_at').eq('org_id', member.org_id).eq('status', 'pending').order('created_at', { ascending: false })
           setPending(pend || [])
         }
       }
@@ -100,7 +108,8 @@ function EmailSkeniranjeContent() {
       category: d.category || 'Drugo',
       status: 'confirmed',
       is_deductible: true,
-      attachment_base64: item.pdf_base64 || null,
+      // PDF naloz(imo sele tu, ne ze ob prikazu seznama (19.8.2026).
+      attachment_base64: (await supabase.from('email_scan_pending').select('pdf_base64').eq('id', item.id).maybeSingle()).data?.pdf_base64 || null,
       attachment_type: 'pdf',
     })
     if (rcpErr) { alert('Računa ni bilo mogoče shraniti: ' + rcpErr.message); return }
@@ -128,9 +137,14 @@ function EmailSkeniranjeContent() {
     setPending(prev => prev.filter(p => p.id !== id))
   }
 
-  function previewPdf(item: any) {
-    if (!item.pdf_base64) { alert('PDF ni na voljo za predogled'); return }
-    const byteChars = atob(item.pdf_base64)
+  async function previewPdf(item: any) {
+    // PDF se nalozi SELE ob kliku (19.8.2026) - prej so se vsi PDF-ji prenesli
+    // ze ob odprtju strani, ceprav uporabnik odpre kvecjemu enega.
+    const { data: zapis } = await supabase
+      .from('email_scan_pending').select('pdf_base64').eq('id', item.id).maybeSingle()
+    const pdf = zapis?.pdf_base64
+    if (!pdf) { alert('PDF ni na voljo za predogled'); return }
+    const byteChars = atob(pdf)
     const byteNumbers = new Array(byteChars.length)
     for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i)
     const byteArray = new Uint8Array(byteNumbers)

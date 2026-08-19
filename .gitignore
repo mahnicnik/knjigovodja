@@ -5,3 +5,7 @@ node_modules/
 .DS_Store
 node_modules/
 .next/
+
+# Izpisi Playwright testov (19.8.2026) - ne sodijo v repozitorij.
+test-results/
+playwright-report/
