@@ -328,7 +328,16 @@ export default function DashboardPage() {
         // POPRAVLJENO (30.7.2026): razsirjeno na celo leto (prej samo mesec)
         // + dodan invoice_id, da lahko izpeljemo tudi pravilen LETNI
         // prihodek za prag normiranca (glej kpoYearIncomeForLimit spodaj).
-        supabase.from('kpo_entries').select('income, entry_date, invoice_id').eq('org_id', o.id).eq('entry_type', 'income').gte('entry_date', yearStart).lte('entry_date', monthEnd),
+        // POPRAVLJENO (19.8.2026): brali smo SAMO prihodke (entry_type='income')
+        // in samo za izracun letnega praga. Mesecni prihodek na Dashboardu je
+        // stel LE izdane racune, odhodki pa so se steli v celoti - kdor prodaja
+        // izkljucno prek POS blagajne, je videl vse stroske in NIC prihodka,
+        // torej stalno izgubo. Zdaj beremo obe strani in tudi DDV.
+        supabase.from('kpo_entries')
+          .select('income, expense, vat_out, entry_date, invoice_id, receipt_id')
+          .eq('org_id', o.id)
+          .gte('entry_date', yearStart)
+          .lte('entry_date', quarterEnd > monthEnd ? quarterEnd : monthEnd),
         // DODANO 29.7.2026: stevilo samodejno pripravljenih osnutkov
         // ponavljajocih racunov, ki cakajo na rocno potrditev.
         supabase.from('issued_invoices').select('id', { count: 'exact', head: true }).eq('org_id', o.id).eq('status', 'draft').like('notes', 'Ponavljajoč račun%'),
@@ -340,28 +349,57 @@ export default function DashboardPage() {
       const receipts = expRes.data || []
       // DODANO 26.7.2026 (audit K3): dejansko prejeto na racun ta mesec
       // (KPO, denarno nacelo) - locen prikaz od fakturiranega prometa.
-      const kpoReceivedMonth = (kpoRes.data || []).reduce((s: number, e: any) => s + Number(e.income || 0), 0)
+      const kpoVsi = (kpoRes.data || []) as any[]
+
+      // KPO vnosi TEGA MESECA, ki NISO povezani z izdanim racunom oz. prejetim
+      // racunom - torej promet, ki ga drugod na Dashboardu ni: POS blagajna,
+      // banka, kartice. Filter prepreci dvojno stetje.
+      const kpoMesec = kpoVsi.filter(e => e.entry_date >= monthStart && e.entry_date <= monthEnd)
+      const kpoPrihodekMesec = kpoMesec
+        .filter(e => !e.invoice_id)
+        .reduce((s: number, e: any) => s + Number(e.income || 0), 0)
+      const kpoOdhodekMesec = kpoMesec
+        .filter(e => !e.receipt_id)
+        .reduce((s: number, e: any) => s + Number(e.expense || 0), 0)
+
+      const kpoReceivedMonth = kpoMesec.reduce((s: number, e: any) => s + Number(e.income || 0), 0)
       setPendingRecurringCount(pendingRecurringRes.count || 0)
       const monthInv = invoices.filter((i:any) => i.issue_date >= monthStart && i.issue_date <= monthEnd)
       const yearInv = invoices.filter((i:any) => i.issue_date >= yearStart)
-      const revenue = monthInv.reduce((s:number,i:any) => s + Number(i.amount_net), 0)
+      // POPRAVLJENO (19.8.2026): prej SAMO izdani racuni. Kdor prodaja izkljucno
+      // prek POS blagajne, je imel prihodek 0, stroske pa vse - Dashboard je
+      // kazal stalno izgubo. Zdaj po ISTEM nacelu kot letni izracun: racuni +
+      // KPO vnosi brez invoice_id (POS, banka, kartice).
+      const revenue = monthInv.reduce((s:number,i:any) => s + Number(i.amount_net), 0) + kpoPrihodekMesec
       // POPRAVLJENO (30.7.2026): letni prihodek za prag normiranca je prej
       // stel SAMO izdane racune - manjkal je POS/bancni/karticni promet.
       // SAMO KPO vnosi BREZ invoice_id (izognemo se dvojnemu stetju s
       // placili ze prestetih racunov).
-      const kpoYearIncomeForLimit = (kpoRes.data || [])
-        .filter((e: any) => !e.invoice_id)
+      const kpoYearIncomeForLimit = kpoVsi
+        .filter((e: any) => !e.invoice_id && e.entry_date >= yearStart && e.entry_date <= monthEnd)
         .reduce((s: number, e: any) => s + Number(e.income || 0), 0)
       const yearRevenue = yearInv.reduce((s:number,i:any) => s + Number(i.amount_net), 0) + kpoYearIncomeForLimit
-      const expenses = receipts.filter((r:any) => r.receipt_date >= monthStart && r.receipt_date <= monthEnd).reduce((s:number,r:any) => s + Number(r.amount_net), 0)
+      // POPRAVLJENO (19.8.2026): prej samo prejeti racuni. Bancni odlivi in
+      // karticne provizije, ki so v KPO knjigi in NIMAJO prejetega racuna,
+      // niso bili nikjer vsteti - strosek je bil prenizek.
+      const expenses = receipts.filter((r:any) => r.receipt_date >= monthStart && r.receipt_date <= monthEnd).reduce((s:number,r:any) => s + Number(r.amount_net), 0) + kpoOdhodekMesec
       // POPRAVLJENO (17.8.2026): DDV samo za TEKOCE CETRTLETJE. Prej so se
       // sestevali VSI racuni in stroski od zacetka poslovanja, rezultat pa se
       // je prikazal kot obveznost za tekoce cetrtletje - torej povsem druga
       // stevilka. Pri Niku je vsota padla v minus, zato je Dashboard kazal
       // niclo namesto 470,87 EUR.
+      // POPRAVLJENO (19.8.2026): obracunani DDV je stel SAMO izdane racune iz
+      // portala. Promet iz POS blagajne ima svoj DDV zapisan v KPO knjigi
+      // (vat_out), a ga tu ni bilo - kdor prodaja prek blagajne, je videl
+      // prenizko obveznost za DDV. To je davcna stevilka, zato je vazno.
+      const kpoVatOutQuarter = kpoVsi
+        .filter((e:any) => !e.invoice_id && e.entry_date >= quarterStart && e.entry_date <= quarterEnd)
+        .reduce((s:number,e:any) => s + Number(e.vat_out || 0), 0)
+
       const vatOut = invoices
         .filter((i:any) => i.issue_date >= quarterStart && i.issue_date <= quarterEnd)
         .reduce((s:number,i:any) => s + Number(i.vat_amount), 0)
+        + kpoVatOutQuarter
       const vatIn = receipts
         .filter((r:any) => r.receipt_date >= quarterStart && r.receipt_date <= quarterEnd)
         .reduce((s:number,r:any) => s + Number(r.vat_amount), 0)

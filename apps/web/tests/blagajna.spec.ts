@@ -190,3 +190,51 @@ test('KPO: storitev, prodana kot artikel, se prepozna kot STORITEV', () => {
   expect(jeStoritevVrstica({ service_id: null, items: { bookable: false } })).toBe(false)
   expect(jeStoritevVrstica({ service_id: null, items: null })).toBe(false)
 })
+
+// ═══════════════════ DASHBOARD: PRIHODKI IN ODHODKI ═══════════════════
+
+/**
+ * Dashboard sešteva iz DVEH virov: izdanih računov (fakturiran promet) in
+ * KPO knjige (denarni tok — POS, banka, kartice). Filter po `invoice_id` /
+ * `receipt_id` prepreči dvojno štetje: plačilo izdanega računa pride v KPO
+ * z `invoice_id`, zato se ne sme šteti še enkrat.
+ */
+function prihodekMeseca(
+  racuni: Array<{ amount_net: number }>,
+  kpo: Array<{ income?: number; invoice_id?: string | null }>,
+): number {
+  return racuni.reduce((s, r) => s + Number(r.amount_net || 0), 0)
+    + kpo.filter(e => !e.invoice_id).reduce((s, e) => s + Number(e.income || 0), 0)
+}
+
+test('dashboard: podjetje SAMO s POS blagajno ne sme kazati ničelnega prihodka', () => {
+  // NAPAKA (popravljeno 19.8.2026): prihodek je štel SAMO izdane račune,
+  // odhodki pa so se šteli v celoti. Frizer, kavarna ali trgovina, ki prodaja
+  // izključno prek blagajne, je videl vse stroške in NIČ prihodka — torej
+  // stalno izgubo, čeprav je posloval s pozitivnim rezultatom.
+  const prihodek = prihodekMeseca([], [
+    { income: 500, invoice_id: null },   // POS zaključek
+    { income: 300, invoice_id: null },   // bančni priliv
+  ])
+  expect(prihodek).toBe(800)
+})
+
+test('dashboard: plačilo izdanega računa se NE sme šteti dvakrat', () => {
+  // Izdan račun 1000 € in njegovo plačilo, ki pride v KPO z invoice_id.
+  const prihodek = prihodekMeseca(
+    [{ amount_net: 1000 }],
+    [{ income: 1000, invoice_id: 'racun-1' }],
+  )
+  expect(prihodek).toBe(1000) // NE 2000
+})
+
+test('dashboard: mešano poslovanje — računi in blagajna se seštejeta', () => {
+  const prihodek = prihodekMeseca(
+    [{ amount_net: 2001.86 }],                       // izdani računi
+    [
+      { income: 101.30, invoice_id: null },          // POS blagajna
+      { income: 500, invoice_id: 'racun-x' },        // plačilo računa — ne šteje
+    ],
+  )
+  expect(prihodek).toBeCloseTo(2103.16, 2)
+})
