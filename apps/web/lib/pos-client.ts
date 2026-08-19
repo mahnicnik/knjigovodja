@@ -438,7 +438,11 @@ export const pos = {
         .select('*, order_lines(*), tables(name)')
         .eq('business_id', BUSINESS_ID)
         .eq('status', 'on_hold')
-        .order('created_at', { ascending: false })
+        // POPRAVLJENO (19.8.2026): `created_at` v tabeli `orders` NE OBSTAJA
+        // (stolpci so opened_at, closed_at, voided_at). Poizvedba je zato
+        // vrgla napako, ta pa je bila vrzena naprej (throw error) - seznam
+        // zadrzanih racunov se sploh ni odprl.
+        .order('opened_at', { ascending: false })
       if (error) throw error
       return data || []
     },
