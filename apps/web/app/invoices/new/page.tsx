@@ -9,7 +9,7 @@ import Link from 'next/link'
 import posthog from 'posthog-js'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
-import { VAT_EXEMPTIONS, vatExemptionText } from '@/lib/vat-exemptions'
+import { VAT_EXEMPTIONS, VAT_EXEMPTION_GROUPS, vatExemptionText, findVatExemption } from '@/lib/vat-exemptions'
 import { formatEurNumber } from '@/lib/format'
 
 interface LineItem {
@@ -378,14 +378,23 @@ export default function NewInvoicePage() {
                 style={{ background:'#fff' }}
               >
                 <option value="">— izberite razlog —</option>
-                {VAT_EXEMPTIONS.map(e => (
-                  <option key={e.code} value={e.code}>{e.label}</option>
+                {VAT_EXEMPTION_GROUPS.map(g => (
+                  <optgroup key={g} label={g}>
+                    {VAT_EXEMPTIONS.filter(e => e.group === g).map(e => (
+                      <option key={e.code} value={e.code}>{e.label}</option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
               {vatExemptionCode && vatExemptionCode !== 'custom' && (
                 <div style={{ marginTop:'10px', padding:'10px', background:'#F7F6F2', borderRadius:'8px', fontSize:'12px', color:'#444', lineHeight:1.5 }}>
-                  <div style={{ marginBottom:'6px' }}>{VAT_EXEMPTIONS.find(e => e.code === vatExemptionCode)?.text}</div>
-                  <div style={{ fontSize:'11px', color:'#888' }}>{VAT_EXEMPTIONS.find(e => e.code === vatExemptionCode)?.hint}</div>
+                  <div style={{ marginBottom:'6px' }}>{findVatExemption(vatExemptionCode)?.text}</div>
+                  <div style={{ fontSize:'11px', color:'#888' }}>{findVatExemption(vatExemptionCode)?.hint}</div>
+                  {findVatExemption(vatExemptionCode)?.priglasitev && (
+                    <div style={{ marginTop:'8px', padding:'8px', background:'#FFF6E5', borderRadius:'6px', fontSize:'11px', color:'#8A5A00', lineHeight:1.5 }}>
+                      Za to oprostitev je potrebna <strong>predhodna priglasitev pri FURS</strong> (43. člen ZDDV-1, prek eDavkov). Navedba člena na računu sama po sebi ne zadošča.
+                    </div>
+                  )}
                 </div>
               )}
               {vatExemptionCode === 'custom' && (

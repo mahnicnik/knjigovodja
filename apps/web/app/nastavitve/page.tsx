@@ -23,7 +23,7 @@ function stStevilo(v: any): number {
   return parseFloat(String(v).replace(',', '.')) || 0
 }
 import AppLayout from '@/components/AppLayout'
-import { VAT_EXEMPTIONS } from '@/lib/vat-exemptions'
+import { VAT_EXEMPTIONS, VAT_EXEMPTION_GROUPS, findVatExemption } from '@/lib/vat-exemptions'
 
 const SP_CONTRIBUTIONS: Record<number, number> = {
   1: 2584.92, 2: 3012.36, 3: 3439.20, 4: 3866.04, 5: 4293.00,
@@ -323,13 +323,23 @@ export default function NastavitevPage() {
                     style={{ background: '#fff' }}
                   >
                     <option value="">— brez privzetega —</option>
-                    {VAT_EXEMPTIONS.map(ex => (
-                      <option key={ex.code} value={ex.code}>{ex.label}</option>
+                    {VAT_EXEMPTION_GROUPS.map(g => (
+                      <optgroup key={g} label={g}>
+                        {VAT_EXEMPTIONS.filter(ex => ex.group === g).map(ex => (
+                          <option key={ex.code} value={ex.code}>{ex.label}</option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                   {form.vat_exemption_code && form.vat_exemption_code !== 'custom' && (
                     <div style={{ marginTop: 8, padding: 10, background: '#F7F6F2', borderRadius: 8, fontSize: 11, color: '#555', lineHeight: 1.5 }}>
-                      {VAT_EXEMPTIONS.find(ex => ex.code === form.vat_exemption_code)?.text}
+                      <div>{findVatExemption(form.vat_exemption_code)?.text}</div>
+                      <div style={{ color: '#888', marginTop: 6 }}>{findVatExemption(form.vat_exemption_code)?.hint}</div>
+                      {findVatExemption(form.vat_exemption_code)?.priglasitev && (
+                        <div style={{ marginTop: 8, padding: 8, background: '#FFF6E5', borderRadius: 6, color: '#8A5A00' }}>
+                          Za to oprostitev je potrebna <strong>predhodna priglasitev pri FURS</strong> (43. člen ZDDV-1, prek eDavkov).
+                        </div>
+                      )}
                     </div>
                   )}
                   {form.vat_exemption_code === 'custom' && (
