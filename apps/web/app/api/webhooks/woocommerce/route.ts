@@ -180,10 +180,18 @@ export async function POST(req: NextRequest) {
       // Ce platforma davka ni poslala, pade nazaj na 22% (prejsnje vedenje)
       const effTax = org.vat_registered ? (tax > 0 ? tax : net * 0.22) : 0
       const effRate = net > 0 && effTax > 0 ? Math.round((effTax / net) * 1000) / 10 : (org.vat_registered ? 22 : 0)
+      // POPRAVLJENO (19.8.2026): `Number(item.price)` je dal NaN, ce trgovina
+      // polja `price` ne poslje (nekatere posljejo samo subtotal). NaN se v
+      // JSON zapise kot null in cena postavke na racunu IZGINE. Zdaj ceno
+      // izracunamo iz neto zneska in kolicine.
+      const kolicina = Number(item.quantity) || 1
+      const cenaEnote = Number(item.price)
       return {
         description: item.name,
-        quantity: item.quantity,
-        unit_price: Number(item.price),
+        quantity: kolicina,
+        unit_price: Number.isFinite(cenaEnote) && cenaEnote > 0
+          ? cenaEnote
+          : Math.round((net / kolicina) * 10000) / 10000,
         amount_net: net,
         vat_rate: effRate,
         vat_amount: Math.round(effTax * 100) / 100,

@@ -165,14 +165,20 @@ export async function POST(req: NextRequest) {
     // POPRAVLJENO (30.7.2026): uporabi DEJANSKI davek iz Shopify
     // (tax_lines / total_tax) namesto predpostavke 22%.
     const lineItems = (order.line_items ?? []).map((item: any) => {
-      const net = Number(item.price) * item.quantity
-      const taxFromLines = (item.tax_lines ?? []).reduce((s: number, t: any) => s + Number(t.price ?? 0), 0)
+      // POPRAVLJENO (19.8.2026): `Number(item.price) * item.quantity` je dal
+      // NaN, ce manjka cena ali kolicina. Tu je posledica hujsa kot pri
+      // WooCommerce: NaN se prenese v `net`, iz njega v DDV in nato v celoten
+      // znesek racuna - torej ne le prikaz, ampak OSNOVA.
+      const kolicina = Number(item.quantity) || 1
+      const cenaEnote = Number(item.price) || 0
+      const net = cenaEnote * kolicina
+      const taxFromLines = (item.tax_lines ?? []).reduce((s: number, t: any) => s + (Number(t.price) || 0), 0)
       const effTax = org.vat_registered ? (taxFromLines > 0 ? taxFromLines : net * 0.22) : 0
       const effRate = net > 0 && effTax > 0 ? Math.round((effTax / net) * 1000) / 10 : (org.vat_registered ? 22 : 0)
       return {
         description: item.title + (item.variant_title ? ` — ${item.variant_title}` : ''),
-        quantity: item.quantity,
-        unit_price: Number(item.price),
+        quantity: kolicina,
+        unit_price: cenaEnote,
         amount_net: net,
         vat_rate: effRate,
         vat_amount: Math.round(effTax * 100) / 100,
