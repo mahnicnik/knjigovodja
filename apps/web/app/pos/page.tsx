@@ -6404,6 +6404,8 @@ function OrdersScreen({ posData, auth }) {
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [orderLines, setOrderLines] = useState([])
   const [orderPayment, setOrderPayment] = useState(null)
+  // DODANO (19.8.2026): stevilke storno dokumentov, kljuc = order_id.
+  const [stornoNumbers, setStornoNumbers] = useState({})
   const [period, setPeriod] = useState('today')
   const [search, setSearch] = useState('')
   const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate()-30); return lokalniDatum(d) })
@@ -6468,7 +6470,28 @@ function OrdersScreen({ posData, auth }) {
     }
 
     const { data, error } = await q
-    setOrders(data || [])
+    const nar = data || []
+    setOrders(nar)
+
+    // DODANO (19.8.2026): stevilke STORNO dokumentov. Ob stornu se izda nov
+    // dokument z lastno zaporedno stevilko (ZDavPR: "racun se stornira tako, da
+    // se izda nov racun z negativnimi zneski"), a se na seznamu ni bil viden -
+    // videti je bilo le precrtan izvirnik. Stranka tako ni mogla dobiti storno
+    // dokumenta, pri nadzoru pa se stevilo dokumentov v blagajni ni ujemalo s
+    // stevilom, ki jih ima FURS.
+    const stornirani = nar.filter(o => o.voided_at || o.status === 'voided').map(o => o.id)
+    if (stornirani.length > 0) {
+      const { data: st } = await sb
+        .from('pos_invoice_numbers')
+        .select('order_id, invoice_number, sequence_number, created_at, note')
+        .in('order_id', stornirani)
+        .not('note', 'is', null)
+      const map = {}
+      ;(st || []).forEach(r => { map[r.order_id] = r })
+      setStornoNumbers(map)
+    } else {
+      setStornoNumbers({})
+    }
     setLoading(false)
   }
 
@@ -6494,6 +6517,25 @@ function OrdersScreen({ posData, auth }) {
     .filter(o => o.status !== 'voided' && !o.voided_at)
     .reduce((s,o) => s + Number(o.total||0), 0)
   const stStorniranih = filtered.filter(o => o.status === 'voided' || o.voided_at).length
+
+  // DODANO (19.8.2026): vrstice za prikaz. Vsak storniran racun da DVE vrstici:
+  // izvirnik (precrtan) in samostojen STORNO dokument z negativnim zneskom.
+  // Tako je v blagajni vidno enako stevilo dokumentov, kot jih ima FURS.
+  const vrstice = []
+  filtered.forEach(o => {
+    vrstice.push({ tip: 'racun', o, cas: o.closed_at })
+    if (o.voided_at || o.status === 'voided') {
+      const st = stornoNumbers[o.id]
+      vrstice.push({
+        tip: 'storno',
+        o,
+        cas: o.voided_at || st?.created_at || o.closed_at,
+        stevilka: st?.invoice_number || null,
+        zaporedna: st?.sequence_number ?? null,
+      })
+    }
+  })
+  vrstice.sort((a, b) => new Date(b.cas || 0).getTime() - new Date(a.cas || 0).getTime())
 
   async function printReceipt(order, lines, payment) {
     // Pridobi org + premise + cashier za glavo računa
@@ -6688,11 +6730,43 @@ function OrdersScreen({ posData, auth }) {
         <div style={{ flex:1, overflowY:'auto' }}>
           {loading ? (
             <div style={{ padding:40, textAlign:'center', color:T.muted }}>Nalagam...</div>
-          ) : filtered.length === 0 ? (
+          ) : vrstice.length === 0 ? (
             <div style={{ padding:40, textAlign:'center', color:T.muted }}>Ni računov za izbrano obdobje</div>
-          ) : filtered.map(o => {
+          ) : vrstice.map(v => {
+            const o = v.o
             const payment = o.payments?.[0]
+            const jeStorno = v.tip === 'storno'
             const isSelected = selectedOrder?.id === o.id
+
+            // ── STORNO DOKUMENT — samostojna vrstica (19.8.2026) ──
+            // Zakon zahteva, da se ob stornu izda NOV dokument z negativnimi
+            // zneski. Doslej je bil viden samo precrtan izvirnik, storno pa
+            // nikjer - stranka ga ni mogla dobiti, pri nadzoru pa se stevilo
+            // dokumentov ni ujemalo s FURS.
+            if (jeStorno) {
+              return (
+                <div key={o.id + '-storno'} onClick={()=>loadOrderDetail(o)}
+                  style={{ padding:'12px 16px', borderBottom:'1px solid '+T.lineSoft, cursor:'pointer', background: isSelected ? 'rgba(168,50,50,0.06)' : 'rgba(168,50,50,0.03)', display:'flex', gap:12, alignItems:'center', borderLeft:'3px solid '+T.danger }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontWeight:700, fontSize:13, display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+                      <span style={{ color:T.danger }}>STORNO</span>
+                      {v.stevilka
+                        ? <span style={{ fontSize:11, color:T.muted, fontWeight:600 }}>{v.stevilka}</span>
+                        : <span style={{ fontSize:10, color:T.muted }}>(številka ni na voljo)</span>}
+                    </div>
+                    <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>
+                      {v.cas ? new Date(v.cas).toLocaleString('sl-SI') : '—'}
+                      {' · storno računa #'}{o.number || o.id.slice(-6)}
+                      {o.void_reason ? ` · ${o.void_reason}` : ''}
+                    </div>
+                  </div>
+                  <div style={{ fontWeight:800, fontSize:15, fontVariantNumeric:'tabular-nums', color:T.danger }}>
+                    −€{Number(o.total).toFixed(2)}
+                  </div>
+                </div>
+              )
+            }
+
             return (
               <div key={o.id} onClick={()=>loadOrderDetail(o)} style={{ padding:'12px 16px', borderBottom:'1px solid '+T.lineSoft, cursor:'pointer', background:isSelected?T.accentSoft:T.surface, display:'flex', gap:12, alignItems:'center' }}>
                 <div style={{ flex:1, minWidth:0 }}>
@@ -6843,6 +6917,46 @@ function OrdersScreen({ posData, auth }) {
               <div style={{ padding:'6px 12px', borderRadius:8, background:'rgba(168,50,50,0.08)', color:T.danger, fontSize:12, fontWeight:700 }}>
                 ⛔ Storniran
               </div>
+            )}
+            {/* DODANO (19.8.2026): ponovni izpis STORNO dokumenta. Storno je
+                samostojen dokument z lastno stevilko in ga stranka ob vracilu
+                dobi - doslej ga je bilo mogoce natisniti SAMO v trenutku
+                storniranja, kasneje nikoli vec. */}
+            {selectedOrder.voided_at && (
+              <button onClick={async ()=>{
+                try {
+                  const db = createClient()
+                  const { data: { user } } = await db.auth.getUser()
+                  let orgData = null, cashierName = ''
+                  const member = await getActiveMembership()
+                  if (member) {
+                    const { data: org } = await db.from('organizations').select('*').eq('id', member.org_id).single()
+                    orgData = org
+                    if (user) {
+                      const { data: me } = await db.from('org_members').select('display_name').eq('user_id', user.id).eq('org_id', member.org_id).maybeSingle()
+                      cashierName = me?.display_name || user.email?.split('@')[0] || ''
+                    }
+                  }
+                  const html = buildStornoReceiptHTML({
+                    order: selectedOrder,
+                    lines: orderLines,
+                    payment: orderPayment,
+                    org: orgData,
+                    cashierName,
+                    voidEor: selectedOrder.void_furs_eor,
+                    voidZoi: selectedOrder.void_furs_zoi,
+                    reason: selectedOrder.void_reason || 'Storno',
+                  })
+                  const w = window.open('', '_blank', 'width=380,height=700')
+                  if (w) { w.document.write(html); w.document.close() }
+                  else alert('Brskalnik je blokiral pojavno okno — dovolite pojavna okna za to stran.')
+                } catch (e) {
+                  alert('Storno dokumenta ni bilo mogoče pripraviti: ' + (e?.message || e))
+                }
+              }}
+                style={{ padding:'7px 14px', borderRadius:8, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, display:'flex', alignItems:'center', gap:6 }}>
+                🖨️ Izpis storna
+              </button>
             )}
             {selectedOrder.furs_required && !orderPayment?.furs_eor && (
               <button onClick={async()=>{
