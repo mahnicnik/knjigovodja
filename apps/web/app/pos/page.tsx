@@ -4,6 +4,8 @@ export const dynamic = 'force-dynamic'
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { escapeHtml } from '@/lib/html-escape'
+import VatExemptionPicker from '@/components/VatExemptionPicker'
+import { vatExemptionText } from '@/lib/vat-exemptions'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { pos, BUSINESS_ID, resolveBusinessId, imaOsebje, ustvariPrvegaUporabnika } from '@/lib/pos-client'
@@ -1277,6 +1279,15 @@ async function autoPrint(data) {
       discountAmount: Number(data.discount_amount||0),
       tip: Number(data.tip||0),
       total: Number(data.total||0),
+      // DODANO (19.8.2026): klavzule o neobracunanem DDV za postavke po 0 %.
+      // Ce je na racunu vec razlicnih oproscenih storitev (npr. fizioterapija
+      // po 42. clenu in najem po 44.), se izpisejo vse - vsaka enkrat.
+      vatExemptions: Array.from(new Set(
+        (data.lines || [])
+          .filter((l: any) => Number(l.vat_rate ?? 22) === 0)
+          .map((l: any) => vatExemptionText(l.vat_exemption_code, l.vat_exemption_custom_text))
+          .filter(Boolean)
+      )) as string[],
     })
     const w = window.open('', '_blank', 'width=380,height=700')
     if (!w) return
@@ -4762,6 +4773,14 @@ function InventoryScreen({ posData }) {
                   </select>
                 </Field>
               </div>
+              <VatExemptionPicker
+                vatRate={itemModal?.vat_rate}
+                code={itemModal?.vat_exemption_code}
+                customText={itemModal?.vat_exemption_custom_text}
+                onCodeChange={c => setItemModal(p => ({ ...p, vat_exemption_code: c }))}
+                onCustomTextChange={t => setItemModal(p => ({ ...p, vat_exemption_custom_text: t }))}
+                inputStyle={inp}
+              />
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
                 <Field label="DDV stopnja *">
                   <select value={itemModal?.vat_rate??''} onChange={e=>setItemModal(p=>({...p,vat_rate:e.target.value}))} style={inp}>
@@ -8563,6 +8582,14 @@ function CatalogSection({ posData }) {
             </Field>
           </div>
 
+          <VatExemptionPicker
+            vatRate={itemModal?.vat_rate}
+            code={itemModal?.vat_exemption_code}
+            customText={itemModal?.vat_exemption_custom_text}
+            onCodeChange={c => setItemModal(p => ({ ...p, vat_exemption_code: c }))}
+            onCustomTextChange={t => setItemModal(p => ({ ...p, vat_exemption_custom_text: t }))}
+            inputStyle={inp}
+          />
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <Field label="DDV stopnja *">
               <select value={itemModal?.vat_rate??''} onChange={e=>setItemModal(p=>({...p,vat_rate:e.target.value}))}
@@ -9099,6 +9126,9 @@ function PackagesAdminSection({ posData, modal, setModal }) {
         days_of_week: modal.days_of_week||[],
         auto_renew: !!modal.auto_renew,
         vat_rate: Number(modal.vat_rate||22),
+        // DODANO (19.8.2026): razlog za neobracunan DDV (pri 0 % obvezen).
+        vat_exemption_code: Number(modal.vat_rate||22) === 0 ? (modal.vat_exemption_code || null) : null,
+        vat_exemption_custom_text: Number(modal.vat_rate||22) === 0 ? (modal.vat_exemption_custom_text || null) : null,
         notify_before_days: Number(modal.notify_before_days||7),
         fixed_start_date: modal.fixed_start_date||null,
         fixed_end_date: modal.fixed_end_date||null,
@@ -9198,6 +9228,15 @@ function PackagesAdminSection({ posData, modal, setModal }) {
               </select>
             </Field>
           </div>
+          {/* DODANO (19.8.2026): pri 0 % je po ZDDV-1 obvezna navedba razloga. */}
+          <VatExemptionPicker
+            vatRate={modal?.vat_rate ?? 22}
+            code={modal?.vat_exemption_code}
+            customText={modal?.vat_exemption_custom_text}
+            onCodeChange={c => setModal(p => ({ ...p, vat_exemption_code: c }))}
+            onCustomTextChange={t => setModal(p => ({ ...p, vat_exemption_custom_text: t }))}
+            inputStyle={inp}
+          />
 
           {/* Aktivacija */}
           <Field label="Začetek veljavnosti">
@@ -9469,7 +9508,13 @@ function StoritveCrudSection({ posData, modal, setModal }) {
         name: modal.name,
         price: Number(modal.price),
         unit: 'ura',
-        vat_rate: 22,
+        // POPRAVLJENO (19.8.2026): tu je bilo trdo zapisano 22 %, zato je bila
+        // izbira uporabnika v obrazcu za storitev IGNORIRANA - fizioterapija,
+        // nastavljena na 0 % (oproscena), je v kosarici vseeno dobila 22 %,
+        // racun pa napacen DDV. Zdaj se prenese dejansko izbrana stopnja.
+        vat_rate: Number(modal.vat_rate ?? 22),
+        vat_exemption_code: Number(modal.vat_rate) === 0 ? (modal.vat_exemption_code || null) : null,
+        vat_exemption_custom_text: Number(modal.vat_rate) === 0 ? (modal.vat_exemption_custom_text || null) : null,
         bookable: true,
         duration_min: Number(modal.duration_min),
         item_type: 'simple',
@@ -9493,6 +9538,9 @@ function StoritveCrudSection({ posData, modal, setModal }) {
         price: Number(modal.price),
         active: modal.active !== false,
         linked_item_id: linkedItemId,
+        // DODANO (19.8.2026): razlog za neobracunan DDV (pri 0 % obvezen).
+        vat_exemption_code: Number(modal.vat_rate) === 0 ? (modal.vat_exemption_code || null) : null,
+        vat_exemption_custom_text: Number(modal.vat_rate) === 0 ? (modal.vat_exemption_custom_text || null) : null,
       }
       if (modal.id) {
         const {error} = await db.from('services').update(payload).eq('id', modal.id)
@@ -9571,6 +9619,15 @@ function StoritveCrudSection({ posData, modal, setModal }) {
               <option value={22}>22% (splošna)</option>
             </select>
           </Field>
+          {/* DODANO (19.8.2026): pri 0 % je po ZDDV-1 obvezna navedba razloga. */}
+          <VatExemptionPicker
+            vatRate={modal?.vat_rate}
+            code={modal?.vat_exemption_code}
+            customText={modal?.vat_exemption_custom_text}
+            onCodeChange={c => setModal(p => ({ ...p, vat_exemption_code: c }))}
+            onCustomTextChange={t => setModal(p => ({ ...p, vat_exemption_custom_text: t }))}
+            inputStyle={inp}
+          />
           <Field label="Barva (za prikaz v koledarju)">
             <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
               {SVC_COLORS.map(c=>(
@@ -11207,7 +11264,9 @@ function KlasikApp() {
     setCart(c => {
       const idx = c.findIndex(l => l.id === item.id && l.happyHourApplied === eligible && l.mods.length === 0)
       if (idx >= 0) { const cp = [...c]; cp[idx] = {...cp[idx], qty: cp[idx].qty + 1}; return cp }
-      return [...c, { lineId: Math.random().toString(36).slice(2), id: item.id, name: item.name, price: Number(item.price), qty: 1, vat_rate: Number(item.vat_rate || 22), unit: item.unit || 'kos', mods: [], note: '', happyHourApplied: eligible, happyHourPct: hhPct }]
+      // DODANO (19.8.2026): klavzula o neobracunanem DDV potuje z artiklom v
+      // kosarico, da se lahko izpise na listku (ZDDV-1 zahteva navedbo razloga).
+      return [...c, { lineId: Math.random().toString(36).slice(2), id: item.id, name: item.name, price: Number(item.price), qty: 1, vat_rate: Number(item.vat_rate || 22), vat_exemption_code: item.vat_exemption_code || null, vat_exemption_custom_text: item.vat_exemption_custom_text || null, unit: item.unit || 'kos', mods: [], note: '', happyHourApplied: eligible, happyHourPct: hhPct }]
     })
   }
 
@@ -11423,7 +11482,7 @@ function KlasikApp() {
                   // replaceLines pristejeta mods.delta k price, zato se je doplacilo
                   // steto DVAKRAT - stranka bi bila preplacana za znesek doplacil.
                   // Osnovna cena zdaj ostane cista, doplacila nosi mods.
-                  setCart((c:any[]) => [...c, { lineId: Math.random().toString(36).slice(2), id: item.id, name: item.name, price: Number(item.price), qty: 1, vat_rate: Number(item.vat_rate||22), unit: item.unit||'kos', mods, note: note||'', happyHourApplied: eligible, happyHourPct: Number(hhPct ?? 0) }])
+                  setCart((c:any[]) => [...c, { lineId: Math.random().toString(36).slice(2), id: item.id, name: item.name, price: Number(item.price), qty: 1, vat_rate: Number(item.vat_rate||22), vat_exemption_code: item.vat_exemption_code || null, vat_exemption_custom_text: item.vat_exemption_custom_text || null, unit: item.unit||'kos', mods, note: note||'', happyHourApplied: eligible, happyHourPct: Number(hhPct ?? 0) }])
                 }
                 setModifierPickModal(null)
               }} style={{ flex:2,padding:'12px',borderRadius:9,border:'none',background:T.accent,color:'#fff',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:14 }}>

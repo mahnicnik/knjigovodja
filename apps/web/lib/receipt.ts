@@ -42,6 +42,12 @@ export interface ReceiptData {
   discountAmount?: number
   tip?: number
   total: number
+  /**
+   * DODANO (19.8.2026): klavzule o neobracunanem DDV. ZDDV-1 zahteva, da
+   * racun brez obracunanega DDV navaja RAZLOG (sklic na clen). Ce je na
+   * racunu vec razlicnih oproscenih postavk, se izpisejo VSE klavzule.
+   */
+  vatExemptions?: string[]
 }
 
 const METHOD_LABELS: Record<string, string> = {
@@ -157,6 +163,13 @@ export async function buildReceiptHTML(d: ReceiptData): Promise<string> {
     ${vatGroups.map(g => `<div class="small">${g.label}: DDV ${g.rate % 1 === 0 ? g.rate.toFixed(0) : g.rate}% stopnja</div>`).join('')}
   ` : ''
 
+  // KLAVZULE O NEOBRACUNANEM DDV (19.8.2026)
+  const klavzule = (d.vatExemptions || []).filter(Boolean)
+  const vatExemptionHtml = klavzule.length > 0 ? `
+    <div class="line" style="margin-top:6px"></div>
+    ${klavzule.map(k => `<div class="small" style="margin-top:4px">${escapeHtml(k)}</div>`).join('')}
+  ` : ''
+
   const discountHtml = (d.discountAmount && d.discountAmount > 0) ? `
     <div class="row sub"><span>Popust</span><span>-${eur(d.discountAmount)}</span></div>
   ` : ''
@@ -259,6 +272,7 @@ export async function buildReceiptHTML(d: ReceiptData): Promise<string> {
   ${discountHtml}
   ${tipHtml}
   ${vatHtml}
+  ${vatExemptionHtml}
   <div class="doubleline"></div>
   <div class="total-row">
     <span>Za plačilo:</span>
