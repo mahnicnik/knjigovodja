@@ -3162,9 +3162,11 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
           .order('active', { ascending: false })
           .order('purchased_at', { ascending: false }),
         createClient().from('orders')
-          .select('id, created_at, payments(amount, method), order_lines(name, qty, unit_price)')
+          // POPRAVLJENO (19.8.2026): `created_at` na orders ne obstaja -
+          // zgodovina narocil stranke se ni prikazala.
+          .select('id, opened_at, closed_at, payments(amount, method), order_lines(name, qty, unit_price)')
           .eq('customer_id', selectedId)
-          .order('created_at', { ascending: false })
+          .order('opened_at', { ascending: false })
           .limit(30),
       ])
       const pkgs = pkgRes.data || []
@@ -3175,7 +3177,7 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
       // Izračunaj statistike
       const totalSpent = ords.reduce((s,o) => s + (o.payments||[]).reduce((ss,p)=>ss+Number(p.amount||0),0), 0)
       const visitCount = pkgs.reduce((s,p) => s + ((p.package_templates?.visits||0) - (p.remaining||0)), 0)
-      const lastVisit = ords.length > 0 ? ords[0].created_at : null
+      const lastVisit = ords.length > 0 ? (ords[0].closed_at || ords[0].opened_at) : null
       const daysSince = lastVisit ? Math.floor((new Date()-new Date(lastVisit))/86400000) : null
       setCustomerStats({ totalSpent, visitCount, lastVisit, daysSince, orderCount: ords.length })
       setLoadingDetail(false)
@@ -3377,7 +3379,7 @@ function CustomerOverviewTab({ customer, orders, packages, loading, setActiveTab
             <div key={o.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 0', borderBottom:i<recentOrders.length-1?'1px solid '+T.lineSoft:'none' }}>
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:13, fontWeight:600 }}>{items || 'Račun'}</div>
-                <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>{new Date(o.created_at).toLocaleDateString('sl-SI')}</div>
+                <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>{new Date(o.closed_at || o.opened_at).toLocaleDateString('sl-SI')}</div>
               </div>
               <div style={{ fontWeight:800, fontVariantNumeric:'tabular-nums' }}>{eur(total)}</div>
             </div>
@@ -4210,9 +4212,12 @@ function InventoryScreen({ posData }) {
       const from = new Date(); from.setDate(from.getDate()-30)
       const { data } = await createClient()
         .from('order_lines')
-        .select('name, qty, orders!inner(created_at, status)')
+        // POPRAVLJENO (19.8.2026): `orders.created_at` NE OBSTAJA (stolpci so
+        // opened_at, closed_at, voided_at) - poizvedba je tiho odpovedala in
+        // priporocila artiklov so ostala prazna.
+        .select('name, qty, orders!inner(closed_at, status)')
         .eq('orders.status', 'paid')
-        .gte('orders.created_at', from.toISOString())
+        .gte('orders.closed_at', from.toISOString())
       if (!data) return
       const map = {}
       data.forEach(l => {
@@ -5469,11 +5474,18 @@ function ZReportModal({ posData, onClose }) {
     // Naloži naročila danes
     const { data: orders } = await db
       .from('orders')
-      .select('id, created_at, payments(amount, method, tip)')
+      // POPRAVLJENO (19.8.2026): dve napaki v eni poizvedbi.
+      // 1) `created_at` v tabeli `orders` NE OBSTAJA (stolpci so opened_at,
+      //    closed_at, voided_at) - poizvedba je odpovedala in Z-poročilo je
+      //    dobilo prazen seznam naročil.
+      // 2) `payments.tip` prav tako ne obstaja.
+      // Za dnevni zaključek je pravi stolpec closed_at (kdaj je bil račun
+      // zaključen), ne kdaj je bila miza odprta.
+      .select('id, closed_at, payments(amount, method)')
       .eq('business_id', BUSINESS_ID)
       .eq('status', 'paid')
-      .gte('created_at', from.toISOString())
-      .lte('created_at', to.toISOString())
+      .gte('closed_at', from.toISOString())
+      .lte('closed_at', to.toISOString())
 
     // Naloži vračila danes
     const { data: refunds } = await db
@@ -5501,7 +5513,8 @@ function ZReportModal({ posData, onClose }) {
     ords.forEach(o => {
       ;(o.payments || []).forEach(p => {
         const amt = Number(p.amount || 0)
-        const tip = Number(p.tip || 0)
+        // Napitnin tabela `payments` ne beleži (prej bran neobstoječi p.tip).
+        const tip = 0
         tips += tip
         if (p.method === 'cash') cash += amt
         else if (p.method === 'card') card += amt
@@ -7419,9 +7432,16 @@ function ReportsScreen({ posData, auth, setScreen }) {
     const orderIds = orders.map(o => o.id)
     let paymentsData = []
     if (orderIds.length > 0) {
-      const { data: pd } = await db.from('payments')
-        .select('order_id, amount, method, tip')
+      // POPRAVLJENO (19.8.2026): tu je bil izbran tudi stolpec `tip`, ki v
+      // tabeli `payments` NE OBSTAJA. Poizvedba je zato odpovedala, plačila se
+      // niso naložila in koda je spodaj padla na privzeto metodo 'cash' -
+      // kartično plačilo se je v poročilu prikazalo kot GOTOVINA, napitnine pa
+      // vedno kot 0. Znesek prometa je bil pravilen (iz orders.total), zato
+      // napaka ni bila očitna.
+      const { data: pd, error: pErr } = await db.from('payments')
+        .select('order_id, amount, method')
         .in('order_id', orderIds)
+      if (pErr) console.error('Napaka pri branju plačil za poročilo:', pErr.message)
       paymentsData = pd || []
     }
     const paymentsByOrder = {}
@@ -7434,7 +7454,10 @@ function ReportsScreen({ posData, auth, setScreen }) {
       const amt = payments.length > 0
         ? payments.reduce((s, p) => s + Number(p.amount || 0), 0)
         : Number(o.total || 0)
-      const tip = payments.reduce((s, p) => s + Number(p.tip || 0), 0)
+      // Napitnine: tabela `payments` stolpca za napitnino nima, zato so 0.
+      // (Prej je bil bran neobstoječi `p.tip`.) Če bodo napitnine kdaj
+      // uvedene, je treba dodati stolpec in ga tu prebrati.
+      const tip = 0
       promet += amt
       napitnine += tip
       const h = new Date(o.closed_at).getHours()
@@ -9653,13 +9676,15 @@ function KuhinjaSection({ posData }) {
       const {data} = await createClient()
         .from('orders')
         .select(`
-          id, created_at, status,
+          id, opened_at, status,
           tables(name, spaces(name)),
           order_lines(id, name, qty, unit_price, note, items(kitchen))
         `)
         .eq('business_id', BUSINESS_ID)
         .in('status', ['open', 'in_progress'])
-        .order('created_at', { ascending: true })
+        // POPRAVLJENO (19.8.2026): `created_at` na orders ne obstaja -
+        // kuhinjski zaslon je ostal prazen.
+        .order('opened_at', { ascending: true })
       setKdsOrders(data || [])
     }
 
@@ -9764,7 +9789,7 @@ function KuhinjaSection({ posData }) {
             ) : (
               <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:10 }}>
                 {kdsOrders.map(order => {
-                  const min = elapsedMin(order.created_at)
+                  const min = elapsedMin(order.opened_at)
                   const color = elapsedColor(min)
                   const kitchenLines = (order.order_lines || []).filter(l => l.items?.kitchen !== false)
                   if (kitchenLines.length === 0) return null
