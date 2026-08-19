@@ -113,7 +113,6 @@ function computeHiddenNav(answers: Answers): string[] {
   if (zap !== 'yes' && zap !== 'soon') { hidden.push('/place'); hidden.push('/rek1'); hidden.push('/dopust') }
   if (ddv !== 'yes' && ddv !== 'soon') { hidden.push('/ddv'); hidden.push('/ddv/evidenca') }
   if (tip !== 'sp') { hidden.push('/normirani'); hidden.push('/prispevki'); hidden.push('/kpo') }
-  if (!d.includes('storitve') && !d.includes('digital')) hidden.push('/eslog')
   return hidden
 }
 

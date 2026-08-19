@@ -170,7 +170,7 @@ const PLANS = [
   },
   {
     name:'Pro', price:'9', priceDec:'.99', per:'/mes', tag:'€119.88/leto', tagClass:'plan-tag-amber',
-    features:['Neomejeni računi','Email pošiljanje računov','FURS e-računi & eSlog','Dobavnice','AI računovodja','DDV evidenca'],
+    features:['Neomejeni računi','Email pošiljanje računov','Dobavnice','AI računovodja','DDV evidenca'],
     cta:'Začni brezplačno →', ctaClass:'btn btn-on-dark btn-block', highlighted: true, flag:'Najbolj priljubljen',
   },
   {
@@ -184,7 +184,7 @@ const FAQS = [
   { q:'Ali Računko res nadomesti računovodja?', a:'Za 90% samostojnih podjetnikov — da. Normiranec, DDV zavezanec, par zaposlenih — Računko pokrije vse. Za d.o.o. z revizijo priporočamo Računko + računovodja za letni zaključek.' },
   { q:'Kateri paket je za mene pravi?', a:'Free je za tiste, ki začenjajo — do 5 računov brez kreditne kartice. Pro je za aktivnega podjetnika z neomejenimi računi, email pošiljanjem in FURS. Pro + POS je za gostince, obrtnike in studie, ki potrebujejo blagajno, člane in ekipo.' },
   { q:'Ali moram prekiniti pogodbo z računovodjem?', a:'Ni potrebno. Prenesite svoje podatke in preidite postopoma. Računko ima 14-dnevni brezplačni preizkus — brez vezave in brez kreditne kartice.' },
-  { q:'Deluje za DDV zavezance?', a:'Da, v celoti. Vključujemo DDV-O obračun, evidenco DDV in eSlog račune za B2G — vse kar DDV zavezanec potrebuje za tekoče poslovanje.' },
+  { q:'Deluje za DDV zavezance?', a:'Da, v celoti. Vključujemo DDV-O obračun in evidenco DDV — vse kar DDV zavezanec potrebuje za tekoče poslovanje.' },
   { q:'Kako varni so moji finančni podatki?', a:'Vsi podatki so shranjeni na EU strežnikih v skladu z GDPR. Varnostne kopije se naredijo vsake 24 ur. Vaši podatki nikoli niso deljeni s tretjimi stranmi brez vaše privolitve.' },
   { q:'Kdaj je smiselno ostati pri računovodji?', a:'Za revizije, d.o.o. z večjim prometom (nad €100k) ali kadrovske zadeve s kolektivno pogodbo. Za te primere priporočamo kombinacijo Računka in specializiranega računovodje — Računko pokrije 95% vsakdanjega dela.' },
 ];
@@ -199,7 +199,6 @@ const TABS: { id: TabId; label: string; emoji: string; title: string; sub: strin
       { name:'Predračuni', desc:'Pošlji ponudbo → en klik → pretvori v račun' },
       { name:'Avansni računi', desc:'Predplačilo + finalni račun z odbitkom avtomatsko' },
       { name:'Ponavljajoči računi', desc:'Mesečne naročnine se izdajo same — brez roke' },
-      { name:'eSlog / UJP', desc:'Elektronski računi za javni sektor — šole, občine', tag:'B2G' },
       { name:'Opomniki za zamudnike', desc:'Avtomatski email stranki po X dneh zamude' },
     ]},
   { id:'finance', label:'Finance', emoji:'📊', title:'Finance & davki', sub:'Pregled, obračuni in obveznosti — vedno na tekočem', tip:'7 dni vnaprej vas opomni na vsak davčni rok — prispevki, DDV, akontacija.',
@@ -585,7 +584,7 @@ export default function LandingPage() {
             </div>
             <div style={{padding:'24px 28px'}}>
               <div style={{display:'flex',flexDirection:'column',gap:11,marginBottom:20}}>
-                {['Računi s PDF & UPN QR kodo','Prispevki QR — plačate v sekundi','Normirani odhodki & akontacija','DDV evidenca (za zavezance)','eSlog / UJP za javni sektor'].map(item => (
+                {['Računi s PDF & UPN QR kodo','Prispevki QR — plačate v sekundi','Normirani odhodki & akontacija','DDV evidenca (za zavezance)'].map(item => (
                   <div key={item} style={{display:'flex',gap:11,alignItems:'flex-start',fontSize:'0.94rem'}}><Check color="#1F4732" /><span>{item}</span></div>
                 ))}
               </div>

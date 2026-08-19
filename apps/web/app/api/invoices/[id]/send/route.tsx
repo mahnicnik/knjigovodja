@@ -4,7 +4,6 @@ import { resend, FROM_EMAIL } from '@/lib/resend'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { InvoicePDF, generateUpnQr } from '@/lib/invoice-pdf'
 import { buildInvoiceEmailHtml } from '@/lib/invoice-email'
-import { generateEslogXml, buildEslogFromInvoice } from '@/lib/eslog'
 
 export async function POST(
   request: NextRequest,
@@ -13,7 +12,7 @@ export async function POST(
   try {
     const { id: invoiceId } = await params
     const body = await request.json()
-    const { to, cc, subject, message, sendEslog } = body
+    const { to, cc, subject, message } = body
 
     if (!to || !subject) {
       return NextResponse.json({ error: 'Manjkajo obvezna polja (to, subject)' }, { status: 400 })
@@ -82,23 +81,10 @@ export async function POST(
       },
     ]
 
-    // eSLOG XML — samo če je zahtevano in stranka ima davčno številko
-    let eslogGenerated = false
-    if (sendEslog && invoice.client_tax_number?.trim()) {
-      try {
-        const eslogData = buildEslogFromInvoice(invoice, org)
-        const xmlString = generateEslogXml(eslogData)
-        const safeInvoiceNumber = invoice.invoice_number.replace(/[^a-zA-Z0-9\-_]/g, '_')
-        attachments.push({
-          filename: `${safeInvoiceNumber}.xml`,
-          content: xmlString,
-        })
-        eslogGenerated = true
-      } catch (eslogErr: any) {
-        // eSLOG napaka ne zaustavi pošiljanja — pošljemo samo PDF
-        console.error('eSLOG generacija napaka:', eslogErr)
-      }
-    }
+    // ODSTRANJENO (19.8.2026): eSLOG XML priloga. Modul e-Racun je bil
+    // odstranjen - portal UJPeRacun ne sprejema generiranih datotek, oddaja
+    // poteka prek lastnega portala eracuni.ujp.gov.si s kvalificiranim
+    // potrdilom. Priloga zato ni imela uporabne vrednosti.
 
     // Zgradimo email HTML
     const emailHtml = buildInvoiceEmailHtml({
@@ -173,7 +159,6 @@ export async function POST(
     return NextResponse.json({
       success: true,
       emailId: resendData?.id,
-      eslogAttached: eslogGenerated,
     })
 
   } catch (error: any) {
