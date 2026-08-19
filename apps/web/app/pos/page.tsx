@@ -5511,8 +5511,11 @@ function ZReportModal({ posData, onClose }) {
       .from('refunds')
       .select('amount')
       .eq('business_id', BUSINESS_ID)
-      .gte('created_at', from.toISOString())
-      .lte('created_at', to.toISOString())
+      // POPRAVLJENO (19.8.2026): tabela `refunds` nima stolpca `created_at` -
+      // pravi je `refunded_at`. Poizvedba je odpovedala in vracila so tiho
+      // izpadla iz Z-porocila: dnevni zakljucek je kazal previsok promet.
+      .gte('refunded_at', from.toISOString())
+      .lte('refunded_at', to.toISOString())
 
     // Pridobi zadnjo Z-poročilo številko
     const { data: lastZ } = await db
@@ -7553,10 +7556,13 @@ function ReportsScreen({ posData, auth, setScreen }) {
         .gte('closed_at', fromStr)
         .lte('closed_at', toStr),
       db.from('refunds')
-        .select('amount, reason, created_at')
+        // POPRAVLJENO (19.8.2026): `created_at` v tabeli `refunds` ne obstaja,
+        // pravi stolpec je `refunded_at`. Poizvedba je odpovedala, zato je
+        // stran Porocila vedno kazala "Ni vracil v tem obdobju".
+        .select('amount, reason, refunded_at')
         .eq('business_id', BUSINESS_ID)
-        .gte('created_at', fromStr)
-        .lte('created_at', toStr),
+        .gte('refunded_at', fromStr)
+        .lte('refunded_at', toStr),
       staffFilter ? db.from('bookings')
         .select('id, start_at, duration_min, status, services(name, price)')
         .eq('business_id', BUSINESS_ID)
@@ -7799,7 +7805,7 @@ function ReportsScreen({ posData, auth, setScreen }) {
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:13, fontWeight:600, color:T.danger }}>RAČ-{String(r.orders?.id||'').slice(-4).toUpperCase()}</div>
                 <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>
-                  {new Date(r.created_at).toLocaleString('sl-SI', { day:'numeric', month:'numeric', hour:'2-digit', minute:'2-digit' })}
+                  {new Date(r.refunded_at).toLocaleString('sl-SI', { day:'numeric', month:'numeric', hour:'2-digit', minute:'2-digit' })}
                   {r.reason && <> · <i>"{r.reason}"</i></>}
                 </div>
               </div>

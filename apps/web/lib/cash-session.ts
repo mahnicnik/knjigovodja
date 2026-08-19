@@ -212,8 +212,12 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
     .from('refunds')
     .select('amount, method')
     .eq('business_id', BUSINESS_ID)
-    .gte('created_at', from)
-    .lte('created_at', to)
+    // POPRAVLJENO (19.8.2026): `created_at` v tabeli `refunds` ne obstaja -
+    // pravi je `refunded_at`. Poizvedba je odpovedala, zato se vracila NISO
+    // odstela od pricakovane gotovine: zakljucek blagajne je javljal manjko,
+    // ceprav je bila gotovina pravilna.
+    .gte('refunded_at', from)
+    .lte('refunded_at', to)
   if (session.staff_id) {
     refundsQuery = refundsQuery.eq('cashier_id', session.staff_id)
   }
