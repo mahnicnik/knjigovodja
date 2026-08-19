@@ -256,7 +256,7 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
       const lineTotal = l.total != null
         ? Number(l.total)
         : Number(l.qty || 0) * Number(l.unit_price || 0)
-      const rate = Number(l.vat_rate || 22)
+      const rate = Number(l.vat_rate ?? 22)
 
       if (rate === 22) {
         const base = lineTotal / 1.22

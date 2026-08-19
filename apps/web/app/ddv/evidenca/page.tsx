@@ -67,13 +67,16 @@ export default function DDVEvidencaPage() {
     const kpoVatOut95 = kpoIncome.filter(jeNizja).reduce((s: number, e: any) => s + Number(e.vat_out || 0), 0)
     const kpoNet95 = kpoIncome.filter(jeNizja).reduce((s: number, e: any) => s + Number(e.income || 0), 0)
 
-    const vatOut22 = invoices.filter((i: any) => !i.vat_rate || i.vat_rate === 22)
+    // POPRAVLJENO (19.8.2026): `!i.vat_rate` je bilo resnicno tudi pri stopnji
+    // 0 %, zato so OPROSCENI racuni pristali med 22-odstotnimi. V DDV evidenci
+    // je bil oproscen promet prikazan kot obdavcen po splosni stopnji.
+    const vatOut22 = invoices.filter((i: any) => (i.vat_rate === null || i.vat_rate === undefined) || Number(i.vat_rate) === 22)
       .reduce((s: number, i: any) => s + Number(i.vat_amount), 0)
       + kpoVatOut22
     const vatOut95 = invoices.filter((i: any) => i.vat_rate === 9.5)
       .reduce((s: number, i: any) => s + Number(i.vat_amount), 0)
       + kpoVatOut95
-    const sales22 = invoices.filter((i: any) => !i.vat_rate || i.vat_rate === 22)
+    const sales22 = invoices.filter((i: any) => (i.vat_rate === null || i.vat_rate === undefined) || Number(i.vat_rate) === 22)
       .reduce((s: number, i: any) => s + Number(i.amount_net), 0)
       + kpoNet22
     const sales95 = invoices.filter((i: any) => i.vat_rate === 9.5)

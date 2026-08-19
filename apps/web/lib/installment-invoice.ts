@@ -48,7 +48,7 @@ export async function issueInstallmentInvoice(
   const invoiceNumber = `${new Date().getFullYear()}-${String((count || 0) + 1).padStart(3, '0')}`
 
   const grossAmount = Number(inst.amount)
-  const vatRate = Number(inst.vat_rate || 22)
+  const vatRate = Number(inst.vat_rate ?? 22)
   const netAmount = Math.round((grossAmount / (1 + vatRate / 100)) * 100) / 100
   const vatAmount = Math.round((grossAmount - netAmount) * 100) / 100
 

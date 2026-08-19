@@ -54,7 +54,7 @@ function vatBreakdownForCart(cart, scale = 1) {
     // od 5,00). To je davcno pomembno - osnova in DDV na racunu morata ustrezati
     // placanemu znesku. Zdaj uporabimo isti izracun kot za vsoto vrstice.
     const gross = H.lineTotal(l) * scale
-    const rate = Number(l.vat_rate || 22)
+    const rate = Number(l.vat_rate ?? 22)
     const lineNet = gross / (1 + rate / 100)
     const lineVat = gross - lineNet
     net += lineNet
@@ -180,7 +180,7 @@ const H = {
     // ne pavsalno za celotno kosarico po 22% (prejsnja koda je bila napacna za artikle z 9.5% DDV)
     const vatByRate = {}
     for (const l of cart) {
-      const rate = Number(l.vat_rate || 22)
+      const rate = Number(l.vat_rate ?? 22)
       const lineGross = H.lineTotal(l)
       const lineVat = lineGross - lineGross / (1 + rate / 100)
       vatByRate[rate] = (vatByRate[rate] || 0) + lineVat
@@ -801,7 +801,7 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         name: line.name,
         qty: line.qty,
         unitPrice: line.happyHourApplied ? line.price * (1 - Number(line.happyHourPct ?? 20) / 100) : line.price,
-        vatRate: line.vat_rate || 22,
+        vatRate: line.vat_rate ?? 22,
         // POPRAVLJENO (16.8.2026, OBRACUN): popust se je prej obracunal SAMO na
         // osnovno ceno, doplacila modifikatorjev pa so ostala nepopustena -
         // znesek narocila v bazi se ni ujemal s tistim v kosarici in na racunu
@@ -1036,7 +1036,7 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
           // Enak izracun kot v H.lineTotal in replaceLines (cena + doplacila).
           unitPrice: (() => { const b = l.price + (l.mods || []).reduce((s, m) => s + (m.delta || 0), 0); return l.happyHourApplied ? b * (1 - Number(l.happyHourPct ?? 20) / 100) : b })(),
           unit_price: (() => { const b = l.price + (l.mods || []).reduce((s, m) => s + (m.delta || 0), 0); return l.happyHourApplied ? b * (1 - Number(l.happyHourPct ?? 20) / 100) : b })(),
-          vat_rate: l.vat_rate || 22,
+          vat_rate: l.vat_rate ?? 22,
         })),
       })
     } catch (e) {
@@ -1186,7 +1186,7 @@ async function autoPrint(data) {
           name: l.name,
           qty: Number(l.qty),
           unit_price: Number(l.unitPrice||l.unit_price||0),
-          vat_rate: Number(l.vat_rate || 22),
+          vat_rate: Number(l.vat_rate ?? 22),
         })),
         subtotal: Number(data.subtotal||data.total||0),
         discount_pct: data.discount_pct || 0,
@@ -1223,7 +1223,7 @@ async function autoPrint(data) {
           name: l.name,
           qty: Number(l.qty),
           unit_price: Number(l.unitPrice||l.unit_price||0),
-          vat_rate: Number(l.vat_rate || 22),
+          vat_rate: Number(l.vat_rate ?? 22),
         })),
         subtotal: Number(data.subtotal||data.total||0),
         discount_pct: data.discount_pct || 0,
@@ -1272,7 +1272,7 @@ async function autoPrint(data) {
         name: l.name,
         qty: Number(l.qty),
         unit_price: Number(l.unitPrice||l.unit_price||0),
-        vat_rate: Number(l.vat_rate || 22),
+        vat_rate: Number(l.vat_rate ?? 22),
         total: Number(l.total || (l.qty * (l.unitPrice||l.unit_price||0))),
       })),
       subtotal: Number(data.subtotal||data.total||0),
@@ -1691,7 +1691,7 @@ function WriteoffModal({ cart, auth, onClose, onDone }) {
         business_id: BUSINESS_ID,
         org_id: member?.org_id || null,
         reason,
-        items: cart.map(l => ({ item_id: l.id, name: l.name, qty: l.qty, unit_price: l.price, vat_rate: l.vat_rate || 22 })),
+        items: cart.map(l => ({ item_id: l.id, name: l.name, qty: l.qty, unit_price: l.price, vat_rate: l.vat_rate ?? 22 })),
         total_cost: totalCost,
         vat_self_assessed: reason === 'lastna_poraba' ? vatOnCost : 0,
         note: note || null,
@@ -1877,7 +1877,7 @@ function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart
             const cashierId = auth?.user?.id || null
             const orderId = await pos.orders.openOrder({ tableId: activeTable?.id, customerId: activeCustomer?.id, cashierId })
             for (const line of cart) {
-              await pos.orders.addLine(orderId, { itemId: line.id, name: line.name, qty: line.qty, unitPrice: line.price, vatRate: line.vat_rate || 22, mods: line.mods || [], note: line.note || null })
+              await pos.orders.addLine(orderId, { itemId: line.id, name: line.name, qty: line.qty, unitPrice: line.price, vatRate: line.vat_rate ?? 22, mods: line.mods || [], note: line.note || null })
             }
             await pos.orders.holdOrder(orderId, label)
             setCart([])
@@ -1900,7 +1900,7 @@ function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart
               receipt_number: num,
               cashier: auth?.user?.name || '',
               date: new Date().toLocaleString('sl-SI'),
-              items: cart.map((l:any) => ({ name: l.name, qty: Number(l.qty), unit_price: Number(l.price), vat_rate: Number(l.vat_rate||22) })),
+              items: cart.map((l:any) => ({ name: l.name, qty: Number(l.qty), unit_price: Number(l.price), vat_rate: Number(l.vat_rate ?? 22) })),
               subtotal: totals.sub,
               discount_amount: totals.total - total,
               tip: 0, total,
@@ -2011,7 +2011,7 @@ th{background:#f5f5f5;font-weight:bold}.right{text-align:right}
 </div>
 ${recipientHtml}
 <table><thead><tr><th>Artikel</th><th class="right">Kol.</th><th class="right">Cena/kos</th><th class="right">DDV%</th><th class="right">Skupaj</th></tr></thead>
-<tbody>${cart.map((l:any) => `<tr><td>${escapeHtml(l.name)}</td><td class="right">${l.qty}</td><td class="right">${eur2(Number(l.price))}</td><td class="right">${l.vat_rate||22}%</td><td class="right">${eur2(Number(l.price)*Number(l.qty))}</td></tr>`).join('')}
+<tbody>${cart.map((l:any) => `<tr><td>${escapeHtml(l.name)}</td><td class="right">${l.qty}</td><td class="right">${eur2(Number(l.price))}</td><td class="right">${l.vat_rate ?? 22}%</td><td class="right">${eur2(Number(l.price)*Number(l.qty))}</td></tr>`).join('')}
 </tbody></table>
 <div style="display:flex;justify-content:flex-end">
   <div style="min-width:280px">
@@ -4402,7 +4402,7 @@ function InventoryScreen({ posData }) {
   async function exportInventory(items, ingredients) {
     const XLSX = await import('xlsx')
     const date = new Date().toLocaleDateString('sl-SI').replace(/\./g,'-')
-    const itemRows = [['Artikel','Sifra','Kategorija','Prod. cena','Nab. cena','Zaloga','Min zaloga','Vrednost','DDV %'],...items.map(i=>[i.name,i.sku||'',i.category||'',i.price||0,i.cost_price||0,i.stock||0,i.min_stock||0,((i.cost_price||0)*(i.stock||0)).toFixed(2),i.vat_rate||22])]
+    const itemRows = [['Artikel','Sifra','Kategorija','Prod. cena','Nab. cena','Zaloga','Min zaloga','Vrednost','DDV %'],...items.map(i=>[i.name,i.sku||'',i.category||'',i.price||0,i.cost_price||0,i.stock||0,i.min_stock||0,((i.cost_price||0)*(i.stock||0)).toFixed(2),i.vat_rate ?? 22])]
     const ingrRows = [['Surovina','Enota','Nab. cena','Zaloga','Min zaloga','Vrednost'],...ingredients.map(i=>[i.name,i.unit||'',i.cost_price||0,i.stock_qty||0,i.min_stock||0,((i.cost_price||0)*(i.stock_qty||0)).toFixed(2)])]
     const tI = items.reduce((s,i)=>s+(i.cost_price||0)*(i.stock||0),0)
     const tG = ingredients.reduce((s,i)=>s+(i.cost_price||0)*(i.stock_qty||0),0)
@@ -6617,7 +6617,7 @@ function OrdersScreen({ posData, auth }) {
           payment: { method: payment?.method || 'cash', furs_zoi: payment?.furs_zoi, furs_eor: payment?.furs_eor },
           lines: (lines||[]).map(l => ({
             name: l.name, qty: Number(l.qty), unit_price: Number(l.unit_price),
-            vat_rate: Number(l.vat_rate || 22), total: Number(l.total || l.qty * l.unit_price), voided: l.voided,
+            vat_rate: Number(l.vat_rate ?? 22), total: Number(l.total || l.qty * l.unit_price), voided: l.voided,
           })),
           subtotal: Number(order.subtotal||0),
           discountAmount: Number(order.discount_amount||0),
@@ -6646,7 +6646,7 @@ function OrdersScreen({ posData, auth }) {
             name: l.name,
             qty: Number(l.qty),
             unit_price: Number(l.unit_price),
-            vat_rate: Number(l.vat_rate || 22),
+            vat_rate: Number(l.vat_rate ?? 22),
           })),
           subtotal: Number(order.subtotal),
           discount_pct: Number(order.discount_pct||0),
@@ -6695,7 +6695,7 @@ function OrdersScreen({ posData, auth }) {
           name: l.name,
           qty: Number(l.qty),
           unit_price: Number(l.unit_price),
-          vat_rate: Number(l.vat_rate || 22),
+          vat_rate: Number(l.vat_rate ?? 22),
           total: Number(l.total || l.qty * l.unit_price),
           voided: l.voided,
         })),
@@ -6892,7 +6892,7 @@ function OrdersScreen({ posData, auth }) {
                     receipt_number: selectedOrder.invoice_number || selectedOrder.number || selectedOrder.id.slice(-6),
                     cashier: cashierName,
                     date: selectedOrder.closed_at ? new Date(selectedOrder.closed_at).toLocaleString('sl-SI') : '—',
-                    items: (orderLines||[]).map((l:any) => ({ name: l.name, qty: Number(l.qty), unit_price: Number(l.unit_price), vat_rate: Number(l.vat_rate||22) })),
+                    items: (orderLines||[]).map((l:any) => ({ name: l.name, qty: Number(l.qty), unit_price: Number(l.unit_price), vat_rate: Number(l.vat_rate ?? 22) })),
                     subtotal: Number(selectedOrder.subtotal||0),
                     discount_amount: Number(selectedOrder.discount_amount||0),
                     tip: Number(selectedOrder.tip_amount||0),
@@ -9131,10 +9131,10 @@ function PackagesAdminSection({ posData, modal, setModal }) {
         time_to: modal.time_to||null,
         days_of_week: modal.days_of_week||[],
         auto_renew: !!modal.auto_renew,
-        vat_rate: Number(modal.vat_rate||22),
+        vat_rate: Number(modal.vat_rate ?? 22),
         // DODANO (19.8.2026): razlog za neobracunan DDV (pri 0 % obvezen).
-        vat_exemption_code: Number(modal.vat_rate||22) === 0 ? (modal.vat_exemption_code || null) : null,
-        vat_exemption_custom_text: Number(modal.vat_rate||22) === 0 ? (modal.vat_exemption_custom_text || null) : null,
+        vat_exemption_code: Number(modal.vat_rate ?? 22) === 0 ? (modal.vat_exemption_code || null) : null,
+        vat_exemption_custom_text: Number(modal.vat_rate ?? 22) === 0 ? (modal.vat_exemption_custom_text || null) : null,
         notify_before_days: Number(modal.notify_before_days||7),
         fixed_start_date: modal.fixed_start_date||null,
         fixed_end_date: modal.fixed_end_date||null,
@@ -11174,7 +11174,7 @@ function KlasikApp() {
           const orderId = existing ? existing.id : await pos.orders.openOrder({ tableId: activeTable.id, customerId: activeCustomer?.id, cashierId })
           await pos.orders.replaceLines(orderId, cart.map(line => ({
             itemId: line.id, name: line.name, qty: line.qty, unitPrice: line.price,
-            vatRate: line.vat_rate || 22, mods: line.mods || [], note: line.note || null,
+            vatRate: line.vat_rate ?? 22, mods: line.mods || [], note: line.note || null,
           })))
           await pos.spaces.updateTableStatus(activeTable.id, 'occupied')
           posData.refresh()
@@ -11272,7 +11272,7 @@ function KlasikApp() {
       if (idx >= 0) { const cp = [...c]; cp[idx] = {...cp[idx], qty: cp[idx].qty + 1}; return cp }
       // DODANO (19.8.2026): klavzula o neobracunanem DDV potuje z artiklom v
       // kosarico, da se lahko izpise na listku (ZDDV-1 zahteva navedbo razloga).
-      return [...c, { lineId: Math.random().toString(36).slice(2), id: item.id, name: item.name, price: Number(item.price), qty: 1, vat_rate: Number(item.vat_rate || 22), vat_exemption_code: item.vat_exemption_code || null, vat_exemption_custom_text: item.vat_exemption_custom_text || null, unit: item.unit || 'kos', mods: [], note: '', happyHourApplied: eligible, happyHourPct: hhPct }]
+      return [...c, { lineId: Math.random().toString(36).slice(2), id: item.id, name: item.name, price: Number(item.price), qty: 1, vat_rate: Number(item.vat_rate ?? 22), vat_exemption_code: item.vat_exemption_code || null, vat_exemption_custom_text: item.vat_exemption_custom_text || null, unit: item.unit || 'kos', mods: [], note: '', happyHourApplied: eligible, happyHourPct: hhPct }]
     })
   }
 
@@ -11488,7 +11488,7 @@ function KlasikApp() {
                   // replaceLines pristejeta mods.delta k price, zato se je doplacilo
                   // steto DVAKRAT - stranka bi bila preplacana za znesek doplacil.
                   // Osnovna cena zdaj ostane cista, doplacila nosi mods.
-                  setCart((c:any[]) => [...c, { lineId: Math.random().toString(36).slice(2), id: item.id, name: item.name, price: Number(item.price), qty: 1, vat_rate: Number(item.vat_rate||22), vat_exemption_code: item.vat_exemption_code || null, vat_exemption_custom_text: item.vat_exemption_custom_text || null, unit: item.unit||'kos', mods, note: note||'', happyHourApplied: eligible, happyHourPct: Number(hhPct ?? 0) }])
+                  setCart((c:any[]) => [...c, { lineId: Math.random().toString(36).slice(2), id: item.id, name: item.name, price: Number(item.price), qty: 1, vat_rate: Number(item.vat_rate ?? 22), vat_exemption_code: item.vat_exemption_code || null, vat_exemption_custom_text: item.vat_exemption_custom_text || null, unit: item.unit||'kos', mods, note: note||'', happyHourApplied: eligible, happyHourPct: Number(hhPct ?? 0) }])
                 }
                 setModifierPickModal(null)
               }} style={{ flex:2,padding:'12px',borderRadius:9,border:'none',background:T.accent,color:'#fff',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:14 }}>
@@ -11533,7 +11533,7 @@ function KlasikApp() {
                         name: l.name,
                         price: Number(l.unit_price||0),
                         qty: Number(l.qty||1),
-                        vat_rate: Number(l.vat_rate||22),
+                        vat_rate: Number(l.vat_rate ?? 22),
                         unit: 'kos',
                         mods: l.mods||[],
                         note: l.note||'',
