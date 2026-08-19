@@ -28,7 +28,17 @@ import { ROLE_ALLOWED_PREFIXES, ROLE_HOME, isPathAllowedForRole } from '@/lib/ro
 
 // Poti, ki jih middleware sploh ne preverja (javne strani, staticne datoteke, auth).
 const PUBLIC_PREFIXES = [
-  '/login', '/signup', '/onboarding', '/invite', '/api/auth',
+  // '/register' DODANO (19.8.2026): to je glavni gumb "Zacni brezplacno" na
+  // zacetni strani. Na seznamu je bil samo '/signup', ki pa se nikjer ne
+  // uporablja - registracija je torej sla skozi middleware brez seje.
+  '/login', '/signup', '/register', '/onboarding', '/invite', '/api/auth',
+  // DODANO (19.8.2026, kriticno): ponastavitev gesla. Uporabnik, ki klikne
+  // povezavo iz e-poste, NI prijavljen - middleware ga je zato prestregel in
+  // preusmeril, stran za ponastavitev pa se sploh ni nalozila. Zato popravka
+  // iz preleta 22 (PKCE tok) in 23 (redirect URL) nikoli nista prisla do
+  // izraza: uporabnik je vsakic pristal na zacetni strani, zeton pa je bil
+  // porabljen. Obe poti morata biti dosegljivi BREZ seje.
+  '/forgot-password', '/reset-password',
   '/_next', '/favicon', '/robots', '/sitemap', '/privacy', '/terms',
   // DODANO (13.8.2026, kriticno): webhooki (Stripe, WooCommerce, Shopify)
   // klicejo zunanji servisi BREZ prijavljene seje - preverjajo se s

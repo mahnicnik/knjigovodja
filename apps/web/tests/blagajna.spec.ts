@@ -238,3 +238,39 @@ test('dashboard: mešano poslovanje — računi in blagajna se seštejeta', () =
   )
   expect(prihodek).toBeCloseTo(2103.16, 2)
 })
+
+// ═══════════════════ JAVNE POTI (BREZ PRIJAVE) ═══════════════════
+
+/**
+ * Poti, ki morajo delovati BREZ prijavljene seje. Če katera izpade iz
+ * seznama v middleware.ts, uporabnika prestreže in preusmeri — stran se
+ * sploh ne naloži.
+ */
+const JAVNE_POTI = [
+  '/login',
+  '/register',          // glavni gumb "Začni brezplačno" na začetni strani
+  '/forgot-password',   // zahteva za ponastavitev gesla
+  '/reset-password',    // povezava iz e-pošte — uporabnik NI prijavljen
+  '/invite',            // povabilo v ekipo
+  '/onboarding',
+]
+
+test('middleware: poti za prijavo in ponastavitev gesla so javne', async () => {
+  // NAPAKA (popravljeno 19.8.2026): '/reset-password' in '/forgot-password'
+  // nista bila na seznamu javnih poti. Uporabnik, ki je kliknil povezavo iz
+  // e-pošte, ni bil prijavljen — middleware ga je preusmeril na začetno stran,
+  // žeton pa je bil porabljen. Ponastavitev gesla zato ni delovala NIKOLI,
+  // čeprav sta bila popravka v preletu 22 in 23 pravilna.
+  const fs = require('fs')
+  const middleware = fs.readFileSync(__dirname + '/../middleware.ts', 'utf8')
+
+  // Preberi seznam PUBLIC_PREFIXES iz kode
+  const blok = middleware.slice(
+    middleware.indexOf('const PUBLIC_PREFIXES'),
+    middleware.indexOf(']', middleware.indexOf('const PUBLIC_PREFIXES')),
+  )
+
+  for (const pot of JAVNE_POTI) {
+    expect(blok, `pot ${pot} manjka med javnimi potmi v middleware.ts`).toContain(`'${pot}'`)
+  }
+})
