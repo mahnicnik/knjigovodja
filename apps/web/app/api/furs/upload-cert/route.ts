@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { readCertificateInfo } from '@/lib/furs'
 import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
@@ -25,8 +26,27 @@ export async function POST(req: NextRequest) {
     if (!certFile || !password) return NextResponse.json({ error: 'Manjka file ali geslo' }, { status: 400 })
 
     const bytes = await certFile.arrayBuffer()
-    const certB64 = Buffer.from(bytes).toString('base64')
-    const subject = certFile.name.replace('.p12','').replace('.pfx','')
+    const certBuffer = Buffer.from(bytes)
+    const certB64 = certBuffer.toString('base64')
+
+    // POPRAVLJENO (19.8.2026): doslej se vsebina certifikata NI prebrala -
+    // shranila sta se samo binarni zapis in geslo, ime pa se je vzelo kar iz
+    // imena datoteke. Zato so `tax_number`, `valid_from` in `valid_to` ostali
+    // prazni, FURS pa je prejel davcno stevilko iz organizacije namesto tiste
+    // iz certifikata. Pri testnem certifikatu sta to razlicni stevilki, zato
+    // je FURS zahtevek zavrnil ("tezave pri komunikaciji").
+    const info = readCertificateInfo(certBuffer, password)
+
+    // Ce je bilo geslo napacno, iz certifikata ne dobimo nicesar - to je
+    // najpogostejsi vzrok in ga je bolje povedati takoj kot pustiti, da se
+    // pokaze sele ob prvi prodaji.
+    if (!info.subject && !info.taxNumber) {
+      return NextResponse.json({
+        error: 'Certifikata ni bilo mogoce prebrati. Najverjetneje je geslo napacno ali datoteka ni veljaven .p12/.pfx.'
+      }, { status: 400 })
+    }
+
+    const subject = info.subject || certFile.name.replace('.p12','').replace('.pfx','')
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -45,13 +65,22 @@ export async function POST(req: NextRequest) {
         certificate_data: certB64,
         certificate_password: password,
         issuer: subject,
+        tax_number: info.taxNumber,
+        valid_from: info.validFrom ? info.validFrom.toISOString() : null,
+        valid_to: info.validTo ? info.validTo.toISOString() : null,
         is_active: true,
         is_test: isTest,
       }, { onConflict: 'org_id,is_test' })
 
     if (error) throw error
 
-    return NextResponse.json({ success: true, subject, expiry: '', isTest })
+    return NextResponse.json({
+      success: true,
+      subject,
+      taxNumber: info.taxNumber,
+      expiry: info.validTo ? info.validTo.toISOString() : '',
+      isTest,
+    })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }

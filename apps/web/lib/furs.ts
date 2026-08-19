@@ -445,6 +445,58 @@ export function extractFromP12(
 }
 
 /**
+ * Prebere METAPODATKE iz certifikata: davcno stevilko in veljavnost.
+ *
+ * DODANO (19.8.2026). Doslej nalaganje certifikata ni prebralo NICESAR iz
+ * datoteke - shranilo je samo binarne podatke in geslo, `tax_number`,
+ * `valid_from` in `valid_to` pa so ostali prazni. Posledici sta bili dve:
+ *
+ *   1. FURS je prejel davcno stevilko iz organizacije namesto tiste iz
+ *      certifikata. Pri testnem certifikatu FURS sta to razlicni stevilki
+ *      (test cert nosi 10686878), zato je FURS zahtevek zavrnil.
+ *   2. Opozorilo o poteku certifikata ni moglo delovati, ker datuma ni bilo.
+ *
+ * FURS certifikat ima davcno stevilko v CN polju subjecta, v obliki
+ * "10686878-1" ali podobno - vzamemo vodilne stevke.
+ */
+export function readCertificateInfo(
+  p12Buffer: Buffer,
+  password: string,
+): { taxNumber: string | null; validFrom: Date | null; validTo: Date | null; subject: string | null } {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const forge = require('node-forge')
+    const p12Der = forge.util.createBuffer(p12Buffer.toString('binary'))
+    const p12Asn1 = forge.asn1.fromDer(p12Der)
+    const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, password)
+    const certBags = p12.getBags({ bagType: forge.pki.oids.certBag })
+    const cert = certBags[forge.pki.oids.certBag]?.[0]?.cert
+    if (!cert) return { taxNumber: null, validFrom: null, validTo: null, subject: null }
+
+    const cnField = cert.subject.getField('CN')
+    const cn: string | null = cnField?.value ?? null
+
+    // Davcna stevilka = vodilne stevke CN polja (npr. "10686878-1" -> "10686878").
+    let taxNumber: string | null = null
+    if (cn) {
+      const m = String(cn).match(/(\d{8})/)
+      if (m) taxNumber = m[1]
+    }
+
+    return {
+      taxNumber,
+      validFrom: cert.validity?.notBefore ?? null,
+      validTo: cert.validity?.notAfter ?? null,
+      subject: cn,
+    }
+  } catch {
+    // Napake tu ne smejo prekiniti nalaganja - certifikat se vseeno shrani,
+    // samo brez metapodatkov.
+    return { taxNumber: null, validFrom: null, validTo: null, subject: null }
+  }
+}
+
+/**
  * Preveri ali je certifikat še veljaven.
  */
 export function isCertificateValid(validTo: Date | null): boolean {

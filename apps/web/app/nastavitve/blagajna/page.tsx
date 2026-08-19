@@ -112,7 +112,10 @@ export default function BlagajnaPage() {
           .select('issuer, valid_to, is_test')
           .eq('org_id', member.org_id)
           .eq('is_active', true)
-        const cert = (certs || []).find(cc => !cc.is_test) // za obstojeco certPassword logiko spodaj
+        // POPRAVLJENO (19.8.2026): prej vedno produkcijski certifikat, tudi v
+        // testnem nacinu - zato je stran javljala, da certifikat ni nalozen.
+        const jeTestniNacin = (await supabase.from('organizations').select('furs_test_mode').eq('id', member.org_id).single()).data?.furs_test_mode ?? false
+        const cert = (certs || []).find(cc => jeTestniNacin ? cc.is_test : !cc.is_test)
         const prodCert = (certs || []).find(cc => !cc.is_test)
         const testCert = (certs || []).find(cc => cc.is_test)
 
@@ -810,7 +813,13 @@ export default function BlagajnaPage() {
           <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e1d8', padding: 20 }}>
             <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>Konfiguracija</div>
             <div style={{ fontSize: 13, color: '#444', lineHeight: 1.8 }}>
-              <div>🔐 Certifikat: {config.certSubject ? <span style={{ color: '#1f6b3a', fontWeight: 600 }}>✓ Naložen</span> : <span style={{ color: '#a83232' }}>❌ Ni naložen</span>}</div>
+              {/* POPRAVLJENO (19.8.2026): tu se je gledal SAMO produkcijski certifikat
+                  (certSubject = prodCert). Kdor je v testnem nacinu nalozil TESTNI
+                  certifikat, je kljub uspesnemu nalaganju bral "Ni nalozen".
+                  Zdaj se gleda tisti certifikat, ki v trenutnem nacinu dejansko velja. */}
+              <div>🔐 Certifikat ({config.testMode ? 'testni' : 'produkcijski'}): {(config.testMode ? config.testCertSubject : config.prodCertSubject)
+                ? <span style={{ color: '#1f6b3a', fontWeight: 600 }}>✓ Naložen</span>
+                : <span style={{ color: '#a83232' }}>❌ Ni naložen</span>}</div>
               <div>🏢 Poslovni prostori: <b>{config.premises.length}</b></div>
               <div>🖨️ Naprave: <b>{config.devices.length}</b></div>
               <div>🌐 Način: <b>{config.testMode ? 'TEST' : 'PRODUKCIJA'}</b></div>
