@@ -498,7 +498,8 @@ function PrvaNastavitev({ imePodjetja, onKoncano }) {
   async function shrani() {
     setNapaka('')
     if (!ime.trim()) { setNapaka('Vnesite svoje ime.'); return }
-    if (!/^\d{4,6}$/.test(pin)) { setNapaka('PIN mora imeti od 4 do 6 številk.'); return }
+    // POPRAVLJENO (19.8.2026): dolzina PIN-a je zdaj 1-4 (prej 4-6).
+    if (!/^\d{1,4}$/.test(pin)) { setNapaka('PIN mora imeti od 1 do 4 številke.'); return }
     if (pin !== pin2) { setNapaka('PIN-a se ne ujemata.'); return }
     if (/^(\d)\1+$/.test(pin)) { setNapaka('PIN naj ne bo sestavljen iz enakih številk (npr. 1111).'); return }
     setShranjujem(true)
@@ -534,7 +535,7 @@ function PrvaNastavitev({ imePodjetja, onKoncano }) {
           <input value={ime} onChange={e=>setIme(e.target.value)} placeholder="npr. Ana" style={polje}/>
         </label>
 
-        <label style={{ fontSize:12, opacity:0.7, display:'block', marginTop:14 }}>PIN (4–6 številk)
+        <label style={{ fontSize:12, opacity:0.7, display:'block', marginTop:14 }}>PIN (1–4 številke)
           <input value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,'').slice(0,6))}
             inputMode="numeric" type="password" placeholder="••••" style={polje}/>
         </label>
@@ -583,11 +584,28 @@ function LockScreen({ auth, imePodjetja }) {
     setLoading(false)
   }
 
+  // POPRAVLJENO (19.8.2026): prej je vsak pritisk cez 800 ms sprozil preverjanje,
+  // ne glede na dolzino - ze po PRVI stevilki je javilo "napacna koda" in cele
+  // kode sploh ni bilo mogoce vnesti. Ker je PIN zdaj dolg 1-4 znake, samodejno
+  // preverjanje ni mogoce (pri enomestnem PIN-u ne vemo, ali je uporabnik
+  // koncal), zato je dodan gumb za potrditev.
+  const PIN_MAX = 4
+
   function press(d) {
-    if (pin.length >= 6 || loading) return
+    if (pin.length >= PIN_MAX || loading) return
+    setError(false)
     const next = pin + d
     setPin(next)
-    setTimeout(() => { setError(false); tryUnlock(next) }, 800)
+    // Pri polni dolzini preverimo takoj - takrat ni dvoma, da je vnos koncan.
+    if (next.length === PIN_MAX) {
+      setTimeout(() => tryUnlock(next), 150)
+    }
+  }
+
+  function potrdi() {
+    if (!pin.length || loading) return
+    setError(false)
+    tryUnlock(pin)
   }
 
   function backspace() { setError(false); setPin(p => p.slice(0, -1)) }
@@ -635,7 +653,11 @@ function LockScreen({ auth, imePodjetja }) {
         {[1,2,3,4,5,6,7,8,9].map(n => (
           <button key={n} onClick={() => press(String(n))} style={{ width:84, height:84, borderRadius:999, background:'rgba(246,241,232,0.08)', border:'none', color:T.headerInk, cursor:'pointer', fontFamily:'inherit', fontSize:28, fontWeight:400 }}>{n}</button>
         ))}
-        <div/>
+        <button onClick={potrdi} disabled={!pin.length || loading} style={{ width:84, height:84, borderRadius:999, background: pin.length ? T.brand : 'rgba(246,241,232,0.04)', border:'none', color: pin.length ? T.header : 'rgba(246,241,232,0.25)', cursor: pin.length ? 'pointer' : 'default', display:'flex', alignItems:'center', justifyContent:'center' }} title="Potrdi">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 6 9 17l-5-5"/>
+          </svg>
+        </button>
         <button onClick={() => press('0')} style={{ width:84, height:84, borderRadius:999, background:'rgba(246,241,232,0.08)', border:'none', color:T.headerInk, cursor:'pointer', fontFamily:'inherit', fontSize:28, fontWeight:400 }}>0</button>
         <button onClick={backspace} style={{ width:84, height:84, borderRadius:999, background:'rgba(246,241,232,0.08)', border:'none', color:T.headerInk, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -7681,7 +7703,7 @@ function StaffSection({ posData }) {
     // ujela sele baza in vrnila surovo anglesko napako
     // ("duplicate key value violates unique constraint idx_staff_pin"), ki
     // uporabniku ne pove nicesar.
-    if (!/^\d{4,6}$/.test(String(modal.pin).trim())) { showToast('PIN mora imeti od 4 do 6 številk', false); return }
+    if (!/^\d{1,4}$/.test(String(modal.pin).trim())) { showToast('PIN mora imeti od 1 do 4 številke', false); return }
     if (/^(\d)\1+$/.test(String(modal.pin).trim())) { showToast('PIN naj ne bo sestavljen iz enakih številk', false); return }
     const zaseden = (posData.staffList || []).some((o: any) => String(o.pin) === String(modal.pin).trim() && o.id !== modal.id)
     if (zaseden) { showToast('Ta PIN že uporablja druga oseba. Izberite drugega.', false); return }
@@ -7751,8 +7773,8 @@ function StaffSection({ posData }) {
               {Object.keys(CFG.rolePresets).map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </Field>
-          <Field label="PIN koda (4-6 mest) *">
-            <input value={modal?.pin||''} onChange={e=>setModal(p=>({...p,pin:e.target.value.replace(/\D/g,'').substring(0,6)}))} placeholder="1234" style={{ ...inp, fontFamily:'monospace', letterSpacing:8, fontSize:20 }} maxLength={6}/>
+          <Field label="PIN koda (1-4 mesta) *">
+            <input value={modal?.pin||''} onChange={e=>setModal(p=>({...p,pin:e.target.value.replace(/\D/g,'').substring(0,4)}))} placeholder="1234" style={{ ...inp, fontFamily:'monospace', letterSpacing:8, fontSize:20 }} maxLength={4}/>
           </Field>
           <Field label="Barva">
             <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>

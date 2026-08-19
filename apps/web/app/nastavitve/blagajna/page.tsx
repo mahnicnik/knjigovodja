@@ -909,8 +909,8 @@ export default function BlagajnaPage() {
                   <option value="Terapevt">Terapevt — koledar in stranke</option>
                 </select>
               </FormField>
-              <FormField label="PIN za vstop v blagajno * (4–6 številk)">
-                <input value={osebjeModal.pin || ''} onChange={e => setOsebjeModal(p => ({ ...p, pin: e.target.value.replace(/\D/g,'').slice(0,6) }))}
+              <FormField label="PIN za vstop v blagajno * (1–4 številke)">
+                <input value={osebjeModal.pin || ''} onChange={e => setOsebjeModal(p => ({ ...p, pin: e.target.value.replace(/\D/g,'').slice(0,4) }))}
                   inputMode="numeric" placeholder="npr. 4827" style={{ ...inputStyle, fontFamily:'monospace', letterSpacing:'0.2em' }} />
               </FormField>
               {osebjeModal.id && (
@@ -930,7 +930,8 @@ export default function BlagajnaPage() {
                 const ime = String(osebjeModal.name || '').trim()
                 const pin = String(osebjeModal.pin || '')
                 if (!ime) { showToast('Ime je obvezno', false); return }
-                if (!/^\d{4,6}$/.test(pin)) { showToast('PIN mora imeti od 4 do 6 številk', false); return }
+                // POPRAVLJENO (19.8.2026): dolzina PIN-a je zdaj 1-4 (prej 4-6).
+                if (!/^\d{1,4}$/.test(pin)) { showToast('PIN mora imeti od 1 do 4 številke', false); return }
                 if (/^(\d)\1+$/.test(pin)) { showToast('PIN naj ne bo sestavljen iz enakih številk', false); return }
                 // PIN mora biti edinstven znotraj blagajne - sicer prijava ne bi
                 // vedela, katera oseba je vstopila.
