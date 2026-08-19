@@ -32,12 +32,12 @@ export async function GET(req: NextRequest) {
   }
 
   const tax = req.nextUrl.searchParams.get('tax')
-  if (!tax) return NextResponse.json({ error: 'Manjka davcna stevilka' }, { status: 400 })
+  if (!tax) return NextResponse.json({ error: 'Manjka davčna številka' }, { status: 400 })
 
   // 2. Preverba oblike: slovenska davcna stevilka je 8 mest, lahko s predpono SI
   const ocisceno = tax.replace(/^SI/i, '').replace(/\s/g, '')
   if (!/^\d{8}$/.test(ocisceno)) {
-    return NextResponse.json({ error: 'Davcna stevilka mora imeti 8 mest' }, { status: 400 })
+    return NextResponse.json({ error: 'Davčna številka mora imeti 8 mest' }, { status: 400 })
   }
 
   try {

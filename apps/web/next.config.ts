@@ -3,7 +3,13 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   eslint: { ignoreDuringBuilds: true },
-  typescript: { ignoreBuildErrors: true },
+  // SPREMENJENO (19.8.2026): preverjanje tipov je bilo IZKLOPLJENO, zato so
+  // se v produkcijo prebijale napake, ki bi jih prevajalnik ujel takoj -
+  // med njimi sedem nedefiniranih spremenljivk (posiljanje racunov strankam,
+  // cron obvescanja, Stripe nastavitve). Vse so bile 18.8.2026 popravljene,
+  // preverjanje je cisto, zato je od zdaj VKLOPLJENO: build se ne zgradi,
+  // dokler koda ni brez napak.
+  typescript: { ignoreBuildErrors: false },
   // pdfjs-dist ne sme biti bundlan z webpack-om v serverless funkcijah -
   // njegov notranji "worker" mehanizem se ob bundlanju napacno prepise
   // (25.7.2026, popravek za citanje placilnih list).

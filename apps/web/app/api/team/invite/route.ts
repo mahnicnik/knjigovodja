@@ -109,13 +109,13 @@ export async function POST(req: NextRequest) {
       let page = 1
       while (!existingUserId && page <= 20) {
         const { data: listData } = await admin.auth.admin.listUsers({ page, perPage: 200 })
-        const found = listData?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase())
+        const found = (listData?.users as any[] | undefined)?.find((u: any) => u.email?.toLowerCase() === email.toLowerCase())
         if (found) existingUserId = found.id
         if (!listData?.users || listData.users.length < 200) break
         page++
       }
       if (!existingUserId) {
-        return NextResponse.json({ error: 'Racun ze obstaja, a ga ni bilo mogoce najti.' }, { status: 500 })
+        return NextResponse.json({ error: 'Račun že obstaja, a ga ni bilo mogoče najti.' }, { status: 500 })
       }
       newUserId = existingUserId
     } else {

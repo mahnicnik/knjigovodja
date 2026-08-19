@@ -89,7 +89,13 @@ export default function NastavitevPage() {
     name: '', tax_number: '', vat_number: '', vat_registered: false,
     vat_exemption_code: '', vat_exemption_custom_text: '',
     iban: '', bic: '', address: '', post_code: '', city: '',
-    phone: '', email: '', contribution_class: 8, contrib_piz: 0, contrib_zzzs: 0, contrib_zaposlovanje: 0, contrib_starsevstvo: 0, contrib_akontacija: 0,
+    // POPRAVLJENO (19.8.2026): polja prispevkov so bila v stanju stevila, iz
+    // vnosnega polja pa vedno pride NIZ - to je bilo 9 napak pri preverjanju
+    // tipov. Ob shranjevanju se tako ali tako pretvorijo s stStevilo(), zato
+    // je pravilno, da so v stanju nizi (uporabnik lahko vmes vtipka "3.").
+    phone: '', email: '', contribution_class: 8,
+    contrib_piz: '' as string, contrib_zzzs: '' as string, contrib_zaposlovanje: '' as string,
+    contrib_starsevstvo: '' as string, contrib_akontacija: '' as string,
   })
   const supabase = createClient()
 
@@ -120,7 +126,7 @@ export default function NastavitevPage() {
         iban: o.iban || '', bic: o.bic || '', address: o.address || '',
         post_code: o.post_code || '', city: o.city || '',
         phone: o.phone || '', email: o.email || '',
-        contribution_class: o.contribution_class || 8, contrib_piz: o.contrib_piz || 0, contrib_zzzs: o.contrib_zzzs || 0, contrib_zaposlovanje: o.contrib_zaposlovanje || 0, contrib_starsevstvo: o.contrib_starsevstvo || 0, contrib_akontacija: o.contrib_akontacija || 0,
+        contribution_class: o.contribution_class || 8, contrib_piz: String(o.contrib_piz ?? ''), contrib_zzzs: String(o.contrib_zzzs ?? ''), contrib_zaposlovanje: String(o.contrib_zaposlovanje ?? ''), contrib_starsevstvo: String(o.contrib_starsevstvo ?? ''), contrib_akontacija: String(o.contrib_akontacija ?? ''),
       })
     }
     setLoading(false)

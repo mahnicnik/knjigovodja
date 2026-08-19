@@ -233,7 +233,9 @@ export default function EkipaPage() {
   async function revokeInvite(inviteId: string) {
     if (!confirm('Prekliči povabilo?')) return
     const { error: revErr } = await supabase.from('org_invites').delete().eq('id', inviteId)
-    if (revErr) { showToast('Povabila ni bilo mogoče preklicati: ' + revErr.message, 'error'); return }
+    // POPRAVLJENO (19.8.2026): argumenta sta bila zamenjana - namesto sporocila
+    // bi se uporabniku izpisalo "success", in to ob NAPAKI.
+    if (revErr) { showToast('error', 'Povabila ni bilo mogoče preklicati: ' + revErr.message); return }
     setInvites(prev => prev.filter(i => i.id !== inviteId))
     showToast('success', 'Povabilo preklicano')
   }

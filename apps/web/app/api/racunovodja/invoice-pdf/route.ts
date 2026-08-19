@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
       .eq('id', invoiceId)
       .maybeSingle()
     if (invErr || !invoice) {
-      return NextResponse.json({ error: 'Racun ni najden' }, { status: 404 })
+      return NextResponse.json({ error: 'Račun ni najden' }, { status: 404 })
     }
 
     const { data: membership } = await supabase

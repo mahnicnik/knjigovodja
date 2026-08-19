@@ -1882,7 +1882,7 @@ function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart
             await pos.orders.holdOrder(orderId, label)
             setCart([])
             setActiveTable(null)
-            alert('Racun shranjen: ' + label)
+            alert('Račun shranjen: ' + label)
           } catch(e: any) { alert('Napaka: ' + e.message) }
         }}
         onProforma={() => { if (cart.length > 0) setProformaModal(true) }}
@@ -3059,15 +3059,18 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
 }
 
 // ================================================================
+// POPRAVLJENO (19.8.2026): imena tipov paketov so bila brez sumnikov, ena
+// pa tudi napacno crkovana ("Claenarina" namesto "Clanarina"). Uporabnik to
+// vidi ob vsakem ustvarjanju paketa, zato je vredno popraviti.
 const TEMPLATE_TYPES = {
-  membership:   { label:'Claenarina',      icon:'info',  color:'#1f6b3a' },
-  visits:       { label:'Karta obiskov',  icon:'target',  color:'#634896' },
-  gift_voucher: { label:'Darilni bon',    icon:'gift',  color:'#b88c28' },
-  service_bon:  { label:'Storitveni bon', icon:'bell',  color:'#0ea5e9' },
-  seasonal:     { label:'Sezonska',       icon:'flower',  color:'#ec4899' },
-  time_restrict:{ label:'Casovna',        icon:'clock',  color:'#f97316' },
-  group_class:  { label:'Skupinska',      icon:'users',  color:'#8b5cf6' },
-  prepaid:      { label:'Predplacilo',    icon:'money',  color:'#14b8a6' },
+  membership:   { label:'Članarina',       icon:'info',    color:'#1f6b3a' },
+  visits:       { label:'Karta obiskov',   icon:'target',  color:'#634896' },
+  gift_voucher: { label:'Darilni bon',     icon:'gift',    color:'#b88c28' },
+  service_bon:  { label:'Storitveni bon',  icon:'bell',    color:'#0ea5e9' },
+  seasonal:     { label:'Sezonska',        icon:'flower',  color:'#ec4899' },
+  time_restrict:{ label:'Časovna',         icon:'clock',   color:'#f97316' },
+  group_class:  { label:'Skupinska',       icon:'users',   color:'#8b5cf6' },
+  prepaid:      { label:'Predplačilo',     icon:'money',   color:'#14b8a6' },
 }
 const ACTIVATION_TYPES = {
   purchase:   'Ob nakupu',
@@ -4247,7 +4250,7 @@ function InventoryScreen({ posData }) {
               <table style={{ width:'100%', borderCollapse:'collapse' }}>
                 <thead>
                   <tr style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:'uppercase' }}>
-                    {['Artikel','EAN','Kolicina','Cena brez DDV','Popust','Neto cena','DDV%','Vrednost'].map((h,i)=>(
+                    {['Artikel','EAN','Količina','Cena brez DDV','Popust','Neto cena','DDV%','Vrednost'].map((h,i)=>(
                       <th key={i} style={{ padding:'8px 10px', textAlign:i>=2?'right':'left', borderBottom:'1px solid '+T.line }}>{h}</th>
                     ))}
                   </tr>
@@ -4402,7 +4405,7 @@ function InventoryScreen({ posData }) {
   async function exportInventory(items, ingredients) {
     const XLSX = await import('xlsx')
     const date = new Date().toLocaleDateString('sl-SI').replace(/\./g,'-')
-    const itemRows = [['Artikel','Sifra','Kategorija','Prod. cena','Nab. cena','Zaloga','Min zaloga','Vrednost','DDV %'],...items.map(i=>[i.name,i.sku||'',i.category||'',i.price||0,i.cost_price||0,i.stock||0,i.min_stock||0,((i.cost_price||0)*(i.stock||0)).toFixed(2),i.vat_rate ?? 22])]
+    const itemRows = [['Artikel','Šifra','Kategorija','Prod. cena','Nab. cena','Zaloga','Min zaloga','Vrednost','DDV %'],...items.map(i=>[i.name,i.sku||'',i.category||'',i.price||0,i.cost_price||0,i.stock||0,i.min_stock||0,((i.cost_price||0)*(i.stock||0)).toFixed(2),i.vat_rate ?? 22])]
     const ingrRows = [['Surovina','Enota','Nab. cena','Zaloga','Min zaloga','Vrednost'],...ingredients.map(i=>[i.name,i.unit||'',i.cost_price||0,i.stock_qty||0,i.min_stock||0,((i.cost_price||0)*(i.stock_qty||0)).toFixed(2)])]
     const tI = items.reduce((s,i)=>s+(i.cost_price||0)*(i.stock||0),0)
     const tG = ingredients.reduce((s,i)=>s+(i.cost_price||0)*(i.stock_qty||0),0)
@@ -4701,7 +4704,7 @@ function InventoryScreen({ posData }) {
               <table style={{ width:'100%', borderCollapse:'collapse' }}>
                 <thead>
                   <tr style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:'uppercase' }}>
-                    {['Artikel','EAN','Kolicina','Cena brez DDV','Popust','Neto cena','DDV%','Vrednost'].map((h,i)=>(
+                    {['Artikel','EAN','Količina','Cena brez DDV','Popust','Neto cena','DDV%','Vrednost'].map((h,i)=>(
                       <th key={i} style={{ padding:'8px 10px', textAlign:i>=2?'right':'left', borderBottom:'1px solid '+T.line }}>{h}</th>
                     ))}
                   </tr>
@@ -5317,7 +5320,7 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
             .update({ sent_to_racunko: true })
             .eq('business_id', BUSINESS_ID)
             .eq('report_number', zReportNumber)
-          if (zFlagErr) console.warn('Oznake prenosa Z-porocila ni bilo mogoce shraniti:', zFlagErr)
+          if (zFlagErr) console.warn('Oznake prenosa Z-poročila ni bilo mogoče shraniti:', zFlagErr)
         } catch (kpoErr: any) {
           console.warn('KPO sinhronizacija ni uspela:', kpoErr)
         }
@@ -5367,7 +5370,7 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
       // zakljucek kot neuspel, cetudi je bil ze zapisan. Blagajnik bi ob tem
       // poskusil zakljuciti znova, kar ni mogoce in ni potrebno.
       if (zakljucekUspel) {
-        console.warn('Zakljucek je uspel, pomozni korak pa ne:', e)
+        console.warn('Zaključek je uspel, pomožni korak pa ne:', e)
         alert(
           'Blagajna je zaključena in Z-poročilo je shranjeno.\n\n' +
           'Ni pa uspelo: ' + (e?.message || 'zadnji korak') + '\n\n' +
@@ -5630,7 +5633,7 @@ function ZReportModal({ posData, onClose }) {
         // portalu", zastavica ostaja skupna; ce bi kdaj potrebovali loceno
         // sled, je treba dodati locen stolpec.
         const { error: zSyncErr } = await createClient().from('z_reports').update({ sent_to_racunko: true }).eq('id', zReport?.id)
-        if (zSyncErr) console.error('Z-porocila ni bilo mogoce oznaciti kot poslano:', zSyncErr)
+        if (zSyncErr) console.error('Z-poročila ni bilo mogoče označiti kot poslano:', zSyncErr)
       } catch (syncErr) {
         console.warn('Sync z računko.si ni uspel:', syncErr)
       }
@@ -11067,7 +11070,7 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
           </label>
           {payInInstallments && (
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginTop:12 }}>
-              <Field label="Stevilo obrokov">
+              <Field label="Število obrokov">
                 <input type="number" onFocus={e => e.target.select()} min={2} max={24} value={installmentCount} onChange={e=>setInstallmentCount(e.target.value)} style={inp}/>
               </Field>
               <Field label="Pogostost">
@@ -11501,7 +11504,7 @@ function KlasikApp() {
       {/* Shranjeni racuni modal */}
       {heldOrdersOpen && (
         <Modal open onClose={()=>setHeldOrdersOpen(false)} width={520}>
-          <ModalHeader title="Shranjeni racuni" onClose={()=>setHeldOrdersOpen(false)}/>
+          <ModalHeader title="Shranjeni računi" onClose={()=>setHeldOrdersOpen(false)}/>
           <div style={{ padding:'16px 20px', maxHeight:'70vh', overflowY:'auto' }}>
             {heldOrders.length === 0 ? (
               <div style={{ padding:32, textAlign:'center', color:T.muted }}>
@@ -11552,7 +11555,7 @@ function KlasikApp() {
                       ▶ Nadaljuj
                     </button>
                     <button onClick={async()=>{
-                      if (!confirm('Izbrisem ta shranjeni racun?')) return
+                      if (!confirm('Izbrišem ta shranjeni račun?')) return
                       const { error: delHeldErr } = await createClient().from('orders').update({ status:'cancelled' }).eq('id', o.id)
                       if (delHeldErr) { alert('Računa ni bilo mogoče izbrisati: ' + delHeldErr.message); return }
                       const updated = await pos.orders.getHeldOrders()

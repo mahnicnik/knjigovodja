@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
     if (!resolvedTaxNumber) {
       return NextResponse.json({
         success: false,
-        error: 'Davcna stevilka ni nastavljena (ne na certifikatu ne na organizaciji) - preizkus FURS zavrnjen.'
+        error: 'Davčna številka ni nastavljena (ne na certifikatu ne na organizaciji) — preizkus FURS zavrnjen.'
       }, { status: 400 })
     }
 

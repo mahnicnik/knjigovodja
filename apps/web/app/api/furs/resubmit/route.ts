@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
   // prej bi se poslal prazen niz in FURS bi (ali pa sploh ne bi) zavrnil zahtevek
   // sele na svoji strani, potem ko je stevilka ze porabljena.
   if (!cert.tax_number) {
-    return NextResponse.json({ error: 'Davcna stevilka na certifikatu ni nastavljena - ponovna oddaja zavrnjena, ni bilo poslano nic na FURS.' }, { status: 400 })
+    return NextResponse.json({ error: 'Davčna številka na certifikatu ni nastavljena — ponovna oddaja zavrnjena, na FURS ni bilo poslano nič.' }, { status: 400 })
   }
 
   const results: any[] = []

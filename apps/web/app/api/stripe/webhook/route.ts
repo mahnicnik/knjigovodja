@@ -70,7 +70,14 @@ export async function POST(request: NextRequest) {
         const { error: subErr } = await sb.from('organizations').update({
           subscription_status: plan,
           stripe_subscription_id: sub.id,
-          plan_expires_at: new Date(sub.current_period_end * 1000).toISOString(),
+          // Stripe je `current_period_end` premaknil na raven postavke naročnine,
+          // zato ga v tipu Subscription ni. Beremo obe mesti, da deluje v obeh
+          // različicah API-ja.
+          plan_expires_at: new Date(
+            ((sub as any).current_period_end
+              ?? (sub as any).items?.data?.[0]?.current_period_end
+              ?? 0) * 1000
+          ).toISOString(),
         }).eq('id', orgId)
         if (subErr) {
           console.error(`KRITICNO: podaljsanja narocnine (${plan}) za org ${orgId} NI bilo mogoce zabeleziti:`, subErr)
