@@ -590,25 +590,53 @@ function LockScreen({ auth, imePodjetja }) {
   // preverjanje ni mogoce (pri enomestnem PIN-u ne vemo, ali je uporabnik
   // koncal), zato je dodan gumb za potrditev.
   const PIN_MAX = 4
+  /**
+   * Cakanje po ZADNJEM pritisku, preden se PIN preveri (19.8.2026).
+   *
+   * Prvotno je vsak pritisk sprozil preverjanje cez 800 ms, ne glede na
+   * dolzino - ze po prvi stevilki je javilo "napacna koda". Nato je bil dodan
+   * gumb za potrditev, kar pa pomeni dodaten klik ob vsaki prijavi.
+   *
+   * Zdaj se casovnik ob VSAKEM pritisku ponastavi, tako da steje sele od
+   * zadnje vtipkane stevilke. Kdor tipka pocasi, ima toliko casa, kolikor ga
+   * potrebuje; kdor vtipka stiri stevilke, gre naprej takoj.
+   */
+  const AVTO_POTRDITEV_MS = 1600
+  const casovnik = useRef(null)
 
   function press(d) {
     if (pin.length >= PIN_MAX || loading) return
     setError(false)
     const next = pin + d
     setPin(next)
-    // Pri polni dolzini preverimo takoj - takrat ni dvoma, da je vnos koncan.
+
+    // Ponastavi cakanje - steje od zadnjega pritiska, ne od prvega.
+    if (casovnik.current) clearTimeout(casovnik.current)
+
     if (next.length === PIN_MAX) {
-      setTimeout(() => tryUnlock(next), 150)
+      // Polna dolzina: ni dvoma, da je vnos koncan.
+      casovnik.current = setTimeout(() => tryUnlock(next), 150)
+    } else {
+      casovnik.current = setTimeout(() => tryUnlock(next), AVTO_POTRDITEV_MS)
     }
   }
 
   function potrdi() {
     if (!pin.length || loading) return
+    if (casovnik.current) clearTimeout(casovnik.current)
     setError(false)
     tryUnlock(pin)
   }
 
-  function backspace() { setError(false); setPin(p => p.slice(0, -1)) }
+  function backspace() {
+    // Brisanje pomeni, da uporabnik se tipka - ustavi samodejno potrditev.
+    if (casovnik.current) clearTimeout(casovnik.current)
+    setError(false)
+    setPin(p => p.slice(0, -1))
+  }
+
+  // Ob odklopu komponente pocisti morebitni tekoci casovnik.
+  useEffect(() => () => { if (casovnik.current) clearTimeout(casovnik.current) }, [])
 
   const days = ['Nedelja','Ponedeljek','Torek','Sreda','Četrtek','Petek','Sobota']
   const months = ['januar','februar','marec','april','maj','junij','julij','avgust','september','oktober','november','december']
@@ -645,6 +673,12 @@ function LockScreen({ auth, imePodjetja }) {
               ))}
         </div>
         {error && <div style={{ fontSize:13, color:'#ff5577', marginTop:14, fontWeight:700 }}>Napačna koda</div>}
+
+        {/* DODANO (19.8.2026): brez tega je videti, kot da se nic ne dogaja -
+            uporabnik ne ve, da bo koda cez trenutek preverjena sama. */}
+        {!loading && !error && pin.length > 0 && pin.length < PIN_MAX && (
+          <div style={{ fontSize:12, opacity:0.5, marginTop:14 }}>Še malo in preverim …</div>
+        )}
 
         {loading && <div style={{ fontSize:13, opacity:0.6, marginTop:14 }}>Preverjam...</div>}
       </div>
