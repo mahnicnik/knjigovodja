@@ -8,6 +8,7 @@ import Link from 'next/link'
 import posthog from 'posthog-js'
 import { getActiveMembership } from '@/lib/active-org'
 import { formatEurNumber } from '@/lib/format'
+import { VAT_EXEMPTIONS, VAT_EXEMPTION_GROUPS, vatExemptionText, findVatExemption } from '@/lib/vat-exemptions'
 
 interface LineItem {
   description: string
@@ -45,6 +46,12 @@ export default function EditInvoicePage() {
   const [newPartner, setNewPartner] = useState({ name: '', tax_number: '', address: '', email: '', iban: '' })
   const [savingPartner, setSavingPartner] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  // DODANO (19.8.2026): klavzula o neobracunanem DDV. Prej je bilo mogoce
+  // racun UREDITI in mu s tem odvzeti klavzulo, ki jo je imel ob izdaji -
+  // shranjevanje spodaj polja sploh ni vsebovalo, zato se je ob vsakem
+  // urejanju izgubila.
+  const [vatExemptionCode, setVatExemptionCode] = useState('')
+  const [vatExemptionCustom, setVatExemptionCustom] = useState('')
   const supabase = createClient()
 
   useEffect(() => {
@@ -88,6 +95,9 @@ export default function EditInvoicePage() {
             setNotes(inv.notes || '')
             setServiceDate(inv.service_date || '')
             setServiceDateTo(inv.service_date_to || '')
+            // Klavzula, ki jo je racun ze imel (19.8.2026).
+            setVatExemptionCode(inv.vat_exemption_code || '')
+            if (inv.vat_exemption_code === 'custom') setVatExemptionCustom(inv.vat_exemption_text || '')
             setHeaderText(inv.header_text || '')
           }
         }
@@ -119,6 +129,8 @@ export default function EditInvoicePage() {
       service_date: serviceDate || null,
       service_date_to: serviceDateTo || null,
       header_text: headerText || null,
+      vat_exemption_code: vatExemptionCode || null,
+      vat_exemption_text: vatExemptionText(vatExemptionCode, vatExemptionCustom),
     }
     let error: any = null
     if (invoiceId) {
@@ -270,6 +282,37 @@ export default function EditInvoicePage() {
               + Dodaj postavko
             </button>
           </div>
+
+          {/* KLAVZULA O NEOBRACUNANEM DDV (19.8.2026) */}
+          {(items.some(it => Number(it.vat_rate) === 0) || org?.vat_registered === false) && (
+            <div style={{ background:'#fff', borderRadius:'12px', border:'0.5px solid rgba(0,0,0,0.08)', padding:'16px' }}>
+              <div style={{ fontSize:'13px', fontWeight:'500', color:'#0D1F12', marginBottom:'4px' }}>Razlog za neobračunan DDV</div>
+              <div style={{ fontSize:'11px', color:'#888', marginBottom:'12px', lineHeight:1.5 }}>
+                Zakon zahteva, da račun brez DDV navaja razlog.
+              </div>
+              <select value={vatExemptionCode} onChange={e => setVatExemptionCode(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none" style={{ background:'#fff' }}>
+                <option value="">— izberite razlog —</option>
+                {VAT_EXEMPTION_GROUPS.map(g => (
+                  <optgroup key={g} label={g}>
+                    {VAT_EXEMPTIONS.filter(e => e.group === g).map(e => (
+                      <option key={e.code} value={e.code}>{e.label}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              {vatExemptionCode && vatExemptionCode !== 'custom' && (
+                <div style={{ marginTop:'10px', padding:'10px', background:'#F7F6F2', borderRadius:'8px', fontSize:'12px', color:'#444', lineHeight:1.5 }}>
+                  {findVatExemption(vatExemptionCode)?.text}
+                </div>
+              )}
+              {vatExemptionCode === 'custom' && (
+                <textarea value={vatExemptionCustom} onChange={e => setVatExemptionCustom(e.target.value)}
+                  placeholder="Besedilo, ki vam ga je svetoval računovodja..." rows={2} style={{ marginTop:'10px' }}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none resize-none" />
+              )}
+            </div>
+          )}
 
           {/* Opombe */}
           <div style={{ background:'#fff', borderRadius:'12px', border:'0.5px solid rgba(0,0,0,0.08)', padding:'16px' }}>
@@ -458,6 +501,34 @@ export default function EditInvoicePage() {
             </div>
             <button onClick={addItem} className="text-sm text-gray-500 hover:text-gray-900 border border-dashed border-gray-200 rounded-xl px-4 py-2 w-full hover:border-gray-400 transition-colors">+ Dodaj postavko</button>
           </div>
+
+          {(items.some(it => Number(it.vat_rate) === 0) || org?.vat_registered === false) && (
+            <div className="bg-white rounded-2xl border border-gray-100 p-6">
+              <h3 className="font-medium text-gray-900 mb-1">Razlog za neobračunan DDV</h3>
+              <p className="text-xs text-gray-500 mb-4 leading-relaxed">Zakon zahteva, da račun brez DDV navaja razlog.</p>
+              <select value={vatExemptionCode} onChange={e => setVatExemptionCode(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white">
+                <option value="">— izberite razlog —</option>
+                {VAT_EXEMPTION_GROUPS.map(g => (
+                  <optgroup key={g} label={g}>
+                    {VAT_EXEMPTIONS.filter(e => e.group === g).map(e => (
+                      <option key={e.code} value={e.code}>{e.label}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              {vatExemptionCode && vatExemptionCode !== 'custom' && (
+                <div className="mt-3 p-3 bg-gray-50 rounded-xl text-xs text-gray-700 leading-relaxed">
+                  {findVatExemption(vatExemptionCode)?.text}
+                </div>
+              )}
+              {vatExemptionCode === 'custom' && (
+                <textarea value={vatExemptionCustom} onChange={e => setVatExemptionCustom(e.target.value)}
+                  placeholder="Besedilo, ki vam ga je svetoval računovodja..." rows={2}
+                  className="mt-3 w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none resize-none" />
+              )}
+            </div>
+          )}
 
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
             <h3 className="font-medium text-gray-900 mb-4">Opombe</h3>

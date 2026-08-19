@@ -508,6 +508,63 @@ export default function NewInvoicePage() {
             </div>
             <button onClick={addItem} className="text-sm text-gray-500 hover:text-gray-900 border border-dashed border-gray-200 rounded-xl px-4 py-2 w-full hover:border-gray-400 transition-colors">+ Dodaj postavko</button>
           </div>
+
+          {/* KLAVZULA O NEOBRACUNANEM DDV — DODANO 19.8.2026.
+              Ta stran ima DVA vmesnika (mobilni od vrstice ~297 in namizni).
+              Ob prvi uvedbi (prelet 32) je bila klavzula dodana SAMO v
+              mobilnega - na racunalniku je izbirnik manjkal, ceprav zakon
+              zahteva navedbo razloga pri vsakem racunu brez DDV. */}
+          {(items.some(it => Number(it.vat_rate) === 0) || org?.vat_registered === false) && (
+            <div className="bg-white rounded-2xl border border-gray-100 p-6">
+              <h3 className="font-medium text-gray-900 mb-1">Razlog za neobračunan DDV</h3>
+              <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+                Zakon zahteva, da račun brez DDV navaja razlog. Če niste prepričani, katera možnost je prava, vprašajte računovodjo.
+              </p>
+              <select
+                value={vatExemptionCode}
+                onChange={e => setVatExemptionCode(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white"
+              >
+                <option value="">— izberite razlog —</option>
+                {VAT_EXEMPTION_GROUPS.map(g => (
+                  <optgroup key={g} label={g}>
+                    {VAT_EXEMPTIONS.filter(e => e.group === g).map(e => (
+                      <option key={e.code} value={e.code}>{e.label}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+
+              {vatExemptionCode && vatExemptionCode !== 'custom' && (
+                <div className="mt-3 p-3 bg-gray-50 rounded-xl text-xs leading-relaxed">
+                  <div className="text-gray-700 mb-1.5">{findVatExemption(vatExemptionCode)?.text}</div>
+                  <div className="text-gray-500">{findVatExemption(vatExemptionCode)?.hint}</div>
+                  {findVatExemption(vatExemptionCode)?.priglasitev && (
+                    <div className="mt-2 p-2 rounded-lg" style={{ background:'#FFF6E5', color:'#8A5A00' }}>
+                      Za to oprostitev je potrebna <strong>predhodna priglasitev pri FURS</strong> (43. člen ZDDV-1, prek eDavkov). Navedba člena na računu sama po sebi ne zadošča.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {vatExemptionCode === 'custom' && (
+                <textarea
+                  value={vatExemptionCustom}
+                  onChange={e => setVatExemptionCustom(e.target.value)}
+                  placeholder="Vpišite besedilo, ki vam ga je svetoval računovodja..."
+                  rows={2}
+                  className="mt-3 w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
+                />
+              )}
+
+              {!vatExemptionCode && (
+                <p className="mt-2 text-xs" style={{ color:'#A32D2D' }}>
+                  Razlog še ni izbran — na računu bo manjkala obvezna navedba.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
             <h3 className="font-medium text-gray-900 mb-4">Opombe</h3>
             <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Dodatne opombe na računu..." rows={3} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none" />
