@@ -490,7 +490,7 @@ export default function EditInvoicePage() {
                   <div className="col-span-2"><input type="number" onFocus={e => e.target.select()} value={item.unit_price} onChange={e => updateItem(i, 'unit_price', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none text-right" /></div>
                   <div className="col-span-2">
                     <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none">
-                      <option value={22}>22%</option><option value={9.5}>9.5%</option><option value={0}>0%</option>
+                      <option value={22}>22 %</option><option value={9.5}>9,5 %</option><option value={0}>0 %</option>
                     </select>
                   </div>
                   <div className="col-span-1 flex justify-center">
