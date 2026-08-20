@@ -180,3 +180,51 @@ test('obdelava: rezultat je vedno sivinski in neprosojen', () => {
     expect(podatki[p + 3]).toBe(255)
   }
 })
+
+// ─── Pretvorba koordinat dotika ─────────────────────────────────────────
+
+/**
+ * Platno se IZRISUJE v svoji ločljivosti, PRIKAZUJE pa v širini vsebnika.
+ * Če se koordinata klika ne pretvori med tema meriloma, napaka narašča z
+ * oddaljenostjo od zgornjega levega kota — zgornja kota se še da ujeti,
+ * spodnjih pa ne.
+ */
+function legaVMeriluPlatna(
+  klik: { x: number; y: number },
+  prikaz: { sirina: number; visina: number },
+  platno: { sirina: number; visina: number },
+) {
+  const fx = prikaz.sirina > 0 ? platno.sirina / prikaz.sirina : 1
+  const fy = prikaz.visina > 0 ? platno.visina / prikaz.visina : 1
+  return { x: klik.x * fx, y: klik.y * fy }
+}
+
+test('dotik: koordinata se pretvori v merilo platna', () => {
+  // NAPAKA (popravljeno 20.8.2026): brez pretvorbe je bil spodnji desni kot
+  // zgrešen za ~15px, kar je pri dosegu 40px pomenilo, da ga pogosto ni bilo
+  // mogoče prijeti.
+  const platno = { sirina: 342, visina: 456 }
+  const prikaz = { sirina: 326, visina: 435 }
+
+  // Uporabnik klikne točno na spodnji desni kot, kot ga VIDI.
+  const klik = { x: 312 / (platno.sirina / prikaz.sirina), y: 426 / (platno.visina / prikaz.visina) }
+  const t = legaVMeriluPlatna(klik, prikaz, platno)
+
+  expect(t.x).toBeCloseTo(312, 0)
+  expect(t.y).toBeCloseTo(426, 0)
+})
+
+test('dotik: pri zgornjem levem kotu ni razlike (zato je bil videti v redu)', () => {
+  const platno = { sirina: 342, visina: 456 }
+  const prikaz = { sirina: 326, visina: 435 }
+  const t = legaVMeriluPlatna({ x: 0, y: 0 }, prikaz, platno)
+  expect(t.x).toBe(0)
+  expect(t.y).toBe(0)
+})
+
+test('dotik: enako merilo pusti koordinato pri miru', () => {
+  const enako = { sirina: 400, visina: 600 }
+  const t = legaVMeriluPlatna({ x: 123, y: 456 }, enako, enako)
+  expect(t.x).toBe(123)
+  expect(t.y).toBe(456)
+})

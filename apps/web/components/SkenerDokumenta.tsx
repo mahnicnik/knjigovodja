@@ -40,12 +40,17 @@ export default function SkenerDokumenta({
     const img = new Image()
     img.onload = () => {
       slikaRef.current = img
-      const najvecjaSirina = Math.min(window.innerWidth - 32, 700)
-      const faktor = Math.min(1, najvecjaSirina / img.width)
+      // POPRAVLJENO (20.8.2026): upostevamo tudi VISINO. Visok racun (9:16) je
+      // prej segal cez zaslon in spodnjih dveh kotov sploh ni bilo videti.
+      const najvecjaSirina = Math.min(window.innerWidth - 48, 700)
+      const najvecjaVisina = Math.max(280, window.innerHeight * 0.6)
+      const faktor = Math.min(1, najvecjaSirina / img.width, najvecjaVisina / img.height)
       const s = Math.round(img.width * faktor)
       const v = Math.round(img.height * faktor)
       setMere({ s, v, faktor })
-      const o = Math.round(Math.min(s, v) * 0.06)
+      // Rocica ima polmer ~26px, zato koti niso tik ob robu - sicer bi bila
+      // polovica rocice odrezana in prst je ne bi mogel prijeti (20.8.2026).
+      const o = Math.max(30, Math.round(Math.min(s, v) * 0.06))
       setKoti([
         { x: o, y: o }, { x: s - o, y: o },
         { x: s - o, y: v - o }, { x: o, y: v - o },
@@ -86,22 +91,45 @@ export default function SkenerDokumenta({
     ctx.closePath()
     ctx.stroke()
 
-    koti.forEach(k => {
+    // SPREMENJENO (20.8.2026): rocice so bile premajhne za prst (polmer 11).
+    koti.forEach((k, i) => {
+      // Prosojno obmocje, ki pokaze, kako veliko povrsino je mogoce prijeti.
       ctx.beginPath()
-      ctx.arc(k.x, k.y, 11, 0, Math.PI * 2)
+      ctx.arc(k.x, k.y, 26, 0, Math.PI * 2)
+      ctx.fillStyle = vlecem === i ? 'rgba(29,158,117,0.30)' : 'rgba(29,158,117,0.12)'
+      ctx.fill()
+
+      ctx.beginPath()
+      ctx.arc(k.x, k.y, vlecem === i ? 17 : 15, 0, Math.PI * 2)
       ctx.fillStyle = '#fff'
       ctx.fill()
       ctx.strokeStyle = '#1D9E75'
-      ctx.lineWidth = 3
+      ctx.lineWidth = 4
       ctx.stroke()
-    })
-  }, [koti, mere])
 
+      // Pika v sredini - natancna tocka kota.
+      ctx.beginPath()
+      ctx.arc(k.x, k.y, 3, 0, Math.PI * 2)
+      ctx.fillStyle = '#1D9E75'
+      ctx.fill()
+    })
+  }, [koti, mere, vlecem])
+
+  /**
+   * POPRAVLJENO (20.8.2026): platno se IZRISUJE v svoji locljivosti
+   * (mere.s × mere.v), PRIKAZUJE pa v sirini vsebnika, ki je zaradi odmikov
+   * ozji. Prej se koordinata klika ni pretvorila med tema meriloma, zato je
+   * napaka narascala z oddaljenostjo od zgornjega levega kota - zgornja
+   * kota se je dalo ujeti, SPODNJIH pa ne.
+   */
   function lega(e: React.PointerEvent): Tocka {
-    const r = platnoRef.current!.getBoundingClientRect()
+    const p = platnoRef.current!
+    const r = p.getBoundingClientRect()
+    const faktorX = r.width > 0 ? p.width / r.width : 1
+    const faktorY = r.height > 0 ? p.height / r.height : 1
     return {
-      x: Math.max(0, Math.min(mere.s, e.clientX - r.left)),
-      y: Math.max(0, Math.min(mere.v, e.clientY - r.top)),
+      x: Math.max(0, Math.min(mere.s, (e.clientX - r.left) * faktorX)),
+      y: Math.max(0, Math.min(mere.v, (e.clientY - r.top) * faktorY)),
     }
   }
 
@@ -112,8 +140,16 @@ export default function SkenerDokumenta({
       const d = Math.hypot(k.x - t.x, k.y - t.y)
       if (d < najmanj) { najmanj = d; najblizji = i }
     })
-    // Prijemamo samo, če je klik blizu ročice — sicer bi vsak dotik premaknil kot.
-    if (najmanj <= 40) {
+
+    // Obcutljivo obmocje: ~28px NA ZASLONU, preracunano v merilo platna.
+    // Prst pokrije priblizno toliko prostora; premajhno obmocje pomeni, da
+    // uporabnik zgresi rocico.
+    const p = platnoRef.current!
+    const r = p.getBoundingClientRect()
+    const faktor = r.width > 0 ? p.width / r.width : 1
+    const doseg = Math.max(50, 28 * faktor)
+
+    if (najmanj <= doseg) {
       setVlecem(najblizji)
       platnoRef.current?.setPointerCapture(e.pointerId)
     }
@@ -207,7 +243,17 @@ export default function SkenerDokumenta({
         onPointerDown={zacniVlecenje}
         onPointerMove={medVlecenjem}
         onPointerUp={() => setVlecem(null)}
-        style={{ width: '100%', maxWidth: mere.s, borderRadius: 10, touchAction: 'none', cursor: 'crosshair', display: 'block' }}
+        style={{
+          width: '100%', maxWidth: mere.s,
+          // `height: auto` ohrani razmerje. Brez tega platno obdrzi visino iz
+          // atributa in se slika vodoravno stisne (20.8.2026).
+          // NE uporabljamo `objectFit`, ker ta ustvari prazen rob ZNOTRAJ
+          // elementa - pretvorba koordinat bi spet postala napacna.
+          height: 'auto',
+          borderRadius: 10, display: 'block', margin: '0 auto',
+          // Prepreci, da bi telefon vlecenje razumel kot drsenje po strani.
+          touchAction: 'none', cursor: 'crosshair',
+        }}
       />
 
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '14px 0', fontSize: 13, cursor: 'pointer' }}>
