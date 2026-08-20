@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import posthog from 'posthog-js'
 import UpgradeButton from '@/components/UpgradeButton'
 import ManageSubscriptionButton from '@/components/ManageSubscriptionButton'
@@ -31,17 +32,20 @@ const SP_CONTRIBUTIONS: Record<number, number> = {
   11: 6877.80, 12: 7304.64, 13: 7731.48, 14: 8585.16, 15: 9438.84,
 }
 
+// SPREMENJENO (19.8.2026): pet razdelkov ni imelo lastne vsebine - klik je
+// pokazal kartico z ENIM gumbom, ki je sele vodil na pravo stran. Zdaj imajo
+// polje `href` in klik pelje naravnost tja, brez vmesnega koraka.
 const SECTIONS = [
   { id: 'profil',       icon: '🏢', label: 'Profil podjetja',    desc: 'Ime, naslov, davčna' },
   { id: 'ddv',          icon: '📊', label: 'DDV & prispevki',    desc: 'DDV status, razred' },
   { id: 'banka',        icon: '🏦', label: 'Bančni podatki',     desc: 'IBAN, BIC/SWIFT' },
-  { id: 'blagajna',     icon: '🧾', label: 'Davčna blagajna',    desc: 'FURS, certifikat' },
-  { id: 'ekipa',        icon: '👥', label: 'Ekipa',              desc: 'Uporabniki, dostop' },
+  { id: 'blagajna',     icon: '🧾', label: 'Davčna blagajna',    desc: 'FURS, certifikat',        href: '/nastavitve/blagajna' },
+  { id: 'ekipa',        icon: '👥', label: 'Ekipa',              desc: 'Uporabniki, dostop',      href: '/nastavitve/ekipa' },
   { id: 'geslo',        icon: '🔐', label: 'Geslo',              desc: 'Sprememba gesla' },
   { id: 'plan',         icon: '⭐', label: 'Naročnina',          desc: 'Plan, nadgradnja' },
-  { id: 'racunovodja',  icon: '📒', label: 'Računovodja portal', desc: 'Dostop računovodje' },
-  { id: 'api',          icon: '🔑', label: 'API ključi',         desc: 'Integracije, dostop' },
-  { id: 'email',        icon: '📧', label: 'E-mail skeniranje',  desc: 'Avtomatski uvoz stroškov' },
+  { id: 'racunovodja',  icon: '📒', label: 'Računovodja portal', desc: 'Dostop računovodje',      href: '/racunovodja' },
+  { id: 'api',          icon: '🔑', label: 'API ključi',         desc: 'Integracije, dostop',     href: '/api-kljuci' },
+  { id: 'email',        icon: '📧', label: 'E-mail skeniranje',  desc: 'Avtomatski uvoz stroškov', href: '/nastavitve/email-skeniranje' },
 ]
 
 const SI_BANKS: Record<string, string> = {
@@ -85,6 +89,7 @@ export default function NastavitevPage() {
   const [pwSaving, setPwSaving] = useState(false)
   const [pwMsg, setPwMsg] = useState<{text:string, ok:boolean} | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
+  const router = useRouter()
   const [form, setForm] = useState({
     name: '', tax_number: '', vat_number: '', vat_registered: false,
     vat_exemption_code: '', vat_exemption_custom_text: '',
@@ -220,7 +225,7 @@ export default function NastavitevPage() {
         {/* Hub kartic */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: 10, marginBottom: 28 }}>
           {SECTIONS.map(s => (
-            <button key={s.id} onClick={() => setActiveSection(s.id)}
+            <button key={s.id} onClick={() => { if ((s as any).href) router.push((s as any).href); else setActiveSection(s.id) }}
               style={{
                 background: activeSection === s.id ? '#0D1F12' : '#fff',
                 color: activeSection === s.id ? '#fff' : '#333',
@@ -230,7 +235,11 @@ export default function NastavitevPage() {
                 transition: 'all 0.15s', fontFamily: 'inherit',
               }}>
               <span style={{ fontSize: 24 }}>{s.icon}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, textAlign: 'center', lineHeight: 1.3 }}>{s.label}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, textAlign: 'center', lineHeight: 1.3 }}>
+                {s.label}
+                {/* Puscica pove, da kartica odpre svojo stran (19.8.2026). */}
+                {(s as any).href && <span style={{ opacity: 0.5 }}> ↗</span>}
+              </span>
               <span style={{ fontSize: 10, opacity: 0.6, textAlign: 'center', lineHeight: 1.3 }}>{s.desc}</span>
             </button>
           ))}
@@ -480,28 +489,8 @@ export default function NastavitevPage() {
           </div>
         )}
 
-        {/* BLAGAJNA */}
-        {activeSection === 'blagajna' && (
-          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>🧾 Davčna blagajna (FURS)</div>
-            <div style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>Nastavitve za FURS potrjevanje gotovinskih računov po ZDavPR</div>
-            <a href="/nastavitve/blagajna" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#0D1F12', color: '#fff', padding: '11px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
-              ⚙️ Odpri nastavitve blagajne →
-            </a>
-          </div>
-        )}
 
         {/* EKIPA */}
-        {activeSection === 'ekipa' && (
-          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>👥 Ekipa</div>
-            <div style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>Upravljanje članov ekipe in dostopov</div>
-            <a href="/nastavitve/ekipa" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#0D1F12', color: '#fff', padding: '11px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
-              👥 Upravljaj ekipo →
-            </a>
-          </div>
-        )}
-
         {/* GESLO */}
         {activeSection === 'geslo' && (
           <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
@@ -530,36 +519,6 @@ export default function NastavitevPage() {
         )}
 
         {/* RAČUNOVODJA */}
-        {activeSection === 'racunovodja' && (
-          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>📒 Računovodja portal</div>
-            <div style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>Vaš računovodja dobi vpogled v vaše poslovanje brez XLSX emailov</div>
-            <a href="/racunovodja" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#0D1F12', color: '#fff', padding: '11px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
-              📒 Odpri računovodja portal →
-            </a>
-          </div>
-        )}
-
-        {/* E-MAIL SKENIRANJE */}
-        {activeSection === 'email' && (
-          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>📧 E-mail skeniranje</div>
-            <div style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>Avtomatsko zaznaj stroške/racune v e-posti in jih predlagaj v pregled pred vnosom</div>
-            <a href="/nastavitve/email-skeniranje" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#0D1F12', color: '#fff', padding: '11px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
-              📧 Upravljaj e-mail povezave →
-            </a>
-          </div>
-        )}
-        {/* API KLJUČI */}
-        {activeSection === 'api' && (
-          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>🔑 API ključi</div>
-            <div style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>API dostop za integracije z zunanjimi sistemi</div>
-            <a href="/api-kljuci" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#0D1F12', color: '#fff', padding: '11px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
-              🔑 Upravljaj API ključe →
-            </a>
-          </div>
-        )}
 
         {/* PLAN */}
         {activeSection === 'plan' && (
