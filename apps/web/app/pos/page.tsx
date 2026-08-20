@@ -2800,6 +2800,7 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
       if (isNew) {
         const {error} = await createClient().from('bookings').insert(payload)
         if (error) throw error
+      if (!brisCust || brisCust.length === 0) throw new Error('Stranka ni bila izbrisana — nimate pravic ali je bila že odstranjena.')
       } else {
         const {error} = await createClient().from('bookings').update(payload).eq('id', booking.id)
         if (error) throw error
@@ -2848,8 +2849,10 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
 
   async function deleteBooking() {
     if (!confirm('Izbrišem to rezervacijo?')) return
-    const { error: delBookErr } = await createClient().from('bookings').delete().eq('id', booking.id)
+    // `.select()`: Supabase NE javi napake, ce brisanje ne zadene nobene vrstice (20.8.2026).
+    const { data: brisBook, error: delBookErr } = await createClient().from('bookings').delete().eq('id', booking.id).select('id')
     if (delBookErr) { alert('Termina ni bilo mogoče izbrisati: ' + delBookErr.message); return }
+    if (!brisBook || brisBook.length === 0) { alert('Termin ni bil izbrisan — nimate pravic ali je bil že odstranjen.'); return }
     onSaved()
   }
 
@@ -3562,7 +3565,8 @@ function CustomerProfileEditTab({ customer, onSave }) {
     if (!confirm(`Izbrišem stranko "${customer.name}"? Tega dejanja ni mogoče razveljaviti.`)) return
     setDeleting(true)
     try {
-      const { error } = await createClient().from('customers').delete().eq('id', customer.id)
+      // `.select()`: Supabase NE javi napake, ce brisanje ne zadene nobene vrstice (20.8.2026).
+      const { data: brisCust, error } = await createClient().from('customers').delete().eq('id', customer.id).select('id')
       if (error) throw error
       onSave()
     } catch(e) { alert(e.message) }
@@ -3708,8 +3712,10 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
   }
   async function deletePkg(pkg) {
     if (!confirm(`Trajno izbrisem kartico "${pkg.name}"? Tega ni mogoce razveljaviti.`)) return
-    const { error } = await createClient().from('customer_packages').delete().eq('id', pkg.id)
+    // `.select()`: Supabase NE javi napake, ce brisanje ne zadene nobene vrstice (20.8.2026).
+    const { data: brisPkg, error } = await createClient().from('customer_packages').delete().eq('id', pkg.id).select('id')
     if (error) { showToast(error.message, false); return }
+    if (!brisPkg || brisPkg.length === 0) { showToast('Paket ni bil izbrisan — nimate pravic ali je bil že odstranjen.', false); return }
     showToast('Kartica trajno izbrisana')
     onRefresh()
   }
@@ -4157,6 +4163,21 @@ function InventoryScreen({ posData }) {
   const [dobavnicaModal, setDobavnicaModal] = useState(false)
   const [deliveries, setDeliveries] = useState([])
   const [deliveriesLoaded, setDeliveriesLoaded] = useState(false)
+
+  /**
+   * Ponovno nalozi dobavnice (20.8.2026).
+   *
+   * NAPAKA, ki jo to odpravlja: dobavnice so se nalozile SAMO enkrat (pogoj
+   * `!deliveriesLoaded`), `posData.refresh()` pa osvezi artikle in surovine,
+   * NE pa dobavnic. Po brisanju je zapis res izginil iz baze, seznam na
+   * zaslonu pa je ostal star - videti je bilo, kot da brisanje ne deluje.
+   */
+  async function naloziDobavnice() {
+    const { data } = await createClient().from('deliveries').select('*')
+      .eq('business_id', BUSINESS_ID).order('document_date', { ascending: false })
+    setDeliveries(data || [])
+    setDeliveriesLoaded(true)
+  }
   const [selectedDelivery, setSelectedDelivery] = useState(null)
   const [deliveryLines, setDeliveryLines] = useState([])
   const [editModal, setEditModal] = useState(null)
@@ -4395,9 +4416,21 @@ function InventoryScreen({ posData }) {
     // 2. Sele nato vrstice in glavo.
     const { error: vErr } = await db.from('delivery_lines').delete().eq('delivery_id', d.id)
     if (vErr) { showInvToast('Vrstic dobavnice ni bilo mogoče izbrisati: ' + vErr.message, false); return }
-    const { error: gErr } = await db.from('deliveries').delete().eq('id', d.id)
-    if (gErr) { showInvToast('Dobavnice ni bilo mogoče izbrisati: ' + gErr.message, false); return }
 
+    // `.select()` je nujen: Supabase NE javi napake, ce brisanje ne zadene
+    // nobene vrstice (npr. zaradi varnostnih pravil). Brez tega bi uporabnik
+    // videl potrditev, zapis pa bi ostal - ista past kot pri spremembi nacina
+    // placila (prelet 37).
+    const { data: izbrisano, error: gErr } = await db.from('deliveries')
+      .delete().eq('id', d.id).select('id')
+    if (gErr) { showInvToast('Dobavnice ni bilo mogoče izbrisati: ' + gErr.message, false); return }
+    if (!izbrisano || izbrisano.length === 0) {
+      showInvToast('Dobavnica ni bila izbrisana — nimate pravic ali je bila že odstranjena.', false)
+      await naloziDobavnice()
+      return
+    }
+
+    await naloziDobavnice()   // brez tega seznam ostane star (20.8.2026)
     posData.refresh()
     showInvToast(poknjizene.length > 0
       ? `Dobavnica izbrisana, zaloga popravljena pri ${poknjizene.length} artiklih`
@@ -4407,13 +4440,19 @@ function InventoryScreen({ posData }) {
   /** Urejanje podatkov dobavnice (dobavitelj, dokument, datum). */
   async function saveDeliveryEdit() {
     if (!deliveryEdit) return
-    const { error } = await createClient().from('deliveries').update({
+    const { data: posodobljeno, error } = await createClient().from('deliveries').update({
       supplier: deliveryEdit.supplier?.trim() || null,
       document_number: deliveryEdit.document_number?.trim() || null,
       document_date: deliveryEdit.document_date || null,
-    }).eq('id', deliveryEdit.id)
+    }).eq('id', deliveryEdit.id).select('id')
     if (error) { showInvToast('Dobavnice ni bilo mogoče shraniti: ' + error.message, false); return }
-    setDeliveryEdit(null); posData.refresh(); showInvToast('Dobavnica posodobljena')
+    if (!posodobljeno || posodobljeno.length === 0) {
+      showInvToast('Sprememba ni bila shranjena — dobavnica ni bila najdena.', false); return
+    }
+    setDeliveryEdit(null)
+    await naloziDobavnice()
+    posData.refresh()
+    showInvToast('Dobavnica posodobljena')
   }
 
   async function deleteIngredient(id, name) {
@@ -4432,8 +4471,10 @@ function InventoryScreen({ posData }) {
       const { error: vezErr } = await db.from('item_ingredients').delete().eq('ingredient_id', id)
       if (vezErr) { showInvToast('Povezav na recepte ni bilo mogoče odstraniti: ' + vezErr.message, false); return }
     }
-    const { error } = await db.from('ingredients').delete().eq('id', id)
+    // `.select()`: Supabase NE javi napake, ce brisanje ne zadene nobene vrstice (20.8.2026).
+    const { data: brisIng, error } = await db.from('ingredients').delete().eq('id', id).select('id')
     if (error) { showInvToast('Surovine ni bilo mogoče izbrisati: ' + error.message, false); return }
+    if (!brisIng || brisIng.length === 0) { showInvToast('Surovina ni bila izbrisana — nimate pravic ali je bila že odstranjena.', false); return }
     posData.refresh(); showInvToast('Surovina izbrisana')
   }
 
@@ -4540,7 +4581,7 @@ function InventoryScreen({ posData }) {
         <div style={{ display:'flex', gap:10, alignItems:'center', flexWrap:'wrap' }}>
           <div style={{ display:'flex', gap:2, background:T.surface3, padding:3, borderRadius:9 }}>
             {[['items','Artikli'],['ingredients','Surovine'],['deliveries','Dobavnice']].map(([id,lbl])=>(
-              <button key={id} onClick={()=>{setTab(id);setFilter('vse');if(id==='deliveries'&&!deliveriesLoaded){createClient().from('deliveries').select('*').eq('business_id',BUSINESS_ID).order('document_date',{ascending:false}).then(({data})=>{setDeliveries(data||[]);setDeliveriesLoaded(true)})}}} style={{ padding:'6px 14px', borderRadius:7, border:'none', background:tab===id?T.header:'transparent', color:tab===id?T.headerInk:T.ink, fontWeight:700, fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>{lbl}</button>
+              <button key={id} onClick={()=>{setTab(id);setFilter('vse');if(id==='deliveries'&&!deliveriesLoaded){naloziDobavnice()}}} style={{ padding:'6px 14px', borderRadius:7, border:'none', background:tab===id?T.header:'transparent', color:tab===id?T.headerInk:T.ink, fontWeight:700, fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>{lbl}</button>
             ))}
           </div>
           <div style={{ display:'flex', gap:4 }}>
