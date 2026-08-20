@@ -177,7 +177,7 @@ export default function PredracuniPage() {
           </div>
         </div>
         {/* Stats */}
-        <div style={{ maxWidth: 960, margin: '16px auto 0', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        <div style={{ maxWidth: 960, margin: '16px auto 0', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
           {[
             { label: 'Skupaj predračunov', value: quotes.length, color: '#fff' },
             { label: 'Sprejeto', value: fmt(accepted), color: '#6EE7B7' },

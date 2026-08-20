@@ -857,7 +857,7 @@ export default function BlagajnaSekcija() {
                     placeholder="Gorenja vas" style={inputStyle} />
                 </FormField>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
                 <FormField label="Kat. občina">
                   <input value={premiseModal.cadastralNumber || ''} onChange={e => setPremiseModal(p => ({ ...p, cadastralNumber: e.target.value }))}
                     placeholder="2345" style={inputStyle} />

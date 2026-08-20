@@ -304,7 +304,7 @@ export default function PosZakljucekPage() {
 
         {/* Stats */}
         {closings.length > 0 && (
-          <div style={{ maxWidth: 900, margin: '16px auto 0', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          <div style={{ maxWidth: 900, margin: '16px auto 0', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
             {[
               { label: 'Zaključkov letos', value: closings.length, color: '#fff' },
               { label: 'Promet letos', value: fmt(closings.reduce((s, c) => s + Number(c.total_sales), 0)), color: '#6EE7B7' },
@@ -326,7 +326,7 @@ export default function PosZakljucekPage() {
         {showForm && (
           <div style={{ background: '#fff', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.08)', padding: 24, marginBottom: 16 }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: '#0D1F12', marginBottom: 18 }}>Nov dnevni zaključek</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 16 }}>
               <div>
                 <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Datum</label>
                 <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.15)', fontSize: 13, outline: 'none' }} />
@@ -352,7 +352,7 @@ export default function PosZakljucekPage() {
             ) : dayStats ? (
               <div style={{ background: '#F7F6F2', borderRadius: 10, padding: 16, marginBottom: 14 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 12 }}>Podatki iz POS — {fmtDate(selectedDate)}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
                   {[
                     { label: 'Gotovina', value: fmt(dayStats.cashSales), color: '#FCD34D' },
                     { label: 'Kartice', value: fmt(dayStats.cardSales), color: '#A78BFA' },

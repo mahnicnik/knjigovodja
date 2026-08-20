@@ -165,7 +165,7 @@ export default function RacunovodjaPortal() {
           </div>
 
           {clients.length > 0 && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 20 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginTop: 20 }}>
               {[
                 { label: 'Stranke', value: clients.length, unit: '', color: '#fff' },
                 { label: `Prihodki ${monthLabel}`, value: `€${Math.round(totalRevenue).toLocaleString('sl-SI')}`, unit: '', color: '#E8B547' },

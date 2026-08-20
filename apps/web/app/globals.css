@@ -109,3 +109,41 @@ aside { background: var(--rk-forest) !important; }
 }
 
 .calendar-slot-hover:hover { background: rgba(31,107,58,0.04); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   PRILAGODITEV ZA TELEFON (19.8.2026)
+
+   Vsebina je na telefonu uhajala cez rob zaslona: tabele s 5–8 stolpci
+   in slike so raztegnile stran, zato se je dalo vodoravno drseti po
+   CELOTNI strani, glava in spodnja vrstica pa sta se premikali z njo.
+
+   Namesto popravkov na ~40 mestih so tu splosna pravila.
+   ═══════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* Tabela naj drsi ZNOTRAJ sebe, ne raztegne cele strani. */
+  table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Nic naj ne bo sirse od zaslona. */
+  img, svg, video, canvas, pre {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Dolge besede (e-naslovi, sklici, IBAN) naj se prelomijo,
+     namesto da raztegnejo postavitev. */
+  td, th, p, div, span {
+    overflow-wrap: anywhere;
+  }
+
+  /* iOS samodejno priblizа zaslon, ce ima polje pisavo manjso od 16px.
+     Zaradi tega je vnos podatkov na iPhonu poskakoval. */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}

@@ -179,7 +179,7 @@ export default function CasPage() {
             <button onClick={() => setShowForm(!showForm)} style={{ background: '#1D9E75', color: '#fff', border: 0, padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>+ Nov vnos</button>
           </div>
         </div>
-        <div style={{ maxWidth: 960, margin: '16px auto 0', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+        <div style={{ maxWidth: 960, margin: '16px auto 0', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
           {[
             { label: 'Skupaj ur', value: `${totalHours.toFixed(1)}h`, color: '#fff' },
             { label: 'Zaračunljivih ur', value: `${billableHours.toFixed(1)}h`, color: '#FCD34D' },
@@ -225,7 +225,7 @@ export default function CasPage() {
                 <input type="date" value={date} onChange={e => setDate(e.target.value)} style={inp} />
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 12 }}>
               <div>
                 <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Stranka</label>
                 <input value={clientName} onChange={e => setClientName(e.target.value)} placeholder="ABC d.o.o." style={inp} />

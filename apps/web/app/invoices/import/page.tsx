@@ -241,7 +241,7 @@ export default function ImportInvoicesPage() {
                     )}
                   </div>
                   {inv._status === 'ok' && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
                       <div>
                         <label style={{ fontSize: 10, color: '#999' }}>Št. računa</label>
                         <input value={inv.invoice_number} onChange={e => updateField(idx, 'invoice_number', e.target.value)}

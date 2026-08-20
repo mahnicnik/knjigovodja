@@ -201,7 +201,7 @@ export default function PonavljajoceRacunePage() {
           </div>
         )}
 
-        <div style={{ maxWidth: 960, margin: '16px auto 0', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        <div style={{ maxWidth: 960, margin: '16px auto 0', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
           {[
             { label: 'Aktivnih naročnin', value: recurring.filter(r => r.is_active).length, color: '#fff' },
             { label: 'Mesečni prihodek', value: fmt(monthlyTotal), color: '#6EE7B7' },

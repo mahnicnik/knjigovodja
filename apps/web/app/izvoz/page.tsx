@@ -250,7 +250,7 @@ export default function IzvozPage() {
           </div>
 
           {previewStats && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, padding: 14, background: '#F7F6F2', borderRadius: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, padding: 14, background: '#F7F6F2', borderRadius: 10 }}>
               <div>
                 <div style={{ fontSize: 11, color: '#888', marginBottom: 3 }}>Izdani računi</div>
                 <div style={{ fontSize: 18, fontWeight: 600, color: '#0D1F12' }}>{previewStats.invoices}</div>

@@ -213,7 +213,7 @@ export default function ZalogePage() {
           </div>
         )}
 
-        <div style={{ maxWidth: 1100, margin: '16px auto 0', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+        <div style={{ maxWidth: 1100, margin: '16px auto 0', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
           {[
             { label: 'Artiklov', value: items.filter(i => i.is_active).length, color: '#fff' },
             { label: 'Vrednost nabave', value: fmt(totalValue), color: '#FCD34D' },
@@ -421,7 +421,7 @@ export default function ZalogePage() {
                   </select>
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
                 <div>
                   <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Nabavna cena (€)</label>
                   <input type="number" onFocus={e => e.target.select()} step="0.01" min="0" value={itemModal.purchase_price ?? 0} onChange={e => setItemModal(p => ({ ...p, purchase_price: Number(e.target.value) }))} style={inp} />

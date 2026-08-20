@@ -176,7 +176,7 @@ export default function RegresPage() {
           </div>
         </div>
 
-        <div style={{ maxWidth: 900, margin: '16px auto 0', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+        <div style={{ maxWidth: 900, margin: '16px auto 0', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
           {[
             { label: 'Zaposlenih', value: employees.length, color: '#fff' },
             { label: 'Skupaj regres', value: `€${Math.round(totalRegres)}`, color: '#E8B547' },
@@ -294,7 +294,7 @@ export default function RegresPage() {
         {/* Zakonske informacije */}
         <div style={{ background: '#fff', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.08)', padding: 20, marginTop: 16 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#0D1F12', marginBottom: 12 }}>📋 Zakonske obveznosti</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
             {[
               { label: 'Minimalni regres', value: `€${MIN_REGRES.toFixed(2)}`, desc: 'Minimalna plača 2026' },
               { label: 'Neobdavčeni del', value: `€${MAX_REGRES_TAXFREE.toFixed(2)}`, desc: '126% minimalne plače' },

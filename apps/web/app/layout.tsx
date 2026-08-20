@@ -79,7 +79,11 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Računko" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+        {/* POPRAVLJENO (19.8.2026): `maximum-scale=1` je uporabniku PREPOVEDAL
+            priblizevanje zaslona. Na racunih in v tabelah z drobno pisavo je bilo
+            to mocno mote(ce, za slabovidne pa oviro. Samodejno priblizevanje ob
+            kliku v polje resujemo z `font-size: 16px` v globals.css. */}
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
       <body className="min-h-full flex flex-col">{children}<PageHelp /></body>
     </html>

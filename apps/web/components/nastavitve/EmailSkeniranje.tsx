@@ -276,7 +276,7 @@ function EmailSkeniranjeContent() {
                   <div style={{ fontSize: 11, color: '#999', marginBottom: 6 }}>
                     Iz e-maila: {item.email_from} · {item.email_subject}
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 10 }}>
                     <div><span style={{ fontSize: 10, color: '#999' }}>Dobavitelj</span><div style={{ fontSize: 13, fontWeight: 600 }}>{item.extracted.vendor}</div></div>
                     <div><span style={{ fontSize: 10, color: '#999' }}>Datum</span><div style={{ fontSize: 13, fontWeight: 600 }}>{item.extracted.date}</div></div>
                     <div><span style={{ fontSize: 10, color: '#999' }}>Skupaj</span><div style={{ fontSize: 13, fontWeight: 700 }}>€{formatEurNumber(Number(item.extracted.amount_total || 0))}</div></div>

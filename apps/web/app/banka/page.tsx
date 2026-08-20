@@ -677,7 +677,7 @@ export default function BankaPage() {
         {step === 'review' && (
           <>
             {/* Statistike */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 16 }}>
               {[
                 { label: 'Ujeto z računi', value: stats.matched, color: '#1D9E75', bg: '#E1F5EE' },
                 { label: 'Neujeto', value: stats.unmatched, color: '#D97706', bg: '#FEF3C7' },

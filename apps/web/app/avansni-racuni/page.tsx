@@ -212,7 +212,7 @@ export default function AvansniRacuniPage() {
             <button onClick={() => setModal('advance')} style={{ background: '#1D9E75', color: '#fff', border: 0, padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>+ Nov avansni račun</button>
           </div>
         </div>
-        <div style={{ maxWidth: 960, margin: '16px auto 0', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        <div style={{ maxWidth: 960, margin: '16px auto 0', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
           {[
             { label: 'Avansnih računov', value: advanceInvoices.length, color: '#fff' },
             { label: 'Finalnih računov', value: finalInvoices.length, color: '#6EE7B7' },

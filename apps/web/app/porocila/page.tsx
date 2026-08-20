@@ -238,7 +238,7 @@ export default function PoslovnaPorocila() {
                 <span style={{ fontSize: 14, fontWeight: 700, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Poslovni izid {year}</span>
                 <span style={{ fontSize: 28, fontWeight: 700, color: totals.profit >= 0 ? '#E8B547' : '#FCA5A5' }}>{fmtN(totals.profit)}</span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16 }}>
                 {[
                   { label: 'Marža', value: totals.revenue > 0 ? `${Math.round((totals.profit / totals.revenue) * 100)}%` : '—' },
                   { label: totals.vatDue >= 0 ? 'DDV dolgovan FURS' : 'DDV za vračilo od FURS', value: fmt(Math.abs(totals.vatDue)) },

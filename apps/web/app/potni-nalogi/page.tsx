@@ -174,7 +174,7 @@ export default function PotniNalogiPage() {
             <button onClick={() => setShowForm(!showForm)} style={{ background: '#1D9E75', color: '#fff', border: 0, padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>+ Nov potni nalog</button>
           </div>
         </div>
-        <div style={{ maxWidth: 960, margin: '16px auto 0', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        <div style={{ maxWidth: 960, margin: '16px auto 0', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
           {[
             { label: 'Skupaj nalogov', value: orders.length, color: '#fff' },
             { label: 'Plačano letos', value: fmt(totalPaid), color: '#6EE7B7' },
@@ -229,7 +229,7 @@ export default function PotniNalogiPage() {
             {/* Stroški */}
             <div style={{ background: '#F7F6F2', borderRadius: 10, padding: 16, marginBottom: 12 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 12 }}>Stroški poti</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
                 {transportType === 'car' && (
                   <>
                     <div>

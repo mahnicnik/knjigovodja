@@ -306,7 +306,7 @@ export default function RacunovodjaClientPage() {
           </div>
 
           {/* Quick stats */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginTop: 18 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginTop: 18 }}>
             {[
               { label: 'Ta mesec', value: `€${Math.round(monthRevenue).toLocaleString('sl-SI')}`, color: '#E8B547' },
               { label: 'Zamudniki', value: overdueInvoices.length, color: overdueInvoices.length > 0 ? '#F87171' : '#6EE7B7' },

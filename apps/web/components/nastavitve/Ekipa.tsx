@@ -261,7 +261,7 @@ export default function EkipaSekcija() {
         {/* VLOGE INFO */}
         <div style={{ background: '#fff', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.08)', padding: 20, marginBottom: 16 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: '#888', letterSpacing: '.05em', textTransform: 'uppercase', marginBottom: 12 }}>Vloge in dovoljenja</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
             {ROLES.map(r => (
               <div key={r.value} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', background: '#F7F6F2', borderRadius: 10 }}>
                 <span style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>{r.emoji}</span>
