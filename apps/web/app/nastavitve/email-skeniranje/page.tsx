@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import { formatEurNumber } from '@/lib/format'
+import AppLayout from '@/components/AppLayout'
 
 function EmailSkeniranjeContent() {
   const [org, setOrg] = useState<any>(null)
@@ -158,6 +159,10 @@ function EmailSkeniranjeContent() {
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#888' }}>Nalagam...</div>
 
   return (
+    // DODANO (19.8.2026): stran je bila EDINA v nastavitvah brez AppLayout -
+    // uporabnik je izgubil stranski meni in se je lahko vrnil samo prek
+    // gumba "Nazaj" ali brskalnika.
+    <AppLayout org={org}>
     <div style={{ minHeight: '100vh', background: '#f7f6f3', padding: '24px 32px' }}>
       <div style={{ maxWidth: 900, margin: '0 auto' }}>
         <Link href="/nastavitve" style={{ fontSize: 13, color: '#888', textDecoration: 'none' }}>← Nazaj na Nastavitve</Link>
@@ -290,6 +295,7 @@ function EmailSkeniranjeContent() {
         )}
       </div>
     </div>
+    </AppLayout>
   )
 }
 

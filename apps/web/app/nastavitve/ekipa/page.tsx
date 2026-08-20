@@ -255,7 +255,10 @@ export default function EkipaPage() {
 
         {/* HEADER */}
         <div style={{ marginBottom: 24 }}>
-          <button onClick={() => router.push('/dashboard')} style={{ background: 'none', border: 0, color: '#888', fontSize: 13, cursor: 'pointer', marginBottom: 8 }}>← Nazaj</button>
+          {/* POPRAVLJENO (19.8.2026): gumb je vodil na Dashboard, ne nazaj v
+              Nastavitve, od koder je uporabnik prisel - na vsaki podstrani
+              nastavitev se je obnasal drugace. */}
+          <button onClick={() => router.push('/nastavitve')} style={{ background: 'none', border: 0, color: '#888', fontSize: 13, cursor: 'pointer', marginBottom: 8 }}>← Nazaj na Nastavitve</button>
           <h1 style={{ fontSize: 26, fontWeight: 500, color: '#0D1F12', margin: 0 }}>Ekipa</h1>
           <div style={{ fontSize: 14, color: '#888', marginTop: 4 }}>Upravljajte dostop do vašega Računko računa</div>
         </div>

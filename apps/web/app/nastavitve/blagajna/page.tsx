@@ -414,7 +414,7 @@ export default function BlagajnaPage() {
     <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 24px', fontFamily: 'Inter, system-ui, sans-serif' }}>
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
-        <a href="/nastavitve" style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:13, color:"var(--rk-ink-3)", textDecoration:"none", marginBottom:8, fontFamily:"var(--rk-font-mono)" }}>← Nastavitve</a>
+        <a href="/nastavitve" style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:13, color:"var(--rk-ink-3)", textDecoration:"none", marginBottom:8, fontFamily:"var(--rk-font-mono)" }}>← Nazaj na Nastavitve</a>
         <h1 style={{ fontSize: 28, fontWeight: 800, margin: 0, color: '#0d2818' }}>Davčna blagajna</h1>
         <p style={{ fontSize: 14, color: '#666', marginTop: 6 }}>FURS certifikat, poslovni prostori in naprave</p>
       </div>
