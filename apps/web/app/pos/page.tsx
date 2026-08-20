@@ -4160,6 +4160,7 @@ function InventoryScreen({ posData }) {
   const [selectedDelivery, setSelectedDelivery] = useState(null)
   const [deliveryLines, setDeliveryLines] = useState([])
   const [editModal, setEditModal] = useState(null)
+  const [ingEditModal, setIngEditModal] = useState(null)
   const [editSaving, setEditSaving] = useState(false)
   const [itemModal, setItemModal] = useState(null)
   const [modifierGroups, setModifierGroups] = useState<any[]>([])
@@ -4348,6 +4349,56 @@ function InventoryScreen({ posData }) {
     } catch(e) { showInvToast(e.message,false) }
     setSaving(false)
   }
+  /**
+   * Brisanje surovine (20.8.2026).
+   *
+   * Surovino, ki je uporabljena v receptu artikla, NE brisemo brez opozorila -
+   * artikel bi ostal z nedelujoco sestavino in obracun porabe bi bil napacen.
+   */
+  async function deleteIngredient(id, name) {
+    const db = createClient()
+    const { count } = await db.from('item_ingredients')
+      .select('id', { count: 'exact', head: true }).eq('ingredient_id', id)
+
+    const opozorilo = count && count > 0
+      ? `Surovina "${name}" je uporabljena v ${count} ${count === 1 ? 'receptu' : 'receptih'}.\n\nČe jo izbrišete, bo iz njih odstranjena in obračun porabe za te artikle ne bo več pravilen.\n\nVseeno izbrišem?`
+      : `Izbrišem surovino "${name}"?`
+    if (!confirm(opozorilo)) return
+
+    // Najprej povezave na recepte, sele nato surovino - sicer bi tuji kljuc
+    // brisanje zavrnil.
+    if (count && count > 0) {
+      const { error: vezErr } = await db.from('item_ingredients').delete().eq('ingredient_id', id)
+      if (vezErr) { showInvToast('Povezav na recepte ni bilo mogoče odstraniti: ' + vezErr.message, false); return }
+    }
+    const { error } = await db.from('ingredients').delete().eq('id', id)
+    if (error) { showInvToast('Surovine ni bilo mogoče izbrisati: ' + error.message, false); return }
+    posData.refresh(); showInvToast('Surovina izbrisana')
+  }
+
+  /** Shranjevanje urejene surovine (20.8.2026). */
+  const vnosStil = { width:'100%', padding:'8px 10px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13, background:T.inputBg, outline:'none', boxSizing:'border-box' as any }
+
+  async function saveIngEdit() {
+    if (!ingEditModal) return
+    if (!String(ingEditModal.name || '').trim()) { showInvToast('Ime surovine je obvezno', false); return }
+    setEditSaving(true)
+    try {
+      const { error } = await createClient().from('ingredients').update({
+        name: ingEditModal.name.trim(),
+        unit: ingEditModal.unit || null,
+        min_stock: ingEditModal.min_stock !== '' ? Number(ingEditModal.min_stock) : null,
+        cost_price: ingEditModal.cost_price !== '' ? Number(ingEditModal.cost_price) : null,
+        supplier: ingEditModal.supplier || null,
+      }).eq('id', ingEditModal.id)
+      if (error) throw error
+      posData.refresh(); setIngEditModal(null); showInvToast('Surovina posodobljena')
+    } catch (e) {
+      showInvToast(e.message, false)
+    }
+    setEditSaving(false)
+  }
+
   async function deleteItem(id, name) {
     if (!confirm(`Izbrišem artikel "${name}"?`)) return
     const { error: arcErr } = await createClient().from('items').update({archived:true}).eq('id',id)
@@ -4498,6 +4549,11 @@ function InventoryScreen({ posData }) {
                           style={{ width:28, height:28, borderRadius:7, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center' }}>✏️</button>
                         <button onClick={()=>setSelectedItem(selectedItem?.id===it.id?null:it)}
                           style={{ width:28, height:28, borderRadius:7, border:'1px solid '+(selectedItem?.id===it.id?T.accent:T.line), background:selectedItem?.id===it.id?T.accentSoft:T.surface, cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', justifyContent:'center' }}>📊</button>
+                        {/* DODANO (20.8.2026): funkcija deleteItem() je ze
+                            obstajala, a je ni bilo mogoce sprozit - gumba v
+                            tabeli ni bilo. Artikla se torej ni dalo izbrisati. */}
+                        <button onClick={()=>deleteItem(it.id, it.name)} title="Izbriši artikel"
+                          style={{ width:28, height:28, borderRadius:7, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', color:T.danger }}>🗑</button>
                       </div>
                     </td>
                   </tr>
@@ -4586,7 +4642,18 @@ function InventoryScreen({ posData }) {
                         if(error) { alert('Zaloge ni bilo mogoče posodobiti: ' + error.message); return }
                         posData.refresh()
                       }}
-                        style={{ width:28, height:28, borderRadius:7, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontSize:14 }}>+</button>
+                        style={{ width:28, height:28, borderRadius:7, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontSize:14 }}
+                        title="Popravi zalogo">+</button>
+                      {/* DODANO (20.8.2026): surovine je bilo mogoce samo
+                          DODATI - urejanja imena/enote/min. zaloge in brisanja
+                          ni bilo nikjer. Zmotno vneseno surovino je bilo
+                          mogoce le pustiti na seznamu. */}
+                      <button onClick={()=>setIngEditModal({ id:ig.id, name:ig.name, unit:ig.unit||'', min_stock:ig.min_stock??'', cost_price:ig.cost_price??'', supplier:ig.supplier||'' })}
+                        title="Uredi surovino"
+                        style={{ width:28, height:28, borderRadius:7, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontSize:13, marginLeft:6 }}>✏️</button>
+                      <button onClick={()=>deleteIngredient(ig.id, ig.name)}
+                        title="Izbriši surovino"
+                        style={{ width:28, height:28, borderRadius:7, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontSize:13, marginLeft:6, color:T.danger }}>🗑</button>
                     </td>
                   </tr>
                 )
@@ -4636,6 +4703,45 @@ function InventoryScreen({ posData }) {
           </div>
         </div>
       )}
+        {/* DODANO (20.8.2026): urejanje surovine. Prej je bilo surovino mogoce
+            samo DODATI - imena, enote, min. zaloge ali dobavitelja ni bilo
+            mogoce popraviti, zmotno vnesene pa ne izbrisati. */}
+        {!!ingEditModal && (
+          <Modal open onClose={()=>setIngEditModal(null)} width={440}>
+            <ModalHeader title={'Uredi surovino: ' + (ingEditModal.name||'')} onClose={()=>setIngEditModal(null)}/>
+            <div style={{ padding:'20px 22px', display:'flex', flexDirection:'column', gap:12 }}>
+              <Field label="Naziv surovine *">
+                <input value={ingEditModal.name||''} onChange={e=>setIngEditModal(p=>({...p,name:e.target.value}))} style={vnosStil}/>
+              </Field>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                <Field label="Enota">
+                  <select value={ingEditModal.unit||''} onChange={e=>setIngEditModal(p=>({...p,unit:e.target.value}))} style={vnosStil}>
+                    {['L','dL','mL','kg','g','kos'].map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </Field>
+                <Field label="Najnižja zaloga">
+                  <input type="number" onFocus={e=>e.target.select()} value={ingEditModal.min_stock??''} onChange={e=>setIngEditModal(p=>({...p,min_stock:e.target.value}))} style={vnosStil}/>
+                </Field>
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                <Field label="Nabavna cena (€)">
+                  <input type="number" step="0.01" onFocus={e=>e.target.select()} value={ingEditModal.cost_price??''} onChange={e=>setIngEditModal(p=>({...p,cost_price:e.target.value}))} style={vnosStil}/>
+                </Field>
+                <Field label="Dobavitelj">
+                  <input value={ingEditModal.supplier||''} onChange={e=>setIngEditModal(p=>({...p,supplier:e.target.value}))} style={vnosStil}/>
+                </Field>
+              </div>
+              <div style={{ fontSize:11, color:T.muted }}>
+                Zalogo popravite z gumbom <strong>+</strong> v preglednici — tako ostane zapis o spremembi.
+              </div>
+              <div style={{ display:'flex', gap:8, marginTop:4 }}>
+                <button onClick={()=>setIngEditModal(null)} style={{ flex:1, padding:'10px', borderRadius:8, border:'1px solid '+T.line, background:'transparent', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:13 }}>Prekliči</button>
+                <button onClick={saveIngEdit} style={{ flex:2, padding:'10px', borderRadius:8, border:'none', background:T.accent, color:'#fff', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:13 }}>Shrani</button>
+              </div>
+            </div>
+          </Modal>
+        )}
+
         {!!editModal && (
           <Modal open onClose={()=>setEditModal(null)} width={440}>
             <ModalHeader title={'Uredi: '+editModal.name} onClose={()=>setEditModal(null)}/>
