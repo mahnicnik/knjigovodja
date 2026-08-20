@@ -8,6 +8,7 @@ import Link from 'next/link'
 import posthog from 'posthog-js'
 import { getActiveMembership } from '@/lib/active-org'
 import { naloziListino, base64VBlob } from '@/lib/listine'
+import SkenerDokumenta from '@/components/SkenerDokumenta'
 import AppLayout from '@/components/AppLayout'
 
 // Varna base64 pretvorba za VELIKE datoteke (24.7.2026). btoa(String.
@@ -44,6 +45,11 @@ export default function ScanPage() {
   })
   const fileRef = useRef<HTMLInputElement>(null)
   const cameraRef = useRef<HTMLInputElement>(null)
+  // DODANO (19.8.2026): pravi skener - fotografija gre najprej skozi poravnavo
+  // in obdelavo (odstranitev sence, belo ozadje), sele nato na AI in v hrambo.
+  // Prej se je poslala takSna, kot je nastala: pod kotom, s senco, z mizo.
+  const [zaSkeniranje, setZaSkeniranje] = useState<string | null>(null)
+  const [skeniranPdf, setSkeniranPdf] = useState<Blob | null>(null)
   const router = useRouter()
   const supabase = createClient()
 
@@ -150,7 +156,9 @@ export default function ScanPage() {
       })
       const compressed = await compressImage(dataUrl)
       ;(window as any).__pdfBase64 = null
-      setImage(compressed)
+      // Slika gre najprej v skener (poravnava + obdelava), ne neposredno naprej.
+      setZaSkeniranje(compressed)
+      setSkeniranPdf(null)
   
     } catch (err: any) {
       alert('Napaka pri nalaganju: ' + err.message)
@@ -220,13 +228,19 @@ export default function ScanPage() {
       // 71 listin je pomenilo 21 MB besedila V BAZI.
       // Ce nalaganje spodleti, zapis vseeno shranimo (bolje strosek brez
       // listine kot izgubljen strosek), uporabnika pa opozorimo.
+      // SPREMENJENO (19.8.2026): skenirana listina se hrani kot PDF - standard
+      // za hrambo, ki ga racunovodski programi pricakujejo. PDF sam po sebi ni
+      // manjSi od slike (le ovije jo), prihranek pride iz obdelave: sivinska
+      // slika z belim ozadjem se stisne bistveno bolje kot fotografija mize.
       const surovaListina: string | null = (window as any).__pdfBase64 || image || null
-      const jePdf = !!(window as any).__pdfBase64
+      const jePdf = !!(window as any).__pdfBase64 || !!skeniranPdf
       let potListine: string | null = null
       let napakaListine: string | null = null
 
-      if (surovaListina && org?.id) {
-        const blob = base64VBlob(surovaListina, jePdf ? 'application/pdf' : 'image/jpeg')
+      if ((surovaListina || skeniranPdf) && org?.id) {
+        const blob = skeniranPdf
+          ? skeniranPdf
+          : base64VBlob(surovaListina!, jePdf ? 'application/pdf' : 'image/jpeg')
         const koncnica = jePdf ? 'pdf' : 'jpg'
         const ime = `${form.receipt_date}-${form.vendor || 'listina'}.${koncnica}`
         const rez = await naloziListino(org.id, 'racuni', blob, ime)
@@ -443,6 +457,23 @@ export default function ScanPage() {
                 )}
               </div>
             )}
+          </div>
+        ) : zaSkeniranje ? (
+          /* SKENER (19.8.2026): poravnava in obdelava pred posiljanjem. */
+          <div className="mb-6">
+            <SkenerDokumenta
+              slikaDataUrl={zaSkeniranje}
+              onPreklic={() => {
+                // Uporabnik ne zeli skeniranja - uporabi surovo fotografijo.
+                setImage(zaSkeniranje)
+                setZaSkeniranje(null)
+              }}
+              onKoncano={({ jpeg, pdf }) => {
+                setImage(jpeg)      // obdelana slika gre na AI (bolje jo prebere)
+                setSkeniranPdf(pdf) // PDF gre v hrambo za racunovodjo
+                setZaSkeniranje(null)
+              }}
+            />
           </div>
         ) : !image ? (
           <div
