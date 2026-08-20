@@ -61,7 +61,11 @@ const NAV_DEFAULT = [
   // "accountant" dostop. Ob filtriranju menija po vlogi bi racunovodja
   // drugace ostal s praznim menijem.
   { label: 'Računovodstvo', items: [
-    { href: '/racunovodja', icon: 'ti-briefcase',   label: 'Portal strank' },
+    // `samoZaVlogo` (20.8.2026): "Portal strank" je namenjen RACUNOVODJI -
+    // pokaze seznam njegovih strank. Lastnik sme povsod, zato mu je razdelek
+    // ostal viden in mu je kazal seznam s SAMIM SEBOJ. Izvoz podatkov pa je
+    // uporaben obema.
+    { href: '/racunovodja', icon: 'ti-briefcase',   label: 'Portal strank', samoZaVlogo: ['accountant', 'viewer'] },
     { href: '/izvoz',       icon: 'ti-file-export', label: 'Izvoz podatkov' },
   ]},
 ]
@@ -208,7 +212,11 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
     .filter(Boolean)
     .map(section => ({
       ...(section as NavSection),
-      items: (section as NavSection).items.filter(item => isPathAllowedForRole(item.href, role)),
+      items: (section as NavSection).items.filter(item => {
+        const zaVlogo = (item as any).samoZaVlogo as string[] | undefined
+        if (zaVlogo && (!role || !zaVlogo.includes(role))) return false
+        return isPathAllowedForRole(item.href, role)
+      }),
     }))
     .filter(section => section.items.length > 0) as NavSection[]
 

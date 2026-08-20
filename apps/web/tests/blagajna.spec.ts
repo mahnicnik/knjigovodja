@@ -274,3 +274,23 @@ test('middleware: poti za prijavo in ponastavitev gesla so javne', async () => {
     expect(blok, `pot ${pot} manjka med javnimi potmi v middleware.ts`).toContain(`'${pot}'`)
   }
 })
+
+// ═══════════════════ MENI PO VLOGAH ═══════════════════
+
+test('meni: "Portal strank" se lastniku ne prikaže', () => {
+  // NAPAKA (popravljeno 20.8.2026): razdelek "Računovodstvo" je bil dodan
+  // zaradi računovodje — brez njega bi ta ostal s praznim menijem. Ker pa
+  // lastnik sme povsod, filtriranje po vlogi ni odstranilo ničesar in
+  // lastniku je "Portal strank" kazal seznam s SAMIM SEBOJ.
+  const fs = require('fs')
+  const layout = fs.readFileSync(__dirname + '/../components/AppLayout.tsx', 'utf8')
+
+  // Vnos mora imeti omejitev na vlogo.
+  const vrstica = layout.split('\n').find((v: string) => v.includes("label: 'Portal strank'"))
+  expect(vrstica, 'vnos "Portal strank" ni najden').toBeTruthy()
+  expect(vrstica, '"Portal strank" nima omejitve samoZaVlogo — lastnik ga bo videl').toContain('samoZaVlogo')
+  expect(vrstica).toContain('accountant')
+
+  // Filtriranje mora omejitev tudi upoštevati.
+  expect(layout, 'filtriranje menija ne upošteva samoZaVlogo').toContain('samoZaVlogo')
+})
