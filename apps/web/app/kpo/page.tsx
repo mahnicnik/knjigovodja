@@ -67,12 +67,42 @@ export default function KPOPage() {
     // so ze poknjizeni kot pravi KPO vnos (npr. prek bancnega uvoza,
     // invoice_id povezava), se NE sintetizirajo se enkrat iz
     // issued_invoices - prikaze se samo pravi vnos (z datumom placila).
+    // POPRAVLJENO (19.8.2026): brali smo SAMO invoice_id. Prejeti racuni
+    // (stroski) se v KPO knjigi NISO prikazovali - izdani racuni so se
+    // sintetizirali, stroski pa ne. Uporabnik, ki je vnesel strosek in ga
+    // potrdil, ga v knjigi ni videl: prihodki so bili tam, odhodki pa 0.
     const { data: linkedEntries } = await supabase
       .from('kpo_entries')
-      .select('invoice_id')
+      .select('invoice_id, receipt_id')
       .eq('org_id', org.id)
-      .not('invoice_id', 'is', null)
-    const linkedInvoiceIds = new Set((linkedEntries || []).map((e: any) => e.invoice_id))
+      .or('invoice_id.not.is.null,receipt_id.not.is.null')
+    const linkedInvoiceIds = new Set((linkedEntries || []).map((e: any) => e.invoice_id).filter(Boolean))
+    const linkedReceiptIds = new Set((linkedEntries || []).map((e: any) => e.receipt_id).filter(Boolean))
+
+    // Prejeti racuni (stroski) - enak vzorec kot pri izdanih racunih:
+    // tisti, ki so ze poknjizeni kot pravi KPO vnos, se ne podvojijo.
+    const { data: receipts } = await supabase
+      .from('receipts')
+      .select('id, vendor, receipt_date, amount_net, amount_total, vat_amount, category, description, status')
+      .eq('org_id', org.id)
+      .gte('receipt_date', from)
+      .lte('receipt_date', to)
+      .order('receipt_date', { ascending: false })
+
+    const recEntries = (receipts || [])
+      .filter((r: any) => !linkedReceiptIds.has(r.id))
+      .map((r: any) => ({
+        id: r.id,
+        entry_date: r.receipt_date,
+        description: `${r.vendor || 'Strošek'}${r.description ? ' — ' + r.description : ''}`,
+        entry_type: 'expense',
+        income: 0,
+        expense: Number(r.amount_net ?? r.amount_total ?? 0),
+        vat_out: 0,
+        vat_in: Number(r.vat_amount ?? 0),
+        category: r.category || 'Drugo',
+        receipt_id: r.id,
+      }))
     const invEntries = (invoices || [])
       .filter((inv: any) => !linkedInvoiceIds.has(inv.id))
       .map((inv: any) => ({
@@ -86,7 +116,7 @@ export default function KPOPage() {
       vat_in: 0,
       category: 'Storitev',
     }))
-    const all = [...invEntries, ...(data || [])].sort((a, b) =>
+    const all = [...invEntries, ...recEntries, ...(data || [])].sort((a, b) =>
       new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime()
     )
     setEntries(all)

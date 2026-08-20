@@ -8,6 +8,7 @@ import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 import { formatEurNumber } from '@/lib/format'
 import { naloziListino } from '@/lib/listine'
+import { napovejKategorijo, opisIzVrstice } from '@/lib/kategorizacija'
 
 // ================================================================
 // FORMATI SLOVENSKIH BANK
@@ -94,6 +95,8 @@ interface BankTransaction {
   raw: string
   isInternal?: boolean
   bookCategory?: string
+  napovedZanesljivost?: 'visoka' | 'srednja' | 'nizka'
+  napovedRazlog?: string
 }
 
 // Prepozna notranji promet (POS gotovinski polog/dvig, prenos med lastnimi
@@ -255,7 +258,11 @@ function parseCSV(text: string, bankKey: string): BankTransaction[] {
     const date = parseDate(dateRaw, format.dateFormat)
     if (!date.match(/^\d{4}-\d{2}-\d{2}$/)) continue
 
-    const desc = cols[format.descCol] ?? ''
+    // POPRAVLJENO (19.8.2026): ce stolpec z opisom pri tej banki ni tam, kjer
+    // predvideva oblika, je opis ostal PRAZEN in vnos je pristal v knjigi kot
+    // "Bancni odliv" brez imena prejemnika (pri enem uporabniku 127 vnosov,
+    // 26.730 EUR). Tedaj poberemo najdaljse besedilno polje iz vrstice.
+    const desc = (cols[format.descCol] ?? '').trim() || opisIzVrstice(cols)
     const reference = format.referenceCol !== null ? (cols[format.referenceCol] ?? '') : ''
 
     let amount = 0
@@ -422,13 +429,30 @@ export default function BankaPage() {
         return
       }
 
-      const matched = matchTransactions(parsed, invoices).map(t => ({
-        ...t,
-        isInternal: isInternalTransfer(t.description),
-        // Privzeta kategorija "Drugo" (25.7.2026) - Nik ne rabi klikati
-        // vsake vrstice posebej, ce mu privzeta kategorija ustreza.
-        bookCategory: t.matched_invoice ? undefined : 'Drugo',
-      }))
+      // SPREMENJENO (19.8.2026): namesto privzete kategorije "Drugo" zdaj
+      // kategorijo NAPOVEMO - najprej iz uporabnikovih preteklih odlocitev,
+      // nato po pravilih (Petrol -> Transport, Telekom -> Komunikacije ...).
+      // Prej je vse pristalo v "Drugo": pri enem uporabniku 151 od 254 vnosov,
+      // zaradi cesar so bile razdelitve po kategorijah povsod prazne.
+      const { data: zgodovina } = await supabase
+        .from('kpo_entries')
+        .select('description, category')
+        .eq('org_id', orgId)
+        .neq('category', 'Drugo')
+        .not('description', 'is', null)
+        .order('entry_date', { ascending: false })
+        .limit(300)
+
+      const matched = matchTransactions(parsed, invoices).map(t => {
+        const napoved = napovejKategorijo(t.description, t.type === 'credit' ? 'income' : 'expense', zgodovina || [])
+        return {
+          ...t,
+          isInternal: isInternalTransfer(t.description),
+          bookCategory: t.matched_invoice ? undefined : napoved.kategorija,
+          napovedZanesljivost: napoved.zanesljivost,
+          napovedRazlog: napoved.razlog,
+        }
+      })
       setTransactions(matched)
 
       const credits = matched.filter(t => t.type === 'credit')
@@ -713,6 +737,18 @@ export default function BankaPage() {
                                 <option key={c} value={c}>{c}</option>
                               ))}
                             </select>
+                          )}
+                          {/* DODANO (19.8.2026): oznaka, od kod je kategorija.
+                              Uporabnik mora vedeti, kaj je program uganil in
+                              kaj je ostalo nerazvrsceno - sicer bi slepo
+                              potrdil napacno razvrstitev. */}
+                          {!t.isInternal && !t.matched_invoice && t.napovedRazlog && (
+                            <div style={{ fontSize: 10, marginTop: 3,
+                              color: t.napovedZanesljivost === 'visoka' ? '#1D9E75'
+                                   : t.napovedZanesljivost === 'srednja' ? '#888' : '#D97706' }}>
+                              {t.napovedZanesljivost === 'visoka' ? '✓ ' : t.napovedZanesljivost === 'nizka' ? '⚠ ' : ''}
+                              {t.napovedRazlog}
+                            </div>
                           )}
                         </td>
                       </tr>
