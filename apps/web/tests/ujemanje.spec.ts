@@ -158,3 +158,47 @@ test('brisanje dobavnice: dvakratno brisanje ni mogoče (zaloga bi šla v minus)
   const drugo = zalogaPoBrisanju(prvo, [{ item_id: 'a1', quantity: 18 }])
   expect(drugo.a1).toBe(-18) // zato vrstni red: najprej zaloga, nato brisanje
 })
+
+// ─── Uvoz z ujemanji: kaj se dejansko zgodi ─────────────────────────────
+
+/**
+ * Povzetek pred uvozom mora povedati resnico: koliko artiklom se bo zaloga
+ * povečala, koliko jih bo nastalo na novo in koliko vrstic bo preskočenih.
+ */
+function povzetekUvoza(
+  vrstice: Array<{ izbrana: boolean; itemId: string | null }>,
+) {
+  const izbrane = vrstice.filter(v => v.izbrana)
+  return {
+    zaloga: izbrane.filter(v => v.itemId && v.itemId !== 'NOV').length,
+    novi: izbrane.filter(v => v.itemId === 'NOV').length,
+    brez: izbrane.filter(v => !v.itemId).length,
+  }
+}
+
+test('uvoz: povzetek loči knjižene, nove in preskočene', () => {
+  const p = povzetekUvoza([
+    { izbrana: true, itemId: 'a1' },
+    { izbrana: true, itemId: 'a2' },
+    { izbrana: true, itemId: 'NOV' },
+    { izbrana: true, itemId: null },
+    { izbrana: false, itemId: 'a3' }, // neizbrana se ne šteje
+  ])
+  expect(p.zaloga).toBe(2)
+  expect(p.novi).toBe(1)
+  expect(p.brez).toBe(1)
+})
+
+test('uvoz: vrstica brez ujemanja NE poveča zaloge nobenemu artiklu', () => {
+  // Ključno: raje ne poknjižimo nikamor, kot da poknjižimo napačno —
+  // napačne zaloge se ne opazi, dokler se ne razide inventura.
+  const p = povzetekUvoza([{ izbrana: true, itemId: null }])
+  expect(p.zaloga).toBe(0)
+  expect(p.brez).toBe(1)
+})
+
+test('uvoz: "NOV" se ne šteje med povečanje zaloge obstoječih', () => {
+  const p = povzetekUvoza([{ izbrana: true, itemId: 'NOV' }])
+  expect(p.zaloga).toBe(0)
+  expect(p.novi).toBe(1)
+})

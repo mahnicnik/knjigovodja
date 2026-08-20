@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic'
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { escapeHtml } from '@/lib/html-escape'
 import { zesekVrstice, razclenitevDdv, popustEurVOdstotek } from '@/lib/pos-calc'
+import { predlagajUjemanje } from '@/lib/ujemanje-artiklov'
 import VatExemptionPicker from '@/components/VatExemptionPicker'
 import { vatExemptionText } from '@/lib/vat-exemptions'
 import { useRouter } from 'next/navigation'
@@ -3966,6 +3967,9 @@ function DobavnicaImportModal({ posData, onClose, onImported }) {
   const [result, setResult] = React.useState(null)
   const [error, setError] = React.useState('')
   const [selected, setSelected] = React.useState({})
+  // Ujemanje vrstice dobavnice z artiklom v blagajni (20.8.2026).
+  // itemId: null pomeni "brez knjizenja", 'NOV' pomeni "ustvari nov artikel".
+  const [ujemanja, setUjemanja] = React.useState({})
   const [importing, setImporting] = React.useState(false)
   const [log, setLog] = React.useState([])
   const fileRef = React.useRef(null)
@@ -3983,14 +3987,30 @@ function DobavnicaImportModal({ posData, onClose, onImported }) {
       const resp = await fetch('/api/pos/import-delivery', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pdfBase64: base64, items: posData.items.map(i => ({ id: i.id, name: i.name })) }),
+        body: JSON.stringify({ pdfBase64: base64, items: posData.items.map(i => ({ id: i.id, name: i.name, barcode: i.barcode })) }),
       })
       if (!resp.ok) { const e = await resp.json(); throw new Error(e.error || 'Napaka') }
       const data = await resp.json()
-      setResult(data)
+
+      // DODANO (20.8.2026): AI pogosto ne poveze vrstic, ker so imena v
+      // blagajni kratka ("Corona"), na dobavnici pa dolga ("PIVO CORONA
+      // EXTRA 0,33L ST"). Zato ujemanje IZRACUNAMO se sami - po crtni kodi in
+      // podobnosti naziva z upostevanjem velikosti pakiranja.
+      const katalog = posData.items.map(i => ({ id: i.id, name: i.name, barcode: i.barcode }))
       const sel = {}
-      data.artikli?.forEach((a, i) => { sel[i] = true })
+      const ujem = {}
+      ;(data.artikli || []).forEach((a, i) => {
+        sel[i] = true
+        if (a.ujemanje_id) {
+          ujem[i] = { itemId: a.ujemanje_id, vir: 'ai', zanesljivost: 'visoka' }
+        } else {
+          const p = predlagajUjemanje({ naziv: a.naziv, ean: a.ean }, katalog)
+          ujem[i] = { itemId: p.itemId, vir: p.itemId ? 'predlog' : 'brez', zanesljivost: p.zanesljivost, ocena: p.ocena }
+        }
+      })
+      setResult(data)
       setSelected(sel)
+      setUjemanja(ujem)
       setStep('preview')
     } catch(e) { setError(e.message) }
     setLoading(false)
@@ -4017,11 +4037,15 @@ function DobavnicaImportModal({ posData, onClose, onImported }) {
       if (deliveryErr) throw deliveryErr
       deliveryId = delivery.id
 
-      // 2. Shrani vrstice dobavnice
-      if (selectedArtikli.length > 0) {
-        const lines = selectedArtikli.map(a => ({
+      // PRESTAVLJENO (20.8.2026): vrstice se zapisejo SELE po koraku 3.
+      // Prej so se shranile TU, ujemanja pa so se razresila sele spodaj -
+      // artikli, ustvarjeni na novo, bi zato v dobavnici ostali brez povezave
+      // (item_id null), kar bi pokvarilo tudi razveljavitev zaloge ob brisanju.
+      if (false && selectedArtikli.length > 0) {
+        const lines = selectedArtikli.map((a, i) => ({
           delivery_id: deliveryId,
-          item_id: a.ujemanje_id || null,
+          // Potrjeno ujemanje (20.8.2026); 'NOV' se razresi spodaj, zato tu null.
+          item_id: (a.ujemanje_id && a.ujemanje_id !== 'NOV') ? a.ujemanje_id : null,
           item_name: a.naziv,
           ean: a.ean || null,
           quantity: Number(a.kolicina || 0),
@@ -4050,7 +4074,36 @@ function DobavnicaImportModal({ posData, onClose, onImported }) {
     for (const [idx, artikel] of (result?.artikli || []).entries()) {
       if (!selected[idx]) continue
       try {
-        if (artikel.ujemanje_id) {
+        // SPREMENJENO (20.8.2026): uporabimo ujemanje, ki ga je POTRDIL
+        // uporabnik, ne le tistega od AI. Prej so vrstice brez AI ujemanja
+        // tiho izpadle in zaloga se ni premaknila.
+        const izbira = ujemanja[idx] || {}
+        let ciljniId = izbira.itemId && izbira.itemId !== 'NOV' ? izbira.itemId : null
+
+        // Uporabnik je zahteval NOV artikel - ustvarimo ga.
+        if (izbira.itemId === 'NOV') {
+          const { data: novArtikel, error: novErr } = await sb.from('items').insert({
+            business_id: BUSINESS_ID,
+            name: artikel.naziv,
+            price: 0,                                   // prodajno ceno dolocite sami
+            cost_price: artikel.neto_cena_brez_ddv || null,
+            barcode: artikel.ean || null,
+            vat_rate: Number(artikel.ddv_stopnja ?? 22),
+            unit: artikel.enota || 'kos',
+            stock: 0,
+          }).select('id').single()
+          if (novErr) throw novErr
+          ciljniId = novArtikel.id
+          newLog.push({ name: artikel.naziv, ok: true, msg: 'nov artikel — določite prodajno ceno' })
+        }
+
+        if (!ciljniId) {
+          newLog.push({ name: artikel.naziv, ok: false, msg: 'preskočeno — brez knjiženja' })
+          continue
+        }
+
+        artikel.ujemanje_id = ciljniId
+        if (ciljniId) {
           // POPRAVLJENO (16.8.2026): prej branje zaloge iz ZASTARELEGA posnetka
           // + zapis absolutne vrednosti - ce je vmes tekla prodaja, je uvoz
           // povozil odstete kolicine. Zdaj atomarno pristevanje v bazi.
@@ -4066,6 +4119,8 @@ function DobavnicaImportModal({ posData, onClose, onImported }) {
           // obstojeco nabavno ceno, kadar je AI ni razbral iz PDF-ja.
           const patch: any = {}
           if (artikel.neto_cena_brez_ddv) patch.cost_price = artikel.neto_cena_brez_ddv
+          // Crtna koda se zapise ob PRVEM potrjenem ujemanju - naslednjic se
+          // artikel ujame samodejno in rocnega dela ni vec (20.8.2026).
           if (artikel.ean) patch.barcode = artikel.ean
           if (Object.keys(patch).length > 0) {
             // POPRAVLJENO (16.8.2026): prej se napaka ni preverjala - uporabnik
@@ -4073,12 +4128,43 @@ function DobavnicaImportModal({ posData, onClose, onImported }) {
             const { error: patchErr } = await sb.from('items').update(patch).eq('id', artikel.ujemanje_id)
             if (patchErr) throw patchErr
           }
-          newLog.push({ name: artikel.naziv, ok: true, msg: '+' + artikel.kolicina + ' kos' })
-        } else {
-          newLog.push({ name: artikel.naziv, ok: false, msg: 'Nov artikel - dodaj rocno' })
+          newLog.push({
+            name: artikel.naziv, ok: true,
+            msg: '+' + artikel.kolicina + ' ' + (artikel.enota || 'kos')
+              + (artikel.ean ? ' · koda shranjena' : ''),
+          })
         }
       } catch(e) { newLog.push({ name: artikel.naziv, ok: false, msg: e.message }) }
     }
+    // 4. Sele zdaj zapisemo vrstice - vsa ujemanja so razresena (20.8.2026).
+    if (deliveryId) {
+      const vrstice = (result?.artikli || [])
+        .map((a, i) => ({ a, i }))
+        .filter(({ i }) => selected[i])
+        .map(({ a }) => ({
+          delivery_id: deliveryId,
+          item_id: a.ujemanje_id || null,
+          item_name: a.naziv,
+          ean: a.ean || null,
+          quantity: Number(a.kolicina || 0),
+          unit: a.enota || 'kos',
+          price_ex_vat: Number(a.cena_brez_ddv || 0),
+          discount_pct: Number(a.popust_procent || 0),
+          net_price_ex_vat: Number(a.neto_cena_brez_ddv || 0),
+          vat_rate: Number(a.ddv_stopnja || 22),
+          net_price_inc_vat: Number(a.neto_cena_z_ddv || 0),
+          total_ex_vat: Number(a.vrednost_brez_ddv || 0),
+          total_inc_vat: Number(a.vrednost_z_ddv || 0),
+        }))
+      if (vrstice.length > 0) {
+        const { error: dlErr } = await sb.from('delivery_lines').insert(vrstice)
+        if (dlErr) {
+          console.error('Vrstic dobavnice ni bilo mogoce shraniti:', dlErr)
+          showToast('Zaloga je posodobljena, vrstic dobavnice pa NI bilo mogoče shraniti: ' + dlErr.message, false)
+        }
+      }
+    }
+
     setLog(newLog); setStep('done'); setImporting(false)
   }
 
@@ -4111,20 +4197,74 @@ function DobavnicaImportModal({ posData, onClose, onImported }) {
               </div>
             </div>
             <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', marginBottom:10 }}>ARTIKLI ({result.artikli?.length || 0})</div>
-            {result.artikli?.map((a, i) => (
-              <div key={i} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', background:selected[i]?T.surface:T.surface3, borderRadius:10, marginBottom:6, border:'1px solid '+T.line, opacity:selected[i]?1:0.55 }}>
-                <input type="checkbox" checked={!!selected[i]} onChange={e=>setSelected(p=>({...p,[i]:e.target.checked}))} style={{ accentColor:T.accent, width:16, height:16 }}/>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:600, fontSize:13 }}>{a.naziv}</div>
-                  {a.ujemanje_ime && <div style={{ fontSize:11, color:T.accent }}>= {a.ujemanje_ime}</div>}
-                  {!a.ujemanje_id && <div style={{ fontSize:11, color:T.warn }}>Nov artikel - dodaj rocno</div>}
+            {/* PRENOVLJENO (20.8.2026): vsaka vrstica ima zdaj IZBIRNIK artikla.
+                Prej je bilo ujemanje prepusceno AI - ce ga ni nasel, je pisalo
+                samo "Nov artikel - dodaj rocno" in zaloga se ni premaknila.
+                Pri eni dobavnici ni bila povezana NOBENA od 17 vrstic. */}
+            {result.artikli?.map((a, i) => {
+              const u = ujemanja[i] || {}
+              const barvaZanesljivosti = u.vir === 'ai' || u.zanesljivost === 'visoka' ? T.accent
+                : u.zanesljivost === 'srednja' ? T.warn : T.muted
+              return (
+              <div key={i} style={{ padding:'10px 12px', background:selected[i]?T.surface:T.surface3, borderRadius:10, marginBottom:6, border:'1px solid '+T.line, opacity:selected[i]?1:0.55 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                  <input type="checkbox" checked={!!selected[i]} onChange={e=>setSelected(p=>({...p,[i]:e.target.checked}))} style={{ accentColor:T.accent, width:16, height:16 }}/>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontWeight:600, fontSize:13 }}>{a.naziv}</div>
+                    {a.ean && <div style={{ fontSize:10, color:T.muted, fontFamily:'monospace' }}>{a.ean}</div>}
+                  </div>
+                  <div style={{ textAlign:'right', fontSize:12, whiteSpace:'nowrap' }}>
+                    <div style={{ fontWeight:700 }}>{a.kolicina} {a.enota || 'kos'}</div>
+                    {a.neto_cena_brez_ddv && <div style={{ color:T.muted }}>{eur(a.neto_cena_brez_ddv)}</div>}
+                  </div>
                 </div>
-                <div style={{ textAlign:'right', fontSize:12 }}>
-                  <div style={{ fontWeight:700 }}>{a.kolicina} {a.enota || 'kos'}</div>
-                  {a.nabavna_cena && <div style={{ color:T.muted }}>{eur(a.nabavna_cena)}</div>}
-                </div>
+
+                {selected[i] && (
+                  <div style={{ marginTop:8, paddingLeft:26 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      <span style={{ fontSize:11, color:T.muted, whiteSpace:'nowrap' }}>Knjiži na:</span>
+                      <select
+                        value={u.itemId ?? ''}
+                        onChange={e=>{
+                          const v = e.target.value
+                          setUjemanja(p=>({ ...p, [i]: { ...(p[i]||{}), itemId: v || null, vir: v === 'NOV' ? 'nov' : v ? 'rocno' : 'brez', zanesljivost: 'visoka' } }))
+                        }}
+                        style={{ flex:1, padding:'6px 8px', borderRadius:7, border:'1px solid '+(u.itemId ? T.line : T.warn), fontFamily:'inherit', fontSize:12, background:T.inputBg, minWidth:0 }}>
+                        <option value="">— ne knjiži (preskoči) —</option>
+                        <option value="NOV">+ Ustvari nov artikel</option>
+                        {posData.items.map(it => (
+                          <option key={it.id} value={it.id}>{it.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div style={{ fontSize:10, marginTop:4, color:barvaZanesljivosti }}>
+                      {u.vir === 'ai' && '✓ prepoznal AI'}
+                      {u.vir === 'predlog' && u.zanesljivost === 'visoka' && '✓ zanesljiv predlog'}
+                      {u.vir === 'predlog' && u.zanesljivost === 'srednja' && '~ predlog — preverite'}
+                      {u.vir === 'predlog' && u.zanesljivost === 'nizka' && '⚠ negotov predlog — preverite'}
+                      {u.vir === 'rocno' && '✓ izbrali ste sami'}
+                      {u.vir === 'nov' && '+ nastal bo nov artikel'}
+                      {u.vir === 'brez' && '⚠ zaloga se ne bo spremenila'}
+                    </div>
+                  </div>
+                )}
               </div>
-            ))}
+            )})}
+
+            {/* Povzetek, da je pred uvozom jasno, kaj se bo zgodilo. */}
+            {(() => {
+              const izbrane = (result.artikli || []).map((_, i) => i).filter(i => selected[i])
+              const bo = izbrane.filter(i => ujemanja[i]?.itemId && ujemanja[i].itemId !== 'NOV').length
+              const novi = izbrane.filter(i => ujemanja[i]?.itemId === 'NOV').length
+              const brez = izbrane.filter(i => !ujemanja[i]?.itemId).length
+              return (
+                <div style={{ marginTop:12, padding:'10px 12px', background:T.surface2, borderRadius:9, fontSize:12, lineHeight:1.6 }}>
+                  <div><strong>{bo}</strong> {bo === 1 ? 'artiklu' : 'artiklom'} se bo povečala zaloga</div>
+                  {novi > 0 && <div><strong>{novi}</strong> {novi === 1 ? 'artikel bo nastal na novo' : 'artiklov bo nastalo na novo'}</div>}
+                  {brez > 0 && <div style={{ color:T.warn }}><strong>{brez}</strong> brez knjiženja — zaloga se ne bo spremenila</div>}
+                </div>
+              )
+            })()}
             <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:16 }}>
               <button onClick={()=>setStep('upload')} style={btnS}>Nazaj</button>
               <button onClick={doImport} disabled={importing} style={{ ...btnP, opacity:importing?0.7:1 }}>
