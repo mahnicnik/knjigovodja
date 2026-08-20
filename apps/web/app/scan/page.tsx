@@ -43,6 +43,7 @@ export default function ScanPage() {
     description: '',
   })
   const fileRef = useRef<HTMLInputElement>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const supabase = createClient()
 
@@ -464,11 +465,36 @@ export default function ScanPage() {
                   <span className="text-xs bg-gray-100 px-2 py-1 rounded">🖼 JPG/PNG</span>
                   <span className="text-xs bg-gray-100 px-2 py-1 rounded">📱 HEIC</span>
                 </div>
-                <div className="bg-gray-900 text-white px-6 py-2.5 rounded-xl text-sm font-medium inline-block">
-                  Izberi datoteko
+                {/* DODANO (19.8.2026): loCen gumb za fotografiranje. Prej je bil
+                    en sam gumb z accept="image/*" - telefon je odprl izbirnik,
+                    kjer je bilo treba SELE izbrati "Kamera". Atribut `capture`
+                    odpre kamero takoj, kar je pri skeniranju racuna na terenu
+                    obicajen primer uporabe. */}
+                <div className="flex gap-2 justify-center flex-wrap">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); cameraRef.current?.click() }}
+                    className="bg-gray-900 text-white px-6 py-2.5 rounded-xl text-sm font-medium"
+                  >
+                    📷 Fotografiraj
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); fileRef.current?.click() }}
+                    className="bg-white border border-gray-300 text-gray-900 px-6 py-2.5 rounded-xl text-sm font-medium"
+                  >
+                    Izberi datoteko
+                  </button>
                 </div>
               </>
             )}
+            {/* Kamera se odpre TAKOJ (capture="environment" = zadnja kamera). */}
+            <input
+              ref={cameraRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleFile}
+              className="hidden"
+            />
             <input
               ref={fileRef}
               type="file"
