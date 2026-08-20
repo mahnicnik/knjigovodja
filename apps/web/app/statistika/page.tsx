@@ -230,7 +230,11 @@ export default function StatistikaPage() {
         </div>
 
         {/* Bottom grid */}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'16px' }}>
+        {/* POPRAVLJENO (19.8.2026): dva stolpca sta na telefonu skupaj zahtevala
+            492px pri 390px zaslonu - stran je uhajala 102px cez rob. Prva
+            skripta je popravila mreze s TREMI in vec stolpci, dvostolpcnih pa
+            ne; tu je vsak stolpec vseboval graf z lastno najmanjso sirino. */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(280px, 1fr))', gap:'16px' }}>
 
           {/* Categories */}
           <div style={{ background:'#fff', border:'0.5px solid rgba(0,0,0,0.08)', borderRadius:'12px', padding:'20px' }}>
