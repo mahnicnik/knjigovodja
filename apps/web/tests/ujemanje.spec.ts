@@ -110,3 +110,51 @@ test('podobnost: prazna naziva ne povzročita napake', () => {
   expect(podobnost('', 'Corona')).toBe(0)
   expect(podobnost('Corona', '')).toBe(0)
 })
+
+// ─── Brisanje dobavnice: razveljavitev zaloge ───────────────────────────
+
+/**
+ * Dobavnica ob uvozu POVEČA zalogo. Če se izbriše brez razveljavitve, zaloga
+ * ostane napihnjena in inventura se ne ujema.
+ */
+function zalogaPoBrisanju(
+  zacetna: Record<string, number>,
+  vrstice: Array<{ item_id: string | null; quantity: number }>,
+): Record<string, number> {
+  const r = { ...zacetna }
+  for (const v of vrstice) {
+    if (!v.item_id) continue          // ni bila poknjižena — ni kaj vračati
+    r[v.item_id] = (r[v.item_id] ?? 0) - Number(v.quantity || 0)
+  }
+  return r
+}
+
+test('brisanje dobavnice: zaloga se zmanjša nazaj za uvožene količine', () => {
+  const po = zalogaPoBrisanju(
+    { a1: 30, a2: 50 },
+    [{ item_id: 'a1', quantity: 18 }, { item_id: 'a2', quantity: 24 }],
+  )
+  expect(po.a1).toBe(12)
+  expect(po.a2).toBe(26)
+})
+
+test('brisanje dobavnice: nepoknjižene vrstice ne spremenijo zaloge', () => {
+  // Vrstica brez item_id ob uvozu ni povečala zaloge — zato je tudi ne
+  // sme zmanjšati. Sicer bi brisanje zalogo pokvarilo v drugo smer.
+  const po = zalogaPoBrisanju(
+    { a1: 30 },
+    [{ item_id: null, quantity: 100 }, { item_id: 'a1', quantity: 5 }],
+  )
+  expect(po.a1).toBe(25)
+  expect(Object.keys(po)).toHaveLength(1)
+})
+
+test('brisanje dobavnice: dvakratno brisanje ni mogoče (zaloga bi šla v minus)', () => {
+  // Prvo brisanje odstrani dobavnico, zato drugega ni. Test dokumentira,
+  // kaj bi se zgodilo, če bi se brisanje ponovilo — zato je pomembno, da se
+  // zapis izbriše ŠELE po uspešni razveljavitvi zaloge.
+  const prvo = zalogaPoBrisanju({ a1: 18 }, [{ item_id: 'a1', quantity: 18 }])
+  expect(prvo.a1).toBe(0)
+  const drugo = zalogaPoBrisanju(prvo, [{ item_id: 'a1', quantity: 18 }])
+  expect(drugo.a1).toBe(-18) // zato vrstni red: najprej zaloga, nato brisanje
+})

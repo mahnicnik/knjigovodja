@@ -4355,6 +4355,67 @@ function InventoryScreen({ posData }) {
    * Surovino, ki je uporabljena v receptu artikla, NE brisemo brez opozorila -
    * artikel bi ostal z nedelujoco sestavino in obracun porabe bi bil napacen.
    */
+  const [deliveryEdit, setDeliveryEdit] = useState(null)
+
+  /**
+   * Brisanje dobavnice (20.8.2026).
+   *
+   * ⚠️ Dobavnica je ob uvozu POVECALA zalogo. Ce bi jo samo izbrisali, bi
+   * zaloga ostala napihnjena in inventura se ne bi ujemala. Zato kolicine
+   * najprej odstejemo nazaj - in to SAMO za vrstice, ki so bile takrat
+   * dejansko poknjizene (imajo item_id).
+   */
+  async function deleteDelivery(d) {
+    const db = createClient()
+    const { data: vrstice } = await db.from('delivery_lines')
+      .select('item_id, item_name, quantity').eq('delivery_id', d.id)
+
+    const poknjizene = (vrstice || []).filter(v => v.item_id)
+    const opozorilo = poknjizene.length > 0
+      ? `Izbrišem dobavnico ${d.document_number || ''} (${d.supplier || 'neznan dobavitelj'})?\n\n`
+        + `Zaloga bo pri ${poknjizene.length} ${poknjizene.length === 1 ? 'artiklu' : 'artiklih'} zmanjšana nazaj za uvožene količine.`
+      : `Izbrišem dobavnico ${d.document_number || ''} (${d.supplier || 'neznan dobavitelj'})?\n\n`
+        + `Zaloge ni treba popravljati — nobena vrstica ni bila poknjižena na artikel.`
+    if (!confirm(opozorilo)) return
+
+    // 1. Razveljavi zalogo.
+    const neuspeli = []
+    for (const v of poknjizene) {
+      const { error } = await db.rpc('increment_stock', {
+        p_item_id: v.item_id,
+        p_qty: -Number(v.quantity || 0),
+      })
+      if (error) neuspeli.push(v.item_name)
+    }
+    if (neuspeli.length > 0) {
+      showInvToast('Zaloge ni bilo mogoče popraviti pri: ' + neuspeli.join(', ') + ' — dobavnica NI izbrisana', false)
+      return
+    }
+
+    // 2. Sele nato vrstice in glavo.
+    const { error: vErr } = await db.from('delivery_lines').delete().eq('delivery_id', d.id)
+    if (vErr) { showInvToast('Vrstic dobavnice ni bilo mogoče izbrisati: ' + vErr.message, false); return }
+    const { error: gErr } = await db.from('deliveries').delete().eq('id', d.id)
+    if (gErr) { showInvToast('Dobavnice ni bilo mogoče izbrisati: ' + gErr.message, false); return }
+
+    posData.refresh()
+    showInvToast(poknjizene.length > 0
+      ? `Dobavnica izbrisana, zaloga popravljena pri ${poknjizene.length} artiklih`
+      : 'Dobavnica izbrisana')
+  }
+
+  /** Urejanje podatkov dobavnice (dobavitelj, dokument, datum). */
+  async function saveDeliveryEdit() {
+    if (!deliveryEdit) return
+    const { error } = await createClient().from('deliveries').update({
+      supplier: deliveryEdit.supplier?.trim() || null,
+      document_number: deliveryEdit.document_number?.trim() || null,
+      document_date: deliveryEdit.document_date || null,
+    }).eq('id', deliveryEdit.id)
+    if (error) { showInvToast('Dobavnice ni bilo mogoče shraniti: ' + error.message, false); return }
+    setDeliveryEdit(null); posData.refresh(); showInvToast('Dobavnica posodobljena')
+  }
+
   async function deleteIngredient(id, name) {
     const db = createClient()
     const { count } = await db.from('item_ingredients')
@@ -4572,8 +4633,12 @@ function InventoryScreen({ posData }) {
               <table style={{ width:'100%', borderCollapse:'collapse' }}>
                 <thead style={{ position:'sticky', top:0, background:T.surface2, zIndex:1 }}>
                   <tr style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.06em' }}>
-                    {['Datum','Dobavitelj','Dokument','Brez DDV','DDV','Z DDV'].map((h,i)=>(
-                      <th key={i} style={{ padding:'11px 12px', textAlign:i>=3?'right':'left', borderBottom:'1olid '+T.line }}>{h}</th>
+                    {/* POPRAVLJENO (20.8.2026): "1olid" namesto "1px solid" -
+                        crta pod glavo tabele se sploh ni izrisala.
+                        DODAN stolpec "Akcije": dobavnice ni bilo mogoce ne
+                        urediti ne izbrisati, klik je odprl samo podrobnosti. */}
+                    {['Datum','Dobavitelj','Dokument','Brez DDV','DDV','Z DDV','Akcije'].map((h,i)=>(
+                      <th key={i} style={{ padding:'11px 12px', textAlign:i>=3&&i<6?'right':i===6?'center':'left', borderBottom:'1px solid '+T.line }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -4586,6 +4651,14 @@ function InventoryScreen({ posData }) {
                       <td style={{ padding:'10px 12px', textAlign:'right', fontSize:12, fontVariantNumeric:'tabular-nums' }}>{d.total_ex_vat?'€'+Number(d.total_ex_vat).toFixed(2):'—'}</td>
                       <td style={{ padding:'10px 12px', textAlign:'right', fontSize:12, fontVariantNumeric:'tabular-nums', color:T.muted }}>{d.total_vat?'€'+Number(d.total_vat).toFixed(2):'—'}</td>
                       <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:700, fontSize:13, fontVariantNumeric:'tabular-nums' }}>{d.total_inc_vat?'€'+Number(d.total_inc_vat).toFixed(2):'—'}</td>
+                      <td style={{ padding:'10px 12px', textAlign:'center', whiteSpace:'nowrap' }} onClick={e=>e.stopPropagation()}>
+                        <button onClick={()=>setDeliveryEdit({ id:d.id, supplier:d.supplier||'', document_number:d.document_number||'', document_date:d.document_date||'' })}
+                          title="Uredi podatke dobavnice"
+                          style={{ width:28, height:28, borderRadius:7, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontSize:13 }}>✏️</button>
+                        <button onClick={()=>deleteDelivery(d)}
+                          title="Izbriši dobavnico"
+                          style={{ width:28, height:28, borderRadius:7, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontSize:13, marginLeft:6, color:T.danger }}>🗑</button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -4706,6 +4779,34 @@ function InventoryScreen({ posData }) {
         {/* DODANO (20.8.2026): urejanje surovine. Prej je bilo surovino mogoce
             samo DODATI - imena, enote, min. zaloge ali dobavitelja ni bilo
             mogoce popraviti, zmotno vnesene pa ne izbrisati. */}
+        {/* Urejanje podatkov dobavnice (20.8.2026). */}
+        {!!deliveryEdit && (
+          <Modal open onClose={()=>setDeliveryEdit(null)} width={440}>
+            <ModalHeader title="Uredi dobavnico" onClose={()=>setDeliveryEdit(null)}/>
+            <div style={{ padding:'20px 22px', display:'flex', flexDirection:'column', gap:12 }}>
+              <Field label="Dobavitelj">
+                <input value={deliveryEdit.supplier||''} onChange={e=>setDeliveryEdit(p=>({...p,supplier:e.target.value}))} style={vnosStil}/>
+              </Field>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                <Field label="Št. dokumenta">
+                  <input value={deliveryEdit.document_number||''} onChange={e=>setDeliveryEdit(p=>({...p,document_number:e.target.value}))} style={vnosStil}/>
+                </Field>
+                <Field label="Datum">
+                  <input type="date" value={deliveryEdit.document_date||''} onChange={e=>setDeliveryEdit(p=>({...p,document_date:e.target.value}))} style={vnosStil}/>
+                </Field>
+              </div>
+              <div style={{ fontSize:11, color:T.muted, lineHeight:1.5 }}>
+                Postavk in zneskov tu ni mogoče spreminjati — ti izhajajo iz uvožene
+                dobavnice. Če so napačni, dobavnico izbrišite in uvozite znova.
+              </div>
+              <div style={{ display:'flex', gap:8, marginTop:4 }}>
+                <button onClick={()=>setDeliveryEdit(null)} style={{ flex:1, padding:'10px', borderRadius:8, border:'1px solid '+T.line, background:'transparent', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:13 }}>Prekliči</button>
+                <button onClick={saveDeliveryEdit} style={{ flex:2, padding:'10px', borderRadius:8, border:'none', background:T.accent, color:'#fff', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:13 }}>Shrani</button>
+              </div>
+            </div>
+          </Modal>
+        )}
+
         {!!ingEditModal && (
           <Modal open onClose={()=>setIngEditModal(null)} width={440}>
             <ModalHeader title={'Uredi surovino: ' + (ingEditModal.name||'')} onClose={()=>setIngEditModal(null)}/>
