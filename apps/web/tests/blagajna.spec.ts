@@ -294,3 +294,64 @@ test('meni: "Portal strank" se lastniku ne prikaže', () => {
   // Filtriranje mora omejitev tudi upoštevati.
   expect(layout, 'filtriranje menija ne upošteva samoZaVlogo').toContain('samoZaVlogo')
 })
+
+// ═══════════════════ VRSTNI RED MENIJA BLAGAJNE ═══════════════════
+
+/**
+ * Uporabnik si lahko levi meni preuredi z vlečenjem. Shranjeni vrstni red
+ * se mora uskladiti s profilom poslovanja: če je profil vmes dobil nov
+ * zaslon, se ta doda; če ga je izgubil, se odstrani.
+ */
+function uskladiVrstniRed(shranjen: string[] | null, profil: string[]): string[] {
+  if (!Array.isArray(shranjen) || shranjen.length === 0) return profil
+  const veljavni = shranjen.filter(id => profil.includes(id))
+  const manjkajoci = profil.filter(id => !veljavni.includes(id))
+  return [...veljavni, ...manjkajoci]
+}
+
+function premakni(vrstniRed: string[], vlecen: string, cilj: string): string[] {
+  if (vlecen === cilj) return vrstniRed
+  const novi = vrstniRed.filter(x => x !== vlecen)
+  const idx = novi.indexOf(cilj)
+  novi.splice(idx < 0 ? novi.length : idx, 0, vlecen)
+  return novi
+}
+
+test('meni: shranjen vrstni red se ohrani', () => {
+  const r = uskladiVrstniRed(['sale', 'floor', 'admin'], ['floor', 'sale', 'admin'])
+  expect(r).toEqual(['sale', 'floor', 'admin'])
+})
+
+test('meni: nov zaslon iz profila se doda na konec', () => {
+  // Profil je dobil "calendar" — uporabnikov razpored se ne sme izgubiti,
+  // novi zaslon pa mora postati dosegljiv.
+  const r = uskladiVrstniRed(['sale', 'floor'], ['floor', 'sale', 'calendar'])
+  expect(r).toEqual(['sale', 'floor', 'calendar'])
+})
+
+test('meni: zaslon, ki ga profil nima več, izpade', () => {
+  // Sicer bi klik vodil na zaslon, do katerega uporabnik nima pravic.
+  const r = uskladiVrstniRed(['sale', 'packages', 'floor'], ['floor', 'sale'])
+  expect(r).toEqual(['sale', 'floor'])
+})
+
+test('meni: brez shranjenega se uporabi profil', () => {
+  expect(uskladiVrstniRed(null, ['floor', 'sale'])).toEqual(['floor', 'sale'])
+  expect(uskladiVrstniRed([], ['floor', 'sale'])).toEqual(['floor', 'sale'])
+})
+
+test('meni: premik postavi element PRED cilj', () => {
+  expect(premakni(['a', 'b', 'c', 'd'], 'd', 'b')).toEqual(['a', 'd', 'b', 'c'])
+})
+
+test('meni: premik nase ničesar ne spremeni', () => {
+  expect(premakni(['a', 'b', 'c'], 'b', 'b')).toEqual(['a', 'b', 'c'])
+})
+
+test('meni: premik ne podvoji in ne izgubi elementov', () => {
+  const izhodisce = ['a', 'b', 'c', 'd', 'e']
+  const r = premakni(izhodisce, 'e', 'a')
+  expect(r).toHaveLength(5)
+  expect(new Set(r).size).toBe(5)
+  expect(r[0]).toBe('e')
+})

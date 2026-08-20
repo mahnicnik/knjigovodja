@@ -1362,20 +1362,102 @@ const SCREENS = {
   admin:     { label:'Nastavitve',      icon:'settings' },
 }
 
-function SideNav({ screen, setScreen, nav }) {
+/**
+ * Levi meni blagajne z urejanjem po meri (20.8.2026).
+ *
+ * Vrstni red je doslej dolocal profil poslovanja (bar, restavracija ...) in
+ * ga uporabnik ni mogel spremeniti. Vsak lokal pa dela drugace: nekje je
+ * najpogostejsa Prodaja, drugje Koledar ali Zaloga.
+ *
+ * Vrstni red se shrani NA NAPRAVO in NA UPORABNIKA - blagajnik ima lahko
+ * drugacen razpored kot lastnik na isti blagajni.
+ */
+function SideNav({ screen, setScreen, nav, staffId }) {
+  const kljuc = 'pos_nav_vrstni_red_' + (staffId || 'skupno')
+  const [urejanje, setUrejanje] = React.useState(false)
+  const [vrstniRed, setVrstniRed] = React.useState(nav)
+  const [vlecem, setVlecem] = React.useState(null)
+  const [nad, setNad] = React.useState(null)
+
+  // Naloz(i shranjen vrstni red; ce se je profil vmes spremenil, dodaj nove
+  // zaslone na konec in odstrani tiste, ki jih profil ne vsebuje vec.
+  React.useEffect(() => {
+    let shranjen = null
+    try { shranjen = JSON.parse(localStorage.getItem(kljuc) || 'null') } catch {}
+    if (Array.isArray(shranjen) && shranjen.length > 0) {
+      const veljavni = shranjen.filter(id => nav.includes(id))
+      const manjkajoci = nav.filter(id => !veljavni.includes(id))
+      setVrstniRed([...veljavni, ...manjkajoci])
+    } else {
+      setVrstniRed(nav)
+    }
+  }, [nav.join(','), kljuc])
+
+  function shrani(novi) {
+    setVrstniRed(novi)
+    try { localStorage.setItem(kljuc, JSON.stringify(novi)) } catch {}
+  }
+
+  function spusti(ciljniId) {
+    if (!vlecem || vlecem === ciljniId) { setVlecem(null); setNad(null); return }
+    const novi = vrstniRed.filter(x => x !== vlecem)
+    const idx = novi.indexOf(ciljniId)
+    novi.splice(idx < 0 ? novi.length : idx, 0, vlecem)
+    shrani(novi)
+    setVlecem(null); setNad(null)
+  }
+
   return (
     <div style={{ width:80, background:T.surface, borderRight:'1px solid '+T.line, display:'flex', flexDirection:'column', alignItems:'center', padding:'10px 0', gap:4, flexShrink:0 }}>
-      {nav.map(id => {
+      {vrstniRed.map(id => {
         const s = SCREENS[id]
+        if (!s) return null
         const active = screen === id
+        const jeNad = nad === id && vlecem && vlecem !== id
         return (
-          <button key={id} onClick={() => setScreen(id)} title={s.label} style={{ width:64, padding:'11px 4px', borderRadius:10, cursor:'pointer', background: active ? T.accentSoft : 'transparent', color: active ? T.accent : T.inkSoft, border:'none', fontFamily:'inherit', position:'relative', display:'flex', flexDirection:'column', alignItems:'center', gap:5 }}>
-            {active && <span style={{ position:'absolute', left:-2, top:10, bottom:10, width:3, borderRadius:2, background:T.accent }}/>}
+          <button
+            key={id}
+            draggable={urejanje}
+            onDragStart={() => setVlecem(id)}
+            onDragOver={e => { if (urejanje) { e.preventDefault(); setNad(id) } }}
+            onDragLeave={() => setNad(n => n === id ? null : n)}
+            onDrop={e => { e.preventDefault(); spusti(id) }}
+            onDragEnd={() => { setVlecem(null); setNad(null) }}
+            onClick={() => { if (!urejanje) setScreen(id) }}
+            title={urejanje ? 'Povlecite za premik' : s.label}
+            style={{
+              width:64, padding:'11px 4px', borderRadius:10,
+              cursor: urejanje ? 'grab' : 'pointer',
+              background: active && !urejanje ? T.accentSoft : urejanje ? T.surface2 : 'transparent',
+              color: active && !urejanje ? T.accent : T.inkSoft,
+              border:'none', fontFamily:'inherit', position:'relative',
+              display:'flex', flexDirection:'column', alignItems:'center', gap:5,
+              opacity: vlecem === id ? 0.4 : 1,
+              boxShadow: jeNad ? 'inset 0 3px 0 ' + T.accent : 'none',
+              transition: 'opacity .12s',
+            }}>
+            {active && !urejanje && <span style={{ position:'absolute', left:-2, top:10, bottom:10, width:3, borderRadius:2, background:T.accent }}/>}
+            {urejanje && <span style={{ position:'absolute', top:2, right:6, fontSize:9, color:T.muted }}>⠿</span>}
             <KI name={s.icon} size={20}/>
             <span style={{ fontSize:10, fontWeight:700, textAlign:'center', lineHeight:1.15 }}>{s.label.split(' ')[0]}</span>
           </button>
         )
       })}
+
+      <div style={{ marginTop:'auto', display:'flex', flexDirection:'column', gap:4, alignItems:'center' }}>
+        {urejanje && (
+          <button onClick={() => { try { localStorage.removeItem(kljuc) } catch {}; setVrstniRed(nav) }}
+            title="Povrni privzeti vrstni red"
+            style={{ width:64, padding:'7px 4px', borderRadius:9, border:'none', background:'transparent', color:T.muted, cursor:'pointer', fontFamily:'inherit', fontSize:9, fontWeight:700 }}>
+            Povrni
+          </button>
+        )}
+        <button onClick={() => setUrejanje(u => !u)}
+          title={urejanje ? 'Končaj urejanje' : 'Uredi vrstni red menija'}
+          style={{ width:64, padding:'9px 4px', borderRadius:9, border:'none', background: urejanje ? T.accent : 'transparent', color: urejanje ? '#fff' : T.muted, cursor:'pointer', fontFamily:'inherit', fontSize:10, fontWeight:700 }}>
+          {urejanje ? 'Končaj' : '⠿ Uredi'}
+        </button>
+      </div>
     </div>
   )
 }
@@ -11752,7 +11834,7 @@ function KlasikApp() {
           // "obtican" in trak "Miza: X" ostane prikazan povsod po aplikaciji)
           if (id !== 'sale' && activeTable) { switchToTable(null) }
           setScreen(id)
-        }} nav={nav}/>
+        }} nav={nav} staffId={auth?.user?.id}/>
         <div style={{ flex:1, display:'flex', overflow:'hidden', minWidth:0 }}>
           {screen==='floor'     && <FloorScreen spaces={posData.spaces} switchToTable={switchToTable} setScreen={setScreen}/>}
           {screen==='sale'      && <SaleScreen activeTable={activeTable} setActiveTable={setActiveTable} activeCustomer={activeCustomer} cart={cart} setCart={setCart} addItem={addItem} adjustQty={adjustQty} setPaymentOpen={setPaymentOpen} totals={totals} setActiveCustomer={setActiveCustomer} posData={posData} happyHourActive={happyHourActive} setHappyHourActive={setHappyHourActive} cashSession={cashSession} onNeedOpenCash={()=>setShowOpenCash(true)} auth={auth}/>}
