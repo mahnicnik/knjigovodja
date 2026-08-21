@@ -736,12 +736,13 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
   // DODANO (21.8.2026): aktivne kartice izbrane stranke, za unovcenje obiska.
   const [strankineKartice, setStrankineKartice] = useState<any[]>([])
   const [izbranaKartica, setIzbranaKartica] = useState('')
+  const [stanjePredplacila, setStanjePredplacila] = useState<number | null>(null)
 
   useEffect(() => {
     if (!open) { setMethod('cash'); setTipPct(0); setGiven(''); setDiscount(0); setDiscountEur(''); setFurs(true); setError(null); setProcessing(false) }
     if (open && typeof open === 'object') { if(open.discount) setDiscount(open.discount) }
     if (!open) setCardConfirmed(false)
-    if (!open) { setStrankineKartice([]); setIzbranaKartica('') }
+    if (!open) { setStrankineKartice([]); setIzbranaKartica(''); setStanjePredplacila(null) }
   }, [open])
 
   // Nalozi aktivne kartice izbrane stranke (21.8.2026).
@@ -760,6 +761,13 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
       const uporabne = (data || []).filter((k: any) => k.remaining !== null && k.remaining > 0)
       setStrankineKartice(uporabne)
       if (uporabne.length === 1) setIzbranaKartica(uporabne[0].id)
+
+      // DODANO (21.8.2026): stanje predplacila. Prej se ob izbiri "Predplacilo"
+      // ni videlo, koliko stranka sploh ima - blagajnik je izvedel sele ob
+      // napaki "ni dovolj kritja".
+      const { data: str } = await createClient()
+        .from('customers').select('prepaid').eq('id', activeCustomer.id).maybeSingle()
+      if (veljavno) setStanjePredplacila(Number(str?.prepaid ?? 0))
     })()
     return () => { veljavno = false }
   }, [open, activeCustomer?.id])
@@ -1168,6 +1176,35 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
                     kartice, zato se znesek NE zaračuna znova.
                   </div>
                 </>
+              )}
+            </div>
+          )}
+
+          {/* STANJE PREDPLACILA (21.8.2026) */}
+          {method === 'prep' && (
+            <div>
+              <div style={{ fontWeight:600, fontSize:12, color:T.muted, marginBottom:8, textTransform:'uppercase', letterSpacing:'0.06em' }}>Stanje predplačila</div>
+              {!activeCustomer?.id ? (
+                <div style={{ padding:'11px 13px', borderRadius:9, background:'rgba(184,140,40,0.1)', color:'#8A5A00', fontSize:13, lineHeight:1.5 }}>
+                  Najprej izberite stranko — predplačilo je vezano nanjo.
+                </div>
+              ) : stanjePredplacila === null ? (
+                <div style={{ fontSize:13, color:T.muted }}>Nalagam…</div>
+              ) : (
+                <div style={{ padding:'11px 13px', borderRadius:9,
+                  background: stanjePredplacila >= finalTotal ? T.accentSoft : 'rgba(163,45,45,0.08)',
+                  color: stanjePredplacila >= finalTotal ? T.accent : T.danger, fontSize:13, lineHeight:1.6 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', fontWeight:700 }}>
+                    <span>{activeCustomer.name}</span><span>{eur(stanjePredplacila)}</span>
+                  </div>
+                  {stanjePredplacila >= finalTotal ? (
+                    <div style={{ fontSize:12, marginTop:3 }}>Po plačilu ostane {eur(stanjePredplacila - finalTotal)}.</div>
+                  ) : (
+                    <div style={{ fontSize:12, marginTop:3 }}>
+                      Manjka {eur(finalTotal - stanjePredplacila)} — plačilo s predplačilom ne bo mogoče.
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -3490,6 +3527,10 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
     setLoadingDetail(true)
     setCustomerStats(null)
     async function load() {
+      // DODANO (21.8.2026): obrocni nacrti. Prej kartica v profilu ni povedala,
+      // da gre za obroke - "Placano: 45 EUR" je bilo od navadne clanarine za
+      // 45 EUR nerazlocljivo. Skupna vrednost, stevilo obrokov in zapadlosti
+      // niso bili vidni nikjer.
       const [pkgRes, ordRes] = await Promise.all([
         createClient().from('customer_packages')
           .select('*, package_templates(name, template_type, color, validity_days, visits)')
@@ -3821,14 +3862,32 @@ function BulkEmailModal({ customers, onClose, posData }) {
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [filter, setFilter] = useState('all') // all | with_email | active_packages
+  // Izbira posameznih prejemnikov (21.8.2026).
+  const [iskanje, setIskanje] = useState('')
+  const [izkljuceni, setIzkljuceni] = useState<Set<string>>(new Set())
   const [sending, setSending] = useState(false)
   const [result, setResult] = useState(null)
 
-  const targets = customers.filter(c => {
+  // DODANO (21.8.2026): izbira POSAMEZNIH prejemnikov. Prej sta bili na voljo
+  // samo dve skupini ("vse" ali "aktivni clani") - poslati sporocilo dvema
+  // izbranima strankama ni bilo mogoce, izkljuciti koga tudi ne.
+  const kandidati = customers.filter(c => {
     if (!c.email) return false
     if (filter === 'active_packages') return (c.customer_packages||[]).some(p=>p.active)
     return true
   })
+
+  const iskani = iskanje.trim().toLowerCase()
+  const prikazani = iskani
+    ? kandidati.filter(c =>
+        (c.name || '').toLowerCase().includes(iskani) ||
+        (c.email || '').toLowerCase().includes(iskani))
+    : kandidati
+
+  // Ce uporabnik ni izbral nikogar rocno, veljajo vsi iz skupine.
+  const targets = izkljuceni.size > 0
+    ? kandidati.filter(c => !izkljuceni.has(c.id))
+    : kandidati
 
   async function send() {
     if (!subject || !body) return alert('Vnesi zadevo in sporočilo')
@@ -3871,7 +3930,43 @@ function BulkEmailModal({ customers, onClose, posData }) {
               <button key={id} onClick={()=>setFilter(id)} style={{ padding:'7px 12px', borderRadius:8, border:'1px solid '+(filter===id?T.accent:T.line), background:filter===id?T.accentSoft:'transparent', color:filter===id?T.accent:T.ink, fontWeight:filter===id?700:500, fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>{lbl}</button>
             ))}
           </div>
-          <div style={{ fontSize:11, color:T.muted, marginTop:6 }}>📧 {targets.length} prejemnikov</div>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:8, marginBottom:6 }}>
+            <div style={{ fontSize:11, color:T.muted }}>
+              📧 {targets.length} od {kandidati.length} prejemnikov
+            </div>
+            {izkljuceni.size > 0 && (
+              <button onClick={()=>setIzkljuceni(new Set())}
+                style={{ background:'none', border:0, color:T.accent, fontSize:11, cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>
+                Izberi vse
+              </button>
+            )}
+          </div>
+
+          <input value={iskanje} onChange={e=>setIskanje(e.target.value)}
+            placeholder="Poišči stranko…"
+            style={{ width:'100%', padding:'7px 10px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:12, background:T.inputBg, outline:'none', boxSizing:'border-box', marginBottom:6 }}/>
+
+          <div style={{ maxHeight:150, overflowY:'auto', border:'1px solid '+T.line, borderRadius:8 }}>
+            {prikazani.length === 0 ? (
+              <div style={{ padding:'10px 12px', fontSize:12, color:T.muted }}>Ni ujemanja.</div>
+            ) : prikazani.map((c: any) => {
+              const izbran = !izkljuceni.has(c.id)
+              return (
+                <label key={c.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 12px', borderBottom:'1px solid '+T.lineSoft, cursor:'pointer', fontSize:12 }}>
+                  <input type="checkbox" checked={izbran} style={{ accentColor:T.accent }}
+                    onChange={()=>setIzkljuceni(prev => {
+                      const n = new Set(prev)
+                      if (n.has(c.id)) n.delete(c.id); else n.add(c.id)
+                      return n
+                    })}/>
+                  <span style={{ flex:1, minWidth:0 }}>
+                    <span style={{ fontWeight:600 }}>{c.name}</span>
+                    <span style={{ color:T.muted }}> · {c.email}</span>
+                  </span>
+                </label>
+              )
+            })}
+          </div>
         </div>
 
         <Field label="Zadeva *">
@@ -3987,6 +4082,23 @@ function CustomerProfileEditTab({ customer, onSave }) {
 
 // ─── Customer Packages Tab ────────────────────────────────────
 function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, setSellPackageModal, setScreen, setActiveCustomer }) {
+  // DODANO (21.8.2026): obrocni nacrti za prikaz na kartici paketa. Nalozimo
+  // jih TU, kjer se prikazujejo - prej so bili pomotoma v drugi komponenti in
+  // spremenljivka tu sploh ni obstajala.
+  const [obrocniNacrti, setObrocniNacrti] = React.useState<any[]>([])
+  React.useEffect(() => {
+    if (!customer?.id) { setObrocniNacrti([]); return }
+    let veljavno = true
+    ;(async () => {
+      const { data } = await createClient()
+        .from('installment_plans')
+        .select('id, customer_package_id, total_amount, installment_count, installment_amount, installments(installment_number, due_date, amount, status)')
+        .eq('customer_id', customer.id)
+      if (veljavno) setObrocniNacrti(data || [])
+    })()
+    return () => { veljavno = false }
+  }, [customer?.id])
+
   const [actionLoading, setActionLoading] = useState(null)
   const [manualAddModal, setManualAddModal] = useState(null)
   const [editPkgModal, setEditPkgModal] = useState(null)
@@ -4119,6 +4231,42 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
                   <div style={{ flex:1 }}>
                     <div style={{ fontWeight:700, fontSize:14 }}>{pkg.name}</div>
                     <div style={{ fontSize:11, color:T.muted }}>{tc.label}{pkg.purchase_price?` · Plačano: ${eur(pkg.purchase_price)}`:''}</div>
+
+                    {/* OBROCNI NACRT (21.8.2026): prej se ni videlo, da gre za
+                        obroke - "Placano: 45 EUR" je bilo od navadne clanarine
+                        nerazlocljivo. Skupne vrednosti, stevila obrokov in
+                        zapadlosti ni bilo nikjer. */}
+                    {(() => {
+                      // `installment_plans` se veze na customer_package_id;
+                      // stolpca package_template_id NIMA (preverjeno v bazi).
+                      const nacrt = (obrocniNacrti || []).find((n: any) => n.customer_package_id === pkg.id)
+                      if (!nacrt) return null
+                      const obroki = (nacrt.installments || []).slice()
+                        .sort((a: any, b: any) => a.installment_number - b.installment_number)
+                      const placani = obroki.filter((o: any) => o.status === 'paid')
+                      const naslednji = obroki.find((o: any) => o.status !== 'paid')
+                      const skupaj = obroki.length > 0
+                        ? obroki.reduce((sum: number, o: any) => sum + Number(o.amount || 0), 0)
+                        : Number(nacrt.total_amount || 0)
+                      const placano = placani.reduce((sum: number, o: any) => sum + Number(o.amount || 0), 0)
+                      return (
+                        <div style={{ marginTop:6, padding:'7px 9px', borderRadius:7, background:T.surface2, fontSize:11, lineHeight:1.6 }}>
+                          <div style={{ fontWeight:700 }}>
+                            Obročno: {placani.length} / {obroki.length} plačanih
+                          </div>
+                          <div style={{ color:T.muted }}>
+                            {eur(placano)} od {eur(skupaj)}
+                            {skupaj - placano > 0 && <> · preostane <strong>{eur(skupaj - placano)}</strong></>}
+                          </div>
+                          {naslednji && (
+                            <div style={{ color:T.warn }}>
+                              Naslednji obrok {eur(naslednji.amount)} zapade{' '}
+                              {new Date(naslednji.due_date).toLocaleDateString('sl-SI')}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </div>
                   {pkg.remaining !== null && (
                     <div style={{ textAlign:'right' }}>
@@ -5240,7 +5388,25 @@ function InventoryScreen({ posData }) {
                 return (
                   <tr key={it.id} style={{ background:idx%2?T.surface2:T.surface, borderBottom:'1px solid '+T.lineSoft }}>
                     <td style={{ padding:'10px 12px' }}>
-                      <div style={{ fontWeight:600, fontSize:13 }}>{it.name}</div>
+                      <div style={{ fontWeight:600, fontSize:13, display:'flex', alignItems:'center', gap:6 }}>
+                        {it.name}
+                        {/* DODANO (21.8.2026): oznaka NORMATIVA. Prej je artikel z
+                            recepturo v seznamu izgledal enako kot navaden - iz
+                            seznama se ni videlo, kateri artikli porabljajo
+                            surovine in katerim se odsteva lastna zaloga. */}
+                        {it.item_type === 'recipe' && (
+                          <span title="Ob prodaji se odštejejo sestavine, ne ta artikel"
+                            style={{ fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:4, background:T.accentSoft, color:T.accent, whiteSpace:'nowrap' }}>
+                            NORMATIV
+                          </span>
+                        )}
+                        {it.bookable && (
+                          <span title="Storitev — rezervira se v koledarju"
+                            style={{ fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:4, background:T.chipBg, color:T.muted, whiteSpace:'nowrap' }}>
+                            STORITEV
+                          </span>
+                        )}
+                      </div>
                       <div style={{ fontSize:10, color:T.muted, marginTop:2, display:'flex', gap:8 }}>
                         {sold30 > 0 && <span>📦 {sold30}× / 30d</span>}
                         {m !== null && <span style={{ color: Number(m)>50?T.accent:Number(m)>20?T.warn:T.danger }}>marža {m}%</span>}
@@ -10212,7 +10378,12 @@ function PackagesAdminSection({ posData, modal, setModal }) {
                     {p.validity_days && <span>📅 {p.validity_days} dni</span>}
                     {p.visits && <span>🎯 {p.visits}×</span>}
                     {p.activation_type && <span>⚡ {ACTIVATION_TYPES[p.activation_type]||''}</span>}
-                    {p.auto_renew && <span>🔄 Auto</span>}
+                    {/* DODANO (21.8.2026): dnevi opozorila. Prej jih je bilo
+                        treba preveriti z odpiranjem urejanja. */}
+                    <span title="Toliko dni pred iztekom stranka prejme opomnik">
+                      🔔 {p.notify_before_days || 7} dni prej
+                    </span>
+                    {p.auto_renew && <span title="Stranka pred iztekom prejme predračun za podaljšanje">🔄 Predračun ob izteku</span>}
                     {p.description && <span style={{ color:T.mutedSoft }}>· {p.description}</span>}
                   </div>
                 </div>
@@ -10329,8 +10500,16 @@ function PackagesAdminSection({ posData, modal, setModal }) {
             <div style={{ display:'flex', flexDirection:'column', justifyContent:'flex-end', paddingBottom:4 }}>
               <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, cursor:'pointer' }}>
                 <input type="checkbox" checked={!!modal?.auto_renew} onChange={e=>setModal(p=>({...p,auto_renew:e.target.checked}))} style={{ accentColor:T.accent }}/>
-                Avtomatska obnova
+                Samodejna obnova
               </label>
+              {/* DODANO (21.8.2026): razlaga. Prej je bila to gola kljukica -
+                  uporabnik ni vedel, ali bo bremenila kartico, izdala racun ali
+                  samo podaljsala veljavnost. Dejansko poslje PREDRACUN. */}
+              <div style={{ fontSize:10, color:T.muted, marginTop:4, lineHeight:1.45 }}>
+                {modal?.auto_renew
+                  ? 'Stranka pred iztekom prejme predračun za podaljšanje. Kartica se NE podaljša sama in ni bremenjena — podaljša se šele, ko predračun plača.'
+                  : 'Brez obnove stranka prejme le opomnik o izteku.'}
+              </div>
             </div>
           </div>
 

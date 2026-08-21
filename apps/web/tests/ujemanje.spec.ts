@@ -804,3 +804,80 @@ test('termin: zaporedna termina brez presledka nista trk', () => {
   )
   expect(trki).toHaveLength(0)
 })
+
+// ─── Obročni načrt v profilu stranke ────────────────────────────────────
+
+/**
+ * Kartica paketa ni povedala, da gre za obroke — "Plačano: 45 €" je bilo od
+ * navadne članarine za 45 € nerazločljivo. Skupna vrednost, število obrokov
+ * in zapadlosti niso bili vidni nikjer.
+ */
+function povzetekObrokov(obroki: Array<{ installment_number: number; amount: number; status: string; due_date: string }>) {
+  const urejeni = [...obroki].sort((a, b) => a.installment_number - b.installment_number)
+  const placani = urejeni.filter(o => o.status === 'paid')
+  const naslednji = urejeni.find(o => o.status !== 'paid')
+  const skupaj = urejeni.reduce((s, o) => s + o.amount, 0)
+  const placano = placani.reduce((s, o) => s + o.amount, 0)
+  return { placanih: placani.length, vseh: urejeni.length, skupaj, placano, preostane: skupaj - placano, naslednji }
+}
+
+const OBROKI = [
+  { installment_number: 1, amount: 45, status: 'paid', due_date: '2026-08-21' },
+  { installment_number: 2, amount: 45, status: 'pending', due_date: '2026-09-21' },
+  { installment_number: 3, amount: 45, status: 'pending', due_date: '2026-10-21' },
+  { installment_number: 4, amount: 45, status: 'pending', due_date: '2026-11-21' },
+  { installment_number: 5, amount: 45, status: 'pending', due_date: '2026-12-21' },
+  { installment_number: 6, amount: 45, status: 'pending', due_date: '2027-01-21' },
+]
+
+test('obroki: povzetek pokaže plačane, skupno in preostanek', () => {
+  const p = povzetekObrokov(OBROKI)
+  expect(p.placanih).toBe(1)
+  expect(p.vseh).toBe(6)
+  expect(p.skupaj).toBe(270)      // NE 45
+  expect(p.placano).toBe(45)
+  expect(p.preostane).toBe(225)
+})
+
+test('obroki: naslednji zapadli je prvi neplačan', () => {
+  const p = povzetekObrokov(OBROKI)
+  expect(p.naslednji?.installment_number).toBe(2)
+  expect(p.naslednji?.due_date).toBe('2026-09-21')
+})
+
+test('obroki: ko so vsi plačani, naslednjega ni', () => {
+  const vsi = OBROKI.map(o => ({ ...o, status: 'paid' }))
+  const p = povzetekObrokov(vsi)
+  expect(p.naslednji).toBeUndefined()
+  expect(p.preostane).toBe(0)
+})
+
+// ─── Izbira prejemnikov e-pošte ─────────────────────────────────────────
+
+function prejemniki(
+  kandidati: Array<{ id: string; email: string | null }>,
+  izkljuceni: Set<string>,
+) {
+  const zEposto = kandidati.filter(c => c.email)
+  return izkljuceni.size > 0 ? zEposto.filter(c => !izkljuceni.has(c.id)) : zEposto
+}
+
+test('e-pošta: brez izbire veljajo vsi iz skupine', () => {
+  const r = prejemniki([{ id: 'a', email: 'a@x.si' }, { id: 'b', email: 'b@x.si' }], new Set())
+  expect(r).toHaveLength(2)
+})
+
+test('e-pošta: izključeni prejemnik odpade', () => {
+  // Prej sta bili na voljo samo dve skupini — poslati dvema izbranima
+  // strankama ni bilo mogoče.
+  const r = prejemniki(
+    [{ id: 'a', email: 'a@x.si' }, { id: 'b', email: 'b@x.si' }, { id: 'c', email: 'c@x.si' }],
+    new Set(['b']),
+  )
+  expect(r.map(c => c.id)).toEqual(['a', 'c'])
+})
+
+test('e-pošta: stranka brez naslova ni prejemnik', () => {
+  const r = prejemniki([{ id: 'a', email: null }, { id: 'b', email: 'b@x.si' }], new Set())
+  expect(r.map(c => c.id)).toEqual(['b'])
+})
