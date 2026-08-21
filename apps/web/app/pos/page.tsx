@@ -4078,16 +4078,36 @@ function DobavnicaImportModal({ posData, onClose, onImported }) {
       // blagajni kratka ("Corona"), na dobavnici pa dolga ("PIVO CORONA
       // EXTRA 0,33L ST"). Zato ujemanje IZRACUNAMO se sami - po crtni kodi in
       // podobnosti naziva z upostevanjem velikosti pakiranja.
-      const katalog = posData.items.map(i => ({ id: i.id, name: i.name, barcode: i.barcode }))
+      // DODANO (20.8.2026): v nabor za ujemanje gredo tudi SUROVINE. Prej so
+      // se iskala ujemanja samo med artikli, zato kave, vina in zganih pijac,
+      // ki se vodijo kot surovine z normativi, ni bilo mogoce polniti iz
+      // dobavnice - vnasati jih je bilo treba rocno ob vsaki dobavi.
+      //
+      // Artikli z NORMATIVOM so izloceni: espresso ni fizicna stvar in na
+      // dobavnici ne pride, polnijo se njegove sestavine.
+      const katalog = [
+        ...posData.items
+          .filter(i => i.item_type !== 'recipe' && i.item_type !== 'ingredient')
+          .map(i => ({ id: i.id, name: i.name, barcode: i.barcode, vrsta: 'item' })),
+        ...(posData.ingredients || [])
+          .map(i => ({ id: i.id, name: i.name, barcode: i.barcode, vrsta: 'ingredient' })),
+      ]
       const sel = {}
       const ujem = {}
       ;(data.artikli || []).forEach((a, i) => {
         sel[i] = true
         if (a.ujemanje_id) {
-          ujem[i] = { itemId: a.ujemanje_id, vir: 'ai', zanesljivost: 'visoka' }
+          ujem[i] = { itemId: a.ujemanje_id, vrsta: 'item', vir: 'ai', zanesljivost: 'visoka' }
         } else {
-          const p = predlagajUjemanje({ naziv: a.naziv, ean: a.ean }, katalog)
-          ujem[i] = { itemId: p.itemId, vir: p.itemId ? 'predlog' : 'brez', zanesljivost: p.zanesljivost, ocena: p.ocena }
+          const pr = predlagajUjemanje({ naziv: a.naziv, ean: a.ean }, katalog)
+          const najden = katalog.find(k => k.id === pr.itemId)
+          ujem[i] = {
+            itemId: pr.itemId,
+            vrsta: najden?.vrsta || 'item',
+            vir: pr.itemId ? 'predlog' : 'brez',
+            zanesljivost: pr.zanesljivost,
+            ocena: pr.ocena,
+          }
         }
       })
       setResult(data)
@@ -4160,7 +4180,54 @@ function DobavnicaImportModal({ posData, onClose, onImported }) {
         // uporabnik, ne le tistega od AI. Prej so vrstice brez AI ujemanja
         // tiho izpadle in zaloga se ni premaknila.
         const izbira = ujemanja[idx] || {}
+        const jeSurovina = izbira.vrsta === 'ingredient' || izbira.vir === 'nova_surovina'
         let ciljniId = izbira.itemId && izbira.itemId !== 'NOV' ? izbira.itemId : null
+
+        // DODANO (20.8.2026): nova SUROVINA (kava, vino, moka ...). Te se
+        // vodijo v loceni tabeli in nimajo prodajne cene - prodaja se izdelek
+        // iz njih (espresso), surovina se odsteva po normativu.
+        if (izbira.vir === 'nova_surovina') {
+          const { data: novaSur, error: surErr } = await sb.from('ingredients').insert({
+            business_id: BUSINESS_ID,
+            name: artikel.naziv,
+            unit: artikel.enota || 'kos',
+            stock_qty: 0,
+            cost_price: artikel.neto_cena_brez_ddv || null,
+            barcode: artikel.ean || null,
+          }).select('id').single()
+          if (surErr) throw surErr
+          ciljniId = novaSur.id
+          newLog.push({ name: artikel.naziv, ok: true, msg: 'nova surovina — dodajte jo v normative' })
+        }
+
+        // Knjizenje na SUROVINO (obstojeco ali pravkar ustvarjeno).
+        if (jeSurovina && ciljniId) {
+          const { error: sErr } = await sb.rpc('increment_ingredient_stock', {
+            p_ingredient_id: ciljniId,
+            p_qty: Number(artikel.kolicina || 0),
+          })
+          if (sErr) throw sErr
+
+          // Nabavna cena in crtna koda - koda se zapomni za naslednjic.
+          const patchSur: any = {}
+          if (artikel.neto_cena_brez_ddv) patchSur.cost_price = artikel.neto_cena_brez_ddv
+          if (artikel.ean) patchSur.barcode = artikel.ean
+          if (Object.keys(patchSur).length > 0) {
+            const { error: pErr } = await sb.from('ingredients').update(patchSur).eq('id', ciljniId)
+            if (pErr) throw pErr
+          }
+
+          artikel.ujemanje_id = null   // vrstica dobavnice se veze na ARTIKEL, ne surovino
+          artikel.ujemanje_ingredient_id = ciljniId
+          if (izbira.vir !== 'nova_surovina') {
+            newLog.push({
+              name: artikel.naziv, ok: true,
+              msg: '+' + artikel.kolicina + ' ' + (artikel.enota || 'kos') + ' (surovina)'
+                + (artikel.ean ? ' · koda shranjena' : ''),
+            })
+          }
+          continue
+        }
 
         // Uporabnik je zahteval NOV artikel - ustvarimo ga.
         if (izbira.itemId === 'NOV') {
@@ -4226,6 +4293,9 @@ function DobavnicaImportModal({ posData, onClose, onImported }) {
         .map(({ a }) => ({
           delivery_id: deliveryId,
           item_id: a.ujemanje_id || null,
+          // Surovina se vodi loceno - brez tega brisanje dobavnice ne bi
+          // znalo vrniti zaloge surovine nazaj (20.8.2026).
+          ingredient_id: a.ujemanje_ingredient_id || null,
           item_name: a.naziv,
           ean: a.ean || null,
           quantity: Number(a.kolicina || 0),
@@ -4306,17 +4376,39 @@ function DobavnicaImportModal({ posData, onClose, onImported }) {
                     <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                       <span style={{ fontSize:11, color:T.muted, whiteSpace:'nowrap' }}>Knjiži na:</span>
                       <select
-                        value={u.itemId ?? ''}
+                        value={u.itemId ? (u.vrsta === 'ingredient' ? 'ing:' : 'itm:') + u.itemId : ''}
                         onChange={e=>{
                           const v = e.target.value
-                          setUjemanja(p=>({ ...p, [i]: { ...(p[i]||{}), itemId: v || null, vir: v === 'NOV' ? 'nov' : v ? 'rocno' : 'brez', zanesljivost: 'visoka' } }))
+                          // Iz vrednosti razberemo tudi VRSTO cilja - artikel
+                          // in surovina sta v locenih tabelah (20.8.2026).
+                          const jeSurovina = v.startsWith('ing:')
+                          const cistId = v.replace(/^(ing|itm):/, '')
+                          setUjemanja(p=>({ ...p, [i]: {
+                            ...(p[i]||{}),
+                            itemId: cistId || null,
+                            vrsta: jeSurovina ? 'ingredient' : 'item',
+                            vir: v === 'NOV' ? 'nov' : v === 'NOVA_SUROVINA' ? 'nova_surovina' : v ? 'rocno' : 'brez',
+                            zanesljivost: 'visoka',
+                          } }))
                         }}
                         style={{ flex:1, padding:'6px 8px', borderRadius:7, border:'1px solid '+(u.itemId ? T.line : T.warn), fontFamily:'inherit', fontSize:12, background:T.inputBg, minWidth:0 }}>
                         <option value="">— ne knjiži (preskoči) —</option>
                         <option value="NOV">+ Ustvari nov artikel</option>
-                        {posData.items.map(it => (
-                          <option key={it.id} value={it.id}>{it.name}</option>
-                        ))}
+                        <option value="NOVA_SUROVINA">+ Ustvari novo surovino</option>
+                        <optgroup label="Artikli">
+                          {posData.items
+                            .filter(it => it.item_type !== 'recipe' && it.item_type !== 'ingredient')
+                            .map(it => (
+                              <option key={it.id} value={'itm:' + it.id}>{it.name}</option>
+                            ))}
+                        </optgroup>
+                        {(posData.ingredients || []).length > 0 && (
+                          <optgroup label="Surovine">
+                            {(posData.ingredients || []).map(ig => (
+                              <option key={ig.id} value={'ing:' + ig.id}>{ig.name} ({ig.unit || 'kos'})</option>
+                            ))}
+                          </optgroup>
+                        )}
                       </select>
                     </div>
                     <div style={{ fontSize:10, marginTop:4, color:barvaZanesljivosti }}>
@@ -4326,6 +4418,8 @@ function DobavnicaImportModal({ posData, onClose, onImported }) {
                       {u.vir === 'predlog' && u.zanesljivost === 'nizka' && '⚠ negotov predlog — preverite'}
                       {u.vir === 'rocno' && '✓ izbrali ste sami'}
                       {u.vir === 'nov' && '+ nastal bo nov artikel'}
+                      {u.vir === 'nova_surovina' && '+ nastala bo nova surovina'}
+                      {u.vrsta === 'ingredient' && u.itemId && u.vir !== 'nova_surovina' && ' · surovina'}
                       {u.vir === 'brez' && '⚠ zaloga se ne bo spremenila'}
                     </div>
                   </div>
@@ -4336,14 +4430,18 @@ function DobavnicaImportModal({ posData, onClose, onImported }) {
             {/* Povzetek, da je pred uvozom jasno, kaj se bo zgodilo. */}
             {(() => {
               const izbrane = (result.artikli || []).map((_, i) => i).filter(i => selected[i])
-              const bo = izbrane.filter(i => ujemanja[i]?.itemId && ujemanja[i].itemId !== 'NOV').length
-              const novi = izbrane.filter(i => ujemanja[i]?.itemId === 'NOV').length
-              const brez = izbrane.filter(i => !ujemanja[i]?.itemId).length
+              const jeNov = i => ujemanja[i]?.vir === 'nov' || ujemanja[i]?.vir === 'nova_surovina'
+              const artikli = izbrane.filter(i => ujemanja[i]?.itemId && ujemanja[i]?.vrsta !== 'ingredient' && !jeNov(i)).length
+              const surovine = izbrane.filter(i => ujemanja[i]?.itemId && ujemanja[i]?.vrsta === 'ingredient' && !jeNov(i)).length
+              const novi = izbrane.filter(i => jeNov(i)).length
+              const brez = izbrane.filter(i => !ujemanja[i]?.itemId && !jeNov(i)).length
               return (
                 <div style={{ marginTop:12, padding:'10px 12px', background:T.surface2, borderRadius:9, fontSize:12, lineHeight:1.6 }}>
-                  <div><strong>{bo}</strong> {bo === 1 ? 'artiklu' : 'artiklom'} se bo povečala zaloga</div>
-                  {novi > 0 && <div><strong>{novi}</strong> {novi === 1 ? 'artikel bo nastal na novo' : 'artiklov bo nastalo na novo'}</div>}
+                  {artikli > 0 && <div><strong>{artikli}</strong> {artikli === 1 ? 'artiklu' : 'artiklom'} se bo povečala zaloga</div>}
+                  {surovine > 0 && <div><strong>{surovine}</strong> {surovine === 1 ? 'surovini' : 'surovinam'} se bo povečala zaloga</div>}
+                  {novi > 0 && <div><strong>{novi}</strong> {novi === 1 ? 'bo nastal na novo' : 'jih bo nastalo na novo'}</div>}
                   {brez > 0 && <div style={{ color:T.warn }}><strong>{brez}</strong> brez knjiženja — zaloga se ne bo spremenila</div>}
+                  {artikli + surovine + novi === 0 && <div style={{ color:T.warn }}>Nobena vrstica ne bo poknjižena.</div>}
                 </div>
               )
             })()}
@@ -4611,9 +4709,9 @@ function InventoryScreen({ posData }) {
   async function deleteDelivery(d) {
     const db = createClient()
     const { data: vrstice } = await db.from('delivery_lines')
-      .select('item_id, item_name, quantity').eq('delivery_id', d.id)
+      .select('item_id, ingredient_id, item_name, quantity').eq('delivery_id', d.id)
 
-    const poknjizene = (vrstice || []).filter(v => v.item_id)
+    const poknjizene = (vrstice || []).filter(v => v.item_id || v.ingredient_id)
     const opozorilo = poknjizene.length > 0
       ? `Izbrišem dobavnico ${d.document_number || ''} (${d.supplier || 'neznan dobavitelj'})?\n\n`
         + `Zaloga bo pri ${poknjizene.length} ${poknjizene.length === 1 ? 'artiklu' : 'artiklih'} zmanjšana nazaj za uvožene količine.`
@@ -4624,10 +4722,16 @@ function InventoryScreen({ posData }) {
     // 1. Razveljavi zalogo.
     const neuspeli = []
     for (const v of poknjizene) {
-      const { error } = await db.rpc('increment_stock', {
-        p_item_id: v.item_id,
-        p_qty: -Number(v.quantity || 0),
-      })
+      // Surovina in artikel sta v LOCENIH tabelah, vsaka s svojo funkcijo.
+      const { error } = v.ingredient_id
+        ? await db.rpc('increment_ingredient_stock', {
+            p_ingredient_id: v.ingredient_id,
+            p_qty: -Number(v.quantity || 0),
+          })
+        : await db.rpc('increment_stock', {
+            p_item_id: v.item_id,
+            p_qty: -Number(v.quantity || 0),
+          })
       if (error) neuspeli.push(v.item_name)
     }
     if (neuspeli.length > 0) {

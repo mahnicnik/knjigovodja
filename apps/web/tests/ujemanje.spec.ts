@@ -202,3 +202,71 @@ test('uvoz: "NOV" se ne šteje med povečanje zaloge obstoječih', () => {
   expect(p.zaloga).toBe(0)
   expect(p.novi).toBe(1)
 })
+
+// ─── Surovine iz dobavnice ──────────────────────────────────────────────
+
+/**
+ * Surovine (kava, vino, moka) so v LOČENI tabeli od artiklov. Uvoz mora
+ * znati polniti obe — sicer je treba surovine ob vsaki dobavi vnašati ročno.
+ */
+function razporediPoTabelah(
+  vrstice: Array<{ izbrana: boolean; itemId: string | null; vrsta?: string; vir?: string }>,
+) {
+  const izbrane = vrstice.filter(v => v.izbrana)
+  const jeNov = (v: any) => v.vir === 'nov' || v.vir === 'nova_surovina'
+  return {
+    artikli: izbrane.filter(v => v.itemId && v.vrsta !== 'ingredient' && !jeNov(v)).length,
+    surovine: izbrane.filter(v => v.itemId && v.vrsta === 'ingredient' && !jeNov(v)).length,
+    novi: izbrane.filter(jeNov).length,
+    brez: izbrane.filter(v => !v.itemId && !jeNov(v)).length,
+  }
+}
+
+test('surovine: uvoz loči artikle od surovin', () => {
+  const r = razporediPoTabelah([
+    { izbrana: true, itemId: 'i1', vrsta: 'item' },
+    { izbrana: true, itemId: 'g1', vrsta: 'ingredient' },
+    { izbrana: true, itemId: 'g2', vrsta: 'ingredient' },
+  ])
+  expect(r.artikli).toBe(1)
+  expect(r.surovine).toBe(2)
+})
+
+test('surovine: nova surovina se ne šteje med obstoječe', () => {
+  const r = razporediPoTabelah([
+    { izbrana: true, itemId: null, vir: 'nova_surovina' },
+  ])
+  expect(r.surovine).toBe(0)
+  expect(r.novi).toBe(1)
+  expect(r.brez).toBe(0)   // NI preskočena — nastala bo
+})
+
+/**
+ * Brisanje dobavnice mora zalogo vrniti v PRAVO tabelo. Če bi surovino
+ * poskušali vrniti prek funkcije za artikle, bi se zaloga surovine ne
+ * popravila in bi ostala napihnjena.
+ */
+function katereFunkcijeZaVrnitev(
+  vrstice: Array<{ item_id: string | null; ingredient_id: string | null }>,
+) {
+  return vrstice.map(v => v.ingredient_id ? 'increment_ingredient_stock' : 'increment_stock')
+}
+
+test('brisanje: surovina se vrne prek svoje funkcije', () => {
+  const f = katereFunkcijeZaVrnitev([
+    { item_id: 'i1', ingredient_id: null },
+    { item_id: null, ingredient_id: 'g1' },
+  ])
+  expect(f).toEqual(['increment_stock', 'increment_ingredient_stock'])
+})
+
+test('normativ ni fizična stvar in ne sme biti med kandidati za polnjenje', () => {
+  // Espresso na dobavnici ne pride — polnijo se njegove sestavine.
+  const katalog = [
+    { id: 'i1', name: 'Corona', item_type: 'simple' },
+    { id: 'i2', name: 'Espresso', item_type: 'recipe' },
+    { id: 'i3', name: 'Kava zrna', item_type: 'ingredient' },
+  ]
+  const kandidati = katalog.filter(k => k.item_type !== 'recipe' && k.item_type !== 'ingredient')
+  expect(kandidati.map(k => k.name)).toEqual(['Corona'])
+})
