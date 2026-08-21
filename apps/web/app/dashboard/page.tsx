@@ -194,6 +194,11 @@ export default function DashboardPage() {
   const [draggedQaIdx, setDraggedQaIdx] = useState<number | null>(null)
 
   const [emailPendingCount, setEmailPendingCount] = useState(0)
+  // DODANO (21.8.2026): opozorila iz blagajne (iztek kartic, nizka zaloga).
+  // Doslej so bila vidna SAMO v blagajni pod zvoncem - kdor je ni odprl, za
+  // iztek clanarine sploh ni izvedel. Podatki so ze obstajali, manjkal je
+  // le prikaz na mestu, kjer lastnik dejansko pogleda.
+  const [posOpozorila, setPosOpozorila] = useState<any[]>([])
   const [emailConnectionsCount, setEmailConnectionsCount] = useState(0)
   const [data, setData] = useState({
     revenue: 0, expenses: 0, vatDue: 0, kpoReceivedMonth: 0,
@@ -347,6 +352,35 @@ export default function DashboardPage() {
         supabase.from('issued_invoices').select('id', { count: 'exact', head: true }).eq('org_id', o.id).eq('status', 'draft').like('notes', 'Ponavljajoč račun%'),
       ])
       setEmailPendingCount(emailPendRes.count || 0)
+
+      // Opozorila iz blagajne — SAMO za organizacije, ki blagajno dejansko
+      // imajo. Ostali tega ne potrebujejo in jim ne kaze prazne skatle.
+      if (o.pos_business_id) {
+        const { data: opoz } = await supabase
+          .from('pos_notifications')
+          .select('id, type, message, severity, created_at')
+          .eq('business_id', o.pos_business_id)
+          .eq('dismissed', false)
+          .order('created_at', { ascending: false })
+          .limit(8)
+        setPosOpozorila(opoz || [])
+      } else {
+        setPosOpozorila([])
+      }
+
+      // Samo za tiste, ki blagajno DEJANSKO imajo - ostali tega ne rabijo.
+      if (o.pos_business_id) {
+        const { data: opoz } = await supabase
+          .from('pos_notifications')
+          .select('id, type, message, severity, created_at')
+          .eq('business_id', o.pos_business_id)
+          .eq('dismissed', false)
+          .order('created_at', { ascending: false })
+          .limit(8)
+        setPosOpozorila(opoz || [])
+      } else {
+        setPosOpozorila([])
+      }
       setEmailConnectionsCount(emailConnRes.count || 0)
 
       const invoices = invRes.data || []
@@ -967,6 +1001,39 @@ export default function DashboardPage() {
             </div>
           )}
         </section>
+
+        {/* OPOZORILA IZ BLAGAJNE — DODANO 21.8.2026.
+            Prikaze se SAMO, ce ima organizacija blagajno in ce opozorila
+            dejansko obstajajo. Doslej so bila vidna izkljucno v blagajni pod
+            zvoncem - kdor je ni odprl, za iztek clanarine ni izvedel. */}
+        {posOpozorila.length > 0 && (
+          <section style={{ background:'#fff', borderRadius:16, border:'1px solid #f0f0f0', padding:20, marginBottom:20 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
+              <div style={{ fontSize:15, fontWeight:700, color:'#0D1F12' }}>
+                🔔 Opozorila iz blagajne
+              </div>
+              <a href="/pos" style={{ fontSize:12, color:'#888', textDecoration:'none' }}>Odpri blagajno →</a>
+            </div>
+
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {posOpozorila.map((o: any) => {
+                const barva = o.severity === 'danger' ? '#A32D2D' : '#8A5A00'
+                const ozadje = o.severity === 'danger' ? 'rgba(163,45,45,0.06)' : 'rgba(184,140,40,0.08)'
+                const ikona = o.type === 'low_stock' ? '📦'
+                  : o.type === 'expired' ? '⛔'
+                  : o.type === 'low_visits' ? '🎫' : '⏳'
+                return (
+                  <div key={o.id} style={{ display:'flex', gap:10, alignItems:'flex-start', padding:'10px 12px', background:ozadje, borderRadius:9, fontSize:13 }}>
+                    <span style={{ fontSize:15, lineHeight:1.2 }}>{ikona}</span>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ color:barva, fontWeight:500, lineHeight:1.45 }}>{o.message}</div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        )}
 
         {/* LIMIT THERMOMETER (real, dynamic based on tax system) */}
         {(data.taxSystem === 'normirani_80' || data.taxSystem === 'normirani_40') && (
