@@ -790,7 +790,12 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
       // 1. Odpri naročilo
       const orderId = await pos.orders.openOrder({
         tableId: activeTable?.id,
-        customerId: activeCustomer?.id,
+        // POPRAVLJENO (21.8.2026): pri prodaji paketa je bila stranka izbrana
+        // v oknu paketa, ne na zaslonu Prodaja - `activeCustomer` je bil zato
+        // prazen in racun se NI vezal na stranko. V profilu je pisalo
+        // "Ni se nobenih nakupov" in PORABLJENO 0,00 EUR, ceprav je stranka
+        // kupila paket za 400 EUR.
+        customerId: (typeof open === 'object' && (open as any)?.customerId) || activeCustomer?.id,
         cashierId,
       })
 
@@ -1230,6 +1235,32 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         </div>
         <div style={{ padding:22, background:T.summaryBg, borderLeft:'1px solid rgba(0,0,0,0.06)', display:'flex', flexDirection:'column' }}>
           <div style={{ fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', color:T.muted, marginBottom:10 }}>Povzetek</div>
+
+          {/* DODANO (21.8.2026): SEZNAM POSTAVK. Prej sta bili prikazani samo
+              vrstici DDV in Skupaj - blagajnik pred potrditvijo ni videl, KAJ
+              potrjuje. Pri mesanem racunu z vec storitvami je bilo to slepo
+              potrjevanje zneska. */}
+          {(cart || []).length > 0 ? (
+            <div style={{ marginBottom:10, maxHeight:180, overflowY:'auto' }}>
+              {cart.map((l: any, i: number) => (
+                <div key={l.lineId || i} style={{ display:'flex', justifyContent:'space-between', gap:8, padding:'4px 0', fontSize:12, lineHeight:1.35 }}>
+                  <span style={{ flex:1, minWidth:0 }}>
+                    {Number(l.qty) > 1 && <span style={{ color:T.muted }}>{l.qty}× </span>}
+                    {l.name}
+                  </span>
+                  <span style={{ fontVariantNumeric:'tabular-nums', whiteSpace:'nowrap' }}>
+                    {eur(zesekVrstice(l))}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ marginBottom:10, fontSize:12, color:T.muted, lineHeight:1.4 }}>
+              Postavke niso na voljo — znesek je bil pripravljen drugje
+              (npr. prodaja paketa).
+            </div>
+          )}
+
           {discount > 0 && <SRow label={`Popust ${discount}%`} v={-total*discount/100}/>}
           {tipPct > 0 && <SRow label={`Napitnina ${tipPct}%`} v={total*tipPct/100}/>}
           <div style={{ marginTop:'auto', paddingTop:12, borderTop:'1px solid rgba(0,0,0,0.08)' }}>
@@ -2114,7 +2145,15 @@ ${cartDiscount > 0 ? `<div style="text-align:right;color:#666">Popust ${fmtPct(c
 <div class="total-row" style="text-align:right;font-size:18px;margin:12px 0">SKUPAJ: ${eur2(total)}</div>
 <div class="stamp">Predracun ni davčno potrjen. Velja do: ${new Date(Date.now()+7*86400000).toLocaleDateString('sl-SI')}</div>
 <div class="footer">${escapeHtml(pp.ime)} · www.racunko.si<br>Predracun izdan s sistemom RACUNKO</div>
-<script>window.addEventListener('load',function(){setTimeout(function(){window.print()},300)})</script>
+<!-- SPREMENJENO (21.8.2026): samodejni window.print() je odprl MODALNO okno
+     operacijskega sistema, ki blokira cel brskalnik, dokler ga uporabnik ne
+     zapre. Pri vsakem racunu je bil to odvecen klik, pri strankah brez
+     tiskalnika pa cista ovira. Zdaj je gumb - kdor tiska, klikne. -->
+<div style="position:fixed;top:0;left:0;right:0;padding:10px;background:#0D1F12;display:flex;gap:8px;justify-content:center" class="no-print">
+  <button onclick="window.print()" style="padding:9px 22px;border:0;border-radius:8px;background:#fff;color:#0D1F12;font-weight:700;font-size:14px;cursor:pointer">Natisni</button>
+  <button onclick="window.close()" style="padding:9px 22px;border:1px solid rgba(255,255,255,.35);border-radius:8px;background:transparent;color:#fff;font-weight:600;font-size:14px;cursor:pointer">Zapri</button>
+</div>
+<style>@media print{.no-print{display:none!important}}body{padding-top:56px}</style>
 </body></html>`
           const w = window.open('','_blank','width=800,height=900')
           if (w) { w.document.write(html); w.document.close() }
@@ -2203,7 +2242,15 @@ ${recipientHtml}
 </div>
 <div class="stamp">Ta predračun ni davčno potrjen račun.<br>Po plačilu izstavimo uradni davčni račun.</div>
 <div class="footer">${escapeHtml(pp.ime)}${pp.davcna ? ' · Davčna: ' + pp.davcna : ''}<br>Izdano s sistemom RAČUNKO · www.racunko.si</div>
-<script>window.addEventListener('load',function(){setTimeout(function(){window.print()},300)})</script>
+<!-- SPREMENJENO (21.8.2026): samodejni window.print() je odprl MODALNO okno
+     operacijskega sistema, ki blokira cel brskalnik, dokler ga uporabnik ne
+     zapre. Pri vsakem racunu je bil to odvecen klik, pri strankah brez
+     tiskalnika pa cista ovira. Zdaj je gumb - kdor tiska, klikne. -->
+<div style="position:fixed;top:0;left:0;right:0;padding:10px;background:#0D1F12;display:flex;gap:8px;justify-content:center" class="no-print">
+  <button onclick="window.print()" style="padding:9px 22px;border:0;border-radius:8px;background:#fff;color:#0D1F12;font-weight:700;font-size:14px;cursor:pointer">Natisni</button>
+  <button onclick="window.close()" style="padding:9px 22px;border:1px solid rgba(255,255,255,.35);border-radius:8px;background:transparent;color:#fff;font-weight:600;font-size:14px;cursor:pointer">Zapri</button>
+</div>
+<style>@media print{.no-print{display:none!important}}body{padding-top:56px}</style>
 </body></html>`
                 const w = window.open('','_blank','width=820,height=960')
                 if (w) { w.document.write(html); w.document.close() }
@@ -2955,7 +3002,14 @@ function CalendarScreen({ posData }) {
           booking={bookingModal}
           posData={posData}
           onClose={()=>setBookingModal(null)}
-          onSaved={()=>{ loadBookings(); setBookingModal(null) }}
+          onSaved={(datumTermina?: string)=>{
+            if (datumTermina) {
+              const d = new Date(datumTermina)
+              if (!isNaN(d.getTime())) setCurrentDate(d)   // skoci na dan termina
+            }
+            loadBookings()
+            setBookingModal(null)
+          }}
         />
       )}
     </div>
@@ -3049,6 +3103,42 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
         space_id: data.space_id || null,
       }
 
+      // DODANO (21.8.2026): opozorilo na ZASEDEN termin. Prej sta se dve
+      // rezervaciji ob isti uri pri istem izvajalcu ustvarili brez besede -
+      // uporabnik je izvedel sele, ko je videl dva termina drug ob drugem.
+      // Opozorilo je NEBLOKIRNO: dvojna rezervacija je vcasih namerna
+      // (skupinska vadba, dva terapevta v istem prostoru).
+      if (payload.staff_id && payload.start_at) {
+        const zacetek = new Date(payload.start_at)
+        const konec = new Date(zacetek.getTime() + Number(payload.duration_min || 60) * 60000)
+        const { data: obstojeci } = await createClient()
+          .from('bookings')
+          .select('id, start_at, duration_min, customer_name, customers(name)')
+          .eq('business_id', BUSINESS_ID)
+          .eq('staff_id', payload.staff_id)
+          .neq('status', 'cancelled')
+          .gte('start_at', new Date(zacetek.getTime() - 4 * 3600000).toISOString())
+          .lte('start_at', new Date(konec.getTime() + 4 * 3600000).toISOString())
+
+        const trki = (obstojeci || []).filter((b: any) => {
+          if (!isNew && b.id === booking.id) return false
+          const bZac = new Date(b.start_at).getTime()
+          const bKon = bZac + Number(b.duration_min || 60) * 60000
+          return zacetek.getTime() < bKon && konec.getTime() > bZac
+        })
+
+        if (trki.length > 0) {
+          const imena = trki
+            .map((b: any) => b.customers?.name || b.customer_name || 'termin')
+            .join(', ')
+          const ura = zacetek.toLocaleTimeString('sl-SI', { hour: '2-digit', minute: '2-digit' })
+          if (!confirm(
+            `Izvajalec ima ob ${ura} že ${trki.length === 1 ? 'termin' : trki.length + ' termine'}: ${imena}.\n\n`
+            + 'Želite kljub temu ustvariti rezervacijo?'
+          )) { setSaving(false); return }
+        }
+      }
+
       if (isNew) {
         const {error} = await createClient().from('bookings').insert(payload)
         if (error) throw error
@@ -3088,7 +3178,11 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
         }
       }
 
-      onSaved()
+      // DODANO (21.8.2026): sporocimo DATUM shranjenega termina, da koledar
+      // skoci nanj. Prej je uporabnik ustvaril termin za jutri, koledar pa je
+      // ostal na danes - videti je bilo, kot da rezervacija ni nastala, zato
+      // jo je vnesel se enkrat.
+      onSaved(data.start_at)
     } catch(e: any) {
       const sporocilo = String(e?.message || '').includes('idx_staff_pin')
         ? 'Ta PIN že uporablja druga oseba. Izberite drugega.'
@@ -5389,8 +5483,17 @@ function InventoryScreen({ posData }) {
                 </Field>
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-                <Field label="Nabavna cena (€)">
-                  <input type="number" step="0.01" onFocus={e=>e.target.select()} value={ingEditModal.cost_price??''} onChange={e=>setIngEditModal(p=>({...p,cost_price:e.target.value}))} style={vnosStil}/>
+                {/* POPRAVLJENO (21.8.2026): oznaka ni povedala, NA KATERO ENOTO
+                    se cena nanasa. Uporabnik je pri kavi v gramih vpisal 18
+                    (misljeno 18 EUR/kg), program pa je to razumel kot 18 EUR
+                    NA GRAM - vrednost zaloge 18.000 EUR namesto 18. */}
+                <Field label={`Nabavna cena (€ / ${ingEditModal.unit || 'enoto'})`}>
+                  <input type="number" step="0.0001" onFocus={e=>e.target.select()} value={ingEditModal.cost_price??''} onChange={e=>setIngEditModal(p=>({...p,cost_price:e.target.value}))} style={vnosStil}/>
+                  {ingEditModal.cost_price && ingEditModal.stock_qty ? (
+                    <div style={{ fontSize:10, color:T.muted, marginTop:3 }}>
+                      Vrednost zaloge: {eur(Number(ingEditModal.cost_price) * Number(ingEditModal.stock_qty || 0))}
+                    </div>
+                  ) : null}
                 </Field>
                 <Field label="Dobavitelj">
                   <input value={ingEditModal.supplier||''} onChange={e=>setIngEditModal(p=>({...p,supplier:e.target.value}))} style={vnosStil}/>
@@ -6234,7 +6337,27 @@ function ZReportModal({ posData, onClose }) {
     setLoading(true)
     const db = createClient()
     const today = new Date()
-    const from = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+
+    // POPRAVLJENO (21.8.2026): Z-porocilo je zajemalo CEL DAN, ne izmene.
+    // Ce si blagajno zakljucil dvakrat v istem dnevu, je drugo porocilo
+    // ponovilo ves promet prvega - podvojen davcni dokument. Zdaj izmena
+    // tece od zadnjega zakljucka naprej.
+    const { data: zadnjeZ } = await db
+      .from('z_reports')
+      .select('closed_at, cash_closing')
+      .eq('business_id', BUSINESS_ID)
+      .order('report_number', { ascending: false })
+      .limit(1)
+
+    const zacetekIzmene = zadnjeZ?.[0]?.closed_at
+      ? new Date(zadnjeZ[0].closed_at)
+      : new Date(today.getFullYear(), today.getMonth(), today.getDate())
+
+    // Prenos gotovine iz prejsnje izmene - doslej je vedno pisalo 0,00,
+    // ceprav je prejsnje porocilo prenos izrecno priporocilo.
+    const prenosIzPrejsnje = Number(zadnjeZ?.[0]?.cash_closing ?? 0)
+
+    const from = zacetekIzmene
     const to = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59)
 
     // Naloži naročila danes
@@ -6328,7 +6451,17 @@ function ZReportModal({ posData, onClose }) {
       totalRefunds,
       netRevenue: totalRevenue - totalRefunds,
       ddvPoStopnjah,
+      zacetekIzmene: zacetekIzmene.toISOString(),
+      prenosIzPrejsnje,
     })
+    // Prenos iz prejsnje izmene predlagamo kot zacetno gotovino - doslej je
+    // uporabnik moral vpisati sam, ceprav ga je prejsnje porocilo priporocilo.
+    if (prenosIzPrejsnje > 0 && cashOpening === '0') {
+      setCashOpening(String(prenosIzPrejsnje))
+    }
+    // POPRAVLJENO (21.8.2026): `carryOver` se ni NIKOLI nastavil, zato je
+    // vrstica "Prenos iz prejsnje izmene" vedno kazala 0,00.
+    setCarryOver(prenosIzPrejsnje)
     setLoading(false)
   }
 
@@ -7259,7 +7392,15 @@ ${voidEor ? `
   <div>AI knjigovodstvo za s.p.</div>
   <div style="font-weight:700">www.računko.si</div>
 </div>
-<script>window.addEventListener('load',function(){setTimeout(function(){window.print();setTimeout(function(){window.close()},1500)},100)})</script>
+<!-- SPREMENJENO (21.8.2026): samodejni window.print() je odprl MODALNO okno
+     operacijskega sistema, ki blokira cel brskalnik, dokler ga uporabnik ne
+     zapre. Pri vsakem racunu je bil to odvecen klik, pri strankah brez
+     tiskalnika pa cista ovira. Zdaj je gumb - kdor tiska, klikne. -->
+<div style="position:fixed;top:0;left:0;right:0;padding:10px;background:#0D1F12;display:flex;gap:8px;justify-content:center" class="no-print">
+  <button onclick="window.print()" style="padding:9px 22px;border:0;border-radius:8px;background:#fff;color:#0D1F12;font-weight:700;font-size:14px;cursor:pointer">Natisni</button>
+  <button onclick="window.close()" style="padding:9px 22px;border:1px solid rgba(255,255,255,.35);border-radius:8px;background:transparent;color:#fff;font-weight:600;font-size:14px;cursor:pointer">Zapri</button>
+</div>
+<style>@media print{.no-print{display:none!important}}body{padding-top:56px}</style>
 </body></html>`
 }
 
@@ -7288,7 +7429,15 @@ function buildRefundReceiptHTML({ order, refundAmount, reason, cashierName }) {
   <div class="brand">RAČUNKO</div>
   <div style="font-weight:700">www.računko.si</div>
 </div>
-<script>window.addEventListener('load',function(){setTimeout(function(){window.print();setTimeout(function(){window.close()},1500)},100)})</script>
+<!-- SPREMENJENO (21.8.2026): samodejni window.print() je odprl MODALNO okno
+     operacijskega sistema, ki blokira cel brskalnik, dokler ga uporabnik ne
+     zapre. Pri vsakem racunu je bil to odvecen klik, pri strankah brez
+     tiskalnika pa cista ovira. Zdaj je gumb - kdor tiska, klikne. -->
+<div style="position:fixed;top:0;left:0;right:0;padding:10px;background:#0D1F12;display:flex;gap:8px;justify-content:center" class="no-print">
+  <button onclick="window.print()" style="padding:9px 22px;border:0;border-radius:8px;background:#fff;color:#0D1F12;font-weight:700;font-size:14px;cursor:pointer">Natisni</button>
+  <button onclick="window.close()" style="padding:9px 22px;border:1px solid rgba(255,255,255,.35);border-radius:8px;background:transparent;color:#fff;font-weight:600;font-size:14px;cursor:pointer">Zapri</button>
+</div>
+<style>@media print{.no-print{display:none!important}}body{padding-top:56px}</style>
 </body></html>`
 }
 
@@ -10339,8 +10488,19 @@ function SestavineSection({ posData }) {
             <Field label="Minimalna zaloga (opozorilo)">
               <input type="number" onFocus={e => e.target.select()} min="0" step="0.01" value={modal?.min_stock||0} onChange={e=>setModal(p=>({...p,min_stock:e.target.value}))} style={inp}/>
             </Field>
-            <Field label="Nabavna cena (€)">
-              <input type="number" onFocus={e => e.target.select()} min="0" step="0.01" value={modal?.cost_price||''} onChange={e=>setModal(p=>({...p,cost_price:e.target.value}))} placeholder="0.00" style={inp}/>
+            {/* POPRAVLJENO (21.8.2026): oznaka ni povedala, NA KATERO ENOTO se
+                cena nanasa. Pri kavi v gramih je uporabnik vpisal 18 (misljeno
+                18 EUR/kg), program pa je to razumel kot 18 EUR NA GRAM -
+                vrednost zaloge je pokazala 18.000 EUR namesto 18. */}
+            <Field label={`Nabavna cena (€ za 1 ${modal?.unit || 'enoto'})`}>
+              <input type="number" onFocus={e => e.target.select()} min="0" step="0.0001" value={modal?.cost_price||''} onChange={e=>setModal(p=>({...p,cost_price:e.target.value}))} placeholder="0.0000" style={inp}/>
+              {Number(modal?.cost_price) > 0 && (
+                <div style={{ fontSize:10, color:T.muted, marginTop:3, lineHeight:1.4 }}>
+                  {Number(modal?.stock_qty) > 0
+                    ? <>Vrednost zaloge: <strong>{eur(Number(modal.cost_price) * Number(modal.stock_qty))}</strong></>
+                    : <>Cena za 1 {modal?.unit || 'enoto'}. Pri kilogramu za 18 € in enoti <strong>g</strong> vpišite 0,018.</>}
+                </div>
+              )}
             </Field>
           </div>
           <Field label="Dobavitelj (neobvezno)">
@@ -11803,6 +11963,7 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
       setVOzadju(true)   // skrij to okno, da placilo ni pod njim (21.8.2026)
       setPaymentOpen({
         discount: 0,
+        customerId,          // veze racun na stranko (21.8.2026)
         splitLines: [firstLine],
         onSplitPaid: async () => {
           try {
@@ -11855,6 +12016,7 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
       setVOzadju(true)   // skrij to okno, da placilo ni pod njim (21.8.2026)
       setPaymentOpen({
         discount: 0,
+        customerId,          // veze racun na stranko (21.8.2026)
         splitLines: [pkgLine],
         onSplitPaid: async () => {
           try {

@@ -289,11 +289,14 @@ export async function buildReceiptHTML(d: ReceiptData): Promise<string> {
     <div>AI knjigovodstvo za s.p.</div>
     <div class="url">www.racunko.si</div>
   </div>
-  <script>
-    window.addEventListener('load', function() {
-      setTimeout(function() { window.print(); setTimeout(function() { window.close(); }, 1500); }, 100);
-    });
-  </script>
+  <!-- SPREMENJENO (21.8.2026): samodejni window.print() je odprl MODALNO okno
+       operacijskega sistema, ki blokira cel brskalnik. Pri vsakem racunu je
+       bil to odvecen klik, pri strankah brez tiskalnika pa ovira. -->
+  <div class="no-print" style="position:fixed;top:0;left:0;right:0;padding:10px;background:#0D1F12;display:flex;gap:8px;justify-content:center">
+    <button onclick="window.print()" style="padding:9px 22px;border:0;border-radius:8px;background:#fff;color:#0D1F12;font-weight:700;font-size:14px;cursor:pointer">Natisni</button>
+    <button onclick="window.close()" style="padding:9px 22px;border:1px solid rgba(255,255,255,.35);border-radius:8px;background:transparent;color:#fff;font-weight:600;font-size:14px;cursor:pointer">Zapri</button>
+  </div>
+  <style>@media print{.no-print{display:none!important}}body{padding-top:56px}</style>
 </body>
 </html>`
 }

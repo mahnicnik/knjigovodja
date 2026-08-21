@@ -691,3 +691,116 @@ test('kartica: prihodek se ne sme šteti dvakrat', () => {
   expect(dodatniPrihodek).toBe(0)
   expect(prodaja + dodatniPrihodek).toBe(400)   // NE 800
 })
+
+// ─── Z-poročilo: obseg izmene ───────────────────────────────────────────
+
+/**
+ * Z-poročilo je zajemalo CEL DAN. Če si blagajno zaključil dvakrat v istem
+ * dnevu, je drugo poročilo ponovilo ves promet prvega — podvojen davčni
+ * dokument. Izmena mora teči od zadnjega zaključka naprej.
+ */
+function obsegIzmene(
+  zadnjiZaključek: string | null,
+  danes: Date,
+): { od: Date; do: Date } {
+  const od = zadnjiZaključek
+    ? new Date(zadnjiZaključek)
+    : new Date(danes.getFullYear(), danes.getMonth(), danes.getDate())
+  const doKdaj = new Date(danes.getFullYear(), danes.getMonth(), danes.getDate(), 23, 59, 59)
+  return { od, do: doKdaj }
+}
+
+function prometVObsegu(
+  narocila: Array<{ closed_at: string; total: number }>,
+  obseg: { od: Date; do: Date },
+): number {
+  return narocila
+    .filter(o => {
+      const t = new Date(o.closed_at).getTime()
+      return t >= obseg.od.getTime() && t <= obseg.do.getTime()
+    })
+    .reduce((s, o) => s + o.total, 0)
+}
+
+test('Z-poročilo: druga izmena ne ponovi prometa prve', () => {
+  const danes = new Date(2026, 7, 21, 20, 0)
+  const narocila = [
+    { closed_at: '2026-08-21T09:00:00', total: 100 },   // prva izmena
+    { closed_at: '2026-08-21T11:00:00', total: 200 },   // prva izmena
+    { closed_at: '2026-08-21T15:00:00', total: 50 },    // druga izmena
+  ]
+
+  const prva = obsegIzmene(null, danes)
+  expect(prometVObsegu(narocila, prva)).toBe(350)  // pred zaključkom: vse
+
+  // Prva izmena zaključena ob 13:00.
+  const druga = obsegIzmene('2026-08-21T13:00:00', danes)
+  expect(prometVObsegu(narocila, druga)).toBe(50)  // NE 350
+})
+
+test('Z-poročilo: prva izmena dneva teče od polnoči', () => {
+  const danes = new Date(2026, 7, 21, 20, 0)
+  const o = obsegIzmene(null, danes)
+  expect(o.od.getHours()).toBe(0)
+  expect(o.od.getDate()).toBe(21)
+})
+
+test('Z-poročilo: prenos gotovine se predlaga kot začetno stanje', () => {
+  // Prej je vedno pisalo 0,00, čeprav je prejšnje poročilo prenos priporočilo.
+  const zadnjeZ = { cash_closing: 545 }
+  const prenos = Number(zadnjeZ?.cash_closing ?? 0)
+  expect(prenos).toBe(545)
+
+  const brezPrejsnje = Number((null as any)?.cash_closing ?? 0)
+  expect(brezPrejsnje).toBe(0)
+})
+
+// ─── Nabavna cena surovine ──────────────────────────────────────────────
+
+test('surovina: cena je NA ENOTO, ne na pakiranje', () => {
+  // NAPAKA (popravljeno 21.8.2026): oznaka ni povedala enote. Uporabnik je
+  // pri kavi v gramih vpisal 18 (mišljeno 18 €/kg), program pa je to razumel
+  // kot 18 € NA GRAM — vrednost zaloge 18.000 € namesto 18.
+  const vrednost = (zaloga: number, cenaNaEnoto: number) => zaloga * cenaNaEnoto
+
+  expect(vrednost(1000, 18)).toBe(18000)      // kar se je zgodilo
+  expect(vrednost(1000, 0.018)).toBeCloseTo(18, 2)  // kar je pravilno
+})
+
+// ─── Prekrivanje terminov ───────────────────────────────────────────────
+
+function najdiTrke(
+  nov: { start: number; trajanje: number; staff: string },
+  obstojeci: Array<{ id: string; start: number; trajanje: number; staff: string }>,
+) {
+  const konec = nov.start + nov.trajanje
+  return obstojeci.filter(b => {
+    if (b.staff !== nov.staff) return false          // drug izvajalec ni trk
+    const bKonec = b.start + b.trajanje
+    return nov.start < bKonec && konec > b.start
+  })
+}
+
+test('termin: trk pri ISTEM izvajalcu se zazna', () => {
+  const trki = najdiTrke(
+    { start: 600, trajanje: 60, staff: 'nik' },
+    [{ id: 'a', start: 600, trajanje: 60, staff: 'nik' }],
+  )
+  expect(trki).toHaveLength(1)
+})
+
+test('termin: isti čas pri DRUGEM izvajalcu ni trk', () => {
+  const trki = najdiTrke(
+    { start: 600, trajanje: 60, staff: 'nik' },
+    [{ id: 'a', start: 600, trajanje: 60, staff: 'ana' }],
+  )
+  expect(trki).toHaveLength(0)
+})
+
+test('termin: zaporedna termina brez presledka nista trk', () => {
+  const trki = najdiTrke(
+    { start: 660, trajanje: 60, staff: 'nik' },      // 11:00–12:00
+    [{ id: 'a', start: 600, trajanje: 60, staff: 'nik' }],  // 10:00–11:00
+  )
+  expect(trki).toHaveLength(0)
+})

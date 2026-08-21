@@ -142,16 +142,18 @@ function footer(): string {
     </div>`
 }
 
+/**
+ * SPREMENJENO (21.8.2026): prej samodejni `window.print()`, ki je odprl
+ * MODALNO okno operacijskega sistema in blokiral cel brskalnik, dokler ga
+ * uporabnik ni zaprl. Zdaj gumb — kdor tiska, klikne.
+ */
 function autoprint(): string {
   return `
-    <script>
-      window.addEventListener('load', function() {
-        setTimeout(function() {
-          window.print();
-          setTimeout(function() { window.close(); }, 1500);
-        }, 100);
-      });
-    </script>`
+    <div class="no-print" style="position:fixed;top:0;left:0;right:0;padding:10px;background:#0D1F12;display:flex;gap:8px;justify-content:center">
+      <button onclick="window.print()" style="padding:9px 22px;border:0;border-radius:8px;background:#fff;color:#0D1F12;font-weight:700;font-size:14px;cursor:pointer">Natisni</button>
+      <button onclick="window.close()" style="padding:9px 22px;border:1px solid rgba(255,255,255,.35);border-radius:8px;background:transparent;color:#fff;font-weight:600;font-size:14px;cursor:pointer">Zapri</button>
+    </div>
+    <style>@media print{.no-print{display:none!important}}body{padding-top:56px}</style>`
 }
 
 function wrapHtml(title: string, body: string): string {
