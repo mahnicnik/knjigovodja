@@ -432,3 +432,38 @@ test('storno: brez podatka o vrsti bi se surovine NE vrnile', () => {
   expect(Object.keys(r.surovine)).toHaveLength(0)
   expect(r.artikli.vino1dl).toBe(7)  // napačno — zato iščemo vrsto v katalogu
 })
+
+// ─── Paketi: stopnja DDV ────────────────────────────────────────────────
+
+/** Vrstica za plačilo, ki nastane ob prodaji paketa. */
+function vrsticaPaketa(template: { name: string; price: number; vat_rate?: number | null }) {
+  return {
+    name: template.name,
+    price: Number(template.price || 0),
+    qty: 1,
+    vat_rate: Number(template.vat_rate ?? 22),
+  }
+}
+
+test('paket: oproščen paket NE sme dobiti 22 %', () => {
+  // NAPAKA (popravljeno 21.8.2026): stopnja je bila trdo zapisana na 22.
+  // Paket "10× fizioterapija" z 0 % je na računu dobil 81,15 € DDV —
+  // napačen davčni dokument, poslan tudi FURS.
+  const v = vrsticaPaketa({ name: '10× fizioterapija', price: 450, vat_rate: 0 })
+  expect(v.vat_rate).toBe(0)
+
+  const ddv = v.price - v.price / (1 + v.vat_rate / 100)
+  expect(ddv).toBeCloseTo(0, 2)   // NE 81,15
+})
+
+test('paket: članarina po 22 % ostane 22 %', () => {
+  const v = vrsticaPaketa({ name: 'Mesečna vadba', price: 45, vat_rate: 22 })
+  expect(v.vat_rate).toBe(22)
+  expect(v.price - v.price / 1.22).toBeCloseTo(8.11, 2)
+})
+
+test('paket: brez določene stopnje privzame 22 %, 0 pa ostane 0', () => {
+  expect(vrsticaPaketa({ name: 'x', price: 10 }).vat_rate).toBe(22)
+  expect(vrsticaPaketa({ name: 'x', price: 10, vat_rate: null }).vat_rate).toBe(22)
+  expect(vrsticaPaketa({ name: 'x', price: 10, vat_rate: 0 }).vat_rate).toBe(0)
+})

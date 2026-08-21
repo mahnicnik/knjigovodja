@@ -11438,6 +11438,10 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
   const [firstInstallmentPayNow, setFirstInstallmentPayNow] = useState(false)
   const [installmentCount, setInstallmentCount] = useState(6)
   const [installmentFrequency, setInstallmentFrequency] = useState('monthly')
+  // DODANO (21.8.2026): ko se odpre placilno okno, se to okno SKRIJE. Prej se
+  // je placilo odprlo POD njim in je bilo nedosegljivo - uporabnik je moral
+  // gornje okno rocno zapreti z X, sicer je obtical.
+  const [vOzadju, setVOzadju] = useState(false)
   const [firstDueDate, setFirstDueDate] = useState(lokalniDatum())
   const tconf = TEMPLATE_TYPES[template.template_type||'visits'] || TEMPLATE_TYPES.visits
 
@@ -11510,7 +11514,8 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
         installment_number: i + 1,
         due_date: lokalniDatum(due),
         amount: perInstallment,
-        vat_rate: 22,
+        // Enako kot zgoraj: stopnja iz paketa, ne pavsalnih 22 % (21.8.2026).
+        vat_rate: Number(template.vat_rate ?? 22),
         // Ce je prvi obrok ze placan na blagajni (firstAlreadyPaid), ga oznacimo
         // kot 'paid' takoj - e-mail/cron sistem ga preskoci, ker filtrira po status='pending'.
         status: (firstAlreadyPaid && i === 0) ? 'paid' : 'pending',
@@ -11554,8 +11559,15 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
         name: `${template.name} - 1. obrok`,
         price: perInstallment,
         qty: 1,
-        vat_rate: 22,
+        // POPRAVLJENO (21.8.2026): stopnja je bila TRDO ZAPISANA na 22 %,
+        // zato je bila izbira pri paketu ignorirana. Paket "10x fizioterapija"
+        // z 0 % (oproscena zdravstvena storitev) je na racunu dobil 81,15 EUR
+        // DDV - napacen davcni dokument, poslan tudi FURS.
+        vat_rate: Number(template.vat_rate ?? 22),
+        vat_exemption_code: template.vat_exemption_code || null,
+        vat_exemption_custom_text: template.vat_exemption_custom_text || null,
       }
+      setVOzadju(true)   // skrij to okno, da placilo ni pod njim (21.8.2026)
       setPaymentOpen({
         discount: 0,
         splitLines: [firstLine],
@@ -11599,8 +11611,15 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
         name: template.name,
         price: Number(template.price || 0),
         qty: 1,
-        vat_rate: 22,
+        // POPRAVLJENO (21.8.2026): stopnja je bila TRDO ZAPISANA na 22 %,
+        // zato je bila izbira pri paketu ignorirana. Paket "10x fizioterapija"
+        // z 0 % (oproscena zdravstvena storitev) je na racunu dobil 81,15 EUR
+        // DDV - napacen davcni dokument, poslan tudi FURS.
+        vat_rate: Number(template.vat_rate ?? 22),
+        vat_exemption_code: template.vat_exemption_code || null,
+        vat_exemption_custom_text: template.vat_exemption_custom_text || null,
       }
+      setVOzadju(true)   // skrij to okno, da placilo ni pod njim (21.8.2026)
       setPaymentOpen({
         discount: 0,
         splitLines: [pkgLine],
@@ -11639,7 +11658,7 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
   }
 
   return (
-    <Modal open={true} onClose={onClose} width={500}>
+    <Modal open={!vOzadju} onClose={onClose} width={500}>
       <ModalHeader title={`Prodaj: ${template.name}`} onClose={onClose}/>
       <div style={{ padding:'20px 22px', display:'flex', flexDirection:'column', gap:14 }}>
 
