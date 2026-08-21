@@ -102,3 +102,38 @@ if (opozorila.length > 0) {
   opozorila.forEach(o => console.log('  ! ' + o));
   console.log('\n  (Če gre za surovino ali inventuro, je uporaba pravilna — to je le opozorilo.)');
 }
+
+// ─── Nedefinirana imena v blagajni ────────────────────────────────────
+//
+// `app/pos/page.tsx` ima `@ts-nocheck`, zato prevajalnik NE javi nedefiniranih
+// spremenljivk. To je 21.8.2026 povzročilo tri sesutja v produkciji:
+// "brisCust is not defined" (rezervacije), "stats is not defined" (zaključek
+// blagajne, bela stran) in "db is not defined" (tiskanje računa).
+//
+// Ta preverba začasno odstrani `@ts-nocheck` in poišče SAMO napake TS2304
+// (neznano ime). Ostale tipske neskladnosti pusti pri miru — teh je še ~380
+// in niso vzrok sesutij.
+const { execSync } = require('child_process');
+const posPot = 'apps/web/app/pos/page.tsx';
+
+if (fs.existsSync(posPot)) {
+  const izvirnik = fs.readFileSync(posPot, 'utf8');
+  try {
+    fs.writeFileSync(posPot, izvirnik.replace(/^\/\/ @ts-nocheck/, '// (preverjanje)'));
+    let izpis = '';
+    try {
+      execSync('npx tsc --noEmit', { cwd: 'apps/web', stdio: 'pipe' });
+    } catch (e) {
+      izpis = (e.stdout || '').toString();
+    }
+    const neznana = izpis.split('\n').filter(v => v.includes('TS2304'));
+    if (neznana.length > 0) {
+      console.log(`\nNEDEFINIRANA IMENA V BLAGAJNI (${neznana.length}) — vsako je možno sesutje:\n`);
+      neznana.forEach(v => console.log('  ✗ ' + v.trim()));
+    } else {
+      console.log('\nNedefiniranih imen v blagajni ni.');
+    }
+  } finally {
+    fs.writeFileSync(posPot, izvirnik);   // vedno vrni izvirnik
+  }
+}

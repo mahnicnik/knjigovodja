@@ -467,3 +467,167 @@ test('paket: brez določene stopnje privzame 22 %, 0 pa ostane 0', () => {
   expect(vrsticaPaketa({ name: 'x', price: 10, vat_rate: null }).vat_rate).toBe(22)
   expect(vrsticaPaketa({ name: 'x', price: 10, vat_rate: 0 }).vat_rate).toBe(0)
 })
+
+// ─── Koledar: prekrivajoči termini ──────────────────────────────────────
+
+/**
+ * Prekrivajoči termini so se risali eden ČEZ drugega (vsi polna širina),
+ * zato sta bila dva termina ob isti uri videti kot en sam.
+ */
+function razporediVStolpce(termini: Array<{ id: string; start: number; trajanje: number }>) {
+  const konec = (b: any) => b.start + b.trajanje
+  const urejeni = [...termini].sort((a, b) => a.start - b.start)
+  const skupine: any[][] = []
+  for (const b of urejeni) {
+    const g = skupine.find(g => g.some(x => b.start < konec(x) && konec(b) > x.start))
+    if (g) g.push(b)
+    else skupine.push([b])
+  }
+  const lega: Record<string, { stolpec: number; skupno: number }> = {}
+  for (const g of skupine) g.forEach((b, i) => { lega[b.id] = { stolpec: i, skupno: g.length } })
+  return lega
+}
+
+test('koledar: dva termina ob isti uri dobita vsak svoj stolpec', () => {
+  const l = razporediVStolpce([
+    { id: 'a', start: 540, trajanje: 60 },  // 9:00–10:00
+    { id: 'b', start: 540, trajanje: 60 },  // 9:00–10:00
+  ])
+  expect(l.a.skupno).toBe(2)
+  expect(l.b.skupno).toBe(2)
+  expect(l.a.stolpec).not.toBe(l.b.stolpec)
+})
+
+test('koledar: termina, ki se ne prekrivata, ostaneta polna širina', () => {
+  const l = razporediVStolpce([
+    { id: 'a', start: 540, trajanje: 60 },   // 9:00–10:00
+    { id: 'b', start: 660, trajanje: 60 },   // 11:00–12:00
+  ])
+  expect(l.a.skupno).toBe(1)
+  expect(l.b.skupno).toBe(1)
+})
+
+test('koledar: delno prekrivanje šteje kot prekrivanje', () => {
+  const l = razporediVStolpce([
+    { id: 'a', start: 540, trajanje: 60 },   // 9:00–10:00
+    { id: 'b', start: 570, trajanje: 60 },   // 9:30–10:30
+  ])
+  expect(l.a.skupno).toBe(2)
+})
+
+test('koledar: termin, ki se konča točno ob začetku naslednjega, se NE prekriva', () => {
+  const l = razporediVStolpce([
+    { id: 'a', start: 540, trajanje: 60 },   // 9:00–10:00
+    { id: 'b', start: 600, trajanje: 60 },   // 10:00–11:00
+  ])
+  expect(l.a.skupno).toBe(1)
+})
+
+// ─── Časovni pas v obrazcu ──────────────────────────────────────────────
+
+function zaVnos(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+test('obrazec: polje kaže LOKALNI čas, ne UTC', () => {
+  // NAPAKA (popravljeno 21.8.2026): uporabljen `toISOString()`, ki vrne UTC.
+  // Termin ob 9:00 se je v obrazcu pokazal kot 7:00 — in če je uporabnik
+  // karkoli spremenil, se je premaknil za dve uri nazaj.
+  //
+  // Test mora delovati v VSAKEM časovnem pasu (na strežniku je pogosto UTC,
+  // pri uporabniku pa CEST), zato ne primerjamo s trdo zapisanim nizom,
+  // ampak z uro, ki jo pokaže sam datum.
+  const d = new Date(2026, 7, 22, 9, 0)  // 22.8.2026 ob 9:00 po lokalnem času
+  const rezultat = zaVnos(d)
+
+  expect(rezultat.slice(11, 13)).toBe(String(d.getHours()).padStart(2, '0'))
+  expect(rezultat.slice(0, 10)).toBe('2026-08-22')
+})
+
+test('obrazec: pretvorba v UTC bi uro premaknila (v pasu z odmikom)', () => {
+  // Dokumentira, ZAKAJ ne smemo uporabiti toISOString(): v pasu z odmikom
+  // se ura razlikuje. V UTC okolju sta zapisa enaka, zato test preverja
+  // le, da naša pretvorba sledi LOKALNI uri, ne glede na okolje.
+  const d = new Date(2026, 7, 22, 9, 0)
+  const odmikMin = d.getTimezoneOffset()
+  const utcUra = d.toISOString().slice(11, 13)
+  const nasaUra = zaVnos(d).slice(11, 13)
+
+  if (odmikMin !== 0) {
+    expect(nasaUra).not.toBe(utcUra)   // pas z odmikom: zapisa se RAZLIKUJETA
+  } else {
+    expect(nasaUra).toBe(utcUra)       // UTC okolje: enaka sta upravičeno
+  }
+})
+
+// ─── Z-poročilo: DDV po stopnjah ────────────────────────────────────────
+
+/**
+ * Z-poročilo je davčni dokument dnevnega zaključka. Doslej razčlenitve DDV
+ * sploh ni imelo — ne v prikazu ne v bazi, čeprav stolpci obstajajo.
+ */
+function ddvPoStopnjah(
+  narocila: Array<{ postavke: Array<{ total: number; vat_rate: number; voided?: boolean }> }>,
+) {
+  const m = new Map<number, { osnova: number; ddv: number }>()
+  for (const o of narocila) {
+    for (const l of o.postavke) {
+      if (l.voided) continue
+      const stopnja = Number(l.vat_rate ?? 22)
+      const osnova = stopnja > 0 ? l.total / (1 + stopnja / 100) : l.total
+      const v = m.get(stopnja) || { osnova: 0, ddv: 0 }
+      v.osnova += osnova
+      v.ddv += l.total - osnova
+      m.set(stopnja, v)
+    }
+  }
+  const z = (n: number) => Math.round(n * 100) / 100
+  return Array.from(m.entries())
+    .map(([stopnja, v]) => ({ stopnja, osnova: z(v.osnova), ddv: z(v.ddv) }))
+    .sort((a, b) => b.stopnja - a.stopnja)
+}
+
+test('Z-poročilo: oproščen in obdavčen promet sta ločena', () => {
+  const r = ddvPoStopnjah([
+    { postavke: [
+      { total: 50, vat_rate: 0 },      // fizioterapija, oproščena
+      { total: 30, vat_rate: 22 },     // masaža
+    ]},
+  ])
+  expect(r).toHaveLength(2)
+
+  const nicelna = r.find(v => v.stopnja === 0)!
+  expect(nicelna.osnova).toBeCloseTo(50, 2)
+  expect(nicelna.ddv).toBeCloseTo(0, 2)
+
+  const splosna = r.find(v => v.stopnja === 22)!
+  expect(splosna.osnova).toBeCloseTo(24.59, 2)
+  expect(splosna.ddv).toBeCloseTo(5.41, 2)
+})
+
+test('Z-poročilo: stornirane postavke se ne štejejo', () => {
+  const r = ddvPoStopnjah([
+    { postavke: [
+      { total: 100, vat_rate: 22 },
+      { total: 70, vat_rate: 22, voided: true },
+    ]},
+  ])
+  expect(r[0].osnova).toBeCloseTo(81.97, 2)   // samo 100, ne 170
+})
+
+test('Z-poročilo: ista stopnja iz več računov se sešteje', () => {
+  const r = ddvPoStopnjah([
+    { postavke: [{ total: 61, vat_rate: 22 }] },
+    { postavke: [{ total: 61, vat_rate: 22 }] },
+  ])
+  expect(r).toHaveLength(1)
+  expect(r[0].ddv).toBeCloseTo(22, 1)
+})
+
+test('Z-poročilo: 9,5 % se ne zaokroži na 22 %', () => {
+  const r = ddvPoStopnjah([{ postavke: [{ total: 10.95, vat_rate: 9.5 }] }])
+  expect(r[0].stopnja).toBe(9.5)
+  expect(r[0].osnova).toBeCloseTo(10, 2)
+  expect(r[0].ddv).toBeCloseTo(0.95, 2)
+})

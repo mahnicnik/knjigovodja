@@ -899,13 +899,14 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         // bil ta seznam VEDNO prazen in normativi se niso odsteli nikoli -
         // brez sledi. Ce vrstica vrste nima, jo poiscemo v katalogu; ce je
         // recept in normativa ni, to zabelezimo, da napaka ne ostane tiha.
+        // POPRAVLJENO (21.8.2026): varovalka iz preleta 70 je uporabljala
+        // `posData`, ki ga ta komponenta NE prejme - ob vrstici brez
+        // `item_type` bi vrgla "posData is not defined" sredi placila.
+        // Kosarica zdaj vrsto vedno nosi (prelet 70), zato zadosca preverba,
+        // manjkajoco vrsto pa le zabelezimo.
         const recepti = cart.filter(l => {
           if (l.item_type) return l.item_type === 'recipe'
-          const kat = posData.items.find(x => x.id === l.id)
-          if (kat?.item_type === 'recipe') {
-            console.warn('Vrstica brez item_type, prepoznana kot recept:', l.name)
-            return true
-          }
+          console.warn('Vrstica brez item_type — normativi zanjo ne bodo odsteti:', l.name)
           return false
         })
         if (recepti.length > 0) {
@@ -1236,7 +1237,10 @@ async function autoPrint(data) {
   try {
     const html = await buildReceiptHTML({
       org: data.org || {
-        name: posData?.businessName || 'Blagajna',
+        // POPRAVLJENO (21.8.2026): `posData?.` NE prepreci napake, ce ime
+        // sploh ni definirano - vrze "posData is not defined". Ta komponenta
+        // ga ne prejme, ime podjetja pa je ze v `data.org`.
+        name: 'Blagajna',
         address: '',
         city: '',
         post_code: '',
@@ -2756,18 +2760,46 @@ function CalendarScreen({ posData }) {
                     ))}
 
                     {/* Rezervacije */}
-                    {colBookings.map(b => {
+                    {(() => {
+                      // DODANO (21.8.2026): PREKRIVAJOCI termini so se risali
+                      // eden CEZ drugega (vsi left:2, right:2), zato je bil
+                      // viden samo zadnji - dva termina ob isti uri sta
+                      // izgledala kot en sam. Zdaj se razdelijo v stolpce.
+                      const zacetek = (b: any) => new Date(b.start_at).getTime()
+                      const konec = (b: any) => zacetek(b) + Number(b.duration_min || 60) * 60000
+
+                      // Sestavi skupine terminov, ki se med sabo prekrivajo.
+                      const urejeni = [...colBookings].sort((a, b) => zacetek(a) - zacetek(b))
+                      const skupine: any[][] = []
+                      for (const b of urejeni) {
+                        const skupina = skupine.find(g => g.some(x => zacetek(b) < konec(x) && konec(b) > zacetek(x)))
+                        if (skupina) skupina.push(b)
+                        else skupine.push([b])
+                      }
+
+                      // Vsakemu terminu dolocimo stolpec znotraj njegove skupine.
+                      const lega = new Map<string, { stolpec: number; skupno: number }>()
+                      for (const g of skupine) {
+                        g.forEach((b, i) => lega.set(b.id, { stolpec: i, skupno: g.length }))
+                      }
+                      return colBookings.map(b => {
                       const {top, height} = bookingPos(b)
                       const ss = statusStyle(b.status)
                       const svc = b.services
                       const cust = b.customers
+                      const l = lega.get(b.id) || { stolpec: 0, skupno: 1 }
+                      const sirinaPct = 100 / l.skupno
                       return (
                         <div key={b.id}
                           draggable
                           onDragStart={e => { setDraggingId(b.id); e.dataTransfer.effectAllowed='move' }}
                           onDragEnd={() => setDraggingId(null)}
                           onClick={()=>setBookingModal(b)}
-                          style={{ position:'absolute', top, left:2, right:2, height:height-2, borderRadius:7, background:svc?.color?svc.color+'25':ss.bg, border:'2px solid '+(svc?.color||ss.border), cursor:'grab', overflow:'hidden', padding:'3px 7px', zIndex:1, opacity:draggingId===b.id?0.5:1 }}>
+                          title={l.skupno > 1 ? `${l.skupno} termina ob istem času` : undefined}
+                          style={{ position:'absolute', top, height:height-2, borderRadius:7,
+                            left: `calc(${l.stolpec * sirinaPct}% + 2px)`,
+                            width: `calc(${sirinaPct}% - 4px)`,
+                            background:svc?.color?svc.color+'25':ss.bg, border:'2px solid '+(svc?.color||ss.border), cursor:'grab', overflow:'hidden', padding:'3px 7px', zIndex:1, opacity:draggingId===b.id?0.5:1 }}>
                           <div style={{ fontWeight:700, fontSize:11, color:svc?.color||ss.text, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
                             {cust?.name || b.customer_name || 'Neznana stranka'}
                           </div>
@@ -2787,7 +2819,8 @@ function CalendarScreen({ posData }) {
                           )}
                         </div>
                       )
-                    })}
+                    })
+                    })()}
 
                     {/* Trenutni čas indikator */}
                     {isToday(colDate) && (() => {
@@ -2822,6 +2855,22 @@ function CalendarScreen({ posData }) {
 }
 
 // ─── Booking Modal ─────────────────────────────────────────────
+/**
+ * Pretvori datum v obliko za polje `datetime-local`, ki pricakuje LOKALNI cas.
+ *
+ * NAPAKA (popravljeno 21.8.2026): uporabljen je bil `toISOString()`, ki vrne
+ * UTC. Rezervacija ob 9:00 se je v obrazcu pokazala kot 7:00, in ce je
+ * uporabnik karkoli spremenil ter shranil, se je termin PREMAKNIL za dve uri
+ * nazaj - tiho, ob vsakem urejanju.
+ */
+function zaVnosDatumaCasa(d: Date | string | null | undefined): string {
+  const dt = d ? new Date(d) : new Date()
+  if (isNaN(dt.getTime())) return ''
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`
+    + `T${p(dt.getHours())}:${p(dt.getMinutes())}`
+}
+
 function BookingModal({ booking, posData, onClose, onSaved }) {
   const isNew = !booking.id
   const [data, setData] = useState({
@@ -2829,7 +2878,7 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
     customer_name: booking.customer_name || '',
     staff_id: booking.staff_id || '',
     service_id: booking.service_id || '',
-    start_at: booking.start_at ? new Date(booking.start_at).toISOString().slice(0,16) : new Date().toISOString().slice(0,16),
+    start_at: zaVnosDatumaCasa(booking.start_at),
     duration_min: booking.duration_min || 60,
     status: booking.status || 'scheduled',
     note: booking.note || '',
@@ -2895,7 +2944,6 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
       if (isNew) {
         const {error} = await createClient().from('bookings').insert(payload)
         if (error) throw error
-      if (!brisCust || brisCust.length === 0) throw new Error('Stranka ni bila izbrisana — nimate pravic ali je bila že odstranjena.')
       } else {
         const {error} = await createClient().from('bookings').update(payload).eq('id', booking.id)
         if (error) throw error
@@ -2925,7 +2973,7 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
                   ${data.duration_min ? ` · ${data.duration_min} min` : ''}
                 </div>
                 <p>V primeru odpovedi nas prosimo obvestite vsaj 24 ur vnaprej.</p>
-                <p>Lep pozdrav,<br/><b>${escapeHtml(pp.ime)}</b></p>
+                <p>Lep pozdrav,<br/><b>${escapeHtml(posData?.businessName || 'Ekipa')}</b></p>
               </div>`
             })
           }).catch(()=>{})
@@ -3430,9 +3478,9 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
             {activeTab === 'uredi' && (
               <CustomerProfileEditTab customer={selected} onSave={()=>{posData.refresh();setSelectedId(s=>s)}}/>
             )}
-            {activeTab === 'klinicno' && (
-              <CustomerClinicalTab customer={selected} posData={posData}/>
-            )}
+            {/* ODSTRANJENO (21.8.2026): sklic na komponento CustomerClinicalTab,
+                ki NE OBSTAJA. Zavihka "klinicno" se sicer nikjer ne da izbrati,
+                zato se ni sesulo - a bi se, cim bi ga kdo dodal med zavihke. */}
           </div>
         </div>
       )}
@@ -3662,6 +3710,14 @@ function CustomerProfileEditTab({ customer, onSave }) {
     try {
       // `.select()`: Supabase NE javi napake, ce brisanje ne zadene nobene vrstice (20.8.2026).
       const { data: brisCust, error } = await createClient().from('customers').delete().eq('id', customer.id).select('id')
+      // POPRAVLJENO (21.8.2026): to preverjanje je ob preletu 66 pomotoma
+      // pristalo v shranjevanju REZERVACIJE - vzorec "if (error) throw error"
+      // se je ujel na napacnem mestu v datoteki. Posledica: ob vsaki novi
+      // rezervaciji je JS vrgel "brisCust is not defined", okno se ni zaprlo
+      // in uporabnik je klikal znova - nastale so PODVOJENE rezervacije.
+      if (!brisCust || brisCust.length === 0) {
+        throw new Error('Stranka ni bila izbrisana — nimate pravic ali je bila že odstranjena.')
+      }
       if (error) throw error
       onSave()
     } catch(e) { alert(e.message) }
@@ -4177,7 +4233,7 @@ function DobavnicaImportModal({ posData, onClose, onImported }) {
         // je videl potrditev, zaloga pa se ni spremenila.
         if (dlErr) {
           console.error('Vrstic dobavnice ni bilo mogoce shraniti:', dlErr)
-          showToast('Dobavnica je shranjena, artiklov na njej pa NI bilo mogoče shraniti: ' + dlErr.message, false)
+          setError('Dobavnica je shranjena, artiklov na njej pa NI bilo mogoče shraniti: ' + dlErr.message)
         }
       }
     } catch(e) {
@@ -4324,7 +4380,7 @@ function DobavnicaImportModal({ posData, onClose, onImported }) {
         const { error: dlErr } = await sb.from('delivery_lines').insert(vrstice)
         if (dlErr) {
           console.error('Vrstic dobavnice ni bilo mogoce shraniti:', dlErr)
-          showToast('Zaloga je posodobljena, vrstic dobavnice pa NI bilo mogoče shraniti: ' + dlErr.message, false)
+          setError('Zaloga je posodobljena, vrstic dobavnice pa NI bilo mogoče shraniti: ' + dlErr.message)
         }
       }
     }
@@ -6083,7 +6139,11 @@ function ZReportModal({ posData, onClose }) {
       // 2) `payments.tip` prav tako ne obstaja.
       // Za dnevni zaključek je pravi stolpec closed_at (kdaj je bil račun
       // zaključen), ne kdaj je bila miza odprta.
-      .select('id, closed_at, payments(amount, method)')
+      // DODANO (21.8.2026): tudi POSTAVKE, da lahko izracunamo DDV po stopnjah.
+      // Z-porocilo ga doslej sploh ni imelo - niti v prikazu niti v bazi,
+      // ceprav stolpci `total_vat_22`, `total_vat_95` in osnove obstajajo.
+      // Racunovodja za DDV obracun potrebuje prav to razclenitev.
+      .select('id, closed_at, payments(amount, method), order_lines(qty, unit_price, total, vat_rate, voided)')
       .eq('business_id', BUSINESS_ID)
       .eq('status', 'paid')
       .gte('closed_at', from.toISOString())
@@ -6115,6 +6175,11 @@ function ZReportModal({ posData, onClose }) {
     let cash = 0, card = 0, bon = 0, other = 0, tips = 0
     const ords = orders || []
 
+    // DDV PO STOPNJAH (21.8.2026) — doslej ga Z-poročilo sploh ni imelo.
+    // Vsaka postavka nosi svojo stopnjo; cena je BRUTO, zato osnovo dobimo
+    // z deljenjem, ne z množenjem.
+    const poStopnji = new Map<number, { osnova: number; ddv: number }>()
+
     ords.forEach(o => {
       ;(o.payments || []).forEach(p => {
         const amt = Number(p.amount || 0)
@@ -6126,7 +6191,23 @@ function ZReportModal({ posData, onClose }) {
         else if (p.method === 'bon') bon += amt
         else other += amt
       })
+
+      ;(o.order_lines || []).forEach((l: any) => {
+        if (l.voided) return
+        const bruto = l.total != null ? Number(l.total) : Number(l.qty || 0) * Number(l.unit_price || 0)
+        const stopnja = Number(l.vat_rate ?? 22)
+        const osnova = stopnja > 0 ? bruto / (1 + stopnja / 100) : bruto
+        const obstoj = poStopnji.get(stopnja) || { osnova: 0, ddv: 0 }
+        obstoj.osnova += osnova
+        obstoj.ddv += bruto - osnova
+        poStopnji.set(stopnja, obstoj)
+      })
     })
+
+    const zaokrozi = (n: number) => Math.round(n * 100) / 100
+    const ddvPoStopnjah = Array.from(poStopnji.entries())
+      .map(([stopnja, v]) => ({ stopnja, osnova: zaokrozi(v.osnova), ddv: zaokrozi(v.ddv) }))
+      .sort((a, b) => b.stopnja - a.stopnja)
 
     const totalRefunds = (refunds || []).reduce((s, r) => s + Number(r.amount || 0), 0)
     const totalRevenue = cash + card + bon + other
@@ -6138,6 +6219,7 @@ function ZReportModal({ posData, onClose }) {
       totalRevenue,
       totalRefunds,
       netRevenue: totalRevenue - totalRefunds,
+      ddvPoStopnjah,
     })
     setLoading(false)
   }
@@ -6168,6 +6250,15 @@ function ZReportModal({ posData, onClose }) {
         total_revenue: data.totalRevenue,
         total_refunds: data.totalRefunds,
         order_count: data.orderCount,
+        // DODANO (21.8.2026): DDV po stopnjah. Stolpci so v bazi obstajali,
+        // a se NISO polnili - racunovodja je dobil Z-porocilo brez podatka,
+        // ki ga za DDV obracun potrebuje najbolj.
+        total_vat_22: (data.ddvPoStopnjah || []).find(v => v.stopnja === 22)?.ddv ?? 0,
+        total_vat_95: (data.ddvPoStopnjah || []).find(v => v.stopnja === 9.5)?.ddv ?? 0,
+        total_vat_base_0: (data.ddvPoStopnjah || []).find(v => v.stopnja === 0)?.osnova ?? 0,
+        total_vat_base_other: (data.ddvPoStopnjah || [])
+          .filter(v => v.stopnja !== 0 && v.stopnja !== 9.5 && v.stopnja !== 22)
+          .reduce((sum, v) => sum + v.osnova, 0),
         sent_to_racunko: false,
       }).select().single()
 
@@ -6314,6 +6405,27 @@ function ZReportModal({ posData, onClose }) {
               </div>
             </div>
 
+            {/* DDV PO STOPNJAH — DODANO 21.8.2026.
+                Z-porocilo tega razdelka doslej SPLOH ni imelo, ceprav je to
+                podatek, ki ga racunovodja za DDV obracun potrebuje najbolj.
+                Brez njega je moral razclenitev iskati po posameznih racunih. */}
+            {(data.ddvPoStopnjah || []).length > 0 && (
+              <div style={{ marginBottom:16 }}>
+                <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>DDV PO STOPNJAH</div>
+                <div style={{ background:T.surface, borderRadius:10, border:'1px solid '+T.line, padding:'4px 14px' }}>
+                  {data.ddvPoStopnjah.map((v: any) => (
+                    <Row key={v.stopnja}
+                      label={v.stopnja === 0
+                        ? 'Oproščeno (0 %) — osnova'
+                        : `Osnova ${String(v.stopnja).replace('.', ',')} % → DDV`}
+                      value={v.stopnja === 0 ? eur(v.osnova) : `${eur(v.osnova)} → ${eur(v.ddv)}`}/>
+                  ))}
+                  <Row label="DDV SKUPAJ"
+                    value={eur(data.ddvPoStopnjah.reduce((sum: number, v: any) => sum + v.ddv, 0))} bold/>
+                </div>
+              </div>
+            )}
+
             {/* Skupaj */}
             <div style={{ marginBottom:16 }}>
               <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>SKUPAJ</div>
@@ -6334,7 +6446,14 @@ function ZReportModal({ posData, onClose }) {
                     <div style={{ fontWeight:700, color:T.accent, marginBottom:2 }}>💰 Prenos v naslednjo izmeno</div>
                     <div style={{ display:'flex', justifyContent:'space-between', fontWeight:600 }}>
                       <span>Priporočena začetna gotovina:</span>
-                      <span style={{ color:T.accent, fontSize:14 }}>€{stats?.cashExpected?.toFixed(2).replace('.',',') || '0,00'}</span>
+                      {/* POPRAVLJENO (21.8.2026): tu je bil uporabljen `stats`,
+                          ki v TEJ komponenti ne obstaja - obstaja v CloseCashModal.
+                          Ker se ta blok prikaze sele, ko blagajnik vpise gotovino,
+                          se je aplikacija sesula natanko takrat: "stats is not
+                          defined", bela stran, izmena ni bila zakljucena.
+                          Priporocena zacetna gotovina je preprosto tisto, kar je
+                          blagajnik prestel ob zakljucku. */}
+                      <span style={{ color:T.accent, fontSize:14 }}>€{(Number(cashClosing) || 0).toFixed(2).replace('.', ',')}</span>
                     </div>
                     <div style={{ color:T.muted, fontSize:11, marginTop:2 }}>Ta znesek bo samodejno predlagan pri naslednji otvoritvi blagajne.</div>
                   </div>
@@ -7205,6 +7324,9 @@ function OrdersScreen({ posData, auth }) {
   vrstice.sort((a, b) => new Date(b.cas || 0).getTime() - new Date(a.cas || 0).getTime())
 
   async function printReceipt(order, lines, payment) {
+    // POPRAVLJENO (21.8.2026): funkcija je uporabljala `db`, ki ni bil nikjer
+    // definiran - tiskanje racuna iz seznama bi vrglo "db is not defined".
+    const db = createClient()
     // Pridobi org + premise + cashier za glavo računa
     let orgData = null
     let premiseData = null
@@ -7512,6 +7634,9 @@ function OrdersScreen({ posData, auth }) {
             <button onClick={async ()=>{
                 if (typeof window !== 'undefined' && (window as any).electronAPI?.printRaw) {
                   // ESC/POS direktni print
+                  // POPRAVLJENO (21.8.2026): `db` ni bil definiran - ponovni
+                  // izpis racuna bi vrgel "db is not defined".
+                  const db = createClient()
                   let orgData = null, premiseData = null, cashierName = ''
                   try {
                     const { data: { user } } = await db.auth.getUser()
