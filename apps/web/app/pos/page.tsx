@@ -64,6 +64,12 @@ const CFG = {
   paymentMethods: [
     { id: 'cash', name: 'Gotovina', icon: '💶' },
     { id: 'card', name: 'Kartica', icon: '💳' },
+    // DODANO (21.8.2026): unovcenje karte obiskov. Prej tega na blagajni NI
+    // BILO - karto je bilo mogoce porabiti samo prek koledarja. Kdor je
+    // stranko sprejel brez termina, poti ni imel; nekateri so uporabili
+    // "Bone", ki pa izda navaden racun in ne odsteje nicesar - stranka je
+    // bila zaracunana dvakrat.
+    { id: 'pkg',  name: 'Karta obiskov', icon: '🎟️' },
     { id: 'bon',  name: 'Boni',    icon: '🎫' },
     { id: 'prep', name: 'Predplačilo', icon: '💰' },
   ],
@@ -727,12 +733,36 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState(null)
   const [cardConfirmed, setCardConfirmed] = useState(false)
+  // DODANO (21.8.2026): aktivne kartice izbrane stranke, za unovcenje obiska.
+  const [strankineKartice, setStrankineKartice] = useState<any[]>([])
+  const [izbranaKartica, setIzbranaKartica] = useState('')
 
   useEffect(() => {
     if (!open) { setMethod('cash'); setTipPct(0); setGiven(''); setDiscount(0); setDiscountEur(''); setFurs(true); setError(null); setProcessing(false) }
     if (open && typeof open === 'object') { if(open.discount) setDiscount(open.discount) }
     if (!open) setCardConfirmed(false)
+    if (!open) { setStrankineKartice([]); setIzbranaKartica('') }
   }, [open])
+
+  // Nalozi aktivne kartice izbrane stranke (21.8.2026).
+  useEffect(() => {
+    if (!open || !activeCustomer?.id) { setStrankineKartice([]); return }
+    let veljavno = true
+    ;(async () => {
+      const { data } = await createClient()
+        .from('customer_packages')
+        .select('id, name, remaining, total, expires, frozen_at, active, activation_type, activated_at, package_templates(validity_days)')
+        .eq('customer_id', activeCustomer.id)
+        .eq('active', true)
+        .order('expires', { ascending: true })
+      if (!veljavno) return
+      // Samo kartice z OBISKI - clanarine se ne odstevajo po obiskih.
+      const uporabne = (data || []).filter((k: any) => k.remaining !== null && k.remaining > 0)
+      setStrankineKartice(uporabne)
+      if (uporabne.length === 1) setIzbranaKartica(uporabne[0].id)
+    })()
+    return () => { veljavno = false }
+  }, [open, activeCustomer?.id])
 
   const discountEurVal = parseFloat(discountEur) || 0
   const finalTotal = Math.max(0, (total - total * discount / 100 - discountEurVal)) + total * tipPct / 100
@@ -837,6 +867,46 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
       // zato bi lahko isto stanje porabila neomejeno mnogokrat. Odstejemo
       // PRED zabelezbo placila (atomarno v bazi, s preverbo kritja) - ce
       // kritja ni dovolj, se placilo sploh ne izvede.
+      // UNOVCENJE KARTE OBISKOV (21.8.2026).
+      //
+      // KLJUCNO: storitev je bila placana ZE ob nakupu kartice, zato se znesek
+      // NE sme zaracunati znova. Racun se zakljuci z 0 EUR, odsteje pa se en
+      // obisk. Prej te poti sploh ni bilo - uporabniki so uporabljali "Bone",
+      // ki izdajo navaden racun in ne odstejejo nicesar: stranka je bila
+      // zaracunana dvakrat, kartica pa je ostala nedotaknjena.
+      let unovcenaKartica: any = null
+      if (method === 'pkg') {
+        if (!activeCustomer?.id) throw new Error('Za unovčenje kartice izberite stranko.')
+        if (!izbranaKartica) throw new Error('Izberite kartico, s katere naj se odšteje obisk.')
+
+        const kartica = strankineKartice.find((k: any) => k.id === izbranaKartica)
+        if (!kartica) throw new Error('Izbrana kartica ni več na voljo — osvežite okno.')
+        if (kartica.frozen_at) throw new Error('Kartica je zamrznjena — obiska ni mogoče odšteti.')
+        if (!(kartica.remaining > 0)) throw new Error('Na kartici ni več obiskov.')
+
+        const posodobitve: any = { remaining: kartica.remaining - 1 }
+        if (posodobitve.remaining === 0) posodobitve.active = false
+        // Kartica z aktivacijo ob prvi uporabi se aktivira zdaj.
+        if (!kartica.activated_at && kartica.activation_type === 'first_use') {
+          posodobitve.activated_at = new Date().toISOString()
+          const dni = kartica.package_templates?.validity_days
+          if (dni) {
+            const potek = new Date()
+            potek.setDate(potek.getDate() + dni)
+            posodobitve.expires = lokalniDatum(potek)
+          }
+        }
+
+        const { data: odstet, error: kartErr } = await createClient()
+          .from('customer_packages').update(posodobitve).eq('id', izbranaKartica)
+          .eq('active', true).gt('remaining', 0).select('id, remaining')
+        if (kartErr) throw new Error('Obiska ni bilo mogoče odšteti: ' + kartErr.message)
+        if (!odstet || odstet.length === 0) {
+          throw new Error('Obisk ni bil odštet — kartica je bila morda vmes porabljena.')
+        }
+        unovcenaKartica = { ...kartica, preostalo: odstet[0].remaining }
+      }
+
       if (method === 'prep') {
         if (!activeCustomer?.id) throw new Error('Za plačilo s predplačilom izberite stranko.')
         const { error: prepErr } = await createClient().rpc('use_prepaid', {
@@ -868,10 +938,15 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         }
       }
 
+      // Pri unovcenju kartice je znesek 0 - storitev je bila placana ze ob
+      // nakupu kartice. Ce bi zapisali polni znesek, bi se prihodek stel
+      // DVAKRAT: enkrat ob prodaji kartice in enkrat ob vsakem obisku.
+      const znesekPlacila = method === 'pkg' ? 0 : finalTotal
+
       const payResult = await pos.orders.pay({
         orderId,
         method: method === 'bon' ? 'bon' : method === 'prep' ? 'prep' : method,
-        amount: finalTotal,
+        amount: znesekPlacila,
         received: method === 'cash' && given ? parseFloat(given) : null,
         furs,
         cashierId,
@@ -1059,6 +1134,39 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
               ))}
             </div>
           </div>
+          {/* UNOVCENJE KARTE OBISKOV (21.8.2026) */}
+          {method === 'pkg' && (
+            <div>
+              <div style={{ fontWeight:600, fontSize:12, color:T.muted, marginBottom:8, textTransform:'uppercase', letterSpacing:'0.06em' }}>Katera kartica</div>
+              {!activeCustomer?.id ? (
+                <div style={{ padding:'11px 13px', borderRadius:9, background:'rgba(184,140,40,0.1)', color:'#8A5A00', fontSize:13, lineHeight:1.5 }}>
+                  Najprej izberite stranko — kartica je vezana nanjo.
+                </div>
+              ) : strankineKartice.length === 0 ? (
+                <div style={{ padding:'11px 13px', borderRadius:9, background:'rgba(184,140,40,0.1)', color:'#8A5A00', fontSize:13, lineHeight:1.5 }}>
+                  {activeCustomer.name} nima aktivne kartice s preostalimi obiski.
+                </div>
+              ) : (
+                <>
+                  <select value={izbranaKartica} onChange={e => setIzbranaKartica(e.target.value)}
+                    style={{ width:'100%', padding:'10px 12px', borderRadius:9, border:'1px solid rgba(0,0,0,0.1)', fontFamily:'inherit', fontSize:14, background:T.inputBg, outline:'none', boxSizing:'border-box' }}>
+                    <option value="">— izberite kartico —</option>
+                    {strankineKartice.map((k: any) => (
+                      <option key={k.id} value={k.id} disabled={!!k.frozen_at}>
+                        {k.name} — {k.remaining} {k.remaining === 1 ? 'obisk' : 'obiskov'}
+                        {k.frozen_at ? ' (zamrznjena)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <div style={{ marginTop:8, padding:'10px 12px', borderRadius:8, background:T.accentSoft, color:T.accent, fontSize:12, lineHeight:1.5 }}>
+                    Odšteje se <strong>1 obisk</strong>. Storitev je bila plačana ob nakupu
+                    kartice, zato se znesek NE zaračuna znova.
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {method === 'cash' && (
             <div>
               <div style={{ fontWeight:600, fontSize:12, color:T.muted, marginBottom:8, textTransform:'uppercase', letterSpacing:'0.06em' }}>Prejeto</div>

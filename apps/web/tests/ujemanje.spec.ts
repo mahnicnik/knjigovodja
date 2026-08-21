@@ -631,3 +631,63 @@ test('Z-poročilo: 9,5 % se ne zaokroži na 22 %', () => {
   expect(r[0].osnova).toBeCloseTo(10, 2)
   expect(r[0].ddv).toBeCloseTo(0.95, 2)
 })
+
+// ─── Unovčenje karte obiskov na blagajni ────────────────────────────────
+
+/**
+ * Storitev je bila plačana ŽE ob nakupu kartice. Ob unovčenju se zato odšteje
+ * obisk, znesek pa se NE zaračuna znova — sicer bi se prihodek štel dvakrat.
+ */
+function unovciKarto(
+  kartica: { remaining: number; frozen_at?: string | null; active: boolean },
+  znesekStoritve: number,
+) {
+  if (!kartica.active) return { napaka: 'kartica ni aktivna' }
+  if (kartica.frozen_at) return { napaka: 'kartica je zamrznjena' }
+  if (!(kartica.remaining > 0)) return { napaka: 'ni več obiskov' }
+  return {
+    preostalo: kartica.remaining - 1,
+    zaracunano: 0,                       // NE znesekStoritve
+    aktivna: kartica.remaining - 1 > 0,
+  }
+}
+
+test('kartica: unovčenje odšteje obisk in NE zaračuna znova', () => {
+  // NAPAKA (popravljeno 21.8.2026): poti za unovčenje na blagajni ni bilo.
+  // Uporabniki so uporabljali "Bone", ki izdajo navaden račun in ne odštejejo
+  // ničesar — stranka je bila zaračunana dvakrat, kartica pa nedotaknjena.
+  const r: any = unovciKarto({ remaining: 8, active: true }, 40)
+  expect(r.preostalo).toBe(7)
+  expect(r.zaracunano).toBe(0)
+})
+
+test('kartica: zadnji obisk kartico zapre', () => {
+  const r: any = unovciKarto({ remaining: 1, active: true }, 40)
+  expect(r.preostalo).toBe(0)
+  expect(r.aktivna).toBe(false)
+})
+
+test('kartica: zamrznjene ni mogoče unovčiti', () => {
+  const r: any = unovciKarto({ remaining: 5, active: true, frozen_at: '2026-08-01' }, 40)
+  expect(r.napaka).toBeTruthy()
+  expect(r.preostalo).toBeUndefined()
+})
+
+test('kartica: prazne kartice ni mogoče unovčiti', () => {
+  const r: any = unovciKarto({ remaining: 0, active: true }, 40)
+  expect(r.napaka).toBeTruthy()
+})
+
+test('kartica: prihodek se ne sme šteti dvakrat', () => {
+  // Prodaja kartice: 400 € prihodka. Deset obiskov po 40 € = 0 € dodatno.
+  const prodaja = 400
+  let dodatniPrihodek = 0
+  let k = { remaining: 10, active: true }
+  for (let i = 0; i < 10; i++) {
+    const r: any = unovciKarto(k, 40)
+    dodatniPrihodek += r.zaracunano
+    k = { remaining: r.preostalo, active: r.aktivna }
+  }
+  expect(dodatniPrihodek).toBe(0)
+  expect(prodaja + dodatniPrihodek).toBe(400)   // NE 800
+})
