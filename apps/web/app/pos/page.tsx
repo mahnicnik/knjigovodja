@@ -895,7 +895,19 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         // je bila prodaja ze zakljucena.
         //
         // Zdaj: normativi vseh receptov v ENI poizvedbi, odstevanja pa vzporedno.
-        const recepti = cart.filter(l => l.item_type === 'recipe')
+        // VAROVALKA (21.8.2026): `item_type` se v kosarici ni prenasal, zato je
+        // bil ta seznam VEDNO prazen in normativi se niso odsteli nikoli -
+        // brez sledi. Ce vrstica vrste nima, jo poiscemo v katalogu; ce je
+        // recept in normativa ni, to zabelezimo, da napaka ne ostane tiha.
+        const recepti = cart.filter(l => {
+          if (l.item_type) return l.item_type === 'recipe'
+          const kat = posData.items.find(x => x.id === l.id)
+          if (kat?.item_type === 'recipe') {
+            console.warn('Vrstica brez item_type, prepoznana kot recept:', l.name)
+            return true
+          }
+          return false
+        })
         if (recepti.length > 0) {
           const db = createClient()
           const { data: vsiNormativi } = await db
@@ -11739,11 +11751,17 @@ function KlasikApp() {
       if (newTable) {
         const existing = await pos.orders.getOpenOnTable(newTable.id)
         if (existing && existing.order_lines) {
-          setCart(existing.order_lines.map((l) => ({
-            lineId: Math.random().toString(36).slice(2),
-            id: l.item_id, name: l.name, qty: l.qty, price: Number(l.unit_price),
-            vat_rate: l.vat_rate, mods: l.mods || [], note: l.note || null,
-          })))
+          // `item_type` in `stock` v narocilu nista shranjena - poiscemo ju v
+          // katalogu, sicer se ob zakljucku normativi ne bi odsteli (21.8.2026).
+          setCart(existing.order_lines.map((l) => {
+            const kat = posData.items.find(x => x.id === l.item_id)
+            return {
+              lineId: Math.random().toString(36).slice(2),
+              id: l.item_id, name: l.name, qty: l.qty, price: Number(l.unit_price),
+              vat_rate: l.vat_rate, mods: l.mods || [], note: l.note || null,
+              item_type: kat?.item_type || 'simple', stock: kat?.stock,
+            }
+          }))
         } else {
           setCart([])
         }
@@ -11822,7 +11840,13 @@ function KlasikApp() {
       if (idx >= 0) { const cp = [...c]; cp[idx] = {...cp[idx], qty: cp[idx].qty + 1}; return cp }
       // DODANO (19.8.2026): klavzula o neobracunanem DDV potuje z artiklom v
       // kosarico, da se lahko izpise na listku (ZDDV-1 zahteva navedbo razloga).
-      return [...c, { lineId: Math.random().toString(36).slice(2), id: item.id, name: item.name, price: Number(item.price), qty: 1, vat_rate: Number(item.vat_rate ?? 22), vat_exemption_code: item.vat_exemption_code || null, vat_exemption_custom_text: item.vat_exemption_custom_text || null, unit: item.unit || 'kos', mods: [], note: '', happyHourApplied: eligible, happyHourPct: hhPct }]
+      /* POPRAVLJENO (21.8.2026): vrstica v kosarici ni nosila `item_type`.
+                          Zato je `cart.filter(l => l.item_type === 'recipe')` vedno vrnil
+                          PRAZEN seznam in normativi se NIKOLI niso odsteli - prodaja
+                          7 kozarcev vina ni zmanjsala zaloge surovine. Poleg tega je
+                          `undefined !== 'recipe'` pomenilo, da je koda poskusila odpisati
+                          zalogo SAMEMU receptu, ki je nima. */
+      return [...c, { lineId: Math.random().toString(36).slice(2), id: item.id, name: item.name, price: Number(item.price), qty: 1, vat_rate: Number(item.vat_rate ?? 22), item_type: item.item_type || 'simple', stock: item.stock, vat_exemption_code: item.vat_exemption_code || null, vat_exemption_custom_text: item.vat_exemption_custom_text || null, unit: item.unit || 'kos', mods: [], note: '', happyHourApplied: eligible, happyHourPct: hhPct }]
     })
   }
 
@@ -12038,7 +12062,7 @@ function KlasikApp() {
                   // replaceLines pristejeta mods.delta k price, zato se je doplacilo
                   // steto DVAKRAT - stranka bi bila preplacana za znesek doplacil.
                   // Osnovna cena zdaj ostane cista, doplacila nosi mods.
-                  setCart((c:any[]) => [...c, { lineId: Math.random().toString(36).slice(2), id: item.id, name: item.name, price: Number(item.price), qty: 1, vat_rate: Number(item.vat_rate ?? 22), vat_exemption_code: item.vat_exemption_code || null, vat_exemption_custom_text: item.vat_exemption_custom_text || null, unit: item.unit||'kos', mods, note: note||'', happyHourApplied: eligible, happyHourPct: Number(hhPct ?? 0) }])
+                  setCart((c:any[]) => [...c, { lineId: Math.random().toString(36).slice(2), id: item.id, name: item.name, price: Number(item.price), qty: 1, vat_rate: Number(item.vat_rate ?? 22), item_type: item.item_type || 'simple', stock: item.stock, vat_exemption_code: item.vat_exemption_code || null, vat_exemption_custom_text: item.vat_exemption_custom_text || null, unit: item.unit||'kos', mods, note: note||'', happyHourApplied: eligible, happyHourPct: Number(hhPct ?? 0) }])
                 }
                 setModifierPickModal(null)
               }} style={{ flex:2,padding:'12px',borderRadius:9,border:'none',background:T.accent,color:'#fff',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:14 }}>
@@ -12077,18 +12101,23 @@ function KlasikApp() {
                   <div style={{ display:'flex', gap:8 }}>
                     <button onClick={async()=>{
                       // Naloži nazaj v kosarico
-                      const newCart = lines.map((l:any) => ({
+                      const newCart = lines.map((l:any) => {
+                        const kat = posData.items.find((x:any) => x.id === (l.item_id || l.id))
+                        return {
                         lineId: Math.random().toString(36).slice(2),
                         id: l.item_id || l.id,
                         name: l.name,
                         price: Number(l.unit_price||0),
                         qty: Number(l.qty||1),
                         vat_rate: Number(l.vat_rate ?? 22),
+                        // Brez tega se pri obnovljenem racunu normativi ne odstejejo.
+                        item_type: kat?.item_type || 'simple',
+                        stock: kat?.stock,
                         unit: 'kos',
                         mods: l.mods||[],
                         note: l.note||'',
                         happyHourApplied: false,
-                      }))
+                      }})
                       setCart(newCart)
                       await pos.orders.resumeOrder(o.id)
                       // KLJUCNO: nastavi activeTable na mizo tega narocila, sicer open_order()

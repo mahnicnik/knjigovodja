@@ -270,3 +270,60 @@ test('normativ ni fizična stvar in ne sme biti med kandidati za polnjenje', () 
   const kandidati = katalog.filter(k => k.item_type !== 'recipe' && k.item_type !== 'ingredient')
   expect(kandidati.map(k => k.name)).toEqual(['Corona'])
 })
+
+// ─── Normativi ob prodaji ───────────────────────────────────────────────
+
+/**
+ * Ob prodaji recepta se NE odšteje recept sam, ampak njegove sestavine.
+ * Vrstica v košarici mora zato nositi `item_type` — brez tega filter ne
+ * najde nobenega recepta in normativi se ne odštejejo NIKOLI, brez sledi.
+ */
+function porabaSurovin(
+  kosarica: Array<{ id: string; qty: number; item_type?: string }>,
+  normativi: Array<{ item_id: string; ingredient_id: string; qty_used: number }>,
+): Record<string, number> {
+  const recepti = kosarica.filter(l => l.item_type === 'recipe')
+  const poSurovini: Record<string, number> = {}
+  for (const l of recepti) {
+    for (const n of normativi.filter(n => n.item_id === l.id)) {
+      poSurovini[n.ingredient_id] = (poSurovini[n.ingredient_id] || 0) + n.qty_used * l.qty
+    }
+  }
+  return poSurovini
+}
+
+const NORMATIVI = [
+  { item_id: 'vino1dl', ingredient_id: 'sauvignon', qty_used: 0.1 },
+]
+
+test('normativ: prodaja 7 kozarcev odšteje 0,7 L vina', () => {
+  // RESNIČEN primer (21.8.2026): prodanih 7 × "Belo vino 1dl", zaloga
+  // surovine se ni premaknila, ker vrstica ni nosila item_type.
+  const p = porabaSurovin([{ id: 'vino1dl', qty: 7, item_type: 'recipe' }], NORMATIVI)
+  expect(p.sauvignon).toBeCloseTo(0.7, 4)
+})
+
+test('normativ: BREZ item_type se ne odšteje nič — to je bila napaka', () => {
+  const p = porabaSurovin([{ id: 'vino1dl', qty: 7 }], NORMATIVI)
+  expect(Object.keys(p)).toHaveLength(0)
+})
+
+test('normativ: ista surovina iz več receptov se sešteje', () => {
+  const normativi = [
+    { item_id: 'vino1dl', ingredient_id: 'sauvignon', qty_used: 0.1 },
+    { item_id: 'vino2dl', ingredient_id: 'sauvignon', qty_used: 0.2 },
+  ]
+  const p = porabaSurovin([
+    { id: 'vino1dl', qty: 3, item_type: 'recipe' },
+    { id: 'vino2dl', qty: 2, item_type: 'recipe' },
+  ], normativi)
+  expect(p.sauvignon).toBeCloseTo(0.7, 4) // 0,3 + 0,4
+})
+
+test('normativ: enostaven artikel v isti košarici ne sproži normativov', () => {
+  const p = porabaSurovin([
+    { id: 'corona', qty: 5, item_type: 'simple' },
+    { id: 'vino1dl', qty: 1, item_type: 'recipe' },
+  ], NORMATIVI)
+  expect(p.sauvignon).toBeCloseTo(0.1, 4)
+})
