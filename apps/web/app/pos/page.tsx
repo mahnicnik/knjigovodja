@@ -6681,7 +6681,69 @@ function VoidModal({ order, lines, payment, posData, auth, onClose, onVoided }) 
       // je uporabnik vseeno videl potrdilo, racun pa je ostal veljaven.
       if (voidErr) throw new Error('Storna ni bilo mogoče zabeležiti: ' + voidErr.message)
 
-      // 4. Natisni storno račun
+      // 4. VRNI ZALOGO (21.8.2026)
+      //
+      // NAPAKA, ki jo to odpravlja: storno je racun oznacil kot storniran in
+      // prijavil FURS, zaloge pa NI vrnil. Prodanih 7 kozarcev vina je iz
+      // surovine odstelo 0,7 L; po stornu bi moralo biti vrnjeno, a je zaloga
+      // ostala znizana. Enako pri navadnih artiklih.
+      //
+      // Vrstni red je enak kot pri prodaji, le v obratno smer:
+      //   - navaden artikel  -> increment_stock (+kolicina)
+      //   - artikel z normativom -> increment_ingredient_stock po sestavinah
+      try {
+        const db = createClient()
+
+        // `order_lines` NE hrani `item_type` - poiscemo ga v katalogu. Brez
+        // tega bi bili vsi artikli obravnavani kot navadni in porabe surovin
+        // ne bi vrnili (ista past kot pri kosarici, prelet 70).
+        const vrsta = (l: any) =>
+          posData?.items?.find((x: any) => x.id === l.item_id)?.item_type || 'simple'
+
+        // a) Navadni artikli - vrni kolicino nazaj.
+        const navadni = (lines || []).filter((l: any) => l.item_id && vrsta(l) !== 'recipe')
+        for (const l of navadni) {
+          const { error } = await db.rpc('increment_stock', {
+            p_item_id: l.item_id,
+            p_qty: Number(l.qty || 0),
+          })
+          if (error) console.error('Zaloge za "' + l.name + '" ni bilo mogoce vrniti:', error.message)
+        }
+
+        // b) Artikli z normativom - vrni porabo surovin.
+        const recepti = (lines || []).filter((l: any) => l.item_id && vrsta(l) === 'recipe')
+        if (recepti.length > 0) {
+          const { data: normativi } = await db
+            .from('item_ingredients')
+            .select('item_id, ingredient_id, qty_used')
+            .in('item_id', recepti.map((l: any) => l.item_id))
+
+          // Sestej po surovini: ce se ista pojavi v vec receptih, vrnemo ENKRAT.
+          const poSurovini = new Map<string, number>()
+          for (const l of recepti) {
+            for (const n of (normativi || [])) {
+              if (n.item_id !== l.item_id) continue
+              poSurovini.set(n.ingredient_id,
+                (poSurovini.get(n.ingredient_id) || 0) + Number(n.qty_used) * Number(l.qty || 0))
+            }
+          }
+
+          for (const [ingredientId, kolicina] of poSurovini) {
+            const { error } = await db.rpc('increment_ingredient_stock', {
+              p_ingredient_id: ingredientId,
+              p_qty: kolicina,
+            })
+            if (error) console.error('Zaloge surovine ni bilo mogoce vrniti:', error.message)
+          }
+        }
+      } catch (zalogaErr: any) {
+        // Zaloga ne sme prepreciti storna - racun je ze storniran in prijavljen
+        // FURS. Napako zabelezimo in uporabnika opozorimo.
+        console.error('Vracanje zaloge ob stornu:', zalogaErr)
+        setError('Račun je storniran, zaloge pa ni bilo mogoče vrniti — preverite jo ročno.')
+      }
+
+      // 5. Natisni storno račun
       const { data: org } = member ? await createClient().from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
       const cashierName = auth?.user?.name || user.email?.split('@')[0] || ''
       const html = buildStornoReceiptHTML({

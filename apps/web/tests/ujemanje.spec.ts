@@ -369,3 +369,66 @@ test('zaloga: artikel brez vodene zaloge ni razprodan', () => {
   expect(jeRazprodano(undefined)).toBe(false)
   expect(jeRazprodano(0)).toBe(true)
 })
+
+// ─── Storno: vračanje zaloge ────────────────────────────────────────────
+
+/**
+ * Storno mora zalogo vrniti v isto stanje, kot je bila pred prodajo:
+ * navadnim artiklom količino, receptom pa porabo surovin.
+ */
+function vrnjenoObStornu(
+  vrstice: Array<{ item_id: string; qty: number }>,
+  vrsta: Record<string, string>,
+  normativi: Array<{ item_id: string; ingredient_id: string; qty_used: number }>,
+) {
+  const artikli: Record<string, number> = {}
+  const surovine: Record<string, number> = {}
+
+  for (const l of vrstice) {
+    if (vrsta[l.item_id] === 'recipe') {
+      for (const n of normativi.filter(n => n.item_id === l.item_id)) {
+        surovine[n.ingredient_id] = (surovine[n.ingredient_id] || 0) + n.qty_used * l.qty
+      }
+    } else {
+      artikli[l.item_id] = (artikli[l.item_id] || 0) + l.qty
+    }
+  }
+  return { artikli, surovine }
+}
+
+test('storno: recept vrne porabo surovine, ne sebe', () => {
+  // RESNIČEN primer (21.8.2026): storniranih 7 × "Belo vino 1dl". Zaloga
+  // surovine je ostala 59,3 L namesto 60 L — storno je zalogo ignoriral.
+  const r = vrnjenoObStornu(
+    [{ item_id: 'vino1dl', qty: 7 }],
+    { vino1dl: 'recipe' },
+    [{ item_id: 'vino1dl', ingredient_id: 'sauvignon', qty_used: 0.1 }],
+  )
+  expect(r.surovine.sauvignon).toBeCloseTo(0.7, 4)
+  expect(r.artikli.vino1dl).toBeUndefined()   // recept sam se NE vrača
+})
+
+test('storno: navaden artikel vrne svojo količino', () => {
+  const r = vrnjenoObStornu([{ item_id: 'corona', qty: 3 }], { corona: 'simple' }, [])
+  expect(r.artikli.corona).toBe(3)
+  expect(Object.keys(r.surovine)).toHaveLength(0)
+})
+
+test('storno: mešan račun vrne oboje', () => {
+  const r = vrnjenoObStornu(
+    [{ item_id: 'corona', qty: 2 }, { item_id: 'vino1dl', qty: 4 }],
+    { corona: 'simple', vino1dl: 'recipe' },
+    [{ item_id: 'vino1dl', ingredient_id: 'sauvignon', qty_used: 0.1 }],
+  )
+  expect(r.artikli.corona).toBe(2)
+  expect(r.surovine.sauvignon).toBeCloseTo(0.4, 4)
+})
+
+test('storno: brez podatka o vrsti bi se surovine NE vrnile', () => {
+  // Zakaj je vrsto treba poiskati v katalogu: `order_lines` je ne hrani.
+  const r = vrnjenoObStornu([{ item_id: 'vino1dl', qty: 7 }], {}, [
+    { item_id: 'vino1dl', ingredient_id: 'sauvignon', qty_used: 0.1 },
+  ])
+  expect(Object.keys(r.surovine)).toHaveLength(0)
+  expect(r.artikli.vino1dl).toBe(7)  // napačno — zato iščemo vrsto v katalogu
+})
