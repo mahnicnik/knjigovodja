@@ -4527,8 +4527,29 @@ function InventoryScreen({ posData }) {
   const allIngredients = posData.ingredients
 
   // Statistike za header
-  const lowStock = allItems.filter(i => i.stock !== null && i.min_stock > 0 && i.stock <= i.min_stock)
-  const lowIngr = allIngredients.filter(i => i.stock_qty !== null && i.stock_qty <= (i.min_stock||0) && i.min_stock > 0)
+  /**
+   * POPRAVLJENO (21.8.2026): filtri v zalogi niso delovali iz DVEH razlogov.
+   *
+   * 1. Pri ARTIKLIH je koda brala `min_stock`, ta stolpec pa v tabeli `items`
+   *    NE OBSTAJA - pravi je `low_stock`. Vrednost je bila vedno undefined,
+   *    zato pogoj `min_stock > 0` nikoli ni drzal in filter "Pod minimum" ni
+   *    mogel vrniti nicesar. (Surovine `min_stock` imajo - tam je bilo prav.)
+   *
+   * 2. Stevilcni stolpci se iz baze pogosto vrnejo kot NIZ ("0.00"), zato
+   *    `stock === 0` ni drzal, primerjava `<=` pa je delovala po abecedi.
+   */
+  const st = (v: any) => v === null || v === undefined || v === '' ? null : Number(v)
+  const jePodMinimumom = (zaloga: any, minimum: any) => {
+    const z = st(zaloga), m = st(minimum)
+    return z !== null && m !== null && m > 0 && z <= m
+  }
+  const jeRazprodano = (zaloga: any) => {
+    const z = st(zaloga)
+    return z !== null && z === 0
+  }
+
+  const lowStock = allItems.filter(i => jePodMinimumom(i.stock, i.low_stock))
+  const lowIngr = allIngredients.filter(i => jePodMinimumom(i.stock_qty, i.min_stock))
   const totalAlerts = lowStock.length + lowIngr.length
   const totalValueItems = allItems.reduce((s,i) => s + (i.cost_price||0)*(i.stock||0), 0)
   const totalValueIngr = allIngredients.reduce((s,i) => s + (i.cost_price||0)*(i.stock_qty||0), 0)
@@ -4536,16 +4557,16 @@ function InventoryScreen({ posData }) {
 
   // Filtriraj in sortiraj
   let items = allItems.filter(i => !search || i.name.toLowerCase().includes(search.toLowerCase()))
-  if (filter === 'nizko') items = items.filter(i => i.stock !== null && i.min_stock > 0 && i.stock <= i.min_stock)
-  if (filter === 'razprodano') items = items.filter(i => i.stock !== null && i.stock === 0)
+  if (filter === 'nizko') items = items.filter(i => jePodMinimumom(i.stock, i.low_stock))
+  if (filter === 'razprodano') items = items.filter(i => jeRazprodano(i.stock))
   if (sort === 'stock') items = [...items].sort((a,b) => (a.stock||0)-(b.stock||0))
   else if (sort === 'value') items = [...items].sort((a,b) => ((b.cost_price||0)*(b.stock||0))-((a.cost_price||0)*(a.stock||0)))
   else if (sort === 'sold') items = [...items].sort((a,b) => (salesData[b.id]||0)-(salesData[a.id]||0))
   else items = [...items].sort((a,b) => a.name.localeCompare(b.name))
 
   let ingredients = allIngredients.filter(i => !search || i.name.toLowerCase().includes(search.toLowerCase()))
-  if (filter === 'nizko') ingredients = ingredients.filter(i => i.stock_qty !== null && i.stock_qty <= (i.min_stock||0) && i.min_stock > 0)
-  if (filter === 'razprodano') ingredients = ingredients.filter(i => i.stock_qty !== null && i.stock_qty === 0)
+  if (filter === 'nizko') ingredients = ingredients.filter(i => jePodMinimumom(i.stock_qty, i.min_stock))
+  if (filter === 'razprodano') ingredients = ingredients.filter(i => jeRazprodano(i.stock_qty))
 
   // Naloži prodajne podatke za sortiranje
   useEffect(() => {
@@ -4869,7 +4890,7 @@ function InventoryScreen({ posData }) {
   async function exportInventory(items, ingredients) {
     const XLSX = await import('xlsx')
     const date = new Date().toLocaleDateString('sl-SI').replace(/\./g,'-')
-    const itemRows = [['Artikel','Šifra','Kategorija','Prod. cena','Nab. cena','Zaloga','Min zaloga','Vrednost','DDV %'],...items.map(i=>[i.name,i.sku||'',i.category||'',i.price||0,i.cost_price||0,i.stock||0,i.min_stock||0,((i.cost_price||0)*(i.stock||0)).toFixed(2),i.vat_rate ?? 22])]
+    const itemRows = [['Artikel','Šifra','Kategorija','Prod. cena','Nab. cena','Zaloga','Min zaloga','Vrednost','DDV %'],...items.map(i=>[i.name,i.sku||'',i.category||'',i.price||0,i.cost_price||0,i.stock||0,i.low_stock||0,((i.cost_price||0)*(i.stock||0)).toFixed(2),i.vat_rate ?? 22])]
     const ingrRows = [['Surovina','Enota','Nab. cena','Zaloga','Min zaloga','Vrednost'],...ingredients.map(i=>[i.name,i.unit||'',i.cost_price||0,i.stock_qty||0,i.min_stock||0,((i.cost_price||0)*(i.stock_qty||0)).toFixed(2)])]
     const tI = items.reduce((s,i)=>s+(i.cost_price||0)*(i.stock||0),0)
     const tG = ingredients.reduce((s,i)=>s+(i.cost_price||0)*(i.stock_qty||0),0)
@@ -4953,7 +4974,7 @@ function InventoryScreen({ posData }) {
             </thead>
             <tbody>
               {items.map((it,idx)=>{
-                const low = it.stock !== null && it.low_stock > 0 && it.stock <= it.low_stock
+                const low = jePodMinimumom(it.stock, it.low_stock)
                 const zero = it.stock === 0
                 const value = (it.cost_price||0) * (it.stock||0)
                 const m = margin(it)
@@ -5056,7 +5077,7 @@ function InventoryScreen({ posData }) {
             </thead>
             <tbody>
               {ingredients.map((ig,idx)=>{
-                const low = ig.stock_qty !== null && ig.stock_qty <= (ig.min_stock||0) && ig.min_stock > 0
+                const low = jePodMinimumom(ig.stock_qty, ig.min_stock)
                 const zero = ig.stock_qty === 0
                 const value = (ig.cost_price||0) * (ig.stock_qty||0)
                 return (

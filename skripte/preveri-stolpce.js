@@ -63,3 +63,42 @@ if (napake.length === 0) {
   console.log(`NAJDENIH ${napake.length} SUMLJIVIH MEST:\n`);
   napake.forEach(n => console.log(' • ' + n));
 }
+
+// ─── Dodatno: branje polj iz objektov, ki v tabeli ne obstajajo ────────
+//
+// Napaka, ki jo to lovi (21.8.2026): koda je pri artiklih brala `min_stock`,
+// ta stolpec pa ima tabela `ingredients`, NE `items` (tam je `low_stock`).
+// Vrednost je bila vedno undefined, zato pogoj `min_stock > 0` nikoli ni
+// drzal in filter "Pod minimum" ni mogel vrniti nicesar - brez napake.
+//
+// Preverimo le nekaj znanih parov, kjer se imena med tabelami razlikujejo.
+const SUMLJIVI_PARI = [
+  { polje: 'min_stock',  obstaja_v: ['ingredients', 'inventory_items'], ne_v: 'items', namesto: 'low_stock' },
+  { polje: 'current_stock', obstaja_v: ['inventory_items'],             ne_v: 'items', namesto: 'stock' },
+];
+
+const opozorila = [];
+for (const dat of datoteke) {
+  // Preverjamo SAMO blagajno: druge strani (npr. /zaloge) uporabljajo tabelo
+  // `inventory_items`, ki `min_stock` in `current_stock` res ima - tam bi
+  // opozorila bila lazna.
+  if (!dat.includes('app/pos/')) continue;
+  const vsebina = fs.readFileSync(dat, 'utf8');
+  const vrstice = vsebina.split('\n');
+  vrstice.forEach((v, i) => {
+    if (v.trim().startsWith('//') || v.trim().startsWith('*')) return;
+    for (const p of SUMLJIVI_PARI) {
+      // isci vzorce tipa "it.min_stock" ali "item.min_stock"
+      const rx = new RegExp('\\b(it|item|artikel|i)\\.' + p.polje + '\\b');
+      if (rx.test(v)) {
+        opozorila.push(`${dat}:${i + 1}  ".${p.polje}" — tabela "${p.ne_v}" tega stolpca NIMA (uporabite "${p.namesto}")`);
+      }
+    }
+  });
+}
+
+if (opozorila.length > 0) {
+  console.log(`\nOPOZORILA (${opozorila.length}) — preverite, na katero tabelo se nanaša:\n`);
+  opozorila.forEach(o => console.log('  ! ' + o));
+  console.log('\n  (Če gre za surovino ali inventuro, je uporaba pravilna — to je le opozorilo.)');
+}

@@ -327,3 +327,45 @@ test('normativ: enostaven artikel v isti košarici ne sproži normativov', () =>
   ], NORMATIVI)
   expect(p.sauvignon).toBeCloseTo(0.1, 4)
 })
+
+// ─── Filtri v zalogi ────────────────────────────────────────────────────
+
+const st = (v: any) => v === null || v === undefined || v === '' ? null : Number(v)
+const jePodMinimumom = (zaloga: any, minimum: any) => {
+  const z = st(zaloga), m = st(minimum)
+  return z !== null && m !== null && m > 0 && z <= m
+}
+const jeRazprodano = (zaloga: any) => {
+  const z = st(zaloga)
+  return z !== null && z === 0
+}
+
+test('zaloga: "Pod minimum" ujame artikel na meji in pod njo', () => {
+  expect(jePodMinimumom(3, 5)).toBe(true)   // pod
+  expect(jePodMinimumom(5, 5)).toBe(true)   // na meji
+  expect(jePodMinimumom(8, 5)).toBe(false)  // nad
+})
+
+test('zaloga: brez določenega minimuma artikel ne velja za nizkega', () => {
+  // Sicer bi bilo "pod minimum" vse, kar ima zalogo 0 — tudi tisto, česar
+  // sploh ne naročamo.
+  expect(jePodMinimumom(0, 0)).toBe(false)
+  expect(jePodMinimumom(0, null)).toBe(false)
+  expect(jePodMinimumom(0, undefined)).toBe(false)
+})
+
+test('zaloga: številke v obliki niza se pravilno primerjajo', () => {
+  // NAPAKA (popravljeno 21.8.2026): številčni stolpci se iz baze vrnejo kot
+  // NIZ ("0.00"), zato `stock === 0` ni držal in primerjava `<=` je delovala
+  // po abecedi — "10" <= "5" je res, ker je "1" pred "5".
+  expect(jeRazprodano('0.00')).toBe(true)
+  expect(jePodMinimumom('3.00', '5.00')).toBe(true)
+  expect(jePodMinimumom('10.00', '5.00')).toBe(false)  // po abecedi bi bilo true
+})
+
+test('zaloga: artikel brez vodene zaloge ni razprodan', () => {
+  // stock = null pomeni "zaloge ne vodimo" (npr. storitev), ne "je ni".
+  expect(jeRazprodano(null)).toBe(false)
+  expect(jeRazprodano(undefined)).toBe(false)
+  expect(jeRazprodano(0)).toBe(true)
+})
