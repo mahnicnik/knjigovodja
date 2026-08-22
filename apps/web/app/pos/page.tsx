@@ -784,6 +784,21 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
     setProcessing(true)
     setError(null)
     try {
+      // PREVERBA PRED ODPRTJEM NAROCILA (22.8.2026).
+      //
+      // NAPAKA: preverba kartice je bila SELE po odprtju narocila, zato je vsak
+      // zavrnjen poskus (stranka brez kartice) pustil ODPRTO narocilo - sirota,
+      // ki visi v bazi, zaseda zaporedno stevilko in je ni mogoce ne videti
+      // ne zapreti.
+      if (method === 'pkg') {
+        if (!activeCustomer?.id) throw new Error('Za unovčenje kartice izberite stranko.')
+        if (!izbranaKartica) throw new Error('Izberite kartico, s katere naj se odšteje obisk.')
+        const k = strankineKartice.find((x: any) => x.id === izbranaKartica)
+        if (!k) throw new Error('Izbrana kartica ni več na voljo — osvežite okno.')
+        if (k.frozen_at) throw new Error('Kartica je zamrznjena — obiska ni mogoče odšteti.')
+        if (!(k.remaining > 0)) throw new Error('Na kartici ni več obiskov.')
+      }
+
       // KLJUCNO: pri dlje odprtih mizah (vec rund, dolgo cakanje) avtentikacijski
       // JWT zeton lahko poteče. Preden zacnemo placilni tok, eksplicitno osvezimo
       // sejo - sicer openOrder/addLine/pay lahko tiho spodletijo sredi postopka,
@@ -955,6 +970,32 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
       // nakupu kartice. Ce bi zapisali polni znesek, bi se prihodek stel
       // DVAKRAT: enkrat ob prodaji kartice in enkrat ob vsakem obisku.
       const znesekPlacila = method === 'pkg' ? 0 : finalTotal
+
+      // DODANO (22.8.2026): klavzule o oprostitvi SHRANIMO na narocilo.
+      // `order_lines` jih ne hrani, zato ponovni izpis racuna ni imel od kod
+      // vzeti besedila - noga racuna z 0 % DDV je ostala brez zakonsko
+      // obveznega razloga. Shranimo BESEDILO (ne kode), da sprememba
+      // zakonodaje ne spremeni ze izdanih racunov.
+      const klavzuleRacuna = Array.from(new Set(
+        (cart || [])
+          .filter((l: any) => Number(l.vat_rate ?? 22) === 0)
+          .map((l: any) => vatExemptionText(l.vat_exemption_code, l.vat_exemption_custom_text))
+          .filter(Boolean)
+      )) as string[]
+      // Pri unovcenju kartice postavimo znesek narocila na 0, SICER OSTANE
+      // ODPRTO: baza zapre racun le, ko vsota placil pokrije znesek (0 ni >= 40).
+      // Zato racun ni bil viden v seznamu Racuni, cetudi je bil fiskaliziran.
+      if (method === 'pkg' && orderId) {
+        const { error: nulErr } = await createClient()
+          .from('orders').update({ total: 0, subtotal: 0, vat_amount: 0 }).eq('id', orderId)
+        if (nulErr) throw new Error('Računa ni bilo mogoče pripraviti: ' + nulErr.message)
+      }
+
+      if (klavzuleRacuna.length > 0 && orderId) {
+        const { error: klErr } = await createClient()
+          .from('orders').update({ vat_exemption_text: klavzuleRacuna.join('\n') }).eq('id', orderId)
+        if (klErr) console.error('Klavzule ni bilo mogoce shraniti na racun:', klErr.message)
+      }
 
       const payResult = await pos.orders.pay({
         orderId,
@@ -1316,9 +1357,26 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         </label>
         <div style={{ marginLeft:'auto', display:'flex', gap:8 }}>
           <button onClick={onCancel} disabled={processing} style={{ padding:'10px 14px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'1px solid rgba(0,0,0,0.12)', background:'transparent', fontWeight:600, fontSize:13, opacity: processing ? 0.4 : 1 }}>Prekliči</button>
-          <button onClick={submitPayment} disabled={processing} style={{ padding:'10px 22px', borderRadius:9, cursor: processing ? 'wait' : 'pointer', fontFamily:'inherit', border:'none', background:T.accent, color:'#fff', fontWeight:700, fontSize:14, display:'flex', alignItems:'center', gap:6, opacity: processing ? 0.7 : 1 }}>
-            {processing ? '⏳ Obdelujem...' : <><KI name="check" size={16}/> Zaključi {eur(finalTotal)}</>}
-          </button>
+          {/* DODANO (22.8.2026): gumb je ostal videti aktiven tudi, kadar
+              unovcenje ni mogoce (stranka brez kartice) - napaka se je pokazala
+              sele PO kliku. Zdaj je onemogocen in pove, zakaj. */}
+          {(() => {
+            const nedovoljeno = method === 'pkg'
+              ? (!activeCustomer?.id ? 'Izberite stranko'
+                : strankineKartice.length === 0 ? 'Stranka nima kartice'
+                : !izbranaKartica ? 'Izberite kartico' : null)
+              : null
+            const zaklenjen = processing || !!nedovoljeno
+            return (
+              <button onClick={submitPayment} disabled={zaklenjen}
+                title={nedovoljeno || undefined}
+                style={{ padding:'10px 22px', borderRadius:9, cursor: processing ? 'wait' : zaklenjen ? 'not-allowed' : 'pointer', fontFamily:'inherit', border:'none', background: zaklenjen && !processing ? '#B8B4AC' : T.accent, color:'#fff', fontWeight:700, fontSize:14, display:'flex', alignItems:'center', gap:6, opacity: processing ? 0.7 : 1 }}>
+                {processing ? '⏳ Obdelujem...'
+                  : nedovoljeno ? nedovoljeno
+                  : <><KI name="check" size={16}/> Zaključi {eur(finalTotal)}</>}
+              </button>
+            )
+          })()}
         </div>
       </div>
     </Modal>
@@ -3071,6 +3129,10 @@ function zaVnosDatumaCasa(d: Date | string | null | undefined): string {
 }
 
 function BookingModal({ booking, posData, onClose, onSaved }) {
+  // Opozorilo o prekrivanju terminov — V VMESNIKU, ne v blokirnem oknu
+  // (22.8.2026). Prvi klik ga pokaze, drugi potrdi.
+  const [opozoriloTrk, setOpozoriloTrk] = React.useState<string | null>(null)
+  const [potrjenTrk, setPotrjenTrk] = React.useState(false)
   const isNew = !booking.id
   const [data, setData] = useState({
     customer_id: booking.customer_id || '',
@@ -3164,15 +3226,20 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
           return zacetek.getTime() < bKon && konec.getTime() > bZac
         })
 
-        if (trki.length > 0) {
+        // SPREMENJENO (22.8.2026): opozorilo je bilo `window.confirm`, ki
+        // BLOKIRA cel brskalnik in ga uporabnik (ali agent) ne more prebrati,
+        // ce se okno odpre v ozadju. Zdaj je opozorilo V VMESNIKU: prvi klik
+        // ga pokaze, drugi potrdi.
+        if (trki.length > 0 && !potrjenTrk) {
           const imena = trki
             .map((b: any) => b.customers?.name || b.customer_name || 'termin')
             .join(', ')
           const ura = zacetek.toLocaleTimeString('sl-SI', { hour: '2-digit', minute: '2-digit' })
-          if (!confirm(
-            `Izvajalec ima ob ${ura} že ${trki.length === 1 ? 'termin' : trki.length + ' termine'}: ${imena}.\n\n`
-            + 'Želite kljub temu ustvariti rezervacijo?'
-          )) { setSaving(false); return }
+          setOpozoriloTrk(
+            `Izvajalec ima ob ${ura} že ${trki.length === 1 ? 'termin' : trki.length + ' termine'}: ${imena}.`
+          )
+          setSaving(false)
+          return
         }
       }
 
@@ -3396,6 +3463,22 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
         {isNew && data.customer_id && posData.customers.find(c=>c.id===data.customer_id)?.email && (
           <div style={{ padding:'8px 12px', background:T.accentSoft, borderRadius:8, fontSize:11, color:T.accent }}>
             📧 Stranka bo prejela email potrditev takoj po shranjevanju
+          </div>
+        )}
+
+        {/* OPOZORILO O PREKRIVANJU (22.8.2026) — v vmesniku, ne v blokirnem oknu. */}
+        {opozoriloTrk && (
+          <div style={{ padding:'12px 14px', borderRadius:10, background:'rgba(184,140,40,0.1)', border:'1px solid rgba(184,140,40,0.3)', marginTop:4 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:'#8A5A00', marginBottom:4 }}>Termin je zaseden</div>
+            <div style={{ fontSize:12, color:'#8A5A00', lineHeight:1.5, marginBottom:10 }}>
+              {opozoriloTrk} Dvojna rezervacija je lahko namerna (skupinska vadba,
+              dva izvajalca v istem prostoru).
+            </div>
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={()=>setOpozoriloTrk(null)} style={{ ...btnS, fontSize:12 }}>Popravi termin</button>
+              <button onClick={()=>{ setPotrjenTrk(true); setOpozoriloTrk(null); setTimeout(save, 0) }}
+                style={{ ...btnP, fontSize:12 }}>Vseeno rezerviraj</button>
+            </div>
           </div>
         )}
 
@@ -7809,6 +7892,20 @@ function OrdersScreen({ posData, auth }) {
             name: l.name, qty: Number(l.qty), unit_price: Number(l.unit_price),
             vat_rate: Number(l.vat_rate ?? 22), total: Number(l.total || l.qty * l.unit_price), voided: l.voided,
           })),
+          // DODANO (22.8.2026): klavzula o oprostitvi tudi pri PONOVNEM izpisu.
+          // `order_lines` je ne hrani, zato jo vzamemo iz narocila (shranjena
+          // ob placilu); pri starih racunih jo poiscemo v katalogu po item_id.
+          vatExemptions: order.vat_exemption_text
+            ? String(order.vat_exemption_text).split('\n').filter(Boolean)
+            : Array.from(new Set(
+                (lines || [])
+                  .filter((l: any) => Number(l.vat_rate ?? 22) === 0)
+                  .map((l: any) => {
+                    const kat = posData?.items?.find((x: any) => x.id === l.item_id)
+                    return vatExemptionText(kat?.vat_exemption_code, kat?.vat_exemption_custom_text)
+                  })
+                  .filter(Boolean)
+              )) as string[],
           subtotal: Number(order.subtotal||0),
           discountAmount: Number(order.discount_amount||0),
           tip: Number(order.tip_amount||0),
@@ -7889,6 +7986,18 @@ function OrdersScreen({ posData, auth }) {
           total: Number(l.total || l.qty * l.unit_price),
           voided: l.voided,
         })),
+        // Klavzula o oprostitvi tudi tu (22.8.2026) — glej opombo zgoraj.
+        vatExemptions: order.vat_exemption_text
+          ? String(order.vat_exemption_text).split('\n').filter(Boolean)
+          : Array.from(new Set(
+              (lines || [])
+                .filter((l: any) => Number(l.vat_rate ?? 22) === 0)
+                .map((l: any) => {
+                  const kat = posData?.items?.find((x: any) => x.id === l.item_id)
+                  return vatExemptionText(kat?.vat_exemption_code, kat?.vat_exemption_custom_text)
+                })
+                .filter(Boolean)
+            )) as string[],
         subtotal: Number(order.subtotal||0),
         discountAmount: Number(order.discount_amount||0),
         tip: Number(order.tip_amount||0),
@@ -10350,7 +10459,24 @@ function PackagesAdminSection({ posData, modal, setModal }) {
   }
 
   async function remove(id, name) {
-    if (!confirm(`Izbrišem paket "${name}"?`)) return
+    // DODANO (22.8.2026): povemo, koliko kartic je ze prodanih. Splosno
+    // vprasanje "Izbrisem paket?" ne pove, da ima paket zivo prodane kartice -
+    // uporabnik ne ve, kaj tvega. (Ze prodane kartice ostanejo veljavne,
+    // izgubi se le predloga za nadaljnjo prodajo.)
+    const { count } = await createClient()
+      .from('customer_packages')
+      .select('id', { count: 'exact', head: true })
+      .eq('template_id', id)
+      .eq('active', true)
+
+    const opozorilo = (count || 0) > 0
+      ? `Izbrišem paket "${name}"?\n\n`
+        + `${count} ${count === 1 ? 'stranka ima' : 'strank ima'} to kartico še aktivno. `
+        + `Njihove kartice OSTANEJO veljavne, paketa pa ne boste mogli več prodajati.\n\n`
+        + 'Tega ni mogoče razveljaviti.'
+      : `Izbrišem paket "${name}"?\n\nTega ni mogoče razveljaviti.`
+
+    if (!confirm(opozorilo)) return
     const { error: tplErr } = await createClient().from('package_templates').update({archived:true}).eq('id',id)
     if (tplErr) { showToast('Predloge ni bilo mogoče arhivirati: ' + tplErr.message, false); return }
     posData.refresh(); showToast('Paket izbrisan')
