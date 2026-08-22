@@ -196,9 +196,11 @@ const H = {
     const active = pkgs.filter(p => p.active)
     if (active.length === 0) return { status: 'none', remainingVisits: 0, daysToExpiry: null }
     const pkg = active[0]
-    const today = new Date()
-    const expires = new Date(pkg.expires)
-    const daysToExpiry = Math.floor((expires - today) / 86400000)
+    // POPRAVLJENO (22.8.2026): C9 je bil odpravljen le v prikazu, TU pa ne.
+    // Ker je `expires` polnoc, zdajsnji cas pa sredi dneva, je Math.floor
+    // odrezal en dan - kartica, ki potece jutri, je bila oznacena kot
+    // "potece danes", tista, ki potece danes, pa kot POTEKLA.
+    const daysToExpiry = dniDo(pkg.expires) ?? 0
     const remainingVisits = pkg.remaining
     let status = 'active'
     if (daysToExpiry < 0) status = 'expired'
@@ -3670,7 +3672,8 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
   const pkgStatusDot = (c) => {
     const pkgs = (c.customer_packages||[]).filter(p=>p.active)
     if (!pkgs.length) return '#9a9890'
-    const near = pkgs.some(p => p.expires && Math.floor((new Date(p.expires)-new Date())/86400000)<=7)
+    // Enako kot zgoraj (22.8.2026).
+    const near = pkgs.some(p => { const d = dniDo(p.expires); return d !== null && d <= 7 })
     const low = pkgs.some(p => p.remaining!==null && p.remaining<=2)
     if (near||low) return T.warn
     return T.accent
