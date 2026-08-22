@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { FROM_EMAIL } from '@/lib/resend'
+import { escapeHtml } from '@/lib/html-escape'
 
 // POPRAVLJENO (audit 23.7.2026): endpoint je bil ODPRT RELAY - poljuben
 // poslji {to, subject, html} brez avtorizacije. Zdaj zahteva ALI prijavljeno
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { to, subject, html, customerName, packageName, expiresAt, validFrom, remaining, severity } = await req.json()
+    const { to, subject, html, customerName, packageName, expiresAt, validFrom, remaining, severity, orgPhone, orgEmail, obnovaUrl } = await req.json()
 
     if (!to || !subject) {
       return NextResponse.json({ error: 'Manjka prejemnik ali zadeva' }, { status: 400 })
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Sestavi HTML email
-    const emailHtml = html || buildEmailTemplate({ customerName, packageName, expiresAt, validFrom, remaining, severity })
+    const emailHtml = html || buildEmailTemplate({ customerName, packageName, expiresAt, validFrom, remaining, severity, orgPhone, orgEmail, obnovaUrl })
 
     const res = await fetch('https://api.resend.com/emails', {
       // POPRAVLJENO (17.8.2026): casovna omejitev - brez nje zahteva ob
@@ -109,11 +110,14 @@ export async function POST(req: NextRequest) {
 // ================================================================
 // EMAIL TEMPLATE
 // ================================================================
-function buildEmailTemplate({ customerName, packageName, expiresAt, validFrom, remaining, severity }: {
+function buildEmailTemplate({ customerName, packageName, expiresAt, validFrom, remaining, severity, orgPhone, orgEmail, obnovaUrl }: {
   customerName: string
   packageName: string
   validFrom?: string | null
   remaining?: number | null
+  orgPhone?: string | null
+  orgEmail?: string | null
+  obnovaUrl?: string | null
   expiresAt: string
   severity: 'warning' | 'danger' | 'info'
 }) {
@@ -188,15 +192,39 @@ function buildEmailTemplate({ customerName, packageName, expiresAt, validFrom, r
               Naš tim vam bo z veseljem pomagal pri podaljšanju ali nadgradnji paketa.
             </p>
 
-            <!-- CTA -->
-            <div style="text-align:center;margin-bottom:24px;">
-              <a href="#" style="display:inline-block;background:#1f6b3a;color:#ffffff;padding:14px 32px;border-radius:9px;text-decoration:none;font-weight:700;font-size:15px;">
-                Obnovi kartico
+            <!-- POPRAVLJENO (22.8.2026): gumb je imel href="#" in ni vodil
+                 NIKAMOR - stranka je kliknila, mislila, da je uredila, in se
+                 ni zgodilo nic. Zdaj vodi na javno stran, kjer si sama naroci
+                 predracun; ce te poti ni, ponudimo klic ali odgovor. -->
+            ${obnovaUrl ? `
+            <div style="text-align:center;margin-bottom:16px;">
+              <a href="${escapeHtml(String(obnovaUrl))}"
+                 style="display:inline-block;background:#1f6b3a;color:#ffffff;padding:14px 32px;border-radius:9px;text-decoration:none;font-weight:700;font-size:15px;">
+                Podaljšaj kartico
               </a>
-            </div>
+              <div style="font-size:12px;color:#8a8880;margin-top:8px;">
+                Predračun prejmete takoj, kartico podaljšamo po plačilu.
+              </div>
+            </div>` : ''}
+
+            ${(orgPhone || orgEmail) ? `
+            <div style="text-align:center;margin-bottom:24px;">
+              ${orgPhone ? `
+              <a href="tel:${escapeHtml(String(orgPhone).replace(/\s/g, ''))}"
+                 style="display:inline-block;background:${obnovaUrl ? '#ffffff' : '#1f6b3a'};color:${obnovaUrl ? '#1f6b3a' : '#ffffff'};${obnovaUrl ? 'border:1.5px solid #1f6b3a;padding:12px 28px;' : 'padding:14px 32px;'}border-radius:9px;text-decoration:none;font-weight:700;font-size:15px;margin:0 4px 8px;">
+                Pokličite ${escapeHtml(String(orgPhone))}
+              </a>` : ''}
+              ${orgEmail ? `
+              <a href="mailto:${escapeHtml(String(orgEmail))}?subject=${encodeURIComponent('Podaljšanje kartice')}"
+                 style="display:inline-block;background:#ffffff;color:#1f6b3a;border:1.5px solid #1f6b3a;padding:12px 28px;border-radius:9px;text-decoration:none;font-weight:700;font-size:15px;margin:0 4px 8px;">
+                Pišite nam
+              </a>` : ''}
+            </div>` : ''}
 
             <p style="margin:0;font-size:13px;color:#9a9890;text-align:center;line-height:1.5;">
-              Imate vprašanja? Pokličite nas ali nam pišite.<br>
+              ${(orgPhone || orgEmail)
+                ? `Imate vprašanja? ${orgPhone ? escapeHtml(String(orgPhone)) : ''}${(orgPhone && orgEmail) ? ' · ' : ''}${orgEmail ? escapeHtml(String(orgEmail)) : ''}`
+                : 'Imate vprašanja? Oglasite se pri nas.'}<br>
               To sporočilo je bilo samodejno poslano prek sistema Računko.
             </p>
           </td>

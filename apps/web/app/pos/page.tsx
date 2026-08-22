@@ -11905,6 +11905,35 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
       if (!confirm(`${cust.name} je bil(a) o tej kartici že obveščen(a) ${kdaj}.\n\nPrejeto sporočilo: "${zadnje.message}"\n\nPošljem še eno sporočilo?`)) { setPosiljam(null); return }
     }
     try {
+      // DODANO (22.8.2026): zeton za javno podaljsanje. Gumb v opomniku je
+      // prej vodil v prazno (href="#"); zdaj vodi na stran, kjer si stranka
+      // sama narosi predracun.
+      let zetonObnove: string | null = null
+      if (n.customer_package_id) {
+        const { data: obstojec } = await createClient()
+          .from('renewal_requests')
+          .select('token')
+          .eq('customer_package_id', n.customer_package_id)
+          .in('status', ['pending', 'quoted'])
+          .gt('expires_at', new Date().toISOString())
+          .maybeSingle()
+
+        if (obstojec?.token) {
+          zetonObnove = obstojec.token
+        } else {
+          const nov = crypto.randomUUID().replace(/-/g, '')
+          const { error: zErr } = await createClient().from('renewal_requests').insert({
+            token: nov,
+            business_id: BUSINESS_ID,
+            customer_id: n.customer_id,
+            customer_package_id: n.customer_package_id,
+            template_id: n.customer_packages?.template_id ?? null,
+          })
+          if (!zErr) zetonObnove = nov
+          else console.error('Zetona za podaljsanje ni bilo mogoce ustvariti:', zErr.message)
+        }
+      }
+
       const res = await fetch('/api/email/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -11912,11 +11941,21 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
           to: cust.email,
           subject: n.type === 'expired' ? `Vaša karta je potekla` : `Vaša karta kmalu poteče`,
           customerName: cust.name,
-          packageName: (n.message || '').split(':').slice(1).join(':').trim() || 'kartica',
+          // Ime se je luscilo iz BESEDILA obvestila, ki ze vsebuje "potece cez
+          // 7 dni" - v e-posti je pisalo "... potece cez 7 dni potece 29. avgust".
+          packageName: n.customer_packages?.name
+            || (n.message || '').split(':').slice(1).join(':').replace(/\s*poteče.*$/i, '').trim()
+            || 'kartica',
           // Obdobje veljavnosti in preostali obiski (22.8.2026).
           expiresAt: n.customer_packages?.expires ?? null,
           validFrom: n.customer_packages?.activated_at ?? n.customer_packages?.purchased_at ?? null,
           remaining: n.customer_packages?.remaining ?? null,
+          // Kontakt in povezava za podaljsanje (22.8.2026): gumb v e-posti je
+          // prej vodil v prazno (href="#"), noga pa je pisala "Poklicite nas"
+          // brez stevilke.
+          orgPhone: posData?.org?.phone ?? null,
+          orgEmail: posData?.org?.email ?? null,
+          obnovaUrl: zetonObnove ? `${window.location.origin}/obnova/${zetonObnove}` : null,
           severity: n.severity,
         }),
       })

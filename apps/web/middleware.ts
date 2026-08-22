@@ -39,6 +39,10 @@ const PUBLIC_PREFIXES = [
   // izraza: uporabnik je vsakic pristal na zacetni strani, zeton pa je bil
   // porabljen. Obe poti morata biti dosegljivi BREZ seje.
   '/forgot-password', '/reset-password',
+  // DODANO (22.8.2026): javno podaljsanje kartice. Stranka pride iz opomnika
+  // in NI prijavljena - brez tega bi jo middleware preusmeril na zacetno
+  // stran, tako kot je nekoc ponastavitev gesla (prelet 50).
+  '/obnova', '/api/obnova',
   '/_next', '/favicon', '/robots', '/sitemap', '/privacy', '/terms',
   // DODANO (13.8.2026, kriticno): webhooki (Stripe, WooCommerce, Shopify)
   // klicejo zunanji servisi BREZ prijavljene seje - preverjajo se s

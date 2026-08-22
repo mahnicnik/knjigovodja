@@ -1102,3 +1102,77 @@ test('opomnik: brez obeh datumov se obdobje ne izriše', () => {
   const v = vrsticeOpomnika({ expires: '2026-09-01' })
   expect(v.obdobje).toBeNull()
 })
+
+// ─── Javno podaljšanje kartice ──────────────────────────────────────────
+
+/**
+ * Stranka pride iz opomnika BREZ računa v aplikaciji. Dostop varuje žeton:
+ * enkraten, vezan na eno kartico, s potekom.
+ */
+function preveriZeton(z: { expires_at: string; status: string } | null, zdaj: Date) {
+  if (!z) return { veljaven: false, razlog: 'neveljavna_povezava' }
+  if (new Date(z.expires_at).getTime() < zdaj.getTime()) {
+    return { veljaven: false, razlog: 'potekla_povezava' }
+  }
+  return { veljaven: true, status: z.status }
+}
+
+test('obnova: neveljaven žeton ne razkrije ničesar', () => {
+  const r = preveriZeton(null, new Date())
+  expect(r.veljaven).toBe(false)
+  expect(r.razlog).toBe('neveljavna_povezava')
+})
+
+test('obnova: potekel žeton se zavrne', () => {
+  const r = preveriZeton(
+    { expires_at: '2026-07-01T00:00:00Z', status: 'pending' },
+    new Date('2026-08-22T10:00:00Z'),
+  )
+  expect(r.veljaven).toBe(false)
+  expect(r.razlog).toBe('potekla_povezava')
+})
+
+test('obnova: veljaven žeton pusti naprej', () => {
+  const r = preveriZeton(
+    { expires_at: '2026-09-21T00:00:00Z', status: 'pending' },
+    new Date('2026-08-22T10:00:00Z'),
+  )
+  expect(r.veljaven).toBe(true)
+})
+
+/**
+ * Predračun se NE sme ustvariti ob odprtju povezave: Gmail in protivirusni
+ * programi vsako povezavo predhodno odprejo, da preverijo varnost.
+ */
+function seUstvariPredracun(metoda: 'GET' | 'POST', status: string, imaPredracun: boolean) {
+  if (metoda === 'GET') return false             // odpiranje samo bere
+  if (status !== 'pending' && imaPredracun) return false   // ne podvajamo
+  return true
+}
+
+test('obnova: odpiranje povezave NE ustvari predračuna', () => {
+  expect(seUstvariPredracun('GET', 'pending', false)).toBe(false)
+})
+
+test('obnova: klik na gumb ustvari predračun', () => {
+  expect(seUstvariPredracun('POST', 'pending', false)).toBe(true)
+})
+
+test('obnova: drugi klik ne podvoji predračuna', () => {
+  // Stranka lahko osveži stran ali klikne dvakrat.
+  expect(seUstvariPredracun('POST', 'quoted', true)).toBe(false)
+})
+
+test('obnova: izračun DDV na predračunu', () => {
+  const cena = 45, stopnja = 22
+  const osnova = cena / (1 + stopnja / 100)
+  expect(Math.round(osnova * 100) / 100).toBeCloseTo(36.89, 2)
+  expect(Math.round((cena - osnova) * 100) / 100).toBeCloseTo(8.11, 2)
+})
+
+test('obnova: oproščen paket ostane brez DDV', () => {
+  const cena = 450, stopnja = 0
+  const osnova = stopnja > 0 ? cena / (1 + stopnja / 100) : cena
+  expect(osnova).toBe(450)
+  expect(cena - osnova).toBe(0)
+})
