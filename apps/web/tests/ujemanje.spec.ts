@@ -947,3 +947,60 @@ test('e-pošta: uspeh shrani Resend ID za sledenje', () => {
   expect(z.status).toBe('sent')
   expect(z.resend_email_id).toBe('re_abc123')
 })
+
+// ─── Obročni račun: datumi ──────────────────────────────────────────────
+
+function datumiObroka(zapadlost: string, danes: Date) {
+  const cez8 = new Date(danes)
+  cez8.setDate(cez8.getDate() + 8)
+  const p = (n: number) => String(n).padStart(2, '0')
+  const privzeti = `${cez8.getFullYear()}-${p(cez8.getMonth() + 1)}-${p(cez8.getDate())}`
+  return {
+    service_date: zapadlost,                                    // C8
+    due_date: zapadlost > privzeti ? zapadlost : privzeti,      // B6
+  }
+}
+
+test('obrok: datum opravljene storitve je izpolnjen', () => {
+  // C8 (22.8.2026): datum opravljene storitve je OBVEZNA sestavina računa po
+  // ZDDV-1, na obročnem računu pa ga sploh ni bilo.
+  const d = datumiObroka('2026-08-22', new Date(2026, 7, 22))
+  expect(d.service_date).toBe('2026-08-22')
+})
+
+test('obrok: rok plačila ni enak datumu izdaje', () => {
+  // B6: prej je bil rok = datum izdaje, zato je račun zapadel takoj in v
+  // e-pošti je pisalo "čez 0 dni".
+  const d = datumiObroka('2026-08-22', new Date(2026, 7, 22))
+  expect(d.due_date).toBe('2026-08-30')   // +8 dni
+  expect(d.due_date).not.toBe('2026-08-22')
+})
+
+test('obrok: kasnejša zapadlost se ohrani', () => {
+  // Obrok, ki zapade čez mesec dni, ne sme dobiti krajšega roka.
+  const d = datumiObroka('2026-09-22', new Date(2026, 7, 22))
+  expect(d.due_date).toBe('2026-09-22')
+})
+
+// ─── QR koda v telesu e-pošte ───────────────────────────────────────────
+
+function priloge(pdf: boolean, qrDataUrl: string | null) {
+  const a: any[] = []
+  if (pdf) a.push({ filename: 'racun.pdf' })
+  if (qrDataUrl) a.push({ filename: 'upnqr.png', content_id: 'upnqr' })
+  return a
+}
+
+test('e-pošta: QR gre kot VGRAJENA priloga, ne kot zunanja slika', () => {
+  // C15 (22.8.2026): Gmail in Outlook zunanje slike privzeto blokirata —
+  // brez `content_id` bi stranka videla prazen kvadrat.
+  const a = priloge(true, 'data:image/png;base64,iVBOR')
+  expect(a).toHaveLength(2)
+  expect(a[1].content_id).toBe('upnqr')
+})
+
+test('e-pošta: brez QR ostane samo PDF', () => {
+  const a = priloge(true, null)
+  expect(a).toHaveLength(1)
+  expect(a[0].filename).toBe('racun.pdf')
+})

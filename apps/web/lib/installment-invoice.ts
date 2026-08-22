@@ -76,7 +76,22 @@ export async function issueInstallmentInvoice(
     client_name: customer.name,
     client_email: customer.email,
     issue_date: lokalniDatum(),
-    due_date: inst.due_date,
+
+    // C8 (22.8.2026): DATUM OPRAVLJENE STORITVE je obvezna sestavina racuna
+    // po ZDDV-1, na obrocnem racunu pa ga sploh ni bilo. Pri obroku je to
+    // datum, ko obrok zapade - takrat je storitev za to obdobje opravljena.
+    service_date: inst.due_date,
+
+    // B6 (22.8.2026): rok placila je bil ENAK datumu izdaje, zato je racun
+    // zapadel takoj in v e-posti je pisalo "cez 0 dni". Dajemo 8 dni, kar je
+    // obicajen rok; pri obrokih, ki zapadejo v prihodnosti, obdrzimo njihov
+    // datum, ce je poznejsi.
+    due_date: (() => {
+      const cez8 = new Date()
+      cez8.setDate(cez8.getDate() + 8)
+      const privzeti = lokalniDatum(cez8)
+      return inst.due_date && inst.due_date > privzeti ? inst.due_date : privzeti
+    })(),
     line_items: lineItems,
     amount_net: netAmount,
     vat_amount: vatAmount,
@@ -112,6 +127,8 @@ export async function issueInstallmentInvoice(
       + (inst.due_date ? ` · zapade ${new Date(inst.due_date).toLocaleDateString('sl-SI')}` : ''),
     iban: org.iban ?? null,
     reference: newInvoice.reference ?? null,
+    // C15 (22.8.2026): QR koda v telesu sporocila, vgrajena kot priloga.
+    qrCid: qrDataUrl ? 'upnqr' : null,
   })
 
   // C1 (22.8.2026): zadeva je bila brez sumnikov - to je prvo, kar stranka
@@ -123,7 +140,16 @@ export async function issueInstallmentInvoice(
     to: [customer.email],
     subject: zadeva,
     html: emailHtml,
-    attachments: [{ filename: `racun-${newInvoice.invoice_number}.pdf`, content: pdfBuffer }],
+    attachments: [
+      { filename: `racun-${newInvoice.invoice_number}.pdf`, content: pdfBuffer },
+      // VGRAJENA priloga za QR v telesu (C15, 22.8.2026). `content_id` mora
+      // ustrezati `cid:` v HTML-ju. Brez tega bi Gmail sliko blokiral.
+      ...(qrDataUrl ? [{
+        filename: 'upnqr.png',
+        content: Buffer.from(qrDataUrl.split(',')[1] || '', 'base64'),
+        content_id: 'upnqr',
+      }] : []),
+    ],
   } as any)
 
   // DODANO (22.8.2026): posiljanje ZABELEZIMO - tudi ko spodleti.

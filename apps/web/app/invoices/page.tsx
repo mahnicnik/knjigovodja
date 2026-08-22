@@ -19,6 +19,16 @@ export default function InvoicesPage() {
   const [org, setOrg] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [actionInv, setActionInv] = useState<any>(null)
+
+  // C12 (22.8.2026): meni "Vec" se ni zapiral na Esc, njegove vrstice pa so
+  // segale cez sirino kartice - naslednji klik je zadel napacno moznost.
+  // Med preizkusom je tako nenamerno nastal podvojen racun.
+  useEffect(() => {
+    if (!actionInv) return
+    const naEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setActionInv(null) }
+    document.addEventListener('keydown', naEsc)
+    return () => document.removeEventListener('keydown', naEsc)
+  }, [actionInv])
   const [actionLoading, setActionLoading] = useState('')
   const [sendModalInv, setSendModalInv] = useState<any>(null)
   const [sendSuccess, setSendSuccess] = useState('')
@@ -156,6 +166,14 @@ export default function InvoicesPage() {
   }
 
   async function podvoji(inv: any) {
+    // C10 (22.8.2026): podvajanje je bilo BREZ POTRDITVE, meni pa se ni zapiral
+    // na Esc in je segal cez sirino kartice - en zgresen klik je ustvaril
+    // osnutek z naslednjo zaporedno stevilko racuna. Tako je med preizkusom
+    // nenamerno nastal racun 2026-003.
+    if (!confirm(
+      `Podvojim račun ${inv.invoice_number}?\n\n`
+      + 'Nastal bo NOV osnutek z istimi postavkami in naslednjo zaporedno številko.'
+    )) return
     setActionLoading('podvoji_' + inv.id)
     // POPRAVLJENO (30.7.2026, audit A4): prej parseInt('2026-015') -> 2026
     // (ustavi se pri pomisljaju), Math.max+1 -> podvojen racun je dobil

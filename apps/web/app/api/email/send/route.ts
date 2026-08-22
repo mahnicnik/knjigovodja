@@ -70,7 +70,13 @@ export async function POST(req: NextRequest) {
         // aplikacija ze uporablja skupno konstanto FROM_EMAIL
         // ('racuni@xn--raunko-j2a.si'), zato jo uporabimo tudi tu. Obrocni
         // racun je zato prisel, opomnik stranki pa ne.
-        from: process.env.RESEND_FROM_EMAIL || FROM_EMAIL,
+        // POPRAVLJENO (22.8.2026): `RESEND_FROM_EMAIL` iz okolja je PREVLADAL
+        // nad skupno konstanto. V Vercelu je nastavljen na domeno
+        // `racunko.si`, ki pri Resendu NI preverjena - posiljanje je bilo
+        // zavrnjeno z "The racunko.si domain is not verified".
+        // Uporabljamo isti naslov kot preostala aplikacija, ki dokazano dela
+        // (obrocni racun je prisel).
+        from: FROM_EMAIL,
         to: [to],
         subject,
         html: emailHtml,

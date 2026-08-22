@@ -12241,15 +12241,32 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
       const todayStr = lokalniDatum()
       const firstInst = insertedInstallments?.find((r) => r.installment_number === 1)
       if (firstInst && firstInst.due_date <= todayStr) {
-        fetch('/api/installments/send-now', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ installmentId: firstInst.id }),
-        }).catch((e) => console.error('Takojsnje posiljanje prvega obroka ni uspelo', e))
+        // C13 (22.8.2026): POCAKAMO na odgovor in povemo, ali je posta res
+        // odsla. Prej se je klic sprozil brez cakanja in uporabnik ni izvedel
+        // ne, da je uspelo, ne, da je spodletelo - v najboljsem primeru je
+        // videl le "aktivirana".
+        try {
+          const res = await fetch('/api/installments/send-now', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ installmentId: firstInst.id }),
+          })
+          if (res.ok) {
+            showToast(`✓ Račun za 1. obrok poslan na ${selCust?.email}`)
+          } else {
+            const e = await res.json().catch(() => ({}))
+            const razlog = (typeof e?.error === 'string' && e.error)
+              || (typeof e?.error?.message === 'string' && e.error.message)
+              || `HTTP ${res.status}`
+            showToast('Paket je aktiviran, računa za 1. obrok pa NI bilo mogoče poslati: ' + razlog, false)
+          }
+        } catch (e: any) {
+          showToast('Paket je aktiviran, računa za 1. obrok pa NI bilo mogoče poslati: ' + (e?.message || e), false)
+        }
       }
     }
 
-    showToast(`✓ ${template.name} aktivirana, ${count} obrokov nacrtovanih${firstAlreadyPaid ? ' (1. obrok placan na blagajni)' : ''}`)
+    showToast(`✓ ${template.name} aktivirana, ${count} obrokov načrtovanih${firstAlreadyPaid ? ' (1. obrok plačan na blagajni)' : ''}`)
     posData.refresh()
   }
   async function sellInInstallments() {
@@ -12439,7 +12456,7 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
         <div style={{ padding:14, borderRadius:10, background:T.surface3, border:'1px solid '+T.line }}>
           <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', fontSize:13, fontWeight:600 }}>
             <input type="checkbox" checked={payInInstallments} onChange={e=>setPayInInstallments(e.target.checked)} style={{ accentColor:T.accent }}/>
-            💳 Placilo v obrokih (odlozena placila)
+            💳 Plačilo v obrokih (odložena plačila)
           </label>
           {/* DODANO (22.8.2026): opozorilo, ce organizacija nima IBAN-a.
               Obrocni racun gre stranki po e-posti z UPN QR kodo - brez IBAN-a
@@ -12460,7 +12477,7 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
               </Field>
               <Field label="Pogostost">
                 <select value={installmentFrequency} onChange={e=>setInstallmentFrequency(e.target.value)} style={inp}>
-                  <option value="monthly">Mesecno</option>
+                  <option value="monthly">Mesečno</option>
                   <option value="weekly">Tedensko</option>
                 </select>
               </Field>
@@ -12468,7 +12485,7 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
                 <input type="date" value={firstDueDate} onChange={e=>setFirstDueDate(e.target.value)} style={inp}/>
               </Field>
               <div style={{ gridColumn:'1 / -1', fontSize:12, color:T.muted }}>
-                {installmentCount}x {eur(Number(template.price))} (skupaj {eur(Math.round(Number(template.price)*Number(installmentCount)*100)/100)}) — kartica se aktivira takoj, racun/opomnik se posilja avtomatsko pred vsakim obrokom
+                {installmentCount}× {eur(Number(template.price))} (skupaj {eur(Math.round(Number(template.price)*Number(installmentCount)*100)/100)}) — kartica se aktivira takoj, račun oziroma opomnik se pošlje samodejno pred vsakim obrokom
               </div>
               <div style={{ gridColumn:'1 / -1', display:'flex', gap:8, marginTop:4 }}>
                 <button type="button" onClick={()=>setFirstInstallmentPayNow(false)} style={{ flex:1, padding:'8px 6px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:11, background:!firstInstallmentPayNow?T.accent:T.surface2, color:!firstInstallmentPayNow?'#fff':T.muted }}>📧 1. obrok: pošlji na e-mail</button>

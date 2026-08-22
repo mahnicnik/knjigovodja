@@ -13,6 +13,12 @@ interface Props {
   customMessage?: string
   iban?: string | null
   reference?: string | null
+  /**
+   * C15 (22.8.2026): QR koda V TELESU sporocila. Vstavi se kot VGRAJENA
+   * PRILOGA (`cid:`), NE kot slika z naslovom - Gmail in Outlook zunanje
+   * slike privzeto blokirata in stranka bi videla prazen kvadrat.
+   */
+  qrCid?: string | null
 }
 
 export function buildInvoiceEmailHtml({
@@ -24,6 +30,7 @@ export function buildInvoiceEmailHtml({
   customMessage,
   iban,
   reference,
+  qrCid,
 }: Props): string {
   const formattedIssue = new Date(issueDate).toLocaleDateString('sl-SI')
   const formattedDue = new Date(dueDate).toLocaleDateString('sl-SI')
@@ -120,6 +127,29 @@ export function buildInvoiceEmailHtml({
                         <td style="font-size:11px;color:#1D9E75;">✓ vse SI banke</td>
                       </tr>
                     </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          ` : ''}
+
+          ${(iban && qrCid) ? `
+          <!-- C15 (22.8.2026): UPN QR koda V TELESU sporocila.
+               Vstavljena kot VGRAJENA priloga (cid:), ne kot zunanja slika -
+               Gmail in Outlook zunanje slike privzeto blokirata in stranka bi
+               videla prazen kvadrat. Koda v PDF prilogi ostane. -->
+          <tr>
+            <td style="padding:16px 32px 0 32px;" align="center">
+              <table role="presentation" style="border-collapse:collapse;background:#ffffff;border:1px solid #E4E1D8;border-radius:12px;">
+                <tr>
+                  <td style="padding:16px 20px;" align="center">
+                    <img src="cid:${escapeHtml(qrCid)}" width="180" height="180"
+                         alt="UPN QR koda za plačilo"
+                         style="display:block;width:180px;height:180px;border:0;"/>
+                    <div style="font-size:12px;color:#666;margin-top:8px;">
+                      Skenirajte z bančno aplikacijo
+                    </div>
                   </td>
                 </tr>
               </table>
