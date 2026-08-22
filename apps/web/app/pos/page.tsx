@@ -3614,7 +3614,7 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
       // da gre za obroke - "Placano: 45 EUR" je bilo od navadne clanarine za
       // 45 EUR nerazlocljivo. Skupna vrednost, stevilo obrokov in zapadlosti
       // niso bili vidni nikjer.
-      const [pkgRes, ordRes] = await Promise.all([
+      const [pkgRes, ordRes, invRes] = await Promise.all([
         createClient().from('customer_packages')
           .select('*, package_templates(name, template_type, color, validity_days, visits)')
           .eq('customer_id', selectedId)
@@ -3627,11 +3627,34 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
           .eq('customer_id', selectedId)
           .order('opened_at', { ascending: false })
           .limit(30),
+        // B4 (22.8.2026): tudi IZDANI racuni (obroki, paketi iz portala).
+        // Prej je zgodovina brala samo `orders` iz blagajne, zato obrocna
+        // prodaja v profilu ni bila vidna.
+        createClient().from('issued_invoices')
+          .select('id, invoice_number, issue_date, amount_total, status, line_items')
+          .eq('customer_id', selectedId)
+          .order('issue_date', { ascending: false })
+          .limit(30),
       ])
       const pkgs = pkgRes.data || []
       const ords = ordRes.data || []
       setCustomerPackages(pkgs)
-      setCustomerOrders(ords)
+      // Zdruzimo oboje v en seznam, urejen po datumu.
+      const izdani = (invRes.data || []).map((r: any) => ({
+        id: r.id,
+        closed_at: r.issue_date,
+        opened_at: r.issue_date,
+        total: Number(r.amount_total || 0),
+        jeIzdanRacun: true,
+        stevilka: r.invoice_number,
+        order_lines: Array.isArray(r.line_items)
+          ? r.line_items.map((p: any) => ({ name: p.description || p.name, qty: p.quantity ?? 1 }))
+          : [],
+        payments: [],
+      }))
+      setCustomerOrders([...ords, ...izdani].sort((a: any, b: any) =>
+        new Date(b.closed_at || b.opened_at || 0).getTime()
+        - new Date(a.closed_at || a.opened_at || 0).getTime()))
 
       // Izračunaj statistike
       const totalSpent = ords.reduce((s,o) => s + (o.payments||[]).reduce((ss,p)=>ss+Number(p.amount||0),0), 0)
@@ -3871,7 +3894,7 @@ function CustomerOverviewTab({ customer, orders, packages, loading, setActiveTab
           <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:16 }}>
             <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>AKTIVNA KARTICA</div>
             {activePkgs.slice(0,1).map(p => {
-              const daysLeft = p.expires ? Math.floor((new Date(p.expires)-new Date())/86400000) : null
+              const daysLeft = dniDo(p.expires)
               const pct = p.total && p.remaining!==null ? p.remaining/p.total : null
               return (
                 <div key={p.id}>
@@ -4164,6 +4187,24 @@ function CustomerProfileEditTab({ customer, onSave }) {
 }
 
 // ─── Customer Packages Tab ────────────────────────────────────
+/**
+ * Stevilo dni do datuma, steto po KOLEDARSKIH dnevih (22.8.2026).
+ *
+ * NAPAKA, ki jo to odpravlja: `Math.floor((potek - new Date()) / 86400000)`
+ * primerja s trenutnim CASOM, ne z zacetkom dneva. Ob 10:25 je do poteka cez
+ * 180 dni ostalo 179,56 dneva, `Math.floor` pa je to zaokrozil navzdol -
+ * 180-dnevni paket je kazal "cez 179 dni".
+ */
+function dniDo(datum: string | Date | null | undefined): number | null {
+  if (!datum) return null
+  const cilj = new Date(datum)
+  if (isNaN(cilj.getTime())) return null
+  const zdaj = new Date()
+  const a = new Date(zdaj.getFullYear(), zdaj.getMonth(), zdaj.getDate())
+  const b = new Date(cilj.getFullYear(), cilj.getMonth(), cilj.getDate())
+  return Math.round((b.getTime() - a.getTime()) / 86400000)
+}
+
 function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, setSellPackageModal, setScreen, setActiveCustomer }) {
   // DODANO (21.8.2026): obrocni nacrti za prikaz na kartici paketa. Nalozimo
   // jih TU, kjer se prikazujejo - prej so bili pomotoma v drugi komponenti in
@@ -4303,7 +4344,7 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
           <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>AKTIVNI PAKETI ({active.length})</div>
           {active.map(pkg => {
             const tc = TEMPLATE_TYPES[pkg.template_type||pkg.package_templates?.template_type]||TEMPLATE_TYPES.visits
-            const daysLeft = pkg.expires ? Math.floor((new Date(pkg.expires).getTime()-new Date().getTime())/86400000) : null
+            const daysLeft = dniDo(pkg.expires)
             const isFrozen = !!pkg.frozen_at
             const isNear = daysLeft!==null && daysLeft<=7
             const barPct = pkg.total && pkg.remaining!==null ? (pkg.remaining/pkg.total*100) : null
@@ -4473,11 +4514,29 @@ function CustomerHistoryTab({ orders, loading }) {
               const method = (o.payments||[])[0]?.method || ''
               const items = (o.order_lines||[]).map(l=>l.name).join(', ')
               const methodIcon = {cash:'💶',card:'💳',bon:'🎫',prep:'💰'}[method]||'💳'
-              const isPkg = method === 'bon' || method === 'prep'
+              // POPRAVLJENO (22.8.2026): oznaki sta bili zamenjani - unovcenje
+              // KARTICE ('pkg') je bilo oznaceno kot "PLAČILO", placilo z boni
+              // pa kot "PAKET". Zdaj vsak nacin dobi svojo oznako.
+              const oznakaNacina =
+                o.jeIzdanRacun ? 'RAČUN ' + (o.stevilka || '')
+                : method === 'pkg' ? 'KARTICA OBISKOV'
+                : method === 'prep' ? 'PREDPLAČILO'
+                : method === 'bon' ? 'BON'
+                : method === 'cash' ? 'GOTOVINA'
+                : method === 'card' ? 'KARTICA'
+                : 'PLAČILO'
+              const isPkg = o.jeIzdanRacun || method === 'pkg' || method === 'bon' || method === 'prep'
               return (
                 <tr key={o.id} style={{ borderTop:'1px solid '+T.lineSoft, background:i%2?T.surface2:T.surface }}>
                   <td style={{ padding:'10px 14px', fontSize:12, color:T.muted }}>
-                    {new Date(o.created_at).toLocaleDateString('sl-SI')}
+                    {/* POPRAVLJENO (22.8.2026): `orders.created_at` NE OBSTAJA
+                        (stolpci so opened_at, closed_at, voided_at), zato je
+                        v zgodovini pisalo "Invalid Date". */}
+                    {(() => {
+                      const d = o.closed_at || o.opened_at
+                      const dt = d ? new Date(d) : null
+                      return dt && !isNaN(dt.getTime()) ? dt.toLocaleDateString('sl-SI') : '—'
+                    })()}
                   </td>
                   <td style={{ padding:'10px 14px', fontSize:13, fontWeight:600 }}>
                     {items || 'Račun'}
@@ -4485,7 +4544,7 @@ function CustomerHistoryTab({ orders, loading }) {
                   <td style={{ padding:'10px 14px', textAlign:'right', fontWeight:800, fontVariantNumeric:'tabular-nums' }}>{eur(total)}</td>
                   <td style={{ padding:'10px 14px', textAlign:'right' }}>
                     <span style={{ fontSize:9, fontWeight:800, padding:'2px 7px', borderRadius:4, background:isPkg?'rgba(99,72,150,0.12)':T.accentSoft, color:isPkg?'#634896':T.accent, textTransform:'uppercase' }}>
-                      {methodIcon} {isPkg?'PAKET':'PLAČILO'}
+                      {methodIcon} {oznakaNacina}
                     </span>
                   </td>
                 </tr>

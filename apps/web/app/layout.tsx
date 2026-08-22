@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import PageHelp from "@/components/PageHelp";
 import ZascitaStevilcnihPolj from "@/components/ZascitaStevilcnihPolj";
+import ZaznavaNoveRazlicice from "@/components/ZaznavaNoveRazlicice";
 import { Geist, Geist_Mono, Newsreader, Bricolage_Grotesque, Plus_Jakarta_Sans, Fraunces, Schibsted_Grotesk, JetBrains_Mono } from "next/font/google";
 
 const rkSans = Schibsted_Grotesk({ subsets: ["latin"], weight: ["400","500","600","700","800","900"], variable: "--rk-font-sans" })
@@ -86,7 +87,7 @@ export default function RootLayout({
             kliku v polje resujemo z `font-size: 16px` v globals.css. */}
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
-      <body className="min-h-full flex flex-col">{children}<PageHelp /><ZascitaStevilcnihPolj /></body>
+      <body className="min-h-full flex flex-col">{children}<PageHelp /><ZascitaStevilcnihPolj /><ZaznavaNoveRazlicice /></body>
     </html>
   );
 }

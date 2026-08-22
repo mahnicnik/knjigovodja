@@ -55,6 +55,8 @@ interface Props {
   fursQrDataUrl?: string
 }
 
+// C7 (22.8.2026): zneski so bili izpisani s PIKO (36.89) in znakom PRED
+// stevilko. Slovenski zapis je "36,89 €".
 export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
   const isStorno = invoice.amount_total < 0
   const isDobropis = invoice.invoice_number?.includes('-D')
@@ -125,9 +127,9 @@ export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
           <View key={idx} style={styles.tableRow}>
             <Text style={styles.col1}>{item.description || ''}</Text>
             <Text style={styles.col2}>{item.quantity}</Text>
-            <Text style={styles.col3}>€{Number(item.unit_price).toFixed(2)}</Text>
+            <Text style={styles.col3}>{Number(item.unit_price).toFixed(2).replace('.', ',')} €</Text>
             <Text style={styles.col4}>{item.vat_rate}%</Text>
-            <Text style={styles.col5}>€{(item.quantity * item.unit_price).toFixed(2)}</Text>
+            <Text style={styles.col5}>{(item.quantity * item.unit_price).toFixed(2).replace('.', ',')} €</Text>
           </View>
         ))}
 
@@ -157,7 +159,7 @@ export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
                 return stopnje.map(([rate, v]) => (
                   <View key={rate} style={styles.totalRow}>
                     <Text>Osnova {rate}% / DDV:</Text>
-                    <Text>€{v.net.toFixed(2)} / €{v.vat.toFixed(2)}</Text>
+                    <Text>{v.net.toFixed(2).replace('.', ',')} / {v.vat.toFixed(2).replace('.', ',')} €</Text>
                   </View>
                 ))
               }
@@ -165,18 +167,18 @@ export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
                 <>
                   <View style={styles.totalRow}>
                     <Text>Osnova za DDV:</Text>
-                    <Text>€{Number(invoice.amount_net).toFixed(2)}</Text>
+                    <Text>{Number(invoice.amount_net).toFixed(2).replace('.', ',')} €</Text>
                   </View>
                   <View style={styles.totalRow}>
                     <Text>DDV:</Text>
-                    <Text>€{Number(invoice.vat_amount).toFixed(2)}</Text>
+                    <Text>{Number(invoice.vat_amount).toFixed(2).replace('.', ',')} €</Text>
                   </View>
                 </>
               )
             })()}
             <View style={styles.totalFinal}>
               <Text>{isStorno || isDobropis ? 'SKUPAJ ZA VRAČILO:' : 'SKUPAJ ZA PLAČILO:'}</Text>
-              <Text>€{Number(invoice.amount_total).toFixed(2)}</Text>
+              <Text>{Number(invoice.amount_total).toFixed(2).replace('.', ',')} €</Text>
             </View>
           </View>
         </View>

@@ -2,6 +2,11 @@ import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // DODANO (22.8.2026): identifikator gradnje je potreben, da odjemalec
+  // zazna, da tece na stari kodi (glej ZaznavaNoveRazlicice).
+  env: {
+    NEXT_PUBLIC_BUILD_ID: process.env.VERCEL_GIT_COMMIT_SHA || '',
+  },
   eslint: { ignoreDuringBuilds: true },
   // SPREMENJENO (19.8.2026): preverjanje tipov je bilo IZKLOPLJENO, zato so
   // se v produkcijo prebijale napake, ki bi jih prevajalnik ujel takoj -

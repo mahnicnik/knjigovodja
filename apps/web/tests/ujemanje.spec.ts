@@ -1004,3 +1004,64 @@ test('e-pošta: brez QR ostane samo PDF', () => {
   expect(a).toHaveLength(1)
   expect(a[0].filename).toBe('racun.pdf')
 })
+
+// ─── Preostali dni do izteka ────────────────────────────────────────────
+
+function dniDo(datum: string, danes: Date): number {
+  const cilj = new Date(datum)
+  const a = new Date(danes.getFullYear(), danes.getMonth(), danes.getDate())
+  const b = new Date(cilj.getFullYear(), cilj.getMonth(), cilj.getDate())
+  return Math.round((b.getTime() - a.getTime()) / 86400000)
+}
+
+test('dnevi: 180-dnevni paket pokaže 180, ne 179', () => {
+  // NAPAKA (popravljeno 22.8.2026): `Math.floor((potek - new Date()) / 86400000)`
+  // je primerjal s trenutnim ČASOM, ne z začetkom dneva. Ob 10:25 je do
+  // poteka ostalo 179,56 dneva → zaokroženo navzdol na 179.
+  const danes = new Date(2026, 7, 22, 10, 25)
+  expect(dniDo('2027-02-18', danes)).toBe(180)
+})
+
+test('dnevi: ura v dnevu ne vpliva na rezultat', () => {
+  const zjutraj = new Date(2026, 7, 22, 6, 0)
+  const zvecer = new Date(2026, 7, 22, 23, 30)
+  expect(dniDo('2026-08-29', zjutraj)).toBe(7)
+  expect(dniDo('2026-08-29', zvecer)).toBe(7)
+})
+
+test('dnevi: današnji datum da 0, včerajšnji −1', () => {
+  const danes = new Date(2026, 7, 22, 14, 0)
+  expect(dniDo('2026-08-22', danes)).toBe(0)
+  expect(dniDo('2026-08-21', danes)).toBe(-1)
+})
+
+// ─── Zgodovina stranke ──────────────────────────────────────────────────
+
+function zgodovina(
+  narocila: Array<{ closed_at: string; total: number }>,
+  izdaniRacuni: Array<{ issue_date: string; amount_total: number }>,
+) {
+  const vse = [
+    ...narocila.map(o => ({ datum: o.closed_at, znesek: o.total, vir: 'blagajna' })),
+    ...izdaniRacuni.map(r => ({ datum: r.issue_date, znesek: r.amount_total, vir: 'račun' })),
+  ]
+  return vse.sort((a, b) => new Date(b.datum).getTime() - new Date(a.datum).getTime())
+}
+
+test('zgodovina: obročni račun je viden poleg prodaj na blagajni', () => {
+  // B4 (22.8.2026): zgodovina je brala samo `orders`, obročna prodaja pa
+  // ustvari račun v `issued_invoices` — v profilu je pisalo
+  // „Ni še nobenih nakupov", čeprav je bil račun izdan in poslan.
+  const z = zgodovina(
+    [{ closed_at: '2026-08-20T10:00:00', total: 40 }],
+    [{ issue_date: '2026-08-22', amount_total: 45 }],
+  )
+  expect(z).toHaveLength(2)
+  expect(z[0].vir).toBe('račun')   // najnovejši prvi
+})
+
+test('zgodovina: brez računov ostanejo samo prodaje', () => {
+  const z = zgodovina([{ closed_at: '2026-08-20T10:00:00', total: 40 }], [])
+  expect(z).toHaveLength(1)
+  expect(z[0].vir).toBe('blagajna')
+})

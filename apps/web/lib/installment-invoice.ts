@@ -75,6 +75,12 @@ export async function issueInstallmentInvoice(
     invoice_type: 'invoice',
     client_name: customer.name,
     client_email: customer.email,
+    // B4 (22.8.2026): POVEZAVA NA STRANKO. Prej je racun nastal samo z
+    // `client_name` (imenom kot besedilom), zato ga zgodovina stranke v
+    // blagajni ni nasla - v profilu je pisalo "Ni se nobenih nakupov",
+    // ceprav je bil racun izdan in poslan.
+    customer_id: inst.customer_id,
+
     issue_date: lokalniDatum(),
 
     // C8 (22.8.2026): DATUM OPRAVLJENE STORITVE je obvezna sestavina racuna
