@@ -881,3 +881,69 @@ test('e-pošta: stranka brez naslova ni prejemnik', () => {
   const r = prejemniki([{ id: 'a', email: null }, { id: 'b', email: 'b@x.si' }], new Set())
   expect(r.map(c => c.id)).toEqual(['b'])
 })
+
+// ─── UPN QR koda in IBAN ────────────────────────────────────────────────
+
+/**
+ * Brez IBAN-a koda nima prejemnikovega računa in banka plačila NE izvede.
+ * Bolje je, da kode ni, kot da obljubi nekaj, česar ne more izpolniti.
+ */
+function nariseQr(iban: string | null | undefined): boolean {
+  return !!(iban || '').replace(/\s/g, '')
+}
+
+test('QR: brez IBAN se koda ne izriše', () => {
+  // NAPAKA (popravljeno 22.8.2026): koda se je izrisala s praznim poljem
+  // prejemnikovega računa — videti je bila veljavna, banka pa je javila napako.
+  expect(nariseQr('')).toBe(false)
+  expect(nariseQr(null)).toBe(false)
+  expect(nariseQr('   ')).toBe(false)
+})
+
+test('QR: z IBAN se koda izriše', () => {
+  expect(nariseQr('SI56 6100 0002 8361 595')).toBe(true)
+})
+
+// ─── Rok plačila v e-pošti ──────────────────────────────────────────────
+
+function rokBesedilo(dni: number): string {
+  return dni < 0 ? `zapadlo pred ${Math.abs(dni)} ${Math.abs(dni) === 1 ? 'dnem' : 'dnevi'}`
+    : dni === 0 ? 'danes'
+    : dni === 1 ? 'jutri'
+    : `čez ${dni} dni`
+}
+
+test('rok: "čez 0 dni" se bere kot napaka — mora biti "danes"', () => {
+  expect(rokBesedilo(0)).toBe('danes')
+  expect(rokBesedilo(1)).toBe('jutri')
+  expect(rokBesedilo(5)).toBe('čez 5 dni')
+  expect(rokBesedilo(-2)).toBe('zapadlo pred 2 dnevi')
+  expect(rokBesedilo(-1)).toBe('zapadlo pred 1 dnem')
+})
+
+// ─── Beleženje poslane pošte ────────────────────────────────────────────
+
+function zapisPosiljanja(napaka: string | null, resendId: string | null) {
+  return {
+    status: napaka ? 'failed' : 'sent',
+    resend_email_id: resendId,
+    error_message: napaka,
+    sent_at: napaka ? null : 'zdaj',
+  }
+}
+
+test('e-pošta: neuspeh se zabeleži, ne izgubi', () => {
+  // Prej se je beležil samo `last_email_sent_at` — to pomeni "poskusili smo",
+  // ne "prišlo je". Če je Resend pošto zavrnil, tega ni bilo mogoče ugotoviti
+  // nikjer.
+  const z = zapisPosiljanja('Domain not verified', null)
+  expect(z.status).toBe('failed')
+  expect(z.error_message).toBe('Domain not verified')
+  expect(z.sent_at).toBeNull()
+})
+
+test('e-pošta: uspeh shrani Resend ID za sledenje', () => {
+  const z = zapisPosiljanja(null, 're_abc123')
+  expect(z.status).toBe('sent')
+  expect(z.resend_email_id).toBe('re_abc123')
+})

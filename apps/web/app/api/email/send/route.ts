@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { FROM_EMAIL } from '@/lib/resend'
 
 // POPRAVLJENO (audit 23.7.2026): endpoint je bil ODPRT RELAY - poljuben
 // poslji {to, subject, html} brez avtorizacije. Zdaj zahteva ALI prijavljeno
@@ -64,7 +65,12 @@ export async function POST(req: NextRequest) {
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        from: process.env.RESEND_FROM_EMAIL || 'Računko <noreply@racunko.si>',
+        // POPRAVLJENO (22.8.2026): trdo zapisan `noreply@racunko.si` z domeno,
+        // ki pri Resendu ni preverjena - posiljanje je bilo zavrnjeno. Ostala
+        // aplikacija ze uporablja skupno konstanto FROM_EMAIL
+        // ('racuni@xn--raunko-j2a.si'), zato jo uporabimo tudi tu. Obrocni
+        // racun je zato prisel, opomnik stranki pa ne.
+        from: process.env.RESEND_FROM_EMAIL || FROM_EMAIL,
         to: [to],
         subject,
         html: emailHtml,
@@ -72,8 +78,19 @@ export async function POST(req: NextRequest) {
     })
 
     if (!res.ok) {
-      const err = await res.json()
-      return NextResponse.json({ error: err }, { status: 500 })
+      // POPRAVLJENO (22.8.2026): vracali smo CELOTEN predmet napake od Resenda.
+      // Odjemalec ga je vstavil v `new Error(...)`, kar je dalo besedilo
+      // "[object Object]" - uporabnik je videl, da posiljanje ni uspelo, ne pa
+      // ZAKAJ. Zdaj izluscimo berljivo sporocilo in ga zabelezimo v dnevnik.
+      const err = await res.json().catch(() => ({}))
+      const sporocilo =
+        (typeof err?.message === 'string' && err.message) ||
+        (typeof err?.error === 'string' && err.error) ||
+        (typeof err?.error?.message === 'string' && err.error.message) ||
+        (typeof err?.name === 'string' && err.name) ||
+        `Resend je zavrnil sporočilo (HTTP ${res.status})`
+      console.error('Resend napaka:', JSON.stringify(err))
+      return NextResponse.json({ error: sporocilo, podrobnosti: err }, { status: 500 })
     }
 
     const data = await res.json()

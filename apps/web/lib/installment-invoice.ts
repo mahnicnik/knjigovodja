@@ -11,6 +11,8 @@ interface InstallmentToInvoice {
   vat_rate: number
   customer_id: string
   customer_package_id: string
+  /** Zaporedna stevilka obroka (1, 2, 3 ...) - neobvezna zaradi starih klicev. */
+  installment_number?: number
 }
 
 /**
@@ -34,6 +36,13 @@ export async function issueInstallmentInvoice(
   if (!customer?.email) {
     return { success: false, reason: 'Stranka nima e-maila' }
   }
+
+  // Nacrt potrebujemo, da v sporocilu povemo "2. obrok od 6" (22.8.2026).
+  const { data: nacrt } = await supabase
+    .from('installment_plans')
+    .select('installment_count')
+    .eq('customer_package_id', inst.customer_package_id)
+    .maybeSingle()
 
   const { data: pkg } = await supabase
     .from('customer_packages')
@@ -95,18 +104,47 @@ export async function issueInstallmentInvoice(
     issueDate: newInvoice.issue_date,
     amount: Number(newInvoice.amount_total),
     dueDate: newInvoice.due_date,
-    customMessage: `Obvestilo: obrok za "${pkg?.name || 'vaš paket'}" zapade ${(inst.due_date ? (inst.due_date ? (inst.due_date ? new Date(inst.due_date).toLocaleDateString('sl-SI') : '—') : '—') : '—')}.`,
+    // C14 (22.8.2026): povemo, KATERI obrok od koliko - stranka je prej iz
+    // sporocila ni mogla razbrati, koliko je ze odplacala.
+    customMessage: (inst.installment_number && nacrt?.installment_count
+        ? `${inst.installment_number}. obrok od ${nacrt.installment_count} za „${pkg?.name || 'vaš paket'}"`
+        : `Obrok za „${pkg?.name || 'vaš paket'}"`)
+      + (inst.due_date ? ` · zapade ${new Date(inst.due_date).toLocaleDateString('sl-SI')}` : ''),
     iban: org.iban ?? null,
     reference: newInvoice.reference ?? null,
   })
 
-  const { error: resendError } = await resend.emails.send({
+  // C1 (22.8.2026): zadeva je bila brez sumnikov - to je prvo, kar stranka
+  // vidi v nabiralniku.
+  const zadeva = `Račun za obrok — ${newInvoice.invoice_number}`
+
+  const { data: resendData, error: resendError } = await resend.emails.send({
     from: FROM_EMAIL,
     to: [customer.email],
-    subject: `Racun za obrok - ${newInvoice.invoice_number}`,
+    subject: zadeva,
     html: emailHtml,
     attachments: [{ filename: `racun-${newInvoice.invoice_number}.pdf`, content: pdfBuffer }],
   } as any)
+
+  // DODANO (22.8.2026): posiljanje ZABELEZIMO - tudi ko spodleti.
+  //
+  // Prej se je obrocno posiljanje beleZilo samo prek `last_email_sent_at`, kar
+  // pomeni "poskusili smo", ne "prislo je". Ce je Resend posto zavrnil, tega
+  // ni bilo mogoce ugotoviti nikjer - ne v aplikaciji ne v bazi. Redno
+  // posiljanje racuna to belezi ze od prej; obrocno ne.
+  const { error: logErr } = await supabase.from('invoice_emails').insert({
+    invoice_id: newInvoice.id,
+    org_id: org.id,
+    to_email: customer.email,
+    subject: zadeva,
+    message: 'Samodejno poslan račun za obrok',
+    status: resendError ? 'failed' : 'sent',
+    resend_email_id: (resendData as any)?.id ?? null,
+    error_message: resendError ? String(resendError.message) : null,
+    sent_at: resendError ? null : new Date().toISOString(),
+  })
+  if (logErr) console.error('Zapisa o poslani obrocni posti ni bilo mogoce shraniti:', logErr.message)
+
   if (resendError) throw new Error(resendError.message)
 
   const { error: sentErr } = await supabase.from('issued_invoices').update({ last_email_sent_at: new Date().toISOString() }).eq('id', newInvoice.id)

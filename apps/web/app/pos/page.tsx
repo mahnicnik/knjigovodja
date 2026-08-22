@@ -4313,7 +4313,12 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
                   <div style={{ width:36, height:36, borderRadius:9, background:tc.color+'18', display:'flex', alignItems:'center', justifyContent:'center', color:tc.color }}><KI name={tc.icon} size={18}/></div>
                   <div style={{ flex:1 }}>
                     <div style={{ fontWeight:700, fontSize:14 }}>{pkg.name}</div>
-                    <div style={{ fontSize:11, color:T.muted }}>{tc.label}{pkg.purchase_price?` · Plačano: ${eur(pkg.purchase_price)}`:''}</div>
+                    {/* POPRAVLJENO (22.8.2026): pisalo je "Placano: 45 EUR", ceprav
+                        je bilo pri obrocnem paketu placano 0 EUR - dve vrstici v
+                        istem okvircku sta si nasprotovali. `purchase_price` je
+                        CENA, ne placilo; koliko je dejansko placano, pove
+                        obrocni nacrt spodaj. */}
+                    <div style={{ fontSize:11, color:T.muted }}>{tc.label}{pkg.purchase_price?` · Cena: ${eur(pkg.purchase_price)}`:''}</div>
 
                     {/* OBROCNI NACRT (21.8.2026): prej se ni videlo, da gre za
                         obroke - "Placano: 45 EUR" je bilo od navadne clanarine
@@ -11846,7 +11851,14 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
       })
       if (!res.ok) {
         const e = await res.json().catch(() => ({}))
-        throw new Error(e.error || 'Pošiljanje ni uspelo')
+        // POPRAVLJENO (22.8.2026): `e.error` je bil lahko PREDMET, zato je
+        // uporabnik videl "[object Object]" namesto razloga.
+        const razlog =
+          (typeof e?.error === 'string' && e.error) ||
+          (typeof e?.error?.message === 'string' && e.error.message) ||
+          (typeof e?.message === 'string' && e.message) ||
+          `Pošiljanje ni uspelo (HTTP ${res.status})`
+        throw new Error(razlog)
       }
       const { error } = await createClient().from('pos_notifications')
         .update({ email_sent: true, email_sent_at: new Date().toISOString() })
@@ -12429,6 +12441,18 @@ function SellPackageModal({ template, posData, onClose, auth, setPaymentOpen }) 
             <input type="checkbox" checked={payInInstallments} onChange={e=>setPayInInstallments(e.target.checked)} style={{ accentColor:T.accent }}/>
             💳 Placilo v obrokih (odlozena placila)
           </label>
+          {/* DODANO (22.8.2026): opozorilo, ce organizacija nima IBAN-a.
+              Obrocni racun gre stranki po e-posti z UPN QR kodo - brez IBAN-a
+              koda nima prejemnikovega racuna in banka placila ne izvede.
+              Prej je uporabnik to izvedel sele, ko ga je stranka poklicala. */}
+          {payInInstallments && !posData?.org?.iban && (
+            <div style={{ marginTop:12, padding:'11px 13px', borderRadius:9, background:'rgba(163,45,45,0.08)', border:'1px solid rgba(163,45,45,0.25)', fontSize:12, lineHeight:1.55, color:T.danger }}>
+              <strong>Manjka IBAN.</strong> Stranka bo prejela račun brez QR kode
+              in brez številke računa za nakazilo. Vpišite ga v
+              <strong> Nastavitve → Bančni podatki</strong>, nato ponovite prodajo.
+            </div>
+          )}
+
           {payInInstallments && (
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginTop:12 }}>
               <Field label="Število obrokov">

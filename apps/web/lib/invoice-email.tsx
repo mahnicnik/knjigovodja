@@ -30,6 +30,11 @@ export function buildInvoiceEmailHtml({
 
   // Izračunamo ali je rok plačila blizu (manj kot 3 dni)
   const daysUntilDue = Math.ceil((new Date(dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+  // POPRAVLJENO (22.8.2026): "cez 0 dni" se bere kot napaka v izracunu.
+  const rokBesedilo = daysUntilDue < 0 ? `zapadlo pred ${Math.abs(daysUntilDue)} ${Math.abs(daysUntilDue) === 1 ? 'dnem' : 'dnevi'}`
+    : daysUntilDue === 0 ? 'danes'
+    : daysUntilDue === 1 ? 'jutri'
+    : `čez ${daysUntilDue} dni`
   const isUrgent = daysUntilDue <= 3 && daysUntilDue >= 0
   const isOverdue = daysUntilDue < 0
 
@@ -37,7 +42,7 @@ export function buildInvoiceEmailHtml({
   const dueLabel = isOverdue
     ? `⚠️ Zapadel ${Math.abs(daysUntilDue)} dni nazaj`
     : isUrgent
-    ? `⏰ Rok plačila: ${formattedDue} (čez ${daysUntilDue} ${daysUntilDue === 1 ? 'dan' : 'dni'})`
+    ? `⏰ Rok plačila: ${formattedDue} (${rokBesedilo})`
     : `Rok plačila: ${formattedDue}`
 
   const messageHtml = customMessage
@@ -89,7 +94,13 @@ export function buildInvoiceEmailHtml({
             </td>
           </tr>
 
-          <!-- PLAČAJ ZDAJ gumb + Flik info -->
+          <!-- PLAČAJ ZDAJ gumb + Flik info.
+               POPRAVLJENO (22.8.2026): okvircek se prikaze SAMO, ce ima
+               organizacija IBAN. Prej je obljubljal "Denar pride takoj na TRR"
+               in nastel banke, medtem ko TRR na racunu sploh ni bil izpolnjen
+               in QR koda ni imela prejemnikovega racuna - stranka je skenirala,
+               banka je javila napako. -->
+          ${iban ? `
           <tr>
             <td style="padding:20px 32px 0 32px;">
               <table role="presentation" style="width:100%;border-collapse:collapse;background:#E1F5EE;border-radius:14px;border:1.5px solid #A6D9C3;">
@@ -114,6 +125,7 @@ export function buildInvoiceEmailHtml({
               </table>
             </td>
           </tr>
+          ` : ''}
 
           ${iban ? `
           <!-- Bančni podatki -->

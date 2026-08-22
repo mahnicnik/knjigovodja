@@ -221,13 +221,16 @@ export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
               </View>
               <View style={styles.payRow}>
                 <Text style={styles.payLabel}>Znesek:</Text>
-                <Text style={styles.payValue}>€{Number(invoice.amount_total).toFixed(2)}</Text>
+                <Text style={styles.payValue}>{Number(invoice.amount_total).toFixed(2).replace('.', ',')} €</Text>
               </View>
             </View>
-            <View>
-              <Image src={qrDataUrl} style={styles.qrImage} />
-              <Text style={styles.qrLabel}>UPN QR</Text>
-            </View>
+            {/* Brez IBAN-a kode ni (22.8.2026) - glej generateUpnQr(). */}
+            {qrDataUrl ? (
+              <View>
+                <Image src={qrDataUrl} style={styles.qrImage} />
+                <Text style={styles.qrLabel}>UPN QR</Text>
+              </View>
+            ) : null}
           </View>
         )}
 
@@ -276,8 +279,20 @@ export async function generateFursQr(zoi: string, issueDate: Date): Promise<stri
 
 // Helper za UPN QR generation (server-side)
 export async function generateUpnQr(invoice: any, org: any): Promise<string> {
-  const amount = String(Math.round(invoice.amount_total * 100)).padStart(11, '0')
   const ibanClean = (org.iban || '').replace(/\s/g, '')
+
+  // POPRAVLJENO (22.8.2026): brez IBAN-a se koda SPLOH NE izrise.
+  //
+  // Prej se je izrisala z belim poljem prejemnikovega racuna. Koda je bila
+  // videti veljavna, banka pa takega placila ne izvede - stranka skenira,
+  // dobi napako in poklice. Bolje je, da kode ni, kot da obljubi nekaj,
+  // cesar ne more izpolniti.
+  if (!ibanClean) {
+    console.warn('UPN QR ni izrisana: organizacija nima IBAN-a (' + (org.name || '') + ')')
+    return ''
+  }
+
+  const amount = String(Math.round(invoice.amount_total * 100)).padStart(11, '0')
   const refClean = (invoice.reference || `SI00 ${invoice.invoice_number}`).replace(/\s/g, '')
   
   function upnDate(dateStr: string): string {
@@ -285,7 +300,9 @@ export async function generateUpnQr(invoice: any, org: any): Promise<string> {
     return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`
   }
   
-  const namen = `Placilo racuna ${invoice.invoice_number}`.slice(0, 42)
+  // C6 (22.8.2026): namen placila je bil brez sumnikov - to vidi stranka
+  // v bancni aplikaciji.
+  const namen = `Plačilo računa ${invoice.invoice_number}`.slice(0, 42)
   
   const upnFields = [
     'UPNQR', '', '', '', '',
