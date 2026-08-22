@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { to, subject, html, customerName, packageName, expiresAt, severity } = await req.json()
+    const { to, subject, html, customerName, packageName, expiresAt, validFrom, remaining, severity } = await req.json()
 
     if (!to || !subject) {
       return NextResponse.json({ error: 'Manjka prejemnik ali zadeva' }, { status: 400 })
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Sestavi HTML email
-    const emailHtml = html || buildEmailTemplate({ customerName, packageName, expiresAt, severity })
+    const emailHtml = html || buildEmailTemplate({ customerName, packageName, expiresAt, validFrom, remaining, severity })
 
     const res = await fetch('https://api.resend.com/emails', {
       // POPRAVLJENO (17.8.2026): casovna omejitev - brez nje zahteva ob
@@ -109,9 +109,11 @@ export async function POST(req: NextRequest) {
 // ================================================================
 // EMAIL TEMPLATE
 // ================================================================
-function buildEmailTemplate({ customerName, packageName, expiresAt, severity }: {
+function buildEmailTemplate({ customerName, packageName, expiresAt, validFrom, remaining, severity }: {
   customerName: string
   packageName: string
+  validFrom?: string | null
+  remaining?: number | null
   expiresAt: string
   severity: 'warning' | 'danger' | 'info'
 }) {
@@ -122,6 +124,8 @@ function buildEmailTemplate({ customerName, packageName, expiresAt, severity }: 
   }
   const c = colors[severity] || colors.warning
   const dateStr = expiresAt ? new Date(expiresAt).toLocaleDateString('sl-SI', { day:'numeric', month:'long', year:'numeric' }) : ''
+  const odStr = validFrom ? new Date(validFrom).toLocaleDateString('sl-SI', { day:'numeric', month:'long', year:'numeric' }) : ''
+  const preostaliObiski = (remaining === null || remaining === undefined) ? null : Number(remaining)
 
   return `
 <!DOCTYPE html>
@@ -160,6 +164,23 @@ function buildEmailTemplate({ customerName, packageName, expiresAt, severity }: 
                 ${c.icon}&nbsp; <strong>${packageName}</strong>
                 ${dateStr ? `poteče <strong>${dateStr}</strong>` : 'kmalu poteče'}
               </p>
+
+              <!-- DODANO (22.8.2026): OBDOBJE VELJAVNOSTI. Prej je bil naveden
+                   samo datum poteka - stranka ni videla, od kdaj karta velja
+                   in koliko obiskov ji je ostalo. -->
+              ${(odStr || preostaliObiski !== null) ? `
+              <table role="presentation" style="border-collapse:collapse;margin-top:12px;">
+                ${odStr ? `
+                <tr>
+                  <td style="font-size:13px;color:${c.text};opacity:.85;padding:2px 12px 2px 0;">Velja:</td>
+                  <td style="font-size:13px;color:${c.text};font-weight:600;padding:2px 0;">${odStr} – ${dateStr}</td>
+                </tr>` : ''}
+                ${preostaliObiski !== null ? `
+                <tr>
+                  <td style="font-size:13px;color:${c.text};opacity:.85;padding:2px 12px 2px 0;">Preostali obiski:</td>
+                  <td style="font-size:13px;color:${c.text};font-weight:600;padding:2px 0;">${preostaliObiski}</td>
+                </tr>` : ''}
+              </table>` : ''}
             </div>
 
             <p style="margin:0 0 24px;font-size:14px;color:#6b6962;line-height:1.6;">

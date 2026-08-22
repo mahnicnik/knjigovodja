@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
         .select(`
           id, message, severity, type, customer_id, package_id,
           customers (id, name, email, notification_email),
-          customer_packages (id, expires, name, template_type)
+          customer_packages (id, expires, name, template_type, activated_at, purchased_at, remaining)
         `)
         .eq('business_id', biz.id)
         .eq('dismissed', false)
@@ -127,6 +127,10 @@ export async function GET(req: NextRequest) {
               customerName: customer.name,
               packageName: pkg?.name || 'kartica',
               expiresAt: pkg?.expires,
+              // Obdobje veljavnosti in preostali obiski (22.8.2026) - da imata
+              // samodejni in rocni opomnik ENAKO vsebino.
+              validFrom: (pkg as any)?.activated_at ?? (pkg as any)?.purchased_at ?? null,
+              remaining: (pkg as any)?.remaining ?? null,
               severity: notif.severity,
             }),
           })

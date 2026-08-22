@@ -1065,3 +1065,40 @@ test('zgodovina: brez računov ostanejo samo prodaje', () => {
   expect(z).toHaveLength(1)
   expect(z[0].vir).toBe('blagajna')
 })
+
+// ─── Obdobje veljavnosti v opomniku ─────────────────────────────────────
+
+function vrsticeOpomnika(kartica: { activated_at?: string | null; purchased_at?: string | null; expires: string; remaining?: number | null }) {
+  const od = kartica.activated_at ?? kartica.purchased_at ?? null
+  const obiski = (kartica.remaining === null || kartica.remaining === undefined) ? null : Number(kartica.remaining)
+  return {
+    obdobje: od ? { od, do: kartica.expires } : null,
+    obiski,
+  }
+}
+
+test('opomnik: karta obiskov pokaže obdobje IN preostale obiske', () => {
+  const v = vrsticeOpomnika({ activated_at: '2026-08-21', expires: '2027-02-17', remaining: 10 })
+  expect(v.obdobje).toEqual({ od: '2026-08-21', do: '2027-02-17' })
+  expect(v.obiski).toBe(10)
+})
+
+test('opomnik: članarina nima obiskov — vrstica izpade', () => {
+  // Članarina je časovno omejena, ne po obiskih. Prikaz "0 obiskov" bi bil
+  // napačen; vrstica se zato ne izriše.
+  const v = vrsticeOpomnika({ activated_at: '2026-08-22', expires: '2026-08-29', remaining: null })
+  expect(v.obdobje).toEqual({ od: '2026-08-22', do: '2026-08-29' })
+  expect(v.obiski).toBeNull()
+})
+
+test('opomnik: brez aktivacije se uporabi datum nakupa', () => {
+  // Kartica z aktivacijo "ob prvem obisku" še ni aktivirana — takrat velja
+  // datum nakupa.
+  const v = vrsticeOpomnika({ activated_at: null, purchased_at: '2026-08-01', expires: '2026-09-01', remaining: 5 })
+  expect(v.obdobje?.od).toBe('2026-08-01')
+})
+
+test('opomnik: brez obeh datumov se obdobje ne izriše', () => {
+  const v = vrsticeOpomnika({ expires: '2026-09-01' })
+  expect(v.obdobje).toBeNull()
+})

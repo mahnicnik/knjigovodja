@@ -303,7 +303,12 @@ function usePosData() {
 
         // Generiraj in fetch notifikacije
         await createClient().rpc('generate_pos_notifications', { p_business_id: BUSINESS_ID })
-        const notifRes = await createClient().from('pos_notifications').select('*, customers(name, email)').eq('business_id', BUSINESS_ID).eq('dismissed', false).order('created_at', { ascending: false })
+        // DODANO (22.8.2026): tudi podatki KARTICE, da lahko v opomniku
+        // navedemo obdobje veljavnosti in preostale obiske. Prej je bil
+        // naveden samo datum poteka.
+        const notifRes = await createClient().from('pos_notifications')
+          .select('*, customers(name, email), customer_packages(expires, activated_at, purchased_at, remaining, total)')
+          .eq('business_id', BUSINESS_ID).eq('dismissed', false).order('created_at', { ascending: false })
         setNotifications(notifRes.data || [])
         // Fetch business profile
         // DODANO (16.8.2026): nalozi happy hour pravila
@@ -11908,6 +11913,10 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
           subject: n.type === 'expired' ? `Vaša karta je potekla` : `Vaša karta kmalu poteče`,
           customerName: cust.name,
           packageName: (n.message || '').split(':').slice(1).join(':').trim() || 'kartica',
+          // Obdobje veljavnosti in preostali obiski (22.8.2026).
+          expiresAt: n.customer_packages?.expires ?? null,
+          validFrom: n.customer_packages?.activated_at ?? n.customer_packages?.purchased_at ?? null,
+          remaining: n.customer_packages?.remaining ?? null,
           severity: n.severity,
         }),
       })
