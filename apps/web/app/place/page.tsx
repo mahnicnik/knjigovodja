@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { escapeHtml } from '@/lib/html-escape'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
-import { EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS, MANDATORY_HEALTH_CONTRIBUTION, GENERAL_RELIEF_MONTH, MIN_WAGE as TC_MIN_WAGE, INCOME_TAX_BRACKETS, REGRES_TAX_FREE_LIMIT, MEAL_ALLOWANCE, KM_RATE_COMMUTE , lokalniDatum} from '@/lib/tax-constants'
+import { EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS, MANDATORY_HEALTH_CONTRIBUTION, GENERAL_RELIEF_MONTH, MIN_WAGE as TC_MIN_WAGE, INCOME_TAX_BRACKETS, REGRES_TAX_FREE_LIMIT, MIN_CONTRIBUTION_BASE, MEAL_ALLOWANCE, KM_RATE_COMMUTE , lokalniDatum} from '@/lib/tax-constants'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 import { formatEurNumber } from '@/lib/format'
@@ -37,16 +37,38 @@ function calcPayroll(grossSalary: number, dependents: number = 0, extras: {
   // pa se NIKOLI ni uporabila - zaposlenemu je tiho izpadla iz place.
   // Malica je do zakonske meje neobdavcena, zato se pristeje k NETU.
   const mealAmt = r((extras.mealAllowance || 0) * MEAL_ALLOWANCE)
-  const ee_piz = r(taxableGross * EE.piz)
-  const ee_zzzs = r(taxableGross * EE.zzzs)
+  // NAJNIŽJA OSNOVA ZA PRISPEVKE (dodano 24.8.2026).
+  //
+  // Prej so se prispevki racunali od PLACE. Ce je placa nizja od najnizje
+  // osnove (60 % povprecne place), zakon zahteva obracun od OSNOVE - pri
+  // minimalni placi (1.481,88 EUR) je osnova visja (1.521,62 EUR), zato je
+  // bilo prispevkov PREMALO. Razlika bremeni delodajalca.
+  const prispevkovnaOsnova = Math.max(taxableGross, MIN_CONTRIBUTION_BASE)
+  const podOsnovo = taxableGross < MIN_CONTRIBUTION_BASE
+
+  const ee_piz = r(prispevkovnaOsnova * EE.piz)
+  const ee_zzzs = r(prispevkovnaOsnova * EE.zzzs)
   const ee_injury = 0 // zaposlenci ne placujejo poskodb pri delu - samo delodajalec
-  const ee_unemployment = r(taxableGross * EE.unemployment)
-  const ee_parental = r(taxableGross * EE.parental)
-  const ee_dolgotrajna = r(taxableGross * EE.dolgotrajnaOskrba)
+  const ee_unemployment = r(prispevkovnaOsnova * EE.unemployment)
+  const ee_parental = r(prispevkovnaOsnova * EE.parental)
+  const ee_dolgotrajna = r(prispevkovnaOsnova * EE.dolgotrajnaOskrba)
   const ee_ozp = OZP_MONTHLY
   const ee_total = r(ee_piz + ee_zzzs + ee_injury + ee_unemployment + ee_parental + ee_dolgotrajna + ee_ozp)
   const base = taxableGross - ee_total
   const depRelief = dependents === 0 ? 0 : dependents === 1 ? 2697/12 : dependents === 2 ? 4120/12 : 7780/12
+  // ⚠️ DODATNA SPLOŠNA OLAJŠAVA (24.8.2026)
+  //
+  // Pri nizkih dohodkih pripada POVEČANA splošna olajšava (ZDoh-2). Ta
+  // obračun je NE upošteva, ker je odvisna od realiziranega LETNEGA dohodka,
+  // ki ga mesečni izračun ne pozna.
+  //
+  // Posledica: pri plačah blizu minimalne je odtegnjena dohodnina VIŠJA od
+  // končne. Razlika se poravna pri letnem obračunu — delavec je torej med
+  // letom prikrajšan, ne oškodovan. Kljub temu mora to vedeti, kdor obračun
+  // uporablja, zato spodaj o tem izrecno opozorimo.
+  //
+  // NE UGIBAMO formule: uskladi z računovodkinjo in šele nato vgradi.
+  const dodatnaOlajsavaNiUpostevana = base < 1650
   const taxableBase = Math.max(0, base - GENERAL_RELIEF_MONTHLY - depRelief)
   let tax = 0, prev = 0
   const annualBase = taxableBase * 12
@@ -59,16 +81,16 @@ function calcPayroll(grossSalary: number, dependents: number = 0, extras: {
   }
   const incomeTax = r(tax / 12)
   const netSalary = r(taxableGross - ee_total - incomeTax + travelAmt + mealAmt)
-  const er_piz = r(taxableGross * ER.piz)
-  const er_zzzs = r(taxableGross * ER.zzzs)
-  const er_injury = r(taxableGross * ER.injury)
-  const er_unemployment = r(taxableGross * ER.unemployment)
-  const er_parental = r(taxableGross * ER.parental)
-  const er_dolgotrajna = r(taxableGross * ER.dolgotrajnaOskrba)
+  const er_piz = r(prispevkovnaOsnova * ER.piz)
+  const er_zzzs = r(prispevkovnaOsnova * ER.zzzs)
+  const er_injury = r(prispevkovnaOsnova * ER.injury)
+  const er_unemployment = r(prispevkovnaOsnova * ER.unemployment)
+  const er_parental = r(prispevkovnaOsnova * ER.parental)
+  const er_dolgotrajna = r(prispevkovnaOsnova * ER.dolgotrajnaOskrba)
   const er_total = r(er_piz + er_zzzs + er_injury + er_unemployment + er_parental + er_dolgotrajna)
   return {
     baseSalary: grossSalary, overtimeAmt, nightAmt, sundayAmt, holidayAmt,
-    taxableGross, travelAmt, mealAmt, ee_piz, ee_zzzs, ee_injury, ee_unemployment, ee_parental, ee_dolgotrajna, ee_ozp, ee_total,
+    taxableGross, prispevkovnaOsnova, podOsnovo, dodatnaOlajsavaNiUpostevana, travelAmt, mealAmt, ee_piz, ee_zzzs, ee_injury, ee_unemployment, ee_parental, ee_dolgotrajna, ee_ozp, ee_total,
     incomeTax, netSalary, er_piz, er_zzzs, er_injury, er_unemployment, er_parental, er_dolgotrajna, er_total,
     // POPRAVLJENO (16.8.2026): povracila (prevoz, malica) so DEJANSKI strosek
     // delodajalca, prej pa nista bila vsteta v skupni strosek - podjetje je
@@ -84,14 +106,58 @@ function calcPayroll(grossSalary: number, dependents: number = 0, extras: {
 // minimalne place. Prej je funkcija obdavcila regres, ki je neobdavcen.
 const REGRES_TAXFREE_LIMIT = REGRES_TAX_FREE_LIMIT // iz lib/tax-constants.ts (⚠️ gibljivo)
 
-function calcRegres(grossSalary: number): { amount: number; taxFree: number; taxable: number; netAmount: number } {
-  const amount = Math.max(MIN_WAGE, grossSalary) // vsaj minimalna plača
+/**
+ * OBRAČUN REGRESA (popravljeno 24.8.2026).
+ *
+ * KAJ JE BILO NAROBE:
+ *   1. Na obdavčljivi del se je uporabilo PAVŠALNIH 27 % dohodnine. Prava
+ *      akontacija se obračuna po LESTVICI, tako kot pri plači.
+ *   2. Od presežka se SPLOH NISO obračunali PRISPEVKI. Regres nad
+ *      neobdavčeno mejo je del plače in je zavezan prispevkom — tako
+ *      delojemalčevim kot delodajalčevim. Manjkali so v celoti.
+ *
+ * Do neobdavčene meje (100 % povprečne bruto plače RS) je regres prost
+ * prispevkov IN dohodnine. Obdavči se samo presežek.
+ *
+ * ⚠️ Metodo akontacije pri LOČENEM izplačilu regresa potrdi računovodkinja —
+ * tu uporabljamo isto lestvico kot pri plači, kar je najbližje pravilnemu.
+ */
+function calcRegres(grossSalary: number, monthlyRelief: number = GENERAL_RELIEF_MONTH): {
+  amount: number; taxFree: number; taxable: number
+  eeContrib: number; erContrib: number; tax: number; netAmount: number
+} {
+  const amount = Math.max(MIN_WAGE, grossSalary) // vsaj minimalna plača (ZDR-1)
   const taxFree = Math.min(amount, REGRES_TAXFREE_LIMIT)
   const taxable = Math.max(0, amount - taxFree)
-  // Davek samo na obdavčljivi del (dohodnina ~27% povprečno)
-  const tax = r(taxable * 0.27)
-  const netAmount = r(amount - tax)
-  return { amount, taxFree, taxable, netAmount }
+
+  if (taxable <= 0) {
+    // Najpogostejši primer: regres je pod mejo, torej v celoti neobdavčen.
+    return { amount, taxFree, taxable: 0, eeContrib: 0, erContrib: 0, tax: 0, netAmount: amount }
+  }
+
+  // 1. Prispevki od PRESEŽKA (prej jih ni bilo).
+  const eeStopnja = EE.piz + EE.zzzs + EE.unemployment + EE.parental + EE.dolgotrajnaOskrba
+  const erStopnja = ER.piz + ER.zzzs + ER.injury + ER.unemployment + ER.parental + ER.dolgotrajnaOskrba
+  const eeContrib = r(taxable * eeStopnja)
+  const erContrib = r(taxable * erStopnja)
+
+  // 2. Dohodnina po LESTVICI (prej pavšalnih 27 %).
+  //    Osnova = presežek minus prispevki delojemalca; olajšava je že
+  //    porabljena pri plači, zato je tu ne odštevamo znova.
+  const davcnaOsnova = Math.max(0, taxable - eeContrib)
+  const letnaOsnova = davcnaOsnova * 12
+  let davek = 0, prej = 0
+  for (const b of INCOME_TAX_BRACKETS) {
+    const meja = b.upTo === Infinity ? letnaOsnova : b.upTo
+    const delez = Math.min(letnaOsnova, meja) - prej
+    if (delez > 0) davek += delez * b.rate
+    prej = meja
+    if (b.upTo === Infinity || letnaOsnova <= meja) break
+  }
+  const tax = r(davek / 12)
+
+  const netAmount = r(amount - eeContrib - tax)
+  return { amount, taxFree, taxable, eeContrib, erContrib, tax, netAmount }
 }
 
 const MONTHS = ['Januar','Februar','Marec','April','Maj','Junij','Julij','Avgust','September','Oktober','November','December']
@@ -449,7 +515,9 @@ export default function PlacePage() {
     <tr><td>Regres za letni dopust ${year}</td><td class="r">€${formatEurNumber(regres.amount)}</td><td class="r">Bruto znesek</td></tr>
     <tr><td style="color:#16a34a">Neobdavčeni del (do min. plače)</td><td class="r" style="color:#16a34a">€${formatEurNumber(regres.taxFree)}</td><td class="r" style="color:#16a34a">Neobdavčeno</td></tr>
     ${regres.taxable > 0 ? `<tr><td style="color:#666">Obdavčljivi del</td><td class="r" style="color:#666">€${formatEurNumber(regres.taxable)}</td><td class="r" style="color:#666">—</td></tr>
-    <tr><td style="color:#dc2626">− Dohodnina (~27%)</td><td class="r" style="color:#dc2626">−€${formatEurNumber(r(regres.taxable * 0.27))}</td><td class="r" style="color:#dc2626">Akontacija</td></tr>` : ''}
+    <tr><td style="color:#dc2626">− Prispevki delojemalca</td><td class="r" style="color:#dc2626">−€${formatEurNumber(regres.eeContrib)}</td><td class="r" style="color:#dc2626">od presežka</td></tr>
+    <tr><td style="color:#dc2626">− Dohodnina (po lestvici)</td><td class="r" style="color:#dc2626">−€${formatEurNumber(regres.tax)}</td><td class="r" style="color:#dc2626">Akontacija</td></tr>
+    <tr><td style="color:#666">Prispevki delodajalca</td><td class="r" style="color:#666">€${formatEurNumber(regres.erContrib)}</td><td class="r" style="color:#666">dodatni strošek</td></tr>` : ''}
   </tbody>
 </table>
 
@@ -702,6 +770,26 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
               <div><label className="text-xs text-gray-500 block mb-1">Nadure (ur)</label>
                 <input type="number" onFocus={e => e.target.select()} value={calcExtras.overtime} onChange={e=>setCalcExtras({...calcExtras,overtime:parseFloat(e.target.value)||0})} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none" /></div>
             </div>
+            {/* OPOZORILA O OBRAČUNU (24.8.2026) — uporabnik mora vedeti, kje
+                obračun ne pove cele zgodbe. */}
+            {calcResult?.podOsnovo && (
+              <div style={{ marginBottom: 12, padding: '11px 13px', borderRadius: 9, background: 'rgba(184,140,40,0.1)', border: '1px solid rgba(184,140,40,0.3)', fontSize: 13, lineHeight: 1.55, color: '#8A5A00' }}>
+                <strong>Prispevki od najnižje osnove.</strong> Bruto plača je nižja od
+                najnižje osnove ({formatEurNumber(MIN_CONTRIBUTION_BASE)} €), zato so
+                prispevki obračunani od osnove, ne od plače. Razlika bremeni delodajalca.
+              </div>
+            )}
+
+            {calcResult?.dodatnaOlajsavaNiUpostevana && (
+              <div style={{ marginBottom: 12, padding: '11px 13px', borderRadius: 9, background: 'rgba(184,140,40,0.1)', border: '1px solid rgba(184,140,40,0.3)', fontSize: 13, lineHeight: 1.55, color: '#8A5A00' }}>
+                <strong>Dodatna splošna olajšava ni upoštevana.</strong> Pri nizkih
+                dohodkih pripada povečana olajšava, ki je odvisna od letnega dohodka —
+                mesečni obračun je ne pozna. Odtegnjena dohodnina je zato višja od
+                končne; razlika se poravna pri letnem obračunu. Za točen znesek se
+                posvetujte z računovodkinjo.
+              </div>
+            )}
+
             {calcResult && (
               <div className="bg-gray-900 rounded-xl p-4 text-white">
                 <div className="grid grid-cols-3 gap-4 text-center">
@@ -905,8 +993,8 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
                 </div>
                 {regresModal.regres.taxable > 0 && (
                   <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px', padding:'8px 0', borderBottom:'0.5px solid #f5f5f5' }}>
-                    <span style={{ color:'#dc2626' }}>Dohodnina (~27%)</span>
-                    <span style={{ color:'#dc2626', fontWeight:'500' }}>−€{formatEurNumber(r(regresModal.regres.taxable * 0.27))}</span>
+                    <span style={{ color:'#dc2626' }}>Dohodnina (po lestvici)</span>
+                    <span style={{ color:'#dc2626', fontWeight:'500' }}>−€{formatEurNumber(regresModal.regres.tax)}</span>
                   </div>
                 )}
                 <div style={{ display:'flex', justifyContent:'space-between', fontSize:'15px', padding:'10px 14px', background:'#0D1F12', borderRadius:'10px', marginTop:'4px' }}>

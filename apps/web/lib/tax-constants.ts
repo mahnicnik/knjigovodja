@@ -61,6 +61,23 @@ export const GENERAL_RELIEF_MONTH = 462.66
 /** Minimalna plača (bruto). Vir: Uradni list RS 6/2026, velja od 1.1.2026. */
 export const MIN_WAGE = 1481.88
 
+/**
+ * NAJNIŽJA OSNOVA ZA PLAČILO PRISPEVKOV (zaposleni).
+ *
+ * ⚠️ GIBLJIVA VREDNOST — uskladi se marca, ko SURS objavi povprečno plačo.
+ *
+ * Če je bruto plača NIŽJA od te osnove, se prispevki obračunajo od OSNOVE,
+ * ne od plače (ZPIZ-2). Ker je minimalna plača (1.481,88 €) nižja od nje,
+ * to zadeva vsakega zaposlenega na minimalni plači.
+ *
+ * Osnova: 60 % povprečne bruto plače 2025 (2.536,03 €) = 1.521,62 €.
+ *
+ * DODANO 24.8.2026: prej te preverbe v obračunu SPLOH NI BILO — prispevki
+ * so se računali od plače, kar pri minimalni plači pomeni PREMALO plačanih
+ * prispevkov (razlika ~40 € osnove mesečno).
+ */
+export const MIN_CONTRIBUTION_BASE = 1521.62
+
 /** Prispevki zaposlenca (delež bruto plače). */
 export const EMPLOYEE_CONTRIBUTIONS = {
   piz: 0.1550,

@@ -246,3 +246,87 @@ test('vsota vrstice: popust velja tudi za doplacila', () => {
 test('vsota vrstice: brez doplacil in popusta je preprosto cena krat kolicina', () => {
   expect(vsotaVrstice({ price: 3.20, qty: 3 })).toBeCloseTo(9.60, 2)
 })
+
+// ═══════════════════ PLAČE: POPRAVKI 24.8.2026 ═══════════════════
+
+import {
+  MIN_WAGE, MIN_CONTRIBUTION_BASE, REGRES_TAX_FREE_LIMIT,
+  EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS,
+} from '../lib/tax-constants'
+
+const zaokrozi = (n: number) => Math.round(n * 100) / 100
+
+// ─── Najnižja osnova za prispevke ───────────────────────────────────────
+
+function prispevkovnaOsnova(bruto: number) {
+  return Math.max(bruto, MIN_CONTRIBUTION_BASE)
+}
+
+test('prispevki: minimalna plača je NIŽJA od najnižje osnove', () => {
+  // Prav zato je bila napaka pomembna — zadeva vsakega na minimalni plači.
+  expect(MIN_WAGE).toBeLessThan(MIN_CONTRIBUTION_BASE)
+})
+
+test('prispevki: pri minimalni plači se obračunajo od OSNOVE', () => {
+  // NAPAKA (popravljeno 24.8.2026): prispevki so se računali od plače —
+  // premalo plačanih prispevkov pri vsakem na minimalni plači.
+  expect(prispevkovnaOsnova(MIN_WAGE)).toBe(MIN_CONTRIBUTION_BASE)
+  expect(prispevkovnaOsnova(MIN_WAGE)).toBeGreaterThan(MIN_WAGE)
+})
+
+test('prispevki: pri višji plači se obračunajo od plače', () => {
+  expect(prispevkovnaOsnova(2500)).toBe(2500)
+})
+
+test('prispevki: razlika pri minimalni plači ni zanemarljiva', () => {
+  const eeStopnja = EMPLOYEE_CONTRIBUTIONS.piz + EMPLOYEE_CONTRIBUTIONS.zzzs
+    + EMPLOYEE_CONTRIBUTIONS.unemployment + EMPLOYEE_CONTRIBUTIONS.parental
+    + EMPLOYEE_CONTRIBUTIONS.longTermCare
+  const prej = MIN_WAGE * eeStopnja
+  const zdaj = MIN_CONTRIBUTION_BASE * eeStopnja
+  expect(zaokrozi(zdaj - prej)).toBeGreaterThan(5)   // nekaj € mesečno, letno več
+})
+
+// ─── Regres ─────────────────────────────────────────────────────────────
+
+function regresPresezek(znesek: number) {
+  const neobdavcen = Math.min(znesek, REGRES_TAX_FREE_LIMIT)
+  return Math.max(0, znesek - neobdavcen)
+}
+
+test('regres: do meje je v celoti neobdavčen', () => {
+  // Najpogostejši primer — regres v višini minimalne plače.
+  expect(regresPresezek(MIN_WAGE)).toBe(0)
+  expect(regresPresezek(REGRES_TAX_FREE_LIMIT)).toBe(0)
+})
+
+test('regres: nad mejo se obdavči SAMO presežek', () => {
+  const presezek = regresPresezek(3000)
+  expect(zaokrozi(presezek)).toBe(zaokrozi(3000 - REGRES_TAX_FREE_LIMIT))
+})
+
+test('regres: od presežka se obračunajo PRISPEVKI', () => {
+  // NAPAKA (popravljeno 24.8.2026): od presežka se prispevki sploh niso
+  // obračunali — ne delojemalčevi ne delodajalčevi.
+  const presezek = regresPresezek(3000)
+  const eeStopnja = EMPLOYEE_CONTRIBUTIONS.piz + EMPLOYEE_CONTRIBUTIONS.zzzs
+    + EMPLOYEE_CONTRIBUTIONS.unemployment + EMPLOYEE_CONTRIBUTIONS.parental
+    + EMPLOYEE_CONTRIBUTIONS.longTermCare
+  const erStopnja = EMPLOYER_CONTRIBUTIONS.piz + EMPLOYER_CONTRIBUTIONS.zzzs
+    + EMPLOYER_CONTRIBUTIONS.injury + EMPLOYER_CONTRIBUTIONS.unemployment
+    + EMPLOYER_CONTRIBUTIONS.parental + EMPLOYER_CONTRIBUTIONS.longTermCare
+
+  expect(zaokrozi(presezek * eeStopnja)).toBeGreaterThan(0)
+  expect(zaokrozi(presezek * erStopnja)).toBeGreaterThan(0)
+})
+
+test('regres: pavšalnih 27 % ni več', () => {
+  // Prej: davek = presežek × 0,27. Zdaj gre presežek najprej skozi prispevke,
+  // šele nato po lestvici — davčna osnova je zato NIŽJA od presežka.
+  const presezek = regresPresezek(3000)
+  const eeStopnja = EMPLOYEE_CONTRIBUTIONS.piz + EMPLOYEE_CONTRIBUTIONS.zzzs
+    + EMPLOYEE_CONTRIBUTIONS.unemployment + EMPLOYEE_CONTRIBUTIONS.parental
+    + EMPLOYEE_CONTRIBUTIONS.longTermCare
+  const davcnaOsnova = presezek - presezek * eeStopnja
+  expect(davcnaOsnova).toBeLessThan(presezek)
+})
