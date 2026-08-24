@@ -109,3 +109,55 @@ mogli uvoziti.
   pokrita s testi; preverjena je bila ročno v testnem okolju FURS.
 - **Obračun plač** — regres, dodatna splošna olajšava in minimalna osnova
   imajo odprta vprašanja za računovodkinjo, zato testov zanje še ni.
+
+---
+
+## preveri-izbore.js
+
+```
+node skripte/preveri-izbore.js
+```
+
+Lovi napako, ki se je **24. 8. 2026 ponovila šestkrat v enem dnevu**: koda
+bere polje, ki ga poizvedba ni izbrala, ali stolpec, ki ga tabela sploh nima.
+
+```
+min_stock      items tega stolpca nima (pravi je low_stock)
+created_at     orders nima tega stolpca — v zgodovini je pisalo "Invalid Date"
+package_id     brali smo customer_package_id
+template_id    vgnezdeni izbor ga ni vseboval → predračun za 0,00 €
+cashier_id     izbor payments(...) ga ni vseboval → "Blagajnik: —"
+display_name   org_members tega stolpca sploh nima
+```
+
+Nobena ni javila napake. Supabase vrne `undefined`, JavaScript to prenese,
+aplikacija pa tiho dela narobe — dokler nekdo ne opazi napačne številke na
+dokumentu.
+
+**Preverba je hevristična.** Cilj ni ujeti vsega, ampak ujeti prav ta vzorec.
+Zato javlja samo primere, kjer stolpec **obstaja**, izbor pa ga ne vsebuje —
+to je podpis prave napake. Klici funkcij so izločeni.
+
+Opozorila o neobstoječih stolpcih se preverjajo proti `shema-baze.json`, ki
+je lahko zastarela — preverite, preden karkoli spremenite.
+
+---
+
+## preveri-teste.js
+
+```
+node skripte/preveri-teste.js             preveri
+node skripte/preveri-teste.js --posodobi  zapiši novo stanje
+```
+
+Opozori, če je testov **manj** kot pri zadnjem znanem stanju.
+
+Zakaj: pri dodajanju testov 24. 8. 2026 je podvojeno ime funkcije povzročilo,
+da Playwright ni javil napake, ampak samo `No tests found`. Videti je bilo,
+kot da vse dela, v resnici pa se **115 testov ni izvedlo**.
+
+Manj testov ni nujno napaka — včasih jih upravičeno odstranimo. Zato skripta
+ne pade, ampak zahteva potrditev z `--posodobi`. Ob zmanjšanju pokaže,
+**katere datoteke** se ne izvajajo.
+
+Zadnje znano stanje je v `stanje-testov.json`.
