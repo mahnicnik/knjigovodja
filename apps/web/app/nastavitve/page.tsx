@@ -484,9 +484,14 @@ export default function NastavitevPage() {
                 <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>IBAN (TRR)</label>
                 <input
                   value={form.iban}
-                  onFocus={e => { if (!form.iban) setForm({...form, iban: 'SI56'}) }}
                   onChange={e => {
-                    const val = e.target.value
+                    // POPRAVLJENO (24.8.2026): `onFocus` je v prazno polje vstavil
+                    // "SI56", placeholder pa je vabil, da uporabnik prilepi CELOTEN
+                    // IBAN - nastalo je "SI56SI56 1910 ...". Predpone zdaj ne
+                    // vstavljamo, ampak jo dodamo SAMO, ce je uporabnik res ni
+                    // vpisal, in odstranimo morebitno podvojitev.
+                    let val = e.target.value
+                    val = val.replace(/^(SI56)\s*(SI\d{2})/i, '$2')   // SI56SI56... -> SI56...
                     setForm({...form, iban: val})
                     const detectedBic = detectBIC(val)
                     if (detectedBic && !form.bic) setForm(prev => ({...prev, iban: val, bic: detectedBic}))

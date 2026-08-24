@@ -58,7 +58,7 @@ export default function ObnovaKartice() {
       const d = await res.json()
       if (!res.ok) {
         setNapaka(
-          d.napaka === 'manjka_iban'
+          (d.napaka === 'manjka_iban' || d.napaka === 'paket_brez_cene')
             ? 'Predračuna trenutno ni mogoče izdati. Pokličite nas in uredimo drugače.'
             : 'Predračuna ni bilo mogoče ustvariti. Poskusite znova ali nas pokličite.'
         )
@@ -116,6 +116,14 @@ export default function ObnovaKartice() {
                     )}
                     <tr><td style={{ color: '#6b6962', padding: '3px 0' }}>Cena:</td>
                         <td style={{ textAlign: 'right', fontWeight: 700, fontSize: 15 }}>{eur(podatki.cena)}</td></tr>
+                    {/* DODANO (24.8.2026): stranka nikjer ni izvedela, DO KDAJ bo
+                        kartica veljala po podaljšanju. */}
+                    {podatki.novoObdobje && (
+                      <tr><td style={{ color: '#6b6962', padding: '3px 0' }}>Novo obdobje:</td>
+                          <td style={{ textAlign: 'right', fontWeight: 600 }}>
+                            {datum(podatki.novoObdobje.od)} – {datum(podatki.novoObdobje.do)}
+                          </td></tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -138,7 +146,9 @@ export default function ObnovaKartice() {
               <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Predračun je pripravljen</div>
               <div style={{ fontSize: 13, color: '#6b6962', lineHeight: 1.6, marginBottom: 18 }}>
                 {rezultat
-                  ? 'Podatke za plačilo najdete spodaj. Kartico podaljšamo takoj, ko je plačilo prejeto.'
+                  ? (rezultat.poslano === false
+                      ? 'Podatke za plačilo najdete spodaj. Sporočila vam nismo mogli poslati — prosimo, shranite si te podatke.'
+                      : 'Predračun smo vam poslali po e-pošti. Podatke za plačilo najdete tudi spodaj.')
                   : 'Za to kartico je predračun že izdan. Če ga niste prejeli, nas pokličite.'}
               </div>
 
@@ -158,6 +168,18 @@ export default function ObnovaKartice() {
                           <td style={{ textAlign: 'right', fontWeight: 600 }}>{datum(rezultat.veljaDo)}</td></tr>
                     </tbody>
                   </table>
+
+                  {/* D3 (24.8.2026): QR koda tudi TU. Stranka, ki plača s
+                      telefona, je prej videla samo IBAN in sklic. */}
+                  {rezultat.qr && (
+                    <div style={{ textAlign: 'center', marginTop: 14, paddingTop: 14, borderTop: '1px solid #E4E1D8' }}>
+                      <img src={rezultat.qr} alt="UPN QR koda za plačilo"
+                        style={{ width: 180, height: 180, display: 'block', margin: '0 auto' }}/>
+                      <div style={{ fontSize: 12, color: '#6b6962', marginTop: 8 }}>
+                        Skenirajte z bančno aplikacijo
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </>

@@ -1103,7 +1103,7 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
           // racuna (npr. "mahnic.nik+test1"), ne ime osebe, ki je racun izdala.
           // Prav sledljivost "kdo je izdal racun" je razlog, da ima vsak svoj
           // PIN - na dokumentu se je to izgubilo.
-          cashierDisplayName = auth?.user?.name || user.email?.split('@')[0] || ''
+          cashierDisplayName = auth?.user?.name || ''
         }
       } catch (e) { console.warn('Receipt meta load:', e) }
 
@@ -6230,7 +6230,7 @@ function OpenCashModal({ posData, auth, onClose, onOpened }) {
       const { data: org } = member ? await createClient().from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
       // POPRAVLJENO (16.8.2026): ime PIN-prijavljene osebe namesto predpone
       // e-naslova racuna.
-      const cashierName = auth?.user?.name || user.email?.split('@')[0] || ''
+      const cashierName = auth?.user?.name || ''
 
       // Natisni otvoritev
       const html = buildOpeningReceipt({
@@ -6318,7 +6318,7 @@ function VmesnoStanjeModal({ session, posData, auth, onClose }) {
       const { data: org } = member ? await createClient().from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
       const { data: allSessions } = await createClient().from('cash_sessions').select('id').eq('business_id', BUSINESS_ID).order('created_at', { ascending: true })
       const sessionNumber = (allSessions || []).findIndex(s => s.id === session.id) + 1
-      const cashierName = auth?.user?.name || user?.email?.split('@')[0] || ''
+      const cashierName = auth?.user?.name || ''
 
       const html = buildXReportReceipt({
         session,
@@ -6502,7 +6502,7 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
       }
       const { data: allSessions } = await createClient().from('cash_sessions').select('id').eq('business_id', BUSINESS_ID).order('created_at', { ascending: true })
       const sessionNumber = (allSessions || []).findIndex(s => s.id === session.id) + 1
-      const cashierName = auth?.user?.name || user.email?.split('@')[0] || ''
+      const cashierName = auth?.user?.name || ''
 
       // Natisni Z-poročilo
       const updatedSession = { ...session, closed_at: casZakljucka, closing_note: note }
@@ -7433,7 +7433,7 @@ function VoidModal({ order, lines, payment, posData, auth, onClose, onVoided }) 
 
       // 5. Natisni storno račun
       const { data: org } = member ? await createClient().from('organizations').select('*').eq('id', member.org_id).single() : { data: null }
-      const cashierName = auth?.user?.name || user.email?.split('@')[0] || ''
+      const cashierName = auth?.user?.name || ''
       const html = buildStornoReceiptHTML({
         order, lines, payment, org, cashierName,
         voidEor: fursData.eor,
@@ -7937,20 +7937,26 @@ function OrdersScreen({ posData, auth }) {
           }
         }
 
-        // Cashier ime
+        // BLAGAJNIK NA RACUNU (popravljeno 24.8.2026).
+        //
+        // NAPAKA: iskali smo v `org_members` po `user_id`, `cashier_id` pa je
+        // ID OSEBJA BLAGAJNE (tabela `staff`) - ujemanja ni bilo nikoli, zato
+        // je koda padla na predpono e-naslova. Na racunu je pisalo
+        // "mahnic.nik+test1" namesto imena blagajnika. Na davcnem dokumentu je
+        // to napacen podatek.
         if (payment?.cashier_id) {
-          const { data: cashUser } = await db.from('org_members')
-            .select('display_name, user_id')
-            .eq('user_id', payment.cashier_id)
-            .maybeSingle()
-          cashierName = cashUser?.display_name || ''
+          const { data: osebje } = await db.from('staff')
+            .select('name').eq('id', payment.cashier_id).maybeSingle()
+          cashierName = osebje?.name || ''
         }
         if (!cashierName) {
           const { data: me } = await db.from('org_members')
             .select('display_name')
             .eq('user_id', user.id)
             .maybeSingle()
-          cashierName = me?.display_name || user.email?.split('@')[0] || ''
+          // Predpone e-naslova NE uporabimo - raje pustimo prazno, kot da na
+          // davcni dokument zapisemo nekaj, kar ni ime.
+          cashierName = me?.display_name || ''
         }
       }
     } catch (e) {}
@@ -11894,6 +11900,7 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
   // Korak 4 (24.8.2026): zahtevki, ki cakajo na placilo — kljuc je ID kartice.
   const [cakaNaPlacilo, setCakaNaPlacilo] = useState<Record<string, string>>({})
   const [potrjujem, setPotrjujem] = useState<string | null>(null)
+  const [osvezitevStevec, setOsvezitevStevec] = useState(0)
 
   useEffect(() => {
     ;(async () => {
@@ -11906,7 +11913,16 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
       for (const r of (data || [])) m[r.customer_package_id] = r.id
       setCakaNaPlacilo(m)
     })()
-  }, [notifications.length])
+    // POPRAVLJENO (24.8.2026): seznam se je osvezil SAMO ob spremembi stevila
+    // obvestil. Na terminalu, ki je odprt ves dan, lastnik ni izvedel, da je
+    // stranka narocila podaljsanje - dokler ni strani nalozil znova.
+  }, [notifications.length, osvezitevStevec])
+
+  // Vsakih 60 sekund preverimo, ali je prisel nov zahtevek ali obvestilo.
+  useEffect(() => {
+    const t = setInterval(() => setOsvezitevStevec(x => x + 1), 60000)
+    return () => clearInterval(t)
+  }, [])
 
   /**
    * Potrdi, da je placilo predracuna prispelo (24.8.2026).
@@ -12143,7 +12159,10 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
                               Izda racun, ga poslje stranki, PODALJSA kartico od
                               dneva PO izteku stare in opusti to obvestilo.
                               Prikaze se le, ce je stranka ze narocila predracun. */}
-                          {cakaNaPlacilo[n.package_id] && (
+                          {/* Gumb SAMO pri obvestilu o predracunu (24.8.2026).
+                              Prej se je pokazal pri obeh obvestilih iste kartice -
+                              dve vstopni tocki za isto dejanje sta zmedli. */}
+                          {cakaNaPlacilo[n.package_id] && String(n.message || '').includes('predračun') && (
                             <button onClick={()=>potrdiPlacilo(n)} disabled={potrjujem===n.id}
                               style={{ marginLeft:6, padding:'4px 10px', borderRadius:7, border:'none', background:T.accent, color:'#fff', fontSize:11, fontWeight:700, cursor: potrjujem===n.id ? 'wait' : 'pointer', fontFamily:'inherit' }}>
                               {potrjujem===n.id ? 'Potrjujem…' : '✓ Plačilo prejeto'}

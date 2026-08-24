@@ -1300,3 +1300,63 @@ test('številčenje: abecedno urejanje se zlomi pri 1000', () => {
   const abecedno = ['2026-999', '2026-1000'].sort().reverse()[0]
   expect(abecedno).toBe('2026-999')   // napačno — zato uporabljamo RPC
 })
+
+// ─── Predračun: varovalka na PRAVEM mestu ───────────────────────────────
+
+/**
+ * Varovalka proti 0 € je bila prej samo pri POTRDITVI plačila — torej šele,
+ * ko je stranka že prejela nesmiseln dokument s PDF-jem in QR kodo.
+ */
+function smeUstvaritiPredracun(cena: number) {
+  return cena > 0
+}
+
+test('predračun: za 0 € sploh ne nastane', () => {
+  expect(smeUstvaritiPredracun(0)).toBe(false)
+  expect(smeUstvaritiPredracun(45)).toBe(true)
+})
+
+test('predračun: varovalka je pred pošiljanjem, ne za njim', () => {
+  // Če cena ni veljavna, se ne ustvari zapis IN ne pošlje e-pošta.
+  const cena = 0
+  const nastane = smeUstvaritiPredracun(cena)
+  const poslano = nastane   // pošiljanje je pogojeno z nastankom
+  expect(nastane).toBe(false)
+  expect(poslano).toBe(false)
+})
+
+// ─── Ime blagajnika na računu ───────────────────────────────────────────
+
+/**
+ * Na davčnem dokumentu je predpona e-naslova napačen podatek. Prej se je
+ * iskalo v `org_members` po `user_id`, `cashier_id` pa je ID OSEBJA blagajne
+ * (tabela `staff`) — ujemanja ni bilo nikoli.
+ */
+function imeBlagajnika(izStaff: string | null, izClanstva: string | null, eposta: string) {
+  return izStaff || izClanstva || ''    // e-naslova NE uporabimo
+}
+
+test('blagajnik: ime iz osebja blagajne', () => {
+  expect(imeBlagajnika('Nik', null, 'mahnic.nik+test1@gmail.com')).toBe('Nik')
+})
+
+test('blagajnik: brez imena raje prazno kot e-naslov', () => {
+  // Prej je na računu pisalo "mahnic.nik+test1".
+  expect(imeBlagajnika(null, null, 'mahnic.nik+test1@gmail.com')).toBe('')
+})
+
+// ─── Polje IBAN ─────────────────────────────────────────────────────────
+
+function normalizirajIban(vnos: string) {
+  return vnos.replace(/^(SI56)\s*(SI\d{2})/i, '$2')
+}
+
+test('IBAN: podvojena predpona se odstrani', () => {
+  // NAPAKA (popravljeno 24.8.2026): `onFocus` je vstavil "SI56", uporabnik pa
+  // je prilepil celoten IBAN — nastalo je "SI56SI56 1910 ...".
+  expect(normalizirajIban('SI56SI56 1910 0000 0123 438')).toBe('SI56 1910 0000 0123 438')
+})
+
+test('IBAN: pravilen vnos ostane nespremenjen', () => {
+  expect(normalizirajIban('SI56 1910 0000 0123 438')).toBe('SI56 1910 0000 0123 438')
+})

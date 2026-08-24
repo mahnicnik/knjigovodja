@@ -99,9 +99,24 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     }
   }
 
+  // Novo obdobje po ISTEM pravilu kot potrditev placila: zacne se dan PO
+  // izteku stare kartice, ce ta se velja, sicer od danes (24.8.2026).
+  let novoObdobje: { od: string; do: string } | null = null
+  if (tmpl?.validity_days) {
+    const danes = new Date(); danes.setHours(0, 0, 0, 0)
+    const staro = kartica?.expires ? new Date(kartica.expires) : null
+    if (staro) staro.setHours(0, 0, 0, 0)
+    const zac = (staro && staro.getTime() >= danes.getTime())
+      ? new Date(staro.getTime() + 86400000)
+      : new Date(danes)
+    const kon = new Date(zac.getTime() + (Number(tmpl.validity_days) - 1) * 86400000)
+    novoObdobje = { od: lokalniDatum(zac), do: lokalniDatum(kon) }
+  }
+
   return NextResponse.json({
     status: z.status,
     placilo,
+    novoObdobje,
     stranka: (z.customers as any)?.name ?? '',
     paket: tmpl?.name ?? kartica?.name ?? 'Kartica',
     cena: Number(tmpl?.price ?? 0),
@@ -141,6 +156,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const tmpl: any = z.package_templates
   const stranka: any = z.customers
   const cena = Number(tmpl?.price ?? 0)
+
+  // VAROVALKA (24.8.2026): predracuna za 0 EUR SPLOH NE ustvarimo.
+  //
+  // Prej je varovalka obstajala samo pri potrditvi placila - torej sele, ko je
+  // stranka ze prejela nesmiseln dokument s PDF prilogo in QR kodo za 0 EUR.
+  // Cena 0 pomeni, da kartica nima predloge paketa; to je napaka na nasi
+  // strani, zato stranki povemo vljudno in je ne obremenimo z njo.
+  if (!(cena > 0)) {
+    console.error('Predracun ni ustvarjen: paket nima cene (zahtevek ' + z.id + ')')
+    return NextResponse.json({ napaka: 'paket_brez_cene' }, { status: 409 })
+  }
   const stopnja = Number(tmpl?.vat_rate ?? 22)
   const osnova = stopnja > 0 ? cena / (1 + stopnja / 100) : cena
   const ddv = cena - osnova
@@ -200,6 +226,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   // "predracun vam posljemo takoj", klica pa ni bilo nikjer - stranka je
   // dobila samo zapis v aplikaciji, ki ga sama ne vidi.
   let poslano = false
+  let qrZaStran: string | null = null   // D3: koda tudi na javni strani
   if (stranka?.email && process.env.RESEND_API_KEY) {
     try {
       const zaPdf = {
@@ -249,16 +276,44 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
           }] : []),
         ],
       } as any)
-      if (!reErr) poslano = true
+      // F3 (24.8.2026): posiljanje predracuna se ni belezilo nikjer - ce ga je
+      // Resend zavrnil, se je to videlo samo v strezniskem dnevniku.
+      await db.from('invoice_emails').insert({
+        invoice_id: null,
+        org_id: org.id,
+        to_email: stranka.email,
+        subject: `Predračun ${predracun.quote_number} — podaljšanje kartice`,
+        message: 'Predračun za podaljšanje kartice, na zahtevo stranke',
+        status: reErr ? 'failed' : 'sent',
+        error_message: reErr ? String(reErr.message) : null,
+        sent_at: reErr ? null : new Date().toISOString(),
+      })
+
+      if (!reErr) { poslano = true; qrZaStran = qr }
       else console.error('Predracuna ni bilo mogoce poslati:', reErr.message)
     } catch (e: any) {
       console.error('Predracuna ni bilo mogoce poslati:', e?.message || e)
     }
   }
 
+  // D3 (24.8.2026): stranka, ki placa s telefona, je na strani videla samo
+  // IBAN in sklic. Koda ze obstaja - pokazemo jo tudi tu.
+  if (!qrZaStran) {
+    try {
+      qrZaStran = await generateUpnQr({
+        invoice_number: predracun.quote_number,
+        amount_total: cena,
+        due_date: lokalniDatum(veljaDo),
+        client_name: stranka?.name ?? '',
+        reference: `SI00 ${predracun.quote_number}`,
+      }, org)
+    } catch { /* brez kode gre naprej - IBAN in sklic sta izpisana */ }
+  }
+
   return NextResponse.json({
     ok: true,
     poslano,
+    qr: qrZaStran || null,
     stevilka: predracun.quote_number,
     znesek: cena,
     iban: org.iban,

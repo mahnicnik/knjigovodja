@@ -421,7 +421,12 @@ export default function InvoicesPage() {
                       position: 'absolute', right: '24px', marginTop: '80px',
                       background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)',
                       borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-                      zIndex: 100, minWidth: '180px', overflow: 'hidden',
+                      // POPRAVLJENO (24.8.2026): meni je imel samo `minWidth`, zato
+                      // se je raztegnil cez CELOTNO sirino kartice. Vrstice so
+                      // klikljive po vsej dolzini, zato je klik, namenjen gumbu
+                      // "PDF", pristal na "Podvoji racun" - tako je med preizkusom
+                      // nastal nepotreben osnutek.
+                      zIndex: 100, width: '220px', maxWidth: '220px', overflow: 'hidden',
                     }}>
                       {inv.status !== 'paid' && inv.status !== 'cancelled' && (
                         <button
