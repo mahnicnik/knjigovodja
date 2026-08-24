@@ -258,7 +258,10 @@ function usePosData() {
           return
         }
         const { data: o } = await sb2.from('organizations')
-          .select('name, address, post_code, city, tax_number, vat_registered, furs_test_mode')
+          // POPRAVLJENO (24.8.2026): poizvedba ni prinesla telefona, e-poste in
+          // IBAN-a, zato je opomnik pisal "Oglasite se pri nas" brez stevilke,
+          // gumba za klic pa sploh ni bilo.
+          .select('name, address, post_code, city, tax_number, vat_registered, furs_test_mode, phone, email, iban, bic')
           .eq('id', mem.org_id).single()
         setFursTestMode(!!o?.furs_test_mode)
         setBusinessName(o?.name || '')
@@ -11883,6 +11886,58 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
   // Pokaze, ali je bila stranka ze obvescena in kdaj, ter omogoca zavestno
   // ponovno posiljanje - prej ni bilo nobenega vpogleda in nobene kontrole.
   const [posiljam, setPosiljam] = useState<string | null>(null)
+
+  // Korak 4 (24.8.2026): zahtevki, ki cakajo na placilo — kljuc je ID kartice.
+  const [cakaNaPlacilo, setCakaNaPlacilo] = useState<Record<string, string>>({})
+  const [potrjujem, setPotrjujem] = useState<string | null>(null)
+
+  useEffect(() => {
+    ;(async () => {
+      const { data } = await createClient()
+        .from('renewal_requests')
+        .select('id, customer_package_id')
+        .eq('business_id', BUSINESS_ID)
+        .eq('status', 'quoted')
+      const m: Record<string, string> = {}
+      for (const r of (data || [])) m[r.customer_package_id] = r.id
+      setCakaNaPlacilo(m)
+    })()
+  }, [notifications.length])
+
+  /**
+   * Potrdi, da je placilo predracuna prispelo (24.8.2026).
+   *
+   * Vse tezko delo opravi streznik: izda racun, ga poslje in podaljsa kartico.
+   * Tu samo pokazemo, kaj se je zgodilo.
+   */
+  async function potrdiPlacilo(n: any) {
+    const zahtevekId = cakaNaPlacilo[n.package_id]
+    if (!zahtevekId) return
+    if (!confirm('Potrdim, da je plačilo prispelo?\n\nIzdal se bo račun, kartica pa bo podaljšana od dneva po izteku.')) return
+
+    setPotrjujem(n.id)
+    try {
+      const res = await fetch('/api/obnova/potrdi-placilo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ zahtevekId }),
+      })
+      const d = await res.json()
+      if (!res.ok) { alert(d.error || 'Potrditev ni uspela.'); setPotrjujem(null); return }
+
+      alert(
+        `Račun ${d.stevilka} je izdan, kartica velja do ${new Date(d.veljaDo).toLocaleDateString('sl-SI')}.\n\n`
+        + (d.poslano
+            ? 'Račun je poslan stranki po e-pošti.'
+            : `Računa NI bilo mogoče poslati: ${d.napakaPoste || 'stranka nima e-naslova'}`)
+      )
+      posData.refresh()
+      window.location.reload()
+    } catch (e: any) {
+      alert('Potrditev ni uspela: ' + (e?.message || e))
+    }
+    setPotrjujem(null)
+  }
   async function posljiStranki(n: any) {
     const cust = n.customers
     if (!cust?.email) { alert('Stranka nima vnesenega e-naslova.'); return }
@@ -11909,11 +11964,15 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
       // prej vodil v prazno (href="#"); zdaj vodi na stran, kjer si stranka
       // sama narosi predracun.
       let zetonObnove: string | null = null
-      if (n.customer_package_id) {
+      // POPRAVLJENO (24.8.2026): tabela `pos_notifications` ima stolpec
+      // `package_id`, ne `customer_package_id` - pogoj zato NIKOLI ni drzal,
+      // zeton se ni ustvaril in gumba "Podaljsaj kartico" v e-posti ni bilo.
+      const karticaId = n.package_id ?? n.customer_package_id ?? null
+      if (karticaId) {
         const { data: obstojec } = await createClient()
           .from('renewal_requests')
           .select('token')
-          .eq('customer_package_id', n.customer_package_id)
+          .eq('customer_package_id', karticaId)
           .in('status', ['pending', 'quoted'])
           .gt('expires_at', new Date().toISOString())
           .maybeSingle()
@@ -11926,7 +11985,7 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
             token: nov,
             business_id: BUSINESS_ID,
             customer_id: n.customer_id,
-            customer_package_id: n.customer_package_id,
+            customer_package_id: karticaId,
             template_id: n.customer_packages?.template_id ?? null,
           })
           if (!zErr) zetonObnove = nov
@@ -12063,12 +12122,23 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
                             </span>
                           )
                         })()}
-                        {n.customers?.email && (
+                        {n.customers?.email && (<>
                           <button onClick={()=>posljiStranki(n)} disabled={posiljam===n.id}
                             style={{ fontSize:11, fontWeight:600, color:T.accent, background:'none', border:'1px solid '+T.line, borderRadius:6, padding:'2px 8px', cursor:posiljam===n.id?'default':'pointer', fontFamily:'inherit', opacity:posiljam===n.id?0.5:1 }}>
                             {posiljam===n.id ? 'Pošiljam…' : (n.email_sent || notifications.some((o: any) => o.customer_id === n.customer_id && o.package_id === n.package_id && o.email_sent)) ? 'Pošlji znova' : 'Pošlji stranki'}
                           </button>
-                        )}
+
+                          {/* DODANO (24.8.2026): korak 4 — potrditev placila.
+                              Izda racun, ga poslje stranki, PODALJSA kartico od
+                              dneva PO izteku stare in opusti to obvestilo.
+                              Prikaze se le, ce je stranka ze narocila predracun. */}
+                          {cakaNaPlacilo[n.package_id] && (
+                            <button onClick={()=>potrdiPlacilo(n)} disabled={potrjujem===n.id}
+                              style={{ marginLeft:6, padding:'4px 10px', borderRadius:7, border:'none', background:T.accent, color:'#fff', fontSize:11, fontWeight:700, cursor: potrjujem===n.id ? 'wait' : 'pointer', fontFamily:'inherit' }}>
+                              {potrjujem===n.id ? 'Potrjujem…' : '✓ Plačilo prejeto'}
+                            </button>
+                          )}
+                        </>)}
                       </div>
                     )}
                   </div>

@@ -53,8 +53,18 @@ const PUBLIC_PREFIXES = [
   '/api/webhooks',
 ]
 
+/**
+ * Poti, ki se ujemajo z javno predpono, a morajo OSTATI zascitene.
+ *
+ * DODANO (24.8.2026): `/api/obnova` je javen, ker stranka pride iz opomnika
+ * brez prijave. Potrditev placila pa izda RACUN in podaljsa kartico - to sme
+ * samo lastnik. Brez te izjeme bi `startsWith` odprl tudi njo.
+ */
+const ZASCITENE_IZJEME = ['/api/obnova/potrdi-placilo']
+
 function isPublicPath(pathname: string): boolean {
   if (pathname === '/') return true
+  if (ZASCITENE_IZJEME.some((p) => pathname.startsWith(p))) return false
   return PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))
 }
 

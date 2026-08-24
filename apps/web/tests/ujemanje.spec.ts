@@ -1179,3 +1179,61 @@ test('obnova: oproščen paket ostane brez DDV', () => {
   expect(osnova).toBe(450)
   expect(cena - osnova).toBe(0)
 })
+
+// ─── Podaljšanje: začetek novega obdobja ────────────────────────────────
+
+/**
+ * Novo obdobje se začne DAN PO izteku stare kartice. Če kartica velja do 22.,
+ * novo obdobje teče od 23. — član ne izgubi plačanih dni in med obdobjema ni
+ * luknje. Če je stara že potekla, teče od danes.
+ */
+function novoObdobje(staroPotece: string | null, dni: number, danes: Date) {
+  const d = new Date(danes); d.setHours(0, 0, 0, 0)
+  const staro = staroPotece ? new Date(staroPotece) : null
+  if (staro) staro.setHours(0, 0, 0, 0)
+
+  const zacetek = (staro && staro.getTime() >= d.getTime())
+    ? new Date(staro.getTime() + 86400000)
+    : new Date(d)
+  const konec = new Date(zacetek.getTime() + (dni - 1) * 86400000)
+  const p = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`
+  return { od: p(zacetek), do: p(konec) }
+}
+
+test('podaljšanje: novo obdobje se začne dan PO izteku', () => {
+  // Kartica velja do 29. 8., podaljšanje potrjeno 24. 8.
+  const o = novoObdobje('2026-08-29', 30, new Date(2026, 7, 24))
+  expect(o.od).toBe('2026-08-30')
+  expect(o.do).toBe('2026-09-28')
+})
+
+test('podaljšanje: član ne izgubi plačanih dni', () => {
+  // Podaljša teden vnaprej — teh 7 dni mora obdržati.
+  const o = novoObdobje('2026-08-29', 30, new Date(2026, 7, 22))
+  expect(o.od).toBe('2026-08-30')   // NE 2026-08-22
+})
+
+test('podaljšanje: potekla kartica teče od danes', () => {
+  const o = novoObdobje('2026-08-01', 30, new Date(2026, 7, 24))
+  expect(o.od).toBe('2026-08-24')
+})
+
+test('podaljšanje: 30-dnevno obdobje traja 30 dni, ne 31', () => {
+  const o = novoObdobje(null, 30, new Date(2026, 7, 24))
+  const dni = (new Date(o.do).getTime() - new Date(o.od).getTime()) / 86400000 + 1
+  expect(dni).toBe(30)
+})
+
+function noviObiski(trenutni: number | null, izPredloge: number | null) {
+  if (trenutni === null || trenutni === undefined || !izPredloge) return null
+  return trenutni + izPredloge
+}
+
+test('podaljšanje: obiski se prištejejo, ne nadomestijo', () => {
+  // Član ima še 3 obiske in kupi novih 10 — plačal jih je, torej ima 13.
+  expect(noviObiski(3, 10)).toBe(13)
+})
+
+test('podaljšanje: članarina nima obiskov', () => {
+  expect(noviObiski(null, null)).toBeNull()
+})
