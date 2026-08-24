@@ -53,6 +53,10 @@ const SECTIONS = [
   { id: 'plan',         icon: '⭐', label: 'Naročnina',          desc: 'Plan, nadgradnja' },
   { id: 'racunovodja',  icon: '📒', label: 'Računovodja portal', desc: 'Dostop računovodje' },
   { id: 'api',          icon: '🔑', label: 'API ključi',         desc: 'Integracije, dostop' },
+  // DODANO (24.8.2026): integracije so bile edini razdelek nastavitev, ki je
+  // zivel v glavnem meniju - uporabnik jih je iskal tu, ker so nastavitev.
+  // Kartica pelje naravnost na /integracije, stran ostane, kjer je.
+  { id: 'integracije',  icon: '🔌', label: 'Integracije',        desc: 'Stripe, WooCommerce, Shopify', href: '/integracije' },
   { id: 'email',        icon: '📧', label: 'E-mail skeniranje',  desc: 'Avtomatski uvoz stroškov' },
 ]
 
@@ -239,7 +243,7 @@ export default function NastavitevPage() {
         {/* Hub kartic */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: 10, marginBottom: 28 }}>
           {SECTIONS.map(s => (
-            <button key={s.id} onClick={() => setActiveSection(s.id)}
+            <button key={s.id} onClick={() => (s as any).href ? router.push((s as any).href) : setActiveSection(s.id)}
               style={{
                 background: activeSection === s.id ? '#0D1F12' : '#fff',
                 color: activeSection === s.id ? '#fff' : '#333',
@@ -251,6 +255,8 @@ export default function NastavitevPage() {
               <span style={{ fontSize: 24 }}>{s.icon}</span>
               <span style={{ fontSize: 11, fontWeight: 700, textAlign: 'center', lineHeight: 1.3 }}>
                 {s.label}
+                {/* Pušcica pove, da kartica odpre SVOJO stran, ne razdelka tu. */}
+                {(s as any).href && <span style={{ opacity: 0.5, marginLeft: 3 }}>↗</span>}
               </span>
               <span style={{ fontSize: 10, opacity: 0.6, textAlign: 'center', lineHeight: 1.3 }}>{s.desc}</span>
             </button>

@@ -17,11 +17,10 @@ const NAV_DEFAULT = [
     { href: '/ai',          icon: 'ti-robot',            label: 'AI računovodja' },
   ]},
   { label: 'Poslovanje', items: [
-    // SPREMENJENO (19.8.2026): prej samo "Stripe uvoz". Integracije za
-    // WooCommerce in Shopify so obstajale (zaledje + nastavitvena stran), a v
-    // meniju jih ni bilo - dosegljive so bile le prek hitrih povezav na
-    // Dashboardu, kar je bilo enostavno spregledati.
-    { href: '/integracije', icon: 'ti-plug-connected', label: 'Integracije' },
+    // PRESTAVLJENO V NASTAVITVE (24.8.2026): integracije so bile edini
+    // razdelek nastavitev v glavnem meniju - Ekipa, Racunovodja portal in
+    // E-mail skeniranje so ze bili tam. Zdaj so na istem mestu kot ostalo,
+    // stran /integracije pa ostaja nespremenjena.
     { href: '/invoices/new', icon: 'ti-file-plus',     label: 'Nov račun' },
     { href: '/invoices',     icon: 'ti-file-invoice',  label: 'Računi' },
     { href: '/expenses',     icon: 'ti-receipt',       label: 'Stroški' },
