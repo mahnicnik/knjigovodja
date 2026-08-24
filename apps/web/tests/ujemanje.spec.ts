@@ -1360,3 +1360,62 @@ test('IBAN: podvojena predpona se odstrani', () => {
 test('IBAN: pravilen vnos ostane nespremenjen', () => {
   expect(normalizirajIban('SI56 1910 0000 0123 438')).toBe('SI56 1910 0000 0123 438')
 })
+
+// ─── Ime blagajnika: cela pot ───────────────────────────────────────────
+
+/**
+ * Na davčnem dokumentu je predpona e-naslova napačen podatek. Napaka je bila
+ * v treh plasteh hkrati:
+ *   1. poizvedba ni izbrala `cashier_id`
+ *   2. rezerva je brala `org_members.display_name` — tega stolpca ni
+ *   3. `catch` je napako pogoltnil, zato je ime ostalo prazno
+ */
+function imeBlagajnikaIzPlacila(payment: any, staffPoId: Record<string, string>, staffPoUporabniku: string | null) {
+  if (payment?.cashier_id && staffPoId[payment.cashier_id]) return staffPoId[payment.cashier_id]
+  return staffPoUporabniku || ''
+}
+
+test('blagajnik: ime iz plačila, kadar je cashier_id izbran', () => {
+  const p = imeBlagajnikaIzPlacila({ cashier_id: 's1' }, { s1: 'Nik' }, null)
+  expect(p).toBe('Nik')
+})
+
+test('blagajnik: brez cashier_id v izboru pade na rezervo', () => {
+  // NAPAKA (popravljeno 24.8.2026): poizvedba `payments(...)` ni vsebovala
+  // `cashier_id`, zato je bil vedno undefined — na računu je pisalo „—".
+  const p = imeBlagajnikaIzPlacila({}, { s1: 'Nik' }, 'Nik')
+  expect(p).toBe('Nik')
+})
+
+test('blagajnik: brez obojega ostane prazno, NE e-naslov', () => {
+  expect(imeBlagajnikaIzPlacila({}, {}, null)).toBe('')
+})
+
+// ─── Beleženje poslane pošte ────────────────────────────────────────────
+
+/**
+ * `invoice_emails.invoice_id` je bil OBVEZEN, predračun pa računa nima —
+ * vstavljanje je tiho spodletelo in pošiljanje predračunov se ni beležilo.
+ */
+function zapisPoste(invoiceId: string | null, quoteId: string | null) {
+  const veljaven = (!!invoiceId && !quoteId) || (!invoiceId && !!quoteId)
+  return { veljaven, invoice_id: invoiceId, quote_id: quoteId }
+}
+
+test('pošta: zapis za račun je veljaven', () => {
+  expect(zapisPoste('inv1', null).veljaven).toBe(true)
+})
+
+test('pošta: zapis za predračun je veljaven', () => {
+  expect(zapisPoste(null, 'q1').veljaven).toBe(true)
+})
+
+test('pošta: zapis brez dokumenta ni veljaven', () => {
+  // Sicer bi beleženje izgledalo, kot da deluje, dokler ne bi kdo iskal
+  // konkretnega dokumenta.
+  expect(zapisPoste(null, null).veljaven).toBe(false)
+})
+
+test('pošta: zapis z obema dokumentoma ni veljaven', () => {
+  expect(zapisPoste('inv1', 'q1').veljaven).toBe(false)
+})

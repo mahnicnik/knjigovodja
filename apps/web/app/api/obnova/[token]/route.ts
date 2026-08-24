@@ -278,8 +278,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       } as any)
       // F3 (24.8.2026): posiljanje predracuna se ni belezilo nikjer - ce ga je
       // Resend zavrnil, se je to videlo samo v strezniskem dnevniku.
-      await db.from('invoice_emails').insert({
-        invoice_id: null,
+      // POPRAVLJENO (24.8.2026): vstavljanje je TIHO SPODLETELO, ker je bil
+      // `invoice_id` obvezen, predracun pa racuna nima. SQL 09 doda `quote_id`
+      // in sprosti `invoice_id`.
+      const { error: logErr } = await db.from('invoice_emails').insert({
+        quote_id: predracun.id,
         org_id: org.id,
         to_email: stranka.email,
         subject: `Predračun ${predracun.quote_number} — podaljšanje kartice`,
@@ -288,6 +291,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
         error_message: reErr ? String(reErr.message) : null,
         sent_at: reErr ? null : new Date().toISOString(),
       })
+      if (logErr) console.error('Zapisa o poslanem predracunu ni bilo mogoce shraniti:', logErr.message)
 
       if (!reErr) { poslano = true; qrZaStran = qr }
       else console.error('Predracuna ni bilo mogoce poslati:', reErr.message)

@@ -7573,7 +7573,9 @@ function RefundModal({ order, lines, payment, auth, onClose, onRefunded }) {
       const html = buildRefundReceiptHTML({
         order, refundAmount,
         reason: reason || 'Delno vračilo',
-        cashierName: user.email?.split('@')[0] || '',
+        // POPRAVLJENO (24.8.2026): na listku vracila je pristala PREDPONA
+        // E-NASLOVA namesto imena. Ime osebja blagajne je v `auth.user.name`.
+        cashierName: auth?.user?.name || '',
       })
       const w = window.open('', '_blank', 'width=380,height=600')
       if (w) { w.document.write(html); w.document.close() }
@@ -7830,7 +7832,11 @@ function OrdersScreen({ posData, auth }) {
       // placila" shranjuje z `.eq('id', payment.id)` - ker id ni bil izbran, je
       // bil undefined, poizvedba ni zadela nobene vrstice in sprememba se ni
       // shranila. Napake ni javilo, ker Supabase update brez zadetka NI napaka.
-      .select('*, payments(id, method, amount, furs_zoi, furs_eor, paid_at)')
+      // POPRAVLJENO (24.8.2026): izbor ni vseboval `cashier_id`, zato
+      // `payment?.cashier_id` ni bil nikoli definiran - iskanje imena
+      // blagajnika se je preskocilo in na racunu je pisalo "Blagajnik: —".
+      // Ista vrsta napake kot `package_id` in `template_id`.
+      .select('*, payments(id, method, amount, furs_zoi, furs_eor, paid_at, cashier_id)')
       .eq('business_id', BUSINESS_ID)
       .in('status', ['paid', 'voided'])
       .order('closed_at', { ascending: false })
@@ -7950,13 +7956,16 @@ function OrdersScreen({ posData, auth }) {
           cashierName = osebje?.name || ''
         }
         if (!cashierName) {
-          const { data: me } = await db.from('org_members')
-            .select('display_name')
-            .eq('user_id', user.id)
-            .maybeSingle()
-          // Predpone e-naslova NE uporabimo - raje pustimo prazno, kot da na
-          // davcni dokument zapisemo nekaj, kar ni ime.
-          cashierName = me?.display_name || ''
+          // POPRAVLJENO (24.8.2026): brali smo `org_members.display_name`,
+          // tega stolpca pa v tabeli SPLOH NI - poizvedba je vrnila napako,
+          // `catch` jo je pogoltnil in ime je ostalo prazno. Osebje blagajne
+          // je v tabeli `staff`; poiscemo prijavljenega uporabnika tam.
+          const { data: jaz } = await db.from('staff')
+            .select('name').eq('user_id', user.id).eq('active', true)
+            .limit(1).maybeSingle()
+          // Predpone e-naslova NE uporabimo - raje prazno, kot da na davcni
+          // dokument zapisemo nekaj, kar ni ime.
+          cashierName = jaz?.name || ''
         }
       }
     } catch (e) {}
@@ -8267,8 +8276,10 @@ function OrdersScreen({ posData, auth }) {
                       }
                       // POPRAVLJENO (16.8.2026): maybeSingle() bi vrgel napako pri
                       // uporabniku, ki je clan vec organizacij - omejimo na aktivno.
-                      const { data: me } = await db.from('org_members').select('display_name').eq('user_id', user.id).eq('org_id', member.org_id).maybeSingle()
-                      cashierName = me?.display_name || user.email?.split('@')[0] || ''
+                      // POPRAVLJENO (24.8.2026): `org_members.display_name` ne obstaja.
+                      const { data: me } = await db.from('staff').select('name')
+                        .eq('user_id', user.id).eq('active', true).limit(1).maybeSingle()
+                      cashierName = me?.name || ''   // e-naslova NE na davcni dokument
                     }
                   } catch {}
                   const pd = {
@@ -8342,8 +8353,10 @@ function OrdersScreen({ posData, auth }) {
                     const { data: org } = await db.from('organizations').select('*').eq('id', member.org_id).single()
                     orgData = org
                     if (user) {
-                      const { data: me } = await db.from('org_members').select('display_name').eq('user_id', user.id).eq('org_id', member.org_id).maybeSingle()
-                      cashierName = me?.display_name || user.email?.split('@')[0] || ''
+                      // POPRAVLJENO (24.8.2026): `org_members.display_name` ne obstaja.
+                      const { data: me } = await db.from('staff').select('name')
+                        .eq('user_id', user.id).eq('active', true).limit(1).maybeSingle()
+                      cashierName = me?.name || ''   // e-naslova NE na davcni dokument
                     }
                   }
                   const html = buildStornoReceiptHTML({
@@ -11919,8 +11932,22 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
   }, [notifications.length, osvezitevStevec])
 
   // Vsakih 60 sekund preverimo, ali je prisel nov zahtevek ali obvestilo.
+  //
+  // POPRAVLJENO (24.8.2026): casovnik je osvezeval SAMO seznam cakajocih
+  // placil, obvestila pa so se nalozila le ob priklopu - novo obvestilo
+  // "stranka zeli podaljsati" se v zvoncu ni pojavilo niti po stirih minutah.
+  // Zdaj ponovno preberemo tudi obvestila.
   useEffect(() => {
-    const t = setInterval(() => setOsvezitevStevec(x => x + 1), 60000)
+    const t = setInterval(async () => {
+      setOsvezitevStevec(x => x + 1)
+      try {
+        const { data } = await createClient().from('pos_notifications')
+          .select('*, customers(name, email), customer_packages(id, name, template_id, expires, activated_at, purchased_at, remaining, total)')
+          .eq('business_id', BUSINESS_ID).eq('dismissed', false)
+          .order('created_at', { ascending: false })
+        if (data) posData.setNotifications(data)
+      } catch { /* brez omrezja poskusimo znova cez minuto */ }
+    }, 60000)
     return () => clearInterval(t)
   }, [])
 
