@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
         .select(`
           id, message, severity, type, customer_id, package_id,
           customers (id, name, email, notification_email),
-          customer_packages (id, expires, name, template_type, activated_at, purchased_at, remaining)
+          customer_packages (id, expires, name, template_type, activated_at, purchased_at, remaining, template_id)
         `)
         .eq('business_id', biz.id)
         .eq('dismissed', false)
@@ -110,6 +110,34 @@ export async function GET(req: NextRequest) {
         }
 
         // Sestavi zadevo
+        // Zeton za javno podaljsanje (24.8.2026) - enaka logika kot pri rocnem
+        // posiljanju iz blagajne: obstojecega ponovno uporabimo, sicer nov.
+        let zetonObnove: string | null = null
+        if (notif.package_id && (pkg as any)?.template_id) {
+          const { data: obstojec } = await supabase
+            .from('renewal_requests')
+            .select('token')
+            .eq('customer_package_id', notif.package_id)
+            .in('status', ['pending', 'quoted'])
+            .gt('expires_at', new Date().toISOString())
+            .maybeSingle()
+
+          if (obstojec?.token) {
+            zetonObnove = obstojec.token
+          } else {
+            const nov = crypto.randomUUID().replace(/-/g, '')
+            const { error: zErr } = await supabase.from('renewal_requests').insert({
+              token: nov,
+              business_id: biz.id,
+              customer_id: notif.customer_id,
+              customer_package_id: notif.package_id,
+              template_id: (pkg as any).template_id,
+            })
+            if (!zErr) zetonObnove = nov
+            else console.error('Zetona za podaljsanje ni bilo mogoce ustvariti:', zErr.message)
+          }
+        }
+
         const subject = notif.type === 'expired'
           ? `Vaša karta "${pkg?.name}" je potekla`
           : notif.type === 'low_visits'
@@ -127,6 +155,14 @@ export async function GET(req: NextRequest) {
               customerName: customer.name,
               packageName: pkg?.name || 'kartica',
               expiresAt: pkg?.expires,
+              // DODANO (24.8.2026): povezava za podaljsanje in kontakt. Prej
+              // ju je nosilo SAMO rocno posiljanje iz blagajne - v produkciji,
+              // kjer opomnike poslje cron, gumba in kontakta ni bilo.
+              orgPhone: (orgForBiz as any)?.phone ?? null,
+              orgEmail: (orgForBiz as any)?.email ?? null,
+              obnovaUrl: zetonObnove
+                ? `${process.env.NEXT_PUBLIC_APP_URL}/obnova/${zetonObnove}`
+                : null,
               // Obdobje veljavnosti in preostali obiski (22.8.2026) - da imata
               // samodejni in rocni opomnik ENAKO vsebino.
               validFrom: (pkg as any)?.activated_at ?? (pkg as any)?.purchased_at ?? null,

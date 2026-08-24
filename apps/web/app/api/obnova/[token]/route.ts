@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { lokalniDatum } from '@/lib/tax-constants'
+import { Resend } from 'resend'
+import { FROM_EMAIL } from '@/lib/resend'
+import { renderToBuffer } from '@react-pdf/renderer'
+import { InvoicePDF, generateUpnQr } from '@/lib/invoice-pdf'
+import { buildInvoiceEmailHtml } from '@/lib/invoice-email'
 
 /**
  * JAVNO PODALJŠANJE KARTICE (22.8.2026)
@@ -75,8 +80,28 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
   const tmpl: any = z.package_templates
   const kartica: any = z.customer_packages
 
+  // POPRAVLJENO (24.8.2026): ob osvezitvi strani so podatki za placilo
+  // IZGINILI - stran je pokazala le "predracun je ze izdan", brez stevilke,
+  // zneska, IBAN-a in sklica. Stranka jih ni imela od kod dobiti.
+  let placilo: any = null
+  if (z.quote_id) {
+    const db2 = sluzbeniOdjemalec()
+    const { data: q } = await db2.from('quotes')
+      .select('quote_number, amount_total, valid_until').eq('id', z.quote_id).maybeSingle()
+    if (q) {
+      placilo = {
+        stevilka: q.quote_number,
+        znesek: Number(q.amount_total || 0),
+        iban: org?.iban ?? null,
+        sklic: `SI00 ${q.quote_number}`,
+        veljaDo: q.valid_until,
+      }
+    }
+  }
+
   return NextResponse.json({
     status: z.status,
+    placilo,
     stranka: (z.customers as any)?.name ?? '',
     paket: tmpl?.name ?? kartica?.name ?? 'Kartica',
     cena: Number(tmpl?.price ?? 0),
@@ -171,8 +196,69 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     message: `${stranka?.name ?? 'Stranka'} želi podaljšati ${tmpl?.name ?? 'kartico'} — izdan predračun ${predracun.quote_number}`,
   })
 
+  // DODANO (24.8.2026): predracun POSLJEMO stranki. Stran je obljubljala
+  // "predracun vam posljemo takoj", klica pa ni bilo nikjer - stranka je
+  // dobila samo zapis v aplikaciji, ki ga sama ne vidi.
+  let poslano = false
+  if (stranka?.email && process.env.RESEND_API_KEY) {
+    try {
+      const zaPdf = {
+        invoice_number: predracun.quote_number,
+        issue_date: lokalniDatum(),
+        due_date: lokalniDatum(veljaDo),
+        service_date: lokalniDatum(veljaDo),
+        client_name: stranka.name ?? '',
+        line_items: [{
+          description: `Podaljšanje: ${tmpl?.name ?? 'kartica'}`,
+          quantity: 1,
+          unit_price: Math.round(osnova * 100) / 100,
+          vat_rate: stopnja,
+        }],
+        amount_net: Math.round(osnova * 100) / 100,
+        vat_amount: Math.round(ddv * 100) / 100,
+        amount_total: cena,
+        reference: `SI00 ${predracun.quote_number}`,
+        is_quote: true,
+      }
+      const qr = await generateUpnQr(zaPdf, org)
+      const pdf = await renderToBuffer(InvoicePDF({ invoice: zaPdf, org, qrDataUrl: qr }) as any)
+      const html = buildInvoiceEmailHtml({
+        orgName: org.name,
+        invoiceNumber: predracun.quote_number,
+        issueDate: zaPdf.issue_date,
+        amount: cena,
+        dueDate: zaPdf.due_date,
+        iban: org.iban ?? null,
+        reference: zaPdf.reference,
+        qrCid: qr ? 'upnqr' : null,
+        customMessage: `Predračun za podaljšanje kartice „${tmpl?.name ?? ''}". Kartico podaljšamo takoj, ko je plačilo prejeto.`,
+      })
+
+      const resend = new Resend(process.env.RESEND_API_KEY)
+      const { error: reErr } = await resend.emails.send({
+        from: FROM_EMAIL,
+        to: [stranka.email],
+        subject: `Predračun ${predracun.quote_number} — podaljšanje kartice`,
+        html,
+        attachments: [
+          { filename: `predracun-${predracun.quote_number}.pdf`, content: pdf },
+          ...(qr ? [{
+            filename: 'upnqr.png',
+            content: Buffer.from(qr.split(',')[1] || '', 'base64'),
+            contentId: 'upnqr',
+          }] : []),
+        ],
+      } as any)
+      if (!reErr) poslano = true
+      else console.error('Predracuna ni bilo mogoce poslati:', reErr.message)
+    } catch (e: any) {
+      console.error('Predracuna ni bilo mogoce poslati:', e?.message || e)
+    }
+  }
+
   return NextResponse.json({
     ok: true,
+    poslano,
     stevilka: predracun.quote_number,
     znesek: cena,
     iban: org.iban,

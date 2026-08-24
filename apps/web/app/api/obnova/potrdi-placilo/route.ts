@@ -66,6 +66,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Za ta zahtevek še ni predračuna.' }, { status: 409 })
   }
 
+  // VAROVALKA (24.8.2026): predracun z zneskom 0 EUR pomeni, da je nekaj slo
+  // narobe ze pri njegovem nastanku (npr. kartica brez predloge paketa).
+  // Brez te preverbe bi potrditev izdala RACUN ZA 0 EUR s statusom "placano"
+  // in kartico podaljsala brezplacno.
+  const znesek = Number((z.quotes as any)?.amount_total ?? 0)
+  if (!(znesek > 0)) {
+    return NextResponse.json({
+      error: 'Predračun je izdan za 0,00 € — potrditev ni mogoča. '
+        + 'Preverite, ali ima kartica določeno predlogo paketa, in izdajte nov predračun.',
+    }, { status: 409 })
+  }
+
   // Pravice: uporabnik mora biti lastnik te blagajne.
   const { data: biz } = await db
     .from('businesses').select('owner_user_id').eq('id', z.business_id).maybeSingle()
@@ -73,29 +85,42 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Za to dejanje nimate pravic' }, { status: 403 })
   }
 
-  const { data: mem } = await db
-    .from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
+  // POPRAVLJENO (24.8.2026): `maybeSingle()` vrne null, ce je uporabnik clan
+  // VEC organizacij - klic se je nato sesul na `mem!.org_id`. Vzamemo tisto,
+  // ki ji pripada ta blagajna.
+  const { data: clanstva } = await db
+    .from('org_members').select('org_id').eq('user_id', user.id)
+  const orgIdi = (clanstva || []).map(m => m.org_id)
+  if (orgIdi.length === 0) {
+    return NextResponse.json({ error: 'Uporabnik ni član nobene organizacije' }, { status: 403 })
+  }
   const { data: org } = await db
-    .from('organizations').select('*').eq('id', mem!.org_id).maybeSingle()
+    .from('organizations').select('*').in('id', orgIdi)
+    .order('created_at', { ascending: true }).limit(1).maybeSingle()
+  if (!org) {
+    return NextResponse.json({ error: 'Organizacije ni bilo mogoče najti' }, { status: 500 })
+  }
 
   const stranka: any = z.customers
   const kartica: any = z.customer_packages
   const predracun: any = z.quotes
 
   // ─── 1. Izdaj racun ──────────────────────────────────────────────────
+  // POPRAVLJENO (24.8.2026): tu je bila TRETJA pot stevilcenja racunov. Ni
+  // bila atomarna (dve hkratni potrditvi bi dobili isto stevilko), abecedno
+  // urejanje pa se zlomi pri stirimestni zaporedni stevilki - "2026-1000" je
+  // abecedno MANJSE od "2026-999". Uporabimo isto RPC kot drugod.
   const leto = new Date().getFullYear()
-  const { data: zadnji } = await db.from('issued_invoices')
-    .select('invoice_number').eq('org_id', org!.id)
-    .like('invoice_number', `${leto}-%`)
-    .order('invoice_number', { ascending: false }).limit(1)
-
-  const zaporedna = zadnji?.[0]
-    ? Number(String(zadnji[0].invoice_number).split('-')[1] || 0) + 1
-    : 1
-  const stevilka = `${leto}-${String(zaporedna).padStart(3, '0')}`
+  const { data: naslednja, error: stErr } = await db.rpc('get_next_manual_invoice_number', {
+    p_org_id: org.id, p_year: leto,
+  })
+  if (stErr) {
+    return NextResponse.json({ error: 'Številke računa ni bilo mogoče dodeliti: ' + stErr.message }, { status: 500 })
+  }
+  const stevilka = naslednja || `${leto}-001`
 
   const { data: racun, error: rErr } = await db.from('issued_invoices').insert({
-    org_id: org!.id,
+    org_id: org.id,
     invoice_number: stevilka,
     client_name: stranka?.name ?? '',
     client_email: stranka?.email ?? null,
@@ -159,12 +184,12 @@ export async function POST(req: NextRequest) {
       const qr = await generateUpnQr(racun, org)
       const pdf = await renderToBuffer(InvoicePDF({ invoice: racun, org, qrDataUrl: qr }) as any)
       const html = buildInvoiceEmailHtml({
-        orgName: org!.name,
+        orgName: org.name,
         invoiceNumber: racun.invoice_number,
         issueDate: racun.issue_date,
         amount: Number(racun.amount_total),
         dueDate: racun.due_date,
-        iban: org!.iban ?? null,
+        iban: org.iban ?? null,
         reference: racun.reference ?? null,
         qrCid: qr ? 'upnqr' : null,
         customMessage: `Kartica „${kartica?.name ?? ''}" je podaljšana do ${new Date(posodobitve.expires).toLocaleDateString('sl-SI')}. Hvala za zaupanje.`,
@@ -188,7 +213,7 @@ export async function POST(req: NextRequest) {
 
       await db.from('invoice_emails').insert({
         invoice_id: racun.id,
-        org_id: org!.id,
+        org_id: org.id,
         to_email: stranka.email,
         subject: `Račun ${racun.invoice_number} — kartica je podaljšana`,
         message: 'Samodejno poslan račun ob potrditvi podaljšanja',

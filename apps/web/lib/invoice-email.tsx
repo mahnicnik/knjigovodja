@@ -118,7 +118,9 @@ export function buildInvoiceEmailHtml({
                          stranka je iskala prilogo, ceprav je koda pod tem okvirckom. -->
                     <div style="font-size:13px;font-weight:700;color:#0E5E3B;margin-bottom:6px;">💳 Hitro plačilo${qrCid ? ' — QR koda spodaj' : ' — QR koda v PDF prilogi'}</div>
                     <div style="font-size:12px;color:#1D9E75;line-height:1.6;margin-bottom:14px;">
-                      Odprite priložen PDF → skenirajte QR kodo z vašo bančno aplikacijo → potrdite plačilo.<br>
+                      ${qrCid
+                        ? 'Skenirajte QR kodo spodaj z bančno aplikacijo in potrdite plačilo. Koda je tudi v priloženem PDF-ju.'
+                        : 'Odprite priložen PDF → skenirajte QR kodo z vašo bančno aplikacijo → potrdite plačilo.'}<br>
                       <strong>Denar pride takoj na TRR.</strong>
                     </div>
                     <table role="presentation" style="border-collapse:collapse;">

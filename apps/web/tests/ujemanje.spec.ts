@@ -1237,3 +1237,66 @@ test('podaljšanje: obiski se prištejejo, ne nadomestijo', () => {
 test('podaljšanje: članarina nima obiskov', () => {
   expect(noviObiski(null, null)).toBeNull()
 })
+
+// ─── Predračun za podaljšanje: varovalke ────────────────────────────────
+
+/**
+ * Predračun z zneskom 0 € pomeni, da je nekaj šlo narobe že pri nastanku —
+ * praviloma kartica brez predloge paketa. Potrditev takega predračuna bi
+ * izdala RAČUN ZA 0 € s statusom „plačano" in podaljšala kartico brezplačno.
+ */
+function smePotrditi(znesek: number) {
+  return znesek > 0
+}
+
+test('potrditev: predračun za 0 € se zavrne', () => {
+  expect(smePotrditi(0)).toBe(false)
+  expect(smePotrditi(-5)).toBe(false)
+})
+
+test('potrditev: predračun z zneskom se sprejme', () => {
+  expect(smePotrditi(45)).toBe(true)
+})
+
+/**
+ * Zahtevka brez predloge paketa sploh ne ustvarimo — sicer bi predračun
+ * nastal z zneskom 0 in imenom „Kartica" namesto pravega paketa.
+ */
+function smeUstvaritiZahtevek(templateId: string | null) {
+  return !!templateId
+}
+
+test('zahtevek: brez predloge paketa ne nastane', () => {
+  // NAPAKA (popravljeno 24.8.2026): vgnezdeni izbor ni vseboval `template_id`,
+  // zato je bil vedno null — predračun je šel stranki z zneskom 0,00 €.
+  expect(smeUstvaritiZahtevek(null)).toBe(false)
+  expect(smeUstvaritiZahtevek('tmpl-1')).toBe(true)
+})
+
+/**
+ * Ob osvežitvi javne strani se podatki za plačilo ne smejo izgubiti —
+ * stranka jih nima od kod dobiti, če predračuna ni prejela po e-pošti.
+ */
+function podatkiZaPlacilo(quoteId: string | null, q: any) {
+  if (!quoteId || !q) return null
+  return { stevilka: q.quote_number, znesek: q.amount_total, sklic: `SI00 ${q.quote_number}` }
+}
+
+test('javna stran: podatki za plačilo ostanejo po osvežitvi', () => {
+  const p = podatkiZaPlacilo('q1', { quote_number: 'PRE-2026-001', amount_total: 45 })
+  expect(p?.stevilka).toBe('PRE-2026-001')
+  expect(p?.sklic).toBe('SI00 PRE-2026-001')
+})
+
+test('javna stran: brez predračuna ni podatkov za plačilo', () => {
+  expect(podatkiZaPlacilo(null, null)).toBeNull()
+})
+
+/**
+ * Abecedno urejanje številk računov se zlomi pri štirimestni zaporedni
+ * številki: "2026-1000" je abecedno MANJŠE od "2026-999".
+ */
+test('številčenje: abecedno urejanje se zlomi pri 1000', () => {
+  const abecedno = ['2026-999', '2026-1000'].sort().reverse()[0]
+  expect(abecedno).toBe('2026-999')   // napačno — zato uporabljamo RPC
+})

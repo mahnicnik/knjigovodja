@@ -39,6 +39,9 @@ export default function ObnovaKartice() {
           return
         }
         setPodatki(d)
+        // POPRAVLJENO (24.8.2026): ob osvezitvi so podatki za placilo izginili
+        // - stran je pokazala le "predracun je ze izdan". Zdaj jih GET vrne.
+        if (d.placilo) setRezultat(d.placilo)
         setStanje(d.status === 'quoted' || d.status === 'paid' ? 'ustvarjen' : 'ponudba')
       } catch {
         setNapaka('Strani ni bilo mogoče naložiti. Poskusite znova.')

@@ -310,7 +310,11 @@ function usePosData() {
         // navedemo obdobje veljavnosti in preostale obiske. Prej je bil
         // naveden samo datum poteka.
         const notifRes = await createClient().from('pos_notifications')
-          .select('*, customers(name, email), customer_packages(expires, activated_at, purchased_at, remaining, total)')
+          // POPRAVLJENO (24.8.2026): vgnezdeni izbor NI vseboval `template_id`
+          // ne `name`. Zahtevek za podaljsanje je zato dobil template_id=null,
+          // javna stran je pokazala "Kartica" brez cene, predracun pa je sel
+          // stranki z zneskom 0,00 EUR. Ista vrsta napake kot `package_id`.
+          .select('*, customers(name, email), customer_packages(id, name, template_id, expires, activated_at, purchased_at, remaining, total)')
           .eq('business_id', BUSINESS_ID).eq('dismissed', false).order('created_at', { ascending: false })
         setNotifications(notifRes.data || [])
         // Fetch business profile
@@ -11980,13 +11984,20 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
         if (obstojec?.token) {
           zetonObnove = obstojec.token
         } else {
+          // Brez predloge bi predracun nastal z zneskom 0 EUR - raje ne
+          // ustvarimo nicesar in to povemo (24.8.2026).
+          const predlogaId = n.customer_packages?.template_id ?? null
+          if (!predlogaId) {
+            console.warn('Zahtevka za podaljsanje ni mogoce ustvariti: kartica nima predloge paketa.')
+            return
+          }
           const nov = crypto.randomUUID().replace(/-/g, '')
           const { error: zErr } = await createClient().from('renewal_requests').insert({
             token: nov,
             business_id: BUSINESS_ID,
             customer_id: n.customer_id,
             customer_package_id: karticaId,
-            template_id: n.customer_packages?.template_id ?? null,
+            template_id: predlogaId,
           })
           if (!zErr) zetonObnove = nov
           else console.error('Zetona za podaljsanje ni bilo mogoce ustvariti:', zErr.message)

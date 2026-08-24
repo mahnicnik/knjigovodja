@@ -137,7 +137,7 @@ function buildEmailTemplate({ customerName, packageName, expiresAt, validFrom, r
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${packageName} — obvestilo</title>
+  <title>${escapeHtml(String(packageName || 'Obvestilo'))} — obvestilo</title>
 </head>
 <body style="margin:0;padding:0;background:#f4efe5;font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4efe5;padding:32px 16px;">
@@ -165,7 +165,7 @@ function buildEmailTemplate({ customerName, packageName, expiresAt, validFrom, r
             <!-- Alert box -->
             <div style="background:${c.bg};border:1.5px solid ${c.border};border-radius:10px;padding:16px 20px;margin-bottom:24px;">
               <p style="margin:0;font-size:15px;font-weight:600;color:${c.text};">
-                ${c.icon}&nbsp; <strong>${packageName}</strong>
+                ${c.icon}&nbsp; <strong>${escapeHtml(String(packageName || ''))}</strong>
                 ${dateStr ? `poteče <strong>${dateStr}</strong>` : 'kmalu poteče'}
               </p>
 
