@@ -147,3 +147,37 @@ test('številčenje: storno pripone se ne štejejo', () => {
   }, 0)
   expect(najvisja + 1).toBe(2)
 })
+
+// ─── Stripe: webhook skrivnost ──────────────────────────────────────────
+
+/**
+ * Pri Stripu skrivnost IZDA STRIPE — mi jo samo prepišemo. Pri WooCommerce in
+ * Shopify je obratno: skrivnost ustvarimo mi in jo prilepimo v njihove
+ * nastavitve.
+ *
+ * NAPAKA (popravljeno 24.8.2026): gumb „↺ Novo" in gumb „+ Poveži" sta pri
+ * Stripu ustvarila naključno skrivnost. Ta se z nobenim Stripovim podpisom ne
+ * bi ujemala — VSI webhooki bi bili tiho zavrnjeni, računi se ne bi izdajali,
+ * napake pa nikjer ne bi bilo, ker Stripe poskuse le ponavlja.
+ */
+function jeVeljavnaStripeSkrivnost(s: string): boolean {
+  return typeof s === 'string' && s.startsWith('whsec_') && s.length > 10
+}
+
+test('Stripe: skrivnost se mora začeti z whsec_', () => {
+  expect(jeVeljavnaStripeSkrivnost('whsec_jZzMO74Eo9lOsCETLFHp72EOoIvaiaIP')).toBe(true)
+})
+
+test('Stripe: izmišljena skrivnost se prepozna kot neveljavna', () => {
+  // Tako je izgledala skrivnost iz gumba „↺ Novo".
+  expect(jeVeljavnaStripeSkrivnost('a3f9c2e1b7d4')).toBe(false)
+  expect(jeVeljavnaStripeSkrivnost('')).toBe(false)
+})
+
+test('Stripe: polje ob povezovanju ostane prazno', () => {
+  // Prej se je prednapolnilo z izmišljeno vrednostjo, kar je vabilo, da jo
+  // uporabnik kar shrani.
+  const zacetnaVrednost = ''
+  expect(zacetnaVrednost).toBe('')
+  expect(jeVeljavnaStripeSkrivnost(zacetnaVrednost)).toBe(false)
+})

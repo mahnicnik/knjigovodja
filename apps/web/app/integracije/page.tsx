@@ -41,6 +41,21 @@ export default function IntegrationPage() {
   const [showShSecret, setShowShSecret] = useState(false)
   const [showStrSecret, setShowStrSecret] = useState(false)
 
+  /**
+   * DODANO (24.8.2026): razkrita skrivnost se sama skrije po 30 sekundah.
+   *
+   * Prej je ostala na zaslonu, dokler je uporabnik ni rocno skril - na
+   * blagajni, ki je odprta ves dan, je to pomenilo, da je webhook skrivnost
+   * vidna vsakomur, ki gre mimo.
+   */
+  useEffect(() => {
+    if (!showWcSecret && !showShSecret && !showStrSecret) return
+    const t = setTimeout(() => {
+      setShowWcSecret(false); setShowShSecret(false); setShowStrSecret(false)
+    }, 30000)
+    return () => clearTimeout(t)
+  }, [showWcSecret, showShSecret, showStrSecret])
+
   const [wcModal, setWcModal] = useState(false)
   const [wcUrl, setWcUrl] = useState('')
   const [wcSecret, setWcSecret] = useState('')
@@ -322,7 +337,12 @@ export default function IntegrationPage() {
                 <button onClick={() => deleteIntegration(strIntegration.id, 'Stripe')} style={{ padding: '6px 12px', borderRadius: 6, border: 0, fontSize: 12, cursor: 'pointer', background: '#FEE2E2', color: '#DC2626' }}>Briši</button>
               </div>
             ) : (
-              <button onClick={() => { setStrSecret(generateSecret()); setStrModal(true) }} style={{ background: '#0D1F12', color: '#fff', border: 0, borderRadius: 8, padding: '8px 16px', fontSize: 13, cursor: 'pointer' }}>
+              // POPRAVLJENO (24.8.2026): gumb je polje prednapolnil z IZMISLJENO
+              // skrivnostjo. Pri Stripu skrivnost izda STRIPE - ti jo samo
+              // prepises. Izmisljena se z nobenim Stripovim podpisom ne ujema,
+              // zato bi bili VSI webhooki tiho zavrnjeni: racuni se ne bi
+              // izdajali, napake pa nikjer ne bi bilo.
+              <button onClick={() => { setStrSecret(''); setStrModal(true) }} style={{ background: '#0D1F12', color: '#fff', border: 0, borderRadius: 8, padding: '8px 16px', fontSize: 13, cursor: 'pointer' }}>
                 + Poveži
               </button>
             )}
@@ -432,10 +452,22 @@ export default function IntegrationPage() {
               <div>
                 <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Webhook Secret (Stripe Signing secret) *</label>
                 <div style={{ display: 'flex', gap: 8 }}>
+                  {/* Gumb "↺ Novo" je bil ODSTRANJEN (24.8.2026): pri Stripu si
+                      skrivnosti ne izmislimo, izda jo Stripe. Pri WooCommerce in
+                      Shopify je obratno - tam skrivnost ustvarimo mi in jo
+                      prilepimo v njihove nastavitve, zato gumb tam ostaja. */}
                   <input value={strSecret} onChange={e => setStrSecret(e.target.value)} placeholder="whsec_..." style={{ ...inp, flex: 1 }} />
-                  <button onClick={() => setStrSecret(generateSecret())} style={{ padding: '8px 12px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.15)', fontSize: 12, cursor: 'pointer', background: '#F7F6F2', flexShrink: 0 }}>↺ Novo</button>
                 </div>
-                <div style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>Prilepite Signing secret iz Stripe → Webhooks → vaš endpoint</div>
+                <div style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>
+                  Prilepite Signing secret iz Stripe → Developers → Webhooks → vaš endpoint.
+                  Začne se z <strong>whsec_</strong> in ga izda Stripe — ne izmislite si ga.
+                </div>
+                {strSecret && !strSecret.startsWith('whsec_') && (
+                  <div style={{ fontSize: 11, color: '#A32D2D', marginTop: 6, lineHeight: 1.5 }}>
+                    Ta skrivnost se ne začne z „whsec_". Če ni prepisana iz Stripa,
+                    bodo webhooki zavrnjeni in računi se ne bodo izdajali.
+                  </div>
+                )}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>

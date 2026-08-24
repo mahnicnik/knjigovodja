@@ -1,10 +1,10 @@
 {
-  "skupaj": 259,
+  "skupaj": 262,
   "poDatotekah": {
     "baza.spec.ts": 13,
     "blagajna.spec.ts": 30,
     "davki.spec.ts": 28,
-    "integracije.spec.ts": 9,
+    "integracije.spec.ts": 12,
     "kategorizacija.spec.ts": 13,
     "mobilno.spec.ts": 30,
     "racunko.spec.ts": 5,
