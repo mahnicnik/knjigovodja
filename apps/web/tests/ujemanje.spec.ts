@@ -987,7 +987,10 @@ test('obrok: kasnejša zapadlost se ohrani', () => {
 function priloge(pdf: boolean, qrDataUrl: string | null) {
   const a: any[] = []
   if (pdf) a.push({ filename: 'racun.pdf' })
-  if (qrDataUrl) a.push({ filename: 'upnqr.png', content_id: 'upnqr' })
+  // POPRAVLJENO (24.8.2026): test je preverjal `content_id`, knjiznica Resend
+  // pa pricakuje `contentId`. Test je bil zato zelen, koda pa NI delovala -
+  // QR je v Gmailu ostal prazen okvir. Poimenovanje mora ustrezati knjiznici.
+  if (qrDataUrl) a.push({ filename: 'upnqr.png', contentId: 'upnqr' })
   return a
 }
 
@@ -996,7 +999,7 @@ test('e-pošta: QR gre kot VGRAJENA priloga, ne kot zunanja slika', () => {
   // brez `content_id` bi stranka videla prazen kvadrat.
   const a = priloge(true, 'data:image/png;base64,iVBOR')
   expect(a).toHaveLength(2)
-  expect(a[1].content_id).toBe('upnqr')
+  expect(a[1].contentId).toBe('upnqr')
 })
 
 test('e-pošta: brez QR ostane samo PDF', () => {

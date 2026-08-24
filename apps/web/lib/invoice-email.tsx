@@ -113,7 +113,10 @@ export function buildInvoiceEmailHtml({
               <table role="presentation" style="width:100%;border-collapse:collapse;background:#E1F5EE;border-radius:14px;border:1.5px solid #A6D9C3;">
                 <tr>
                   <td style="padding:20px 24px;">
-                    <div style="font-size:13px;font-weight:700;color:#0E5E3B;margin-bottom:6px;">💳 Hitro plačilo — QR koda v PDF prilogi</div>
+                    <!-- POPRAVLJENO (24.8.2026): pisalo je "QR koda v PDF prilogi",
+                         odkar pa je koda tudi v TELESU sporocila, je to zavajalo -
+                         stranka je iskala prilogo, ceprav je koda pod tem okvirckom. -->
+                    <div style="font-size:13px;font-weight:700;color:#0E5E3B;margin-bottom:6px;">💳 Hitro plačilo${qrCid ? ' — QR koda spodaj' : ' — QR koda v PDF prilogi'}</div>
                     <div style="font-size:12px;color:#1D9E75;line-height:1.6;margin-bottom:14px;">
                       Odprite priložen PDF → skenirajte QR kodo z vašo bančno aplikacijo → potrdite plačilo.<br>
                       <strong>Denar pride takoj na TRR.</strong>

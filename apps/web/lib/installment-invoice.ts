@@ -148,12 +148,16 @@ export async function issueInstallmentInvoice(
     html: emailHtml,
     attachments: [
       { filename: `racun-${newInvoice.invoice_number}.pdf`, content: pdfBuffer },
-      // VGRAJENA priloga za QR v telesu (C15, 22.8.2026). `content_id` mora
-      // ustrezati `cid:` v HTML-ju. Brez tega bi Gmail sliko blokiral.
+      // VGRAJENA priloga za QR v telesu sporocila (C15).
+      //
+      // POPRAVLJENO (24.8.2026): polje se je imenovalo `content_id`, knjiznica
+      // Resend pa pricakuje `contentId` (sama ga nato pretvori v content_id za
+      // API). Zaradi napacnega imena je QR ostal NAVADNA priloga, v telesu
+      // sporocila pa je bil prazen okvir z besedilom "UPN QR koda za placilo".
       ...(qrDataUrl ? [{
         filename: 'upnqr.png',
         content: Buffer.from(qrDataUrl.split(',')[1] || '', 'base64'),
-        content_id: 'upnqr',
+        contentId: 'upnqr',
       }] : []),
     ],
   } as any)
