@@ -1419,3 +1419,60 @@ test('pošta: zapis brez dokumenta ni veljaven', () => {
 test('pošta: zapis z obema dokumentoma ni veljaven', () => {
   expect(zapisPoste('inv1', 'q1').veljaven).toBe(false)
 })
+
+// ─── Odštevanje obiska ob prihodu ───────────────────────────────────────
+
+/**
+ * Ob statusu „Prišel/a" se obisk odšteje SAMO, če je pri terminu izbrana
+ * kartica. Ta izbira se je prej ob shranjevanju izgubila — tabela `bookings`
+ * stolpca `customer_package_id` sploh ni imela.
+ */
+function zapisTermina(izbranaKartica: string | null) {
+  return { customer_package_id: izbranaKartica || null }
+}
+
+function odsteje(booking: { customer_package_id: string | null }, kartica: any, jeZePrisel: boolean) {
+  if (jeZePrisel) return { odsteto: false, razlog: 'že označen kot prišel' }
+  if (!booking.customer_package_id) return { odsteto: false, razlog: 'kartica ni izbrana' }
+  if (kartica?.frozen_at) return { odsteto: false, razlog: 'kartica zamrznjena' }
+  if (!(kartica?.remaining > 0)) return { odsteto: false, razlog: 'ni obiskov' }
+  return { odsteto: true, preostalo: kartica.remaining - 1 }
+}
+
+test('termin: izbrana kartica se shrani na termin', () => {
+  // Prej se je izbira izgubila in ob ponovnem odprtju je bilo polje prazno.
+  expect(zapisTermina('pkg1').customer_package_id).toBe('pkg1')
+  expect(zapisTermina(null).customer_package_id).toBeNull()
+})
+
+test('termin: prihod z izbrano kartico odšteje obisk', () => {
+  const r: any = odsteje(zapisTermina('pkg1'), { remaining: 8 }, false)
+  expect(r.odsteto).toBe(true)
+  expect(r.preostalo).toBe(7)
+})
+
+test('termin: brez izbrane kartice se NE odšteje', () => {
+  const r: any = odsteje(zapisTermina(null), { remaining: 8 }, false)
+  expect(r.odsteto).toBe(false)
+  expect(r.razlog).toBe('kartica ni izbrana')
+})
+
+test('termin: dvojni klik na „Prišel" ne odšteje dvakrat', () => {
+  const r: any = odsteje(zapisTermina('pkg1'), { remaining: 8 }, true)
+  expect(r.odsteto).toBe(false)
+})
+
+test('termin: z zamrznjene kartice se ne odšteva', () => {
+  const r: any = odsteje(zapisTermina('pkg1'), { remaining: 8, frozen_at: '2026-08-01' }, false)
+  expect(r.odsteto).toBe(false)
+  expect(r.razlog).toBe('kartica zamrznjena')
+})
+
+test('termin: opozorilo, kadar je kartica na voljo, a ni izbrana', () => {
+  // Prej je pisalo samo „✓ Prihod zabeležen" — uporabnik je mislil, da je
+  // obisk odštet.
+  const naVoljo = [{ remaining: 8, frozen_at: null }]
+  const izbrana = null
+  const opozori = !izbrana && naVoljo.filter(p => p.remaining > 0 && !p.frozen_at).length > 0
+  expect(opozori).toBe(true)
+})

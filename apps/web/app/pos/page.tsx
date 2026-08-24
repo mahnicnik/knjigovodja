@@ -3178,7 +3178,10 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
     async function load() {
       const {data:pkgs} = await createClient()
         .from('customer_packages')
-        .select('*, package_templates(name,template_type)')
+        // POPRAVLJENO (24.8.2026): izbor ni vseboval `validity_days`, koda pa
+        // ga bere pri karticah z aktivacijo ob PRVI UPORABI - datum poteka se
+        // zato ni nastavil in kartica bi veljala neomejeno.
+        .select('*, package_templates(name, template_type, validity_days)')
         .eq('customer_id', data.customer_id)
         .eq('active', true)
       setActivePkgs(pkgs || [])
@@ -3214,6 +3217,12 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
         reminder_sent: false,
         is_table: false,
         space_id: data.space_id || null,
+        // DODANO (24.8.2026): izbrana kartica se ob shranjevanju IZGUBILA.
+        // Koda jo je brala (`booking.customer_package_id`), a je nikoli ni
+        // zapisala - in stolpca v bazi sploh ni bilo (SQL 10 ga doda).
+        // Posledica: ob statusu "Prisel/a" se obisk NI odstel, uporabnik pa je
+        // videl le "✓ Prihod zabelezen" in mislil, da je.
+        customer_package_id: selectedPkg || null,
       }
 
       // DODANO (21.8.2026): opozorilo na ZASEDEN termin. Prej sta se dve
@@ -3348,7 +3357,15 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
         showToast('✓ Obisk zabeležen + odštet iz kartice')
       }
     } else if (status === 'arrived') {
-      showToast('✓ Prihod zabeležen')
+      // DODANO (24.8.2026): prej je pisalo samo "Prihod zabelezen" tudi, kadar
+      // ima stranka kartico, ki bi jo bilo mogoce uporabiti - uporabnik je
+      // mislil, da je obisk odstet. Zdaj to izrecno povemo.
+      const naVoljo = (activePkgs || []).filter((p: any) => p.remaining > 0 && !p.frozen_at)
+      if (!selectedPkg && naVoljo.length > 0) {
+        showToast('✓ Prihod zabeležen — obisk NI odštet, ker kartica ni izbrana', false)
+      } else {
+        showToast('✓ Prihod zabeležen')
+      }
     }
     onSaved()
   }
