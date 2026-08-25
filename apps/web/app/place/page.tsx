@@ -179,6 +179,10 @@ export default function PlacePage() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [extras, setExtras] = useState<Record<string, any>>({})
   const [regresModal, setRegresModal] = useState<any>(null)
+  // DODANO (25.8.2026): regres je bil vedno enak bruto placi - zneska ni bilo
+  // mogoce vnesti. V praksi je regres samostojna odlocitev delodajalca
+  // (najmanj minimalna placa, navzgor pa poljubno).
+  const [regresZnesek, setRegresZnesek] = useState('')
   const [regresIzplacila, setRegresIzplacila] = useState<Record<string, any>>({})
 
   const [calcGross, setCalcGross] = useState('1800')
@@ -917,7 +921,7 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
                     <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
                       {/* Regres gumb */}
                       <button
-                        onClick={() => setRegresModal({ emp, regres })}
+                        onClick={() => { setRegresZnesek(String(regres.amount)); setRegresModal({ emp, regres }) }}
                         style={{
                           fontSize:'12px', padding:'6px 12px', borderRadius:'10px', cursor:'pointer', border:'none', fontWeight:'500',
                           background: regresIzplacen ? '#EAF3DE' : '#FFFBEB',
@@ -1019,6 +1023,41 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
                   <span style={{ color:'#16a34a' }}>Neobdavčeni del</span>
                   <span style={{ color:'#16a34a', fontWeight:'500' }}>€{formatEurNumber(regresModal.regres.taxFree)}</span>
                 </div>
+
+                {/* VNOS ZNESKA (25.8.2026): prej ga ni bilo — regres je bil
+                    vedno enak bruto plači, kar drži le v najpogostejšem primeru. */}
+                <div style={{ padding:'10px 0', borderBottom:'1px solid #eee' }}>
+                  <label style={{ fontSize:'12px', color:'#666', display:'block', marginBottom:'4px' }}>
+                    Znesek regresa (€)
+                  </label>
+                  <input type="number" step="0.01" min={MIN_WAGE}
+                    value={regresZnesek}
+                    onChange={e => {
+                      setRegresZnesek(e.target.value)
+                      const z = Number(e.target.value)
+                      if (z > 0) setRegresModal((p: any) => ({ ...p, regres: calcRegres(z) }))
+                    }}
+                    style={{ width:'100%', padding:'9px 11px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'13px', boxSizing:'border-box' }}/>
+                  <div style={{ fontSize:'11px', color:'#999', marginTop:'3px' }}>
+                    Najmanj minimalna plača ({formatEurNumber(MIN_WAGE)} €). Neobdavčeno do{' '}
+                    {formatEurNumber(REGRES_TAX_FREE_LIMIT)} €.
+                  </div>
+                </div>
+
+                {/* PRISPEVKI OD PRESEŽKA (25.8.2026): okno jih ni pokazalo,
+                    čeprav so obračunani — na plačilni listi so, tu jih ni bilo. */}
+                {regresModal.regres.taxable > 0 && (
+                  <>
+                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px', padding:'8px 0', borderBottom:'1px solid #eee' }}>
+                      <span style={{ color:'#dc2626' }}>Prispevki delojemalca</span>
+                      <span style={{ color:'#dc2626', fontWeight:'500' }}>−€{formatEurNumber(regresModal.regres.eeContrib)}</span>
+                    </div>
+                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px', padding:'8px 0', borderBottom:'1px solid #eee' }}>
+                      <span style={{ color:'#666' }}>Prispevki delodajalca</span>
+                      <span style={{ color:'#666', fontWeight:'500' }}>€{formatEurNumber(regresModal.regres.erContrib)}</span>
+                    </div>
+                  </>
+                )}
                 {regresModal.regres.taxable > 0 && (
                   <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px', padding:'8px 0', borderBottom:'0.5px solid #f5f5f5' }}>
                     <span style={{ color:'#dc2626' }}>Dohodnina (po lestvici)</span>

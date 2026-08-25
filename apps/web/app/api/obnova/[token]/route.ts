@@ -190,11 +190,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     valid_until: lokalniDatum(veljaDo),
     line_items: [{
       description: `Podaljšanje: ${tmpl?.name ?? 'kartica'}`,
+      // POPRAVLJENO (25.8.2026): osnova se je zaokrozila na 2 decimalki, iz nje pa
+      // je urejanje racuna preracunalo DDV in dobilo CENT VEC: 36,89 x 1,22 = 45,01,
+      // medtem ko seznam in PDF kazeta 45,00. Na davcnem dokumentu je cent razlike
+      // dovolj, da se knjiga ne izide.
+      //
+      // Osnovo zato hranimo na 4 decimalke (36,8852). Vsota se zaokrozi sele na
+      // koncu, kar je obicajna praksa: cene postavk smejo imeti vec decimalk,
+      // skupni zneski pa so na dve.
       quantity: 1,
-      unit_price: Math.round(osnova * 100) / 100,
+      unit_price: Math.round(osnova * 10000) / 10000,
       vat_rate: stopnja,
     }],
-    amount_net: Math.round(osnova * 100) / 100,
+    amount_net: Math.round(osnova * 10000) / 10000,
     vat_amount: Math.round(ddv * 100) / 100,
     amount_total: cena,
     status: 'sent',
@@ -238,10 +246,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
         line_items: [{
           description: `Podaljšanje: ${tmpl?.name ?? 'kartica'}`,
           quantity: 1,
-          unit_price: Math.round(osnova * 100) / 100,
+          unit_price: Math.round(osnova * 10000) / 10000,
           vat_rate: stopnja,
         }],
-        amount_net: Math.round(osnova * 100) / 100,
+        amount_net: Math.round(osnova * 10000) / 10000,
         vat_amount: Math.round(ddv * 100) / 100,
         amount_total: cena,
         reference: `SI00 ${predracun.quote_number}`,

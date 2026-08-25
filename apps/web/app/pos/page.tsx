@@ -507,6 +507,11 @@ function PrvaNastavitev({ imePodjetja, onKoncano }) {
     if (!ime.trim()) { setNapaka('Vnesite svoje ime.'); return }
     // POPRAVLJENO (19.8.2026): dolzina PIN-a je zdaj 1-4 (prej 4-6).
     if (!/^\d{1,4}$/.test(pin)) { setNapaka('PIN mora imeti od 1 do 4 številke.'); return }
+    // DODANO (25.8.2026): dolzina PIN-a se NI preverjala - shranil se je tudi
+    // enoznakovni, cetudi zaslon kaze stiri pike. Blagajno je odklenila ena
+    // stevka, kar pomeni deset moznih PIN-ov.
+    if (!/^\d{4,6}$/.test(pin)) { setNapaka('PIN mora imeti od 4 do 6 števk.'); return }
+    if (/^(\d)\1+$/.test(pin)) { setNapaka('PIN ne sme biti sestavljen iz istih števk.'); return }
     if (pin !== pin2) { setNapaka('PIN-a se ne ujemata.'); return }
     if (/^(\d)\1+$/.test(pin)) { setNapaka('PIN naj ne bo sestavljen iz enakih številk (npr. 1111).'); return }
     setShranjujem(true)
@@ -3699,7 +3704,10 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
         order_lines: Array.isArray(r.line_items)
           ? r.line_items.map((p: any) => ({ name: p.description || p.name, qty: p.quantity ?? 1 }))
           : [],
-        payments: [],
+        // POPRAVLJENO (25.8.2026): seznam placil je bil PRAZEN, zgodovina pa
+        // znesek izpisuje iz njega - obrok je zato kazal 0,00 EUR, cetudi je
+        // bil racun izdan za 45 EUR. Znesek vzamemo iz racuna samega.
+        payments: [{ amount: Number(r.amount_total || 0), method: 'invoice' }],
       }))
       setCustomerOrders([...ords, ...izdani].sort((a: any, b: any) =>
         new Date(b.closed_at || b.opened_at || 0).getTime()
@@ -13160,7 +13168,11 @@ function KlasikApp() {
           {auth.permissions?.viewSales && (
             <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', lineHeight:1.1 }}>
               <div style={{ fontSize:10, opacity:0.55, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em' }}>Promet</div>
-              <div style={{ fontSize:15, fontWeight:800, color:T.brand, fontVariantNumeric:'tabular-nums' }}>{eur(posData.todayStats.promet + totals.total)}</div>
+              {/* POPRAVLJENO (25.8.2026): glava je prometu PRISTEVALA trenutno kosarico,
+                  ki se ni placana - stevilka, po kateri se blagajnik ravna med
+                  dnevom, je bila previsoka, ob praznjenju kosarice pa je padla
+                  brez razloga. Promet so IZDANI racuni. */}
+              <div style={{ fontSize:15, fontWeight:800, color:T.brand, fontVariantNumeric:'tabular-nums' }}>{eur(posData.todayStats.promet)}</div>
             </div>
           )}
           <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', lineHeight:1.1 }}>

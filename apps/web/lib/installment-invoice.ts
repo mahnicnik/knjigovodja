@@ -58,7 +58,14 @@ export async function issueInstallmentInvoice(
 
   const grossAmount = Number(inst.amount)
   const vatRate = Number(inst.vat_rate ?? 22)
-  const netAmount = Math.round((grossAmount / (1 + vatRate / 100)) * 100) / 100
+  // POPRAVLJENO (25.8.2026): osnova se je zaokrozila na 2 decimalki, iz nje pa
+  // je urejanje racuna preracunalo DDV in dobilo CENT VEC: 36,89 x 1,22 = 45,01,
+  // medtem ko seznam in PDF kazeta 45,00. Na davcnem dokumentu je cent razlike
+  // dovolj, da se knjiga ne izide.
+  //
+  // Osnovo hranimo na 4 decimalke; DDV ostane razlika do bruta, da vsota
+  // vedno da tocen znesek, ki ga stranka placa.
+  const netAmount = Math.round((grossAmount / (1 + vatRate / 100)) * 10000) / 10000
   const vatAmount = Math.round((grossAmount - netAmount) * 100) / 100
 
   const lineItems = [{

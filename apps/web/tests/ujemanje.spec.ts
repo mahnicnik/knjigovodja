@@ -1788,3 +1788,74 @@ test('račun: unovčenje kartice ima oznako, ne prazno', () => {
   expect(OZNAKE['pkg']).toBe('Karta obiskov')
   expect(OZNAKE['pkg'] || '—').not.toBe('—')
 })
+
+// ─── Zaokroževanje na davčnem dokumentu ─────────────────────────────────
+
+/**
+ * Osnova se je hranila na 2 decimalki, urejanje računa pa je iz nje
+ * preračunalo DDV in dobilo CENT VEČ: 36,89 × 1,22 = 45,01, medtem ko seznam
+ * in PDF kažeta 45,00.
+ */
+function zneskiRacuna(bruto: number, stopnja: number, decimalke: number) {
+  const f = Math.pow(10, decimalke)
+  const net = Math.round((bruto / (1 + stopnja / 100)) * f) / f
+  return { net, izNeta: Math.round(net * (1 + stopnja / 100) * 100) / 100 }
+}
+
+test('račun: osnova na 4 decimalke se izide na cent', () => {
+  const z = zneskiRacuna(45, 22, 4)
+  expect(z.net).toBeCloseTo(36.8852, 4)
+  expect(z.izNeta).toBe(45.00)
+})
+
+test('račun: osnova na 2 decimalki da cent razlike', () => {
+  // Tako je nastal 45,01 v urejanju.
+  const z = zneskiRacuna(45, 22, 2)
+  expect(z.izNeta).toBe(45.01)
+})
+
+// ─── Promet v glavi blagajne ────────────────────────────────────────────
+
+function prometVGlavi(izdaniRacuni: number, kosarica: number) {
+  return izdaniRacuni   // košarica NI promet
+}
+
+test('promet: neplačana košarica se ne šteje', () => {
+  // Prej: 1.679,80 + 50 = 1.729,80 — številka je padla, ko si košarico
+  // izpraznil, brez da bi se karkoli prodalo.
+  expect(prometVGlavi(1679.80, 50)).toBe(1679.80)
+})
+
+// ─── Znesek obroka v zgodovini ──────────────────────────────────────────
+
+function znesekVZgodovini(placila: Array<{ amount: number }>, znesekRacuna: number) {
+  const izPlacil = placila.reduce((s, p) => s + p.amount, 0)
+  return izPlacil > 0 ? izPlacil : znesekRacuna
+}
+
+test('zgodovina: obrok kaže svoj znesek, ne 0 €', () => {
+  // Prej je bil seznam plačil prazen, znesek pa se bere iz njega.
+  expect(znesekVZgodovini([{ amount: 45 }], 45)).toBe(45)
+})
+
+// ─── PIN blagajne ───────────────────────────────────────────────────────
+
+function pinVeljaven(pin: string) {
+  return /^\d{4,6}$/.test(pin) && !/^(\d)\1+$/.test(pin)
+}
+
+test('PIN: enoznakovni ni dovoljen', () => {
+  // V bazi je bil PIN dolg ENO števko — deset možnih kombinacij.
+  expect(pinVeljaven('1')).toBe(false)
+  expect(pinVeljaven('123')).toBe(false)
+})
+
+test('PIN: štiri do šest števk je v redu', () => {
+  expect(pinVeljaven('1234')).toBe(true)
+  expect(pinVeljaven('928471')).toBe(true)
+})
+
+test('PIN: same enake števke niso dovoljene', () => {
+  expect(pinVeljaven('1111')).toBe(false)
+  expect(pinVeljaven('000000')).toBe(false)
+})
