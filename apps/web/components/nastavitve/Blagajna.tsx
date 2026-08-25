@@ -4,6 +4,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { getActiveMembership } from '@/lib/active-org'
+import InterniAkt from '@/components/nastavitve/InterniAkt'
 
 const supabase = createClient()
 
@@ -998,6 +999,10 @@ export default function BlagajnaSekcija() {
           </div>
         </div>
       )}
+
+      {/* INTERNI AKT (25.8.2026) — sestavi se iz poslovnih prostorov in naprav,
+          vnesenih zgoraj. Ob nadzoru je dosegljiv tudi v blagajni. */}
+      {orgIdForDemo && <InterniAkt orgId={orgIdForDemo} />}
 
       {/* Toast */}
       {toast && (

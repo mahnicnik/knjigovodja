@@ -1568,3 +1568,50 @@ test('podaljšanje: z obema potema bi prejela dve', () => {
   // Tako se je zgodilo 25. 8. 2026.
   expect(poslanaSporocila(true, true)).toHaveLength(2)
 })
+
+// ─── Interni akt ────────────────────────────────────────────────────────
+
+/**
+ * Akt velja v obliki, v kateri je bil SPREJET. Če se pozneje spremeni
+ * poslovni prostor ali naprava, se sprejme NOVA različica — obstoječa se ne
+ * popravlja. Sicer ob nadzoru ni mogoče dokazati, kaj je veljalo takrat, ko
+ * je bil račun izdan.
+ */
+function sprejmiRazlicico(obstojeca: any, datum: string) {
+  const nova = { version: (obstojeca?.version ?? 0) + 1, adopted_date: datum, superseded_at: null }
+  const stara = obstojeca ? { ...obstojeca, superseded_at: datum } : null
+  return { nova, stara }
+}
+
+test('akt: nova različica ne popravi stare', () => {
+  const { nova, stara } = sprejmiRazlicico(
+    { version: 1, adopted_date: '2026-01-10', content_html: '<p>staro</p>', superseded_at: null },
+    '2026-08-25',
+  )
+  expect(nova.version).toBe(2)
+  expect(stara?.content_html).toBe('<p>staro</p>')     // vsebina ostane
+  expect(stara?.superseded_at).toBe('2026-08-25')      // le označena kot nadomeščena
+})
+
+test('akt: prva različica se začne pri 1', () => {
+  expect(sprejmiRazlicico(null, '2026-08-25').nova.version).toBe(1)
+})
+
+test('akt: veljavna je tista brez superseded_at', () => {
+  const vse = [
+    { version: 1, superseded_at: '2026-08-25' },
+    { version: 2, superseded_at: null },
+  ]
+  const veljavna = vse.filter(a => a.superseded_at === null)
+  expect(veljavna).toHaveLength(1)
+  expect(veljavna[0].version).toBe(2)
+})
+
+/**
+ * Oddaja v eDavke je ločena od sprejetja — akta ni dovolj hraniti pri sebi.
+ */
+test('akt: sprejet še ne pomeni oddan', () => {
+  const a = { adopted_date: '2026-08-25', submitted_at: null }
+  expect(!!a.adopted_date).toBe(true)
+  expect(!!a.submitted_at).toBe(false)   // zato opozorilo
+})

@@ -6,6 +6,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { escapeHtml } from '@/lib/html-escape'
 import { zesekVrstice, razclenitevDdv, popustEurVOdstotek } from '@/lib/pos-calc'
 import { predlagajUjemanje } from '@/lib/ujemanje-artiklov'
+import { SLOG_AKTA } from '@/lib/interni-akt'
 import VatExemptionPicker from '@/components/VatExemptionPicker'
 import { vatExemptionText } from '@/lib/vat-exemptions'
 import { useRouter } from 'next/navigation'
@@ -12906,6 +12907,49 @@ function KlasikApp() {
   const [orderListOpen, setOrderListOpen] = useState(false)
   const [showClockIn, setShowClockIn] = useState(false)
   const [wsRefreshKey, setWsRefreshKey] = useState(0)
+
+  /**
+   * Odpre interni akt za predlozitev ob nadzoru (25.8.2026).
+   *
+   * Vsebina je ZAMRZNJENA ob sprejetju - prikazemo tisto, kar je bilo takrat
+   * sprejeto, ne trenutnega stanja. Sicer ob nadzoru ni mogoce dokazati, kaj
+   * je veljalo takrat, ko je bil racun izdan.
+   */
+  async function odpriInterniAkt() {
+    const orgId = posData?.org?.id
+    if (!orgId) { alert('Podatki organizacije še niso naloženi. Poskusite čez trenutek.'); return }
+
+    const { data, error } = await createClient()
+      .from('internal_acts')
+      .select('content_html, version, adopted_date, submitted_at')
+      .eq('org_id', orgId).is('superseded_at', null).maybeSingle()
+
+    if (error) { alert('Internega akta ni bilo mogoče prebrati: ' + error.message); return }
+    if (!data) {
+      alert('Interni akt še ni sprejet.\n\nSprejmete ga v Nastavitve → Davčna blagajna → Interni akt.')
+      return
+    }
+
+    const w = window.open('', '_blank', 'width=820,height=900')
+    if (!w) return
+    const opomba = data.submitted_at
+      ? `Oddan v eDavke ${new Date(data.submitted_at).toLocaleDateString('sl-SI')}.`
+      : 'OPOZORILO: ni označen kot oddan v eDavke.'
+    w.document.write(`<!DOCTYPE html><html lang="sl"><head><meta charset="utf-8">
+      <title>Interni akt</title><style>${SLOG_AKTA}
+      body{margin:0;padding:32px;background:#fff}
+      .vrh{position:sticky;top:0;background:#0D1F12;padding:10px;display:flex;gap:8px;justify-content:center;margin:-32px -32px 20px}
+      .vrh button{padding:9px 20px;border:0;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer}
+      .meta{font-size:11px;color:#666;text-align:center;margin-bottom:18px}
+      </style></head><body>
+      <div class="vrh noprint">
+        <button onclick="window.print()" style="background:#fff;color:#0D1F12">Natisni</button>
+        <button onclick="window.close()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.35)">Zapri</button>
+      </div>
+      <div class="meta noprint">Različica ${data.version} · sprejet ${new Date(data.adopted_date).toLocaleDateString('sl-SI')} · ${opomba}</div>
+      ${data.content_html}</body></html>`)
+    w.document.close()
+  }
   const [sellPackageModal, setSellPackageModal] = useState(null)
   const [heldOrdersOpen, setHeldOrdersOpen] = useState(false)
   const [heldOrders, setHeldOrders] = useState<any[]>([])
@@ -12994,6 +13038,13 @@ function KlasikApp() {
               ⚠ TESTNI NAČIN
             </div>
           )}
+          {/* INTERNI AKT (25.8.2026): ob nadzoru ga mora zavezanec predloziti
+              na zahtevo. Za pultom to pomeni, da mora biti PRI ROKI - ne doma
+              v predalu. Gumb ga odpre v novem oknu, pripravljenega za tisk. */}
+          <button onClick={odpriInterniAkt} title="Interni akt — za predložitev ob nadzoru"
+            style={{ fontSize:10, fontWeight:800, color:'#0D1F12', background:'rgba(255,255,255,0.85)', padding:'4px 9px', borderRadius:6, letterSpacing:'0.06em', border:'none', cursor:'pointer', fontFamily:'inherit' }}>
+            📜 AKT
+          </button>
           <WorkStatusBar key={wsRefreshKey} posData={posData} onRequestClockIn={()=>setShowClockIn(true)}/>
           <BellNotifications notifications={posData.notifications} notifOpen={notifOpen} setNotifOpen={setNotifOpen} posData={posData} orderListOpen={orderListOpen} setOrderListOpen={setOrderListOpen}/>
           {orderListOpen && <OrderListModal posData={posData} onClose={()=>setOrderListOpen(false)}/>}
