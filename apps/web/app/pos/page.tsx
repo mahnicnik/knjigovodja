@@ -7797,7 +7797,7 @@ ${voidEor ? `
   <div>⚡ Izdano s sistemom</div>
   <div class="brand">RAČUNKO</div>
   <div>AI knjigovodstvo za s.p.</div>
-  <div style="font-weight:700">www.računko.si</div>
+  <div style="font-weight:700">www.racunko.si</div>
 </div>
 <!-- SPREMENJENO (21.8.2026): samodejni window.print() je odprl MODALNO okno
      operacijskega sistema, ki blokira cel brskalnik, dokler ga uporabnik ne
@@ -7834,7 +7834,7 @@ function buildRefundReceiptHTML({ order, refundAmount, reason, cashierName }) {
 <div class="footer">
   <div>⚡ Izdano s sistemom</div>
   <div class="brand">RAČUNKO</div>
-  <div style="font-weight:700">www.računko.si</div>
+  <div style="font-weight:700">www.racunko.si</div>
 </div>
 <!-- SPREMENJENO (21.8.2026): samodejni window.print() je odprl MODALNO okno
      operacijskega sistema, ki blokira cel brskalnik, dokler ga uporabnik ne

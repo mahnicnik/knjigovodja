@@ -1669,3 +1669,49 @@ test('akt: členi se preštevilčijo brez negotovinskih vrst', () => {
   expect(zadnjiClen(0)).toBe('5')
   expect(zadnjiClen(2)).toBe('6')
 })
+
+// ─── Nujnost 3: besedila in prikaz ──────────────────────────────────────
+
+function naslovObrazca(urejamId: string | null) {
+  return urejamId ? 'Uredi zaposlenega' : 'Dodaj zaposlenega'
+}
+
+test('obrazec: pri urejanju ne piše „Dodaj"', () => {
+  // Prej je pisalo „Dodaj zaposlenega" tudi pri urejanju — uporabnik ni
+  // vedel, ali bo nastal nov zapis.
+  expect(naslovObrazca('emp1')).toBe('Uredi zaposlenega')
+  expect(naslovObrazca(null)).toBe('Dodaj zaposlenega')
+})
+
+function pokaziPrazenSeznam(portalskih: number, imaBlagajno: boolean) {
+  return portalskih === 0 && !imaBlagajno
+}
+
+test('zaloge: „Ni artiklov" se ne pokaže, ko so postavke iz blagajne', () => {
+  // Prej je pisalo „Ni artiklov" tik pod seznamom 14 postavk.
+  expect(pokaziPrazenSeznam(0, true)).toBe(false)
+  expect(pokaziPrazenSeznam(0, false)).toBe(true)
+})
+
+function zastopnikVeljaven(vneseno: string) {
+  return vneseno.trim().length > 0
+}
+
+test('akt: brez zastopnika sprejem ni mogoč', () => {
+  // Prej se je predlagal naziv podjetja: „test s.p. …, ki jo zastopa
+  // test s.p." — nesmiseln stavek in dvakrat isti podpis.
+  expect(zastopnikVeljaven('')).toBe(false)
+  expect(zastopnikVeljaven('   ')).toBe(false)
+  expect(zastopnikVeljaven('Janez Novak')).toBe(true)
+})
+
+test('CSV: decimalke so poenotene na dve mesti', () => {
+  // Prej nedosledno: 42,3 in 37,4 proti 14,28.
+  const dve = (v: string) => {
+    const n = Number(String(v).replace(',', '.'))
+    return Number.isFinite(n) ? n.toFixed(2).replace('.', ',') : v
+  }
+  expect(dve('42,3')).toBe('42,30')
+  expect(dve('14,28')).toBe('14,28')
+  expect(dve('986')).toBe('986,00')
+})

@@ -260,7 +260,10 @@ export default function ZalogePage() {
         {/* ARTIKLI */}
         {tab === 'items' && (
           <div style={{ background: '#fff', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.08)', overflow: 'hidden' }}>
-            {items.length === 0 ? (
+            {/* POPRAVLJENO (25.8.2026): pogoj je gledal SAMO portalske artikle,
+                zato je "Ni artiklov" pisalo tudi tik pod seznamom 14 postavk
+                iz blagajne. Ce blagajno imamo, sporocila ne kazemo. */}
+            {items.length === 0 && !posBusinessId ? (
               <div style={{ padding: 48, textAlign: 'center', color: '#aaa', fontSize: 14 }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>📦</div>
                 Ni artiklov — dodajte prvega

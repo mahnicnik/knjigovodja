@@ -828,7 +828,12 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
         {/* Nova zaposlitev forma */}
         {showForm && (
           <div className="bg-white rounded-2xl border border-gray-900 p-6 mb-6">
-            <h3 className="font-medium text-gray-900 mb-4">Dodaj zaposlenega</h3>
+            {/* POPRAVLJENO (25.8.2026): naslov in gumb sta pri UREJANJU pisala
+                "Dodaj zaposlenega" - uporabnik ni vedel, ali bo nastal nov
+                zapis. Shranjevanje je bilo pravilno, besedilo pa zavajajoce. */}
+            <h3 className="font-medium text-gray-900 mb-4">
+              {editingEmployeeId ? 'Uredi zaposlenega' : 'Dodaj zaposlenega'}
+            </h3>
             <div className="grid grid-cols-2 gap-4 mb-4">
               {[
                 { label:'Ime in priimek *', key:'full_name', type:'text' },
@@ -852,7 +857,7 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
             </div>
             <div className="flex gap-3">
               <button onClick={handleAddEmployee} disabled={saving||!form.full_name||!form.gross_salary} className="flex-1 bg-gray-900 text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-40">
-                {saving ? 'Shranjujem...' : 'Dodaj zaposlenega'}
+                {saving ? 'Shranjujem…' : editingEmployeeId ? 'Shrani' : 'Dodaj zaposlenega'}
               </button>
               <button onClick={() => { setShowForm(false); setEditingEmployeeId(null); setForm(emptyForm()) }} className="border border-gray-200 rounded-xl px-6 py-2.5 text-sm">Prekliči</button>
             </div>

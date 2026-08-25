@@ -138,7 +138,7 @@ function footer(): string {
       <div>⚡ Izdano s sistemom</div>
       <div class="brand">RAČUNKO</div>
       <div>AI knjigovodstvo za s.p.</div>
-      <div class="url">www.računko.si</div>
+      <div class="url">www.racunko.si</div>
     </div>`
 }
 

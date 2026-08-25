@@ -46,8 +46,12 @@ export default function InterniAkt({ orgId }: { orgId: string }) {
     const db2 = createClient()
     const { data: org } = await db2.from('organizations').select('name').eq('id', orgId).maybeSingle()
 
-    setZastopnik(prej.zastopnik || org?.name || '')
-    setProgram(prej.program || 'Računko (računko.si)')
+    // POPRAVLJENO (25.8.2026): polji sta bili PREDNAPOLNJENI. Zastopnik = naziv
+    // podjetja je dal nesmiseln stavek „test s.p. …, ki jo zastopa test s.p."
+    // in podpisni blok dvakrat isto. Program je bil vpisan, ceprav je
+    // neobvezen. Zdaj sta prazna — placeholder pove, kaj sodi vanju.
+    setZastopnik(prej.zastopnik || '')
+    setProgram(prej.program || '')
     setVrste(Array.isArray(prej.negotovinske) && prej.negotovinske.length > 0
       ? prej.negotovinske
       : [{ vzorec: 'LLLL-NNN', opis: 'računi, izdani ročno oziroma na podlagi opravljene storitve ali dobave', primer: '2026-001' }])
@@ -78,6 +82,10 @@ export default function InterniAkt({ orgId }: { orgId: string }) {
       setNapaka('Najprej vnesite vsaj eno elektronsko napravo.')
       return null
     }
+    if (!zastopnik.trim()) {
+      setNapaka('Vpišite zastopnika — osebo, ki akt podpiše.')
+      return null
+    }
 
     // `electronic_devices.premise_id` kaze na `business_premises.id`,
     // `business_premises.premise_id` pa je OZNAKA (npr. SIRBFB01).
@@ -89,7 +97,7 @@ export default function InterniAkt({ orgId }: { orgId: string }) {
       naslov: [org.address, [org.post_code, org.city].filter(Boolean).join(' ')]
         .filter(Boolean).join(', '),
       davcna: org.tax_number || '',
-      zastopnik: zastopnik.trim() || org.name || '',
+      zastopnik: zastopnik.trim(),
       prostori: prostori.map((pr: any) => ({
         oznaka: pr.premise_id || '',
         naslov: [pr.address, [pr.postal_code, pr.city].filter(Boolean).join(' ')]
@@ -112,7 +120,15 @@ export default function InterniAkt({ orgId }: { orgId: string }) {
   async function pripravi() {
     setNapaka(null); setDelam(true)
     const p = await zberiPodatke()
-    if (p) setPredogled(sestaviInterniAkt(p))
+    if (p) {
+      setPredogled(sestaviInterniAkt(p))
+      // POPRAVLJENO (25.8.2026): predogled se je izrisal DALEC pod gumbom,
+      // izven vidnega polja - klik ni dal nobenega odziva in je bil videti,
+      // kot da gumb ne dela.
+      setTimeout(() => {
+        document.getElementById('predogled-akta')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 60)
+    }
     setDelam(false)
   }
 
@@ -386,7 +402,7 @@ export default function InterniAkt({ orgId }: { orgId: string }) {
       )}
 
       {predogled && (
-        <div style={{ marginTop: 18, border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: 10, padding: 18, maxHeight: 420, overflowY: 'auto', background: '#fff' }}>
+        <div id="predogled-akta" style={{ marginTop: 18, border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: 10, padding: 18, maxHeight: 420, overflowY: 'auto', background: '#fff', scrollMarginTop: 16 }}>
           <style>{SLOG_AKTA}</style>
           <div dangerouslySetInnerHTML={{ __html: predogled }} />
         </div>
