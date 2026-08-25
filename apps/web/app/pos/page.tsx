@@ -6489,6 +6489,24 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
     // izgledati kot padec celotnega zakljucka.
     let zakljucekUspel = false
     if (!stats) return
+
+    // DODANO (25.8.2026): VELIKA RAZLIKA zahteva potrditev.
+    //
+    // Prej je bilo mogoce izmeno zakljuciti z manjkom v visini CELE blagajne
+    // (pri preizkusu 898,40 EUR) tako hitro, kot bi jo zakljucil pravilno -
+    // brez enega samega opozorila. Najpogostejsi vzrok ni tatvina, ampak
+    // znesek, vpisan v napacno polje.
+    const mejaOpozorila = Math.max(20, expected * 0.05)
+    if (Math.abs(difference) > mejaOpozorila) {
+      const smer = difference < 0 ? 'MANJKO' : 'VIŠEK'
+      if (!confirm(
+        `${smer}: ${eur(Math.abs(difference))}\n\n`
+        + `Pričakovano: ${eur(expected)}\n`
+        + `Prešteto: ${eur(declared)}\n\n`
+        + 'Preverite, ali je znesek vpisan v pravo polje. '
+        + 'Zaključim izmeno s to razliko?'
+      )) return
+    }
     // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
     // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
     // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
@@ -7795,7 +7813,7 @@ function buildStornoReceiptHTML({ order, lines, payment, org, cashierName, voidE
 <div class="c b" style="font-size:13px;color:#a83232">⚠️ STORNO RAČUN</div>
 <div class="c s" style="color:#a83232">Originalni račun je razveljavljen</div>
 <div class="l"></div>
-${stornoNumber ? `<div class="r"><span>Št. storna:</span><span class="b">${stornoNumber}</span></div>` : ''}
+${typeof stornoNumber === 'string' && stornoNumber ? `<div class="r"><span>Št. storna:</span><span class="b">${escapeHtml(stornoNumber)}</span></div>` : ''}
 <div class="r"><span>Storno računa:</span><span class="b">#${order.number || order.id.slice(-6)}</span></div>
 <div class="r"><span>Datum:</span><span>${new Date(order.voided_at || order.closed_at || Date.now()).toLocaleString('sl-SI')}</span></div>
 <div class="r"><span>Blagajnik:</span><span>${escapeHtml(cashierName)}</span></div>
@@ -8491,7 +8509,11 @@ function OrdersScreen({ posData, auth }) {
                     voidEor: selectedOrder.void_furs_eor,
                     voidZoi: selectedOrder.void_furs_zoi,
                     reason: selectedOrder.void_reason || 'Storno',
-                    stornoNumber: stornoNumbers?.[selectedOrder.id] ?? null,
+                    // POPRAVLJENO (25.8.2026): tu je pristal CEL ZAPIS iz
+                    // `pos_invoice_numbers`, ne stevilka - na dokumentu je
+                    // pisalo "[object Object]". Seznam hrani zapise, ker jih
+                    // drugod uporabljamo v celoti; tu vzamemo le stevilko.
+                    stornoNumber: stornoNumbers?.[selectedOrder.id]?.invoice_number ?? null,
                     vatExemptions: selectedOrder.vat_exemption_text
                       ? String(selectedOrder.vat_exemption_text).split('\n').filter(Boolean)
                       : [],

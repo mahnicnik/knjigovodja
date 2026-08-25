@@ -245,6 +245,17 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
       else                          { other += amt; otherCount++ }
     }
 
+    // POPRAVLJENO (25.8.2026): racuni, poravnani s KARTO OBISKOV, so se steli
+    // v oproscen promet po POLNI ceni postavke, cetudi je racun 0,00 EUR.
+    // Z-porocilo se zato ni izslo: pri prometu 53,60 EUR je obracun DDV kazal
+    // 153,60 EUR - razlika 100 EUR sta bila dva racuna po 50 EUR.
+    //
+    // Storitev je bila placana ze ob NAKUPU kartice, kjer je bil izdan racun z
+    // DDV. Unovcenje ni nov prihodek, zato v obracun DDV ne sodi.
+    const placanoSKartico = ((o as any).payments || [])
+      .some((p: any) => p.method === 'pkg')
+    if (placanoSKartico) continue
+
     // DDV po vrsticah
     for (const l of (o as any).order_lines || []) {
       if (l.voided) continue

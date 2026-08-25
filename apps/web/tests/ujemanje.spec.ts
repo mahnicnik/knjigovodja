@@ -1918,3 +1918,84 @@ test('novosti: ponovni tek ne podvoji zapisov', () => {
   z = zapisiBrezPodvojitev(z, 'news-16377')
   expect(z).toHaveLength(2)
 })
+
+// ─── Z-poročilo: karta obiskov ne sme v obračun DDV ─────────────────────
+
+/**
+ * NAPAKA (popravljeno 25.8.2026): računi, poravnani s karto obiskov, so se
+ * šteli v oproščen promet po POLNI ceni postavke, čeprav je račun 0,00 €.
+ * Z-poročilo se ni izšlo: pri prometu 53,60 € je obračun DDV kazal 153,60 €.
+ *
+ * Storitev je bila plačana že ob NAKUPU kartice, kjer je bil izdan račun z
+ * DDV. Unovčenje ni nov prihodek.
+ */
+function obracunDdv(narocila: Array<{ metoda: string; vrstice: Array<{ znesek: number; stopnja: number }> }>) {
+  let osnova22 = 0, ddv22 = 0, osnova0 = 0
+  for (const o of narocila) {
+    if (o.metoda === 'pkg') continue
+    for (const v of o.vrstice) {
+      if (v.stopnja === 22) { const b = v.znesek / 1.22; osnova22 += b; ddv22 += v.znesek - b }
+      else if (v.stopnja === 0) osnova0 += v.znesek
+    }
+  }
+  return { osnova22, ddv22, osnova0, vsota: osnova22 + ddv22 + osnova0 }
+}
+
+test('Z-poročilo: karta obiskov se ne šteje v promet', () => {
+  const n = [
+    { metoda: 'cash', vrstice: [{ znesek: 3.60, stopnja: 22 }] },
+    { metoda: 'cash', vrstice: [{ znesek: 50, stopnja: 0 }] },
+    { metoda: 'pkg',  vrstice: [{ znesek: 50, stopnja: 0 }] },   // 0 € račun
+    { metoda: 'pkg',  vrstice: [{ znesek: 50, stopnja: 0 }] },   // 0 € račun
+  ]
+  const r = obracunDdv(n)
+  expect(Math.round(r.vsota * 100) / 100).toBe(53.60)   // prej 153,60
+  expect(r.osnova0).toBe(50)
+})
+
+// ─── Številka storna na dokumentu ───────────────────────────────────────
+
+/**
+ * V seznam se shrani CEL ZAPIS iz `pos_invoice_numbers`, ne številka —
+ * na dokumentu je pisalo „[object Object]".
+ */
+function stevilkaStorna(zapis: any): string | null {
+  const v = zapis?.invoice_number ?? null
+  return typeof v === 'string' && v ? v : null
+}
+
+test('storno: izpiše se številka, ne predmet', () => {
+  const zapis = { order_id: 'x', invoice_number: 'SIRBFB01-TEST1-35', sequence_number: 35 }
+  expect(stevilkaStorna(zapis)).toBe('SIRBFB01-TEST1-35')
+})
+
+test('storno: predmet brez številke se ne izpiše', () => {
+  expect(stevilkaStorna({ order_id: 'x' })).toBeNull()
+  expect(stevilkaStorna(null)).toBeNull()
+})
+
+// ─── Velika razlika ob zaključku ────────────────────────────────────────
+
+/**
+ * Izmeno je bilo mogoče zaključiti z manjkom v višini cele blagajne brez
+ * opozorila. Najpogostejši vzrok ni tatvina, ampak znesek v napačnem polju.
+ */
+function zahtevaPotrditev(pricakovano: number, presteto: number) {
+  const razlika = presteto - pricakovano
+  const meja = Math.max(20, pricakovano * 0.05)
+  return Math.abs(razlika) > meja
+}
+
+test('zaključek: manjko cele blagajne zahteva potrditev', () => {
+  expect(zahtevaPotrditev(898.40, 0)).toBe(true)
+})
+
+test('zaključek: nekaj centov razlike ne moti', () => {
+  expect(zahtevaPotrditev(898.40, 898.35)).toBe(false)
+})
+
+test('zaključek: meja je vsaj 20 € tudi pri majhni blagajni', () => {
+  // Pri 50 € v blagajni bi 5 % pomenilo 2,50 € — preveč občutljivo.
+  expect(zahtevaPotrditev(50, 40)).toBe(false)
+  expect(zahtevaPotrditev(50, 20)).toBe(true)
+})
