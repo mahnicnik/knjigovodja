@@ -330,3 +330,54 @@ test('regres: pavšalnih 27 % ni več', () => {
   const davcnaOsnova = presezek - presezek * eeStopnja
   expect(davcnaOsnova).toBeLessThan(presezek)
 })
+
+// ─── Povečana splošna olajšava (vgrajeno 25.8.2026) ─────────────────────
+
+import { splosnaOlajsavaMesecno, GENERAL_RELIEF_MONTH,
+         RELIEF_INCREASED_THRESHOLD_MONTH } from '../lib/tax-constants'
+
+test('olajšava: pri pragu se natanko ujame z osnovno', () => {
+  // Zvezni prehod — brez stopnice, sicer bi bil evro razlike v plači usoden.
+  expect(splosnaOlajsavaMesecno(RELIEF_INCREASED_THRESHOLD_MONTH)).toBe(GENERAL_RELIEF_MONTH)
+})
+
+test('olajšava: nad pragom velja osnovna', () => {
+  expect(splosnaOlajsavaMesecno(2000)).toBe(GENERAL_RELIEF_MONTH)
+  expect(splosnaOlajsavaMesecno(1600)).toBe(GENERAL_RELIEF_MONTH)
+})
+
+test('olajšava: pod pragom je višja in raste, ko plača pada', () => {
+  const a = splosnaOlajsavaMesecno(1400)
+  const b = splosnaOlajsavaMesecno(1200)
+  const c = splosnaOlajsavaMesecno(1000)
+  expect(a).toBeGreaterThan(GENERAL_RELIEF_MONTH)
+  expect(b).toBeGreaterThan(a)
+  expect(c).toBeGreaterThan(b)
+})
+
+test('olajšava: znane vrednosti po formuli', () => {
+  // 2.198,69 − 1,17259 × bruto
+  expect(splosnaOlajsavaMesecno(1200)).toBeCloseTo(791.58, 2)
+  expect(splosnaOlajsavaMesecno(1400)).toBeCloseTo(557.06, 2)
+})
+
+test('olajšava: minimalna plača je TIK NAD pragom', () => {
+  // 1.481,88 € proti pragu 1.480,52 € — razlika 1,36 €. Delavec na minimalni
+  // plači povečane olajšave torej NE dobi. To je posledica tega, da se
+  // olajšava računa od BRUTO plače, ne od osnove po prispevkih.
+  expect(splosnaOlajsavaMesecno(1481.88)).toBe(GENERAL_RELIEF_MONTH)
+  expect(splosnaOlajsavaMesecno(1479.00)).toBeGreaterThan(GENERAL_RELIEF_MONTH)
+})
+
+test('olajšava: odpoved vrne osnovno', () => {
+  // Delojemalec z več viri dohodka se ji odpove, da mu ni treba doplačati
+  // pri letnem obračunu.
+  expect(splosnaOlajsavaMesecno(1200, false)).toBe(GENERAL_RELIEF_MONTH)
+})
+
+test('olajšava: nikoli manj od osnovne', () => {
+  // Varovalka pred napako v konstantah.
+  for (const b of [0, 100, 500, 1000, 1480, 1481, 3000]) {
+    expect(splosnaOlajsavaMesecno(b)).toBeGreaterThanOrEqual(GENERAL_RELIEF_MONTH)
+  }
+})

@@ -3662,17 +3662,34 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
         // B4 (22.8.2026): tudi IZDANI racuni (obroki, paketi iz portala).
         // Prej je zgodovina brala samo `orders` iz blagajne, zato obrocna
         // prodaja v profilu ni bila vidna.
+        // POPRAVLJENO (25.8.2026): filtrirali smo po `customer_id`, tega stolpca
+        // pa `issued_invoices` NIMA - poizvedba je vsakic padla, `catch` jo je
+        // pogoltnil in obrocni racuni v zgodovini niso bili nikoli vidni.
+        // Tabela hrani stranko po IMENU in E-NASLOVU (client_name, client_email).
         createClient().from('issued_invoices')
-          .select('id, invoice_number, issue_date, amount_total, status, line_items')
-          .eq('customer_id', selectedId)
+          .select('id, invoice_number, issue_date, amount_total, status, line_items, client_name, client_email')
           .order('issue_date', { ascending: false })
-          .limit(30),
+          .limit(200),
       ])
       const pkgs = pkgRes.data || []
       const ords = ordRes.data || []
       setCustomerPackages(pkgs)
       // Zdruzimo oboje v en seznam, urejen po datumu.
-      const izdani = (invRes.data || []).map((r: any) => ({
+      // Ujemanje po IMENU ali E-NASLOVU (25.8.2026): `issued_invoices` nima
+      // povezave na stranko, hrani pa njeno ime in e-naslov ob izdaji.
+      // E-naslov je zanesljivejsi, zato ga preverimo najprej.
+      const stranka = posData.customers.find((c: any) => c.id === selectedId)
+      const imeStranke = (stranka?.name || '').trim().toLowerCase()
+      const epostaStranke = (stranka?.email || '').trim().toLowerCase()
+
+      const izdani = (invRes.data || [])
+        .filter((r: any) => {
+          const rEposta = (r.client_email || '').trim().toLowerCase()
+          if (epostaStranke && rEposta) return rEposta === epostaStranke
+          const rIme = (r.client_name || '').trim().toLowerCase()
+          return !!imeStranke && rIme === imeStranke
+        })
+        .map((r: any) => ({
         id: r.id,
         closed_at: r.issue_date,
         opened_at: r.issue_date,

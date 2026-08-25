@@ -8,6 +8,7 @@ import Link from 'next/link'
 import posthog from 'posthog-js'
 import { getActiveMembership } from '@/lib/active-org'
 import { formatEurNumber } from '@/lib/format'
+import AppLayout from '@/components/AppLayout'
 
 interface LineItem {
   description: string
@@ -302,6 +303,11 @@ export default function NewDobavnicaPage() {
 
   // ── DESKTOP LAYOUT ──
   return (
+    <AppLayout>
+    {/* DODANO (25.8.2026): stran je imela LASTNO postavitev cez cel zaslon,
+        brez menija. Do nje prides iz seznama, torej se je navigacija izgubila
+        sredi dela - enako, kot je bilo pri integracijah. */}
+
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
         <div>
@@ -420,5 +426,6 @@ export default function NewDobavnicaPage() {
         </div>
       </div>
     </div>
+    </AppLayout>
   )
 }

@@ -50,11 +50,42 @@ export const GENERAL_RELIEF_YEAR = 5551.93
 export const GENERAL_RELIEF_MONTH = 462.66
 
 /**
- * ⚠️ NEPREVERJENO: povečana (dodatna) splošna olajšava za nizke dohodke.
- * Velja pri letnem dohodku pod ~17.766 €, po formuli iz ZDoh-2.
- * NI avtomatizirana, ker je odvisna od REALIZIRANEGA letnega dohodka,
- * ki ga mesečni izračun ne pozna. Računovodja to pravilno upošteva.
+ * POVEČANA (DODATNA) SPLOŠNA OLAJŠAVA — vgrajeno 25.8.2026.
+ *
+ * Pri nižjih dohodkih je splošna olajšava VIŠJA. Znižuje se zvezno, ne
+ * stopničasto, in pri pragu doseže osnovno vrednost.
+ *
+ * LETNO:  olajšava = 5.551,93 + (20.832,39 − 1,17259 × skupni dohodek)
+ *                  = 26.384,32 − 1,17259 × dohodek
+ *         velja pri dohodku pod 17.766,18 €
+ *
+ * MESEČNO (deljeno z 12, dohodek = 12 × mesečna bruto plača):
+ *         olajšava = 2.198,69 − 1,17259 × bruto plača
+ *         velja pri bruto plači pod 1.480,52 €
+ *
+ * OSNOVA JE BRUTO PLAČA (odločitev 25.8.2026). To je pomembno: minimalna
+ * plača 1.481,88 € je TIK NAD pragom, zato delavec na minimalni plači
+ * povečane olajšave NE dobi. Pri osnovi po odbitku prispevkov bi jo.
+ *
+ * ⚠️ Delojemalec se ji lahko ODPOVE — če ima več virov dohodka, mu med letom
+ * zniža akontacijo, pri letnem obračunu pa mora doplačati. O tem obvesti
+ * delodajalca; takrat se uporabi osnovna olajšava.
  */
+export const RELIEF_INCREASED_THRESHOLD_MONTH = 1480.52
+export const RELIEF_INCREASED_BASE_MONTH = 2198.69
+export const RELIEF_INCREASED_FACTOR = 1.17259
+
+/**
+ * Splošna olajšava za mesečno akontacijo pri dani BRUTO plači.
+ * Pod pragom vrne povečano, sicer osnovno.
+ */
+export function splosnaOlajsavaMesecno(brutoPlaca: number, uveljavljaPovecano = true): number {
+  if (!uveljavljaPovecano) return GENERAL_RELIEF_MONTH
+  if (brutoPlaca >= RELIEF_INCREASED_THRESHOLD_MONTH) return GENERAL_RELIEF_MONTH
+  const o = RELIEF_INCREASED_BASE_MONTH - RELIEF_INCREASED_FACTOR * brutoPlaca
+  // Nikoli manj od osnovne — varovalka pred napako v konstantah.
+  return Math.max(GENERAL_RELIEF_MONTH, Math.round(o * 100) / 100)
+}
 
 // ───────────────────────── PLAČE ─────────────────────────
 

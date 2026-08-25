@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { getActiveMembership } from '@/lib/active-org'
 import { formatEurNumber } from '@/lib/format'
+import AppLayout from '@/components/AppLayout'
 
 interface LineItem {
   description: string
@@ -127,6 +128,11 @@ export default function NewQuotePage() {
   const inp: React.CSSProperties = { width: '100%', padding: '10px 12px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.15)', fontSize: 13, outline: 'none', background: '#fff' }
 
   return (
+    <AppLayout>
+    {/* DODANO (25.8.2026): stran je imela LASTNO postavitev cez cel zaslon,
+        brez menija. Do nje prides iz seznama, torej se je navigacija izgubila
+        sredi dela - enako, kot je bilo pri integracijah. */}
+
     <div style={{ minHeight: '100vh', background: '#F7F6F2', padding: '24px 16px' }}>
       <div style={{ maxWidth: 760, margin: '0 auto' }}>
         <div style={{ marginBottom: 20 }}>
@@ -230,5 +236,6 @@ export default function NewQuotePage() {
         </div>
       </div>
     </div>
+    </AppLayout>
   )
 }

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { escapeHtml } from '@/lib/html-escape'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
-import { EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS, MANDATORY_HEALTH_CONTRIBUTION, GENERAL_RELIEF_MONTH, MIN_WAGE as TC_MIN_WAGE, INCOME_TAX_BRACKETS, REGRES_TAX_FREE_LIMIT, MIN_CONTRIBUTION_BASE, MEAL_ALLOWANCE, KM_RATE_COMMUTE , lokalniDatum} from '@/lib/tax-constants'
+import { EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS, MANDATORY_HEALTH_CONTRIBUTION, GENERAL_RELIEF_MONTH, splosnaOlajsavaMesecno, MIN_WAGE as TC_MIN_WAGE, INCOME_TAX_BRACKETS, REGRES_TAX_FREE_LIMIT, MIN_CONTRIBUTION_BASE, MEAL_ALLOWANCE, KM_RATE_COMMUTE , lokalniDatum} from '@/lib/tax-constants'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 import { formatEurNumber } from '@/lib/format'
@@ -23,6 +23,8 @@ function r(v: number) { return Math.round(v * 100) / 100 }
 function calcPayroll(grossSalary: number, dependents: number = 0, extras: {
   overtime?: number; nightBonus?: number; sundayBonus?: number;
   holidayBonus?: number; travelAllowance?: number; mealAllowance?: number;
+  /** Delojemalec se je odpovedal povecani splosni olajsavi (ZDoh-2). */
+  brezPovecaneOlajsave?: boolean;
 } = {}) {
   const overtimeAmt = r(grossSalary / 174 * 1.3 * (extras.overtime || 0))
   const nightAmt = r(grossSalary / 174 * 0.3 * (extras.nightBonus || 0))
@@ -56,20 +58,23 @@ function calcPayroll(grossSalary: number, dependents: number = 0, extras: {
   const ee_total = r(ee_piz + ee_zzzs + ee_injury + ee_unemployment + ee_parental + ee_dolgotrajna + ee_ozp)
   const base = taxableGross - ee_total
   const depRelief = dependents === 0 ? 0 : dependents === 1 ? 2697/12 : dependents === 2 ? 4120/12 : 7780/12
-  // ⚠️ DODATNA SPLOŠNA OLAJŠAVA (24.8.2026)
+  // DODATNA (POVEČANA) SPLOŠNA OLAJŠAVA — vgrajeno 25.8.2026.
   //
-  // Pri nizkih dohodkih pripada POVEČANA splošna olajšava (ZDoh-2). Ta
-  // obračun je NE upošteva, ker je odvisna od realiziranega LETNEGA dohodka,
-  // ki ga mesečni izračun ne pozna.
+  // Prej obračun te olajšave NI upošteval: pri nizkih plačah je bila
+  // odtegnjena dohodnina previsoka, razlika pa se je poravnala šele pri
+  // letnem obračunu.
   //
-  // Posledica: pri plačah blizu minimalne je odtegnjena dohodnina VIŠJA od
-  // končne. Razlika se poravna pri letnem obračunu — delavec je torej med
-  // letom prikrajšan, ne oškodovan. Kljub temu mora to vedeti, kdor obračun
-  // uporablja, zato spodaj o tem izrecno opozorimo.
+  // Osnova je BRUTO PLAČA. Ker je minimalna plača (1.481,88 €) TIK NAD
+  // pragom (1.480,52 €), delavec na minimalni plači povečane olajšave ne
+  // dobi — razlika je 1,36 €.
   //
-  // NE UGIBAMO formule: uskladi z računovodkinjo in šele nato vgradi.
-  const dodatnaOlajsavaNiUpostevana = base < 1650
-  const taxableBase = Math.max(0, base - GENERAL_RELIEF_MONTHLY - depRelief)
+  // `uveljavljaPovecano`: delojemalec se olajšavi lahko odpove (ZDoh-2). To
+  // stori, kdor ima več virov dohodka in bi moral pri letnem obračunu
+  // doplačati.
+  const uveljavljaPovecano = extras.brezPovecaneOlajsave !== true
+  const splosnaOlajsava = splosnaOlajsavaMesecno(taxableGross, uveljavljaPovecano)
+  const imaPovecano = splosnaOlajsava > GENERAL_RELIEF_MONTHLY
+  const taxableBase = Math.max(0, base - splosnaOlajsava - depRelief)
   let tax = 0, prev = 0
   const annualBase = taxableBase * 12
   for (const b of BRACKETS) {
@@ -90,7 +95,7 @@ function calcPayroll(grossSalary: number, dependents: number = 0, extras: {
   const er_total = r(er_piz + er_zzzs + er_injury + er_unemployment + er_parental + er_dolgotrajna)
   return {
     baseSalary: grossSalary, overtimeAmt, nightAmt, sundayAmt, holidayAmt,
-    taxableGross, prispevkovnaOsnova, podOsnovo, dodatnaOlajsavaNiUpostevana, travelAmt, mealAmt, ee_piz, ee_zzzs, ee_injury, ee_unemployment, ee_parental, ee_dolgotrajna, ee_ozp, ee_total,
+    taxableGross, prispevkovnaOsnova, podOsnovo, splosnaOlajsava, imaPovecano, travelAmt, mealAmt, ee_piz, ee_zzzs, ee_injury, ee_unemployment, ee_parental, ee_dolgotrajna, ee_ozp, ee_total,
     incomeTax, netSalary, er_piz, er_zzzs, er_injury, er_unemployment, er_parental, er_dolgotrajna, er_total,
     // POPRAVLJENO (16.8.2026): povracila (prevoz, malica) so DEJANSKI strosek
     // delodajalca, prej pa nista bila vsteta v skupni strosek - podjetje je
@@ -780,13 +785,13 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
               </div>
             )}
 
-            {calcResult?.dodatnaOlajsavaNiUpostevana && (
-              <div style={{ marginBottom: 12, padding: '11px 13px', borderRadius: 9, background: 'rgba(184,140,40,0.1)', border: '1px solid rgba(184,140,40,0.3)', fontSize: 13, lineHeight: 1.55, color: '#8A5A00' }}>
-                <strong>Dodatna splošna olajšava ni upoštevana.</strong> Pri nizkih
-                dohodkih pripada povečana olajšava, ki je odvisna od letnega dohodka —
-                mesečni obračun je ne pozna. Odtegnjena dohodnina je zato višja od
-                končne; razlika se poravna pri letnem obračunu. Za točen znesek se
-                posvetujte z računovodkinjo.
+            {calcResult?.imaPovecano && (
+              <div style={{ marginBottom: 12, padding: '11px 13px', borderRadius: 9, background: '#E1F5EE', border: '1px solid rgba(31,107,58,0.25)', fontSize: 13, lineHeight: 1.55, color: '#0E5E3B' }}>
+                <strong>Upoštevana povečana splošna olajšava</strong> —{' '}
+                {formatEurNumber(calcResult.splosnaOlajsava)} € namesto{' '}
+                {formatEurNumber(GENERAL_RELIEF_MONTH)} €. Pripada pri bruto plači
+                pod {formatEurNumber(1480.52)} €. Če se ji delojemalec odpove
+                (npr. zaradi drugih virov dohodka), o tem obvesti delodajalca.
               </div>
             )}
 
