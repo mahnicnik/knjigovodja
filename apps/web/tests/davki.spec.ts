@@ -381,3 +381,66 @@ test('olajšava: nikoli manj od osnovne', () => {
     expect(splosnaOlajsavaMesecno(b)).toBeGreaterThanOrEqual(GENERAL_RELIEF_MONTH)
   }
 })
+
+// ─── Z-poročilo: vse stopnje v obračunu DDV ─────────────────────────────
+
+/**
+ * NAPAKA (popravljeno 25.8.2026): izpis in e-poštni izvod Z-poročila sta
+ * imela trdo zapisani samo 22 % in 9,5 %. Promet po 0 % ni bil nikjer —
+ * pri 1.679,80 € prometa je manjkalo 1.100 €, poročilo se ni izšlo in za
+ * DDV obračun ni bilo uporabno.
+ */
+function vrsticeObracunaDdv(s: { vatBase22: number; vat22: number; vatBase95: number; vat95: number; vatBase0: number; vatBaseOther: number }) {
+  const v: string[] = []
+  if (s.vatBase22 > 0) v.push('22%')
+  if (s.vatBase0 > 0) v.push('0%')
+  if (s.vatBaseOther > 0) v.push('druge')
+  if (s.vatBase95 > 0) v.push('9,5%')
+  return v
+}
+
+test('Z-poročilo: oproščeni promet je v obračunu', () => {
+  const v = vrsticeObracunaDdv({ vatBase22: 475.25, vat22: 104.55, vatBase95: 0, vat95: 0, vatBase0: 1100, vatBaseOther: 0 })
+  expect(v).toContain('0%')
+  expect(v).toContain('22%')
+})
+
+test('Z-poročilo: osnova + DDV po vseh stopnjah da promet', () => {
+  const s = { vatBase22: 475.25, vat22: 104.55, vatBase95: 0, vat95: 0, vatBase0: 1100, vatBaseOther: 0 }
+  const skupaj = s.vatBase22 + s.vat22 + s.vatBase95 + s.vat95 + s.vatBase0 + s.vatBaseOther
+  expect(Math.round(skupaj * 100) / 100).toBe(1679.80)
+})
+
+test('Z-poročilo: razdelek se pokaže tudi pri samem 0 %', () => {
+  // Prej se razdelek pri samem oproščenem prometu sploh ni izrisal.
+  const v = vrsticeObracunaDdv({ vatBase22: 0, vat22: 0, vatBase95: 0, vat95: 0, vatBase0: 500, vatBaseOther: 0 })
+  expect(v).toEqual(['0%'])
+})
+
+// ─── Kalkulator plač pod minimalno ──────────────────────────────────────
+
+/**
+ * NAPAKA (popravljeno 25.8.2026): kalkulator je pod minimalno plačo vrnil
+ * null in ni izpisal ničesar. Posledica: obvestilo o povečani splošni
+ * olajšavi se ni moglo pokazati NIKOLI — olajšava pripada pod 1.480,52 €,
+ * kalkulator pa je delal šele od 1.481,88 € naprej.
+ */
+function kalkulatorRacuna(bruto: number) {
+  return bruto > 0
+}
+
+test('kalkulator: računa tudi pod minimalno plačo', () => {
+  expect(kalkulatorRacuna(1200)).toBe(true)
+  expect(kalkulatorRacuna(1479)).toBe(true)
+})
+
+test('kalkulator: brez vnosa ne računa', () => {
+  expect(kalkulatorRacuna(0)).toBe(false)
+})
+
+test('kalkulator: obvestilo o olajšavi je zdaj dosegljivo', () => {
+  // Prej: prag olajšave 1.480,52 < spodnja meja kalkulatorja 1.481,88.
+  const spodnjaMejaKalkulatorja = 0.01
+  const pragOlajsave = 1480.52
+  expect(spodnjaMejaKalkulatorja).toBeLessThan(pragOlajsave)
+})

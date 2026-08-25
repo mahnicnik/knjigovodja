@@ -334,7 +334,12 @@ export default function IntegracijeSekcija() {
                 }}>
                   {strIntegration.is_active ? '✓ Aktiven' : '✕ Neaktiven'}
                 </button>
-                <button onClick={() => { setStrSecret(strIntegration.webhook_secret); setStrModal(true) }} style={{ padding: '6px 12px', borderRadius: 6, border: '0.5px solid rgba(0,0,0,0.12)', fontSize: 12, cursor: 'pointer', background: '#fff' }}>Uredi</button>
+                {/* POPRAVLJENO (25.8.2026): gumb je v okno prednapolnil skrivnost
+                    v CISTEM BESEDILU, vidno brez zakrivanja - v pregledu pod
+                    tem je ista skrivnost pravilno skrita za gumbom "Pokazi".
+                    Polje pustimo prazno: kdor skrivnost menja, jo prilepi
+                    znova iz Stripa; kdor je ne menja, okno preprosto zapre. */}
+                <button onClick={() => { setStrSecret(''); setStrModal(true) }} style={{ padding: '6px 12px', borderRadius: 6, border: '0.5px solid rgba(0,0,0,0.12)', fontSize: 12, cursor: 'pointer', background: '#fff' }}>Uredi</button>
                 <button onClick={() => deleteIntegration(strIntegration.id, 'Stripe')} style={{ padding: '6px 12px', borderRadius: 6, border: 0, fontSize: 12, cursor: 'pointer', background: '#FEE2E2', color: '#DC2626' }}>Briši</button>
               </div>
             ) : (
@@ -460,6 +465,7 @@ export default function IntegracijeSekcija() {
                   <input value={strSecret} onChange={e => setStrSecret(e.target.value)} placeholder="whsec_..." style={{ ...inp, flex: 1 }} />
                 </div>
                 <div style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>
+                  {strIntegration?.webhook_secret ? 'Skrivnost je že shranjena — pustite prazno, če je ne menjate. ' : ''}
                   Prilepite Signing secret iz Stripe → Developers → Webhooks → vaš endpoint.
                   Začne se z <strong>whsec_</strong> in ga izda Stripe — ne izmislite si ga.
                 </div>
@@ -473,7 +479,10 @@ export default function IntegracijeSekcija() {
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
               <button onClick={() => setStrModal(false)} style={{ padding: '9px 16px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.12)', fontSize: 13, cursor: 'pointer', background: '#fff' }}>Prekliči</button>
-              <button onClick={() => saveIntegration('stripe', 'stripe', strSecret)} disabled={saving} style={{ padding: '9px 18px', borderRadius: 8, border: 0, fontSize: 13, fontWeight: 500, cursor: 'pointer', background: '#0D1F12', color: '#fff', opacity: saving ? 0.6 : 1 }}>
+              {/* Prazno polje pomeni "pusti obstojeco", ne "izbrisi jo" -
+                  sicer bi zapiranje okna razdrlo delujoco integracijo. */}
+              <button onClick={() => saveIntegration('stripe', 'stripe',
+                        strSecret.trim() || strIntegration?.webhook_secret || '')} disabled={saving} style={{ padding: '9px 18px', borderRadius: 8, border: 0, fontSize: 13, fontWeight: 500, cursor: 'pointer', background: '#0D1F12', color: '#fff', opacity: saving ? 0.6 : 1 }}>
                 {saving ? 'Shranjujem...' : 'Shrani'}
               </button>
             </div>

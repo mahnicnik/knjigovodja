@@ -308,13 +308,20 @@ export function buildXReportReceipt(params: {
       <span>${eur(stats.cashExpected)}</span>
     </div>
 
-    ${(stats.vatBase22 + stats.vatBase95) > 0 ? `
+    ${(stats.vatBase22 + stats.vatBase95 + (stats.vatBase0 || 0) + (stats.vatBaseOther || 0)) > 0 ? `
     <div class="line"></div>
     <div class="section">OBRAČUN DDV</div>
     <div style="height:4px"></div>
     ${stats.vatBase22 > 0 ? `
     <div class="row sub"><span>Osnova 22%:</span><span>${eur(stats.vatBase22)}</span></div>
     <div class="row sub"><span>DDV 22%:</span><span>${eur(stats.vat22)}</span></div>
+    ` : ''}
+    ${(stats.vatBase0 || 0) > 0 ? `
+    <div class="row sub"><span>Oproščeno (0%):</span><span>${eur(stats.vatBase0)}</span></div>
+    <div class="row sub"><span>DDV 0%:</span><span>${eur(0)}</span></div>
+    ` : ''}
+    ${(stats.vatBaseOther || 0) > 0 ? `
+    <div class="row sub"><span>Druge stopnje — osnova:</span><span>${eur(stats.vatBaseOther)}</span></div>
     ` : ''}
     ${stats.vatBase95 > 0 ? `
     <div class="row sub"><span>Osnova 9,5%:</span><span>${eur(stats.vatBase95)}</span></div>
@@ -411,13 +418,20 @@ export function buildZReportReceipt(params: {
     <div class="row sub"><span>Skupaj:</span><span>${eur(stats.refundTotal)}</span></div>
     ` : ''}
 
-    ${(stats.vatBase22 + stats.vatBase95) > 0 ? `
+    ${(stats.vatBase22 + stats.vatBase95 + (stats.vatBase0 || 0) + (stats.vatBaseOther || 0)) > 0 ? `
     <div class="line"></div>
     <div class="section">OBRAČUN DDV</div>
     <div style="height:4px"></div>
     ${stats.vatBase22 > 0 ? `
     <div class="row sub"><span>Osnova 22%:</span><span>${eur(stats.vatBase22)}</span></div>
     <div class="row sub"><span>DDV 22%:</span><span>${eur(stats.vat22)}</span></div>
+    ` : ''}
+    ${(stats.vatBase0 || 0) > 0 ? `
+    <div class="row sub"><span>Oproščeno (0%):</span><span>${eur(stats.vatBase0)}</span></div>
+    <div class="row sub"><span>DDV 0%:</span><span>${eur(0)}</span></div>
+    ` : ''}
+    ${(stats.vatBaseOther || 0) > 0 ? `
+    <div class="row sub"><span>Druge stopnje — osnova:</span><span>${eur(stats.vatBaseOther)}</span></div>
     ` : ''}
     ${stats.vatBase95 > 0 ? `
     <div class="row sub"><span>Osnova 9,5%:</span><span>${eur(stats.vatBase95)}</span></div>

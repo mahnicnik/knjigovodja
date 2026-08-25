@@ -7474,6 +7474,15 @@ function VoidModal({ order, lines, payment, posData, auth, onClose, onVoided }) 
         voidEor: fursData.eor,
         voidZoi: fursData.zoi,
         reason: reason || 'Storno',
+        // Lastna stevilka storna in klavzule (25.8.2026).
+        stornoNumber: fursData?.invoiceNumber ?? null,
+        vatExemptions: Array.from(new Set((lines || [])
+          .filter((l: any) => Number(l.vat_rate ?? 22) === 0)
+          .map((l: any) => {
+            const kat = posData?.items?.find((x: any) => x.id === l.item_id)
+            return vatExemptionText(kat?.vat_exemption_code, kat?.vat_exemption_custom_text)
+          })
+          .filter(Boolean))),
       })
       const w = window.open('', '_blank', 'width=380,height=700')
       if (w) { w.document.write(html); w.document.close() }
@@ -7714,7 +7723,17 @@ function RefundModal({ order, lines, payment, auth, onClose, onRefunded }) {
 // STORNO RAČUN HTML (termalni format)
 // ─────────────────────────────────────────────────────────────────
 
-function buildStornoReceiptHTML({ order, lines, payment, org, cashierName, voidEor, voidZoi, reason }) {
+/**
+ * IZPIS STORNA (popravljeno 25.8.2026).
+ *
+ * Prej troje narobe:
+ *   1. Datum se je jemal iz `new Date()` OB TISKU — vsak ponovni izpis istega
+ *      dokumenta je pokazal drug cas. Davcni dokument mora nositi cas IZDAJE.
+ *   2. Manjkala je LASTNA stevilka storna (SIRBFB01-TEST1-28); pisalo je le
+ *      "Storno racuna: #22".
+ *   3. Manjkala sta OBRACUN DDV in klavzula o oprostitvi, ki ju original ima.
+ */
+function buildStornoReceiptHTML({ order, lines, payment, org, cashierName, voidEor, voidZoi, reason, stornoNumber, vatExemptions }) {
   const eur = n => '€' + Number(n).toFixed(2).replace('.', ',')
   const addr = [org?.address, [org?.post_code, org?.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>STORNO #${order.number}</title>
@@ -7730,8 +7749,9 @@ function buildStornoReceiptHTML({ order, lines, payment, org, cashierName, voidE
 <div class="c b" style="font-size:13px;color:#a83232">⚠️ STORNO RAČUN</div>
 <div class="c s" style="color:#a83232">Originalni račun je razveljavljen</div>
 <div class="l"></div>
+${stornoNumber ? `<div class="r"><span>Št. storna:</span><span class="b">${stornoNumber}</span></div>` : ''}
 <div class="r"><span>Storno računa:</span><span class="b">#${order.number || order.id.slice(-6)}</span></div>
-<div class="r"><span>Datum:</span><span>${new Date().toLocaleString('sl-SI')}</span></div>
+<div class="r"><span>Datum:</span><span>${new Date(order.voided_at || order.closed_at || Date.now()).toLocaleString('sl-SI')}</span></div>
 <div class="r"><span>Blagajnik:</span><span>${escapeHtml(cashierName)}</span></div>
 <div class="r"><span>Razlog:</span><span>${escapeHtml(reason)}</span></div>
 <div class="l"></div>
@@ -7742,6 +7762,28 @@ ${lines.map(l => `
 <div class="dl"></div>
 <div class="r b" style="font-size:13px"><span>VRAČILO:</span><span style="color:#a83232">-${eur(order.total)}</span></div>
 <div class="dl"></div>
+${(() => {
+  // OBRACUN DDV (dodano 25.8.2026): storno je davcni dokument in mora imeti
+  // enak davcni del kot original, le z nasprotnim predznakom.
+  const poStopnji = new Map()
+  for (const l of (lines || [])) {
+    const bruto = Number(l.total ?? Number(l.qty || 0) * Number(l.unit_price || 0))
+    const st = Number(l.vat_rate ?? 22)
+    const osn = st > 0 ? bruto / (1 + st / 100) : bruto
+    const v = poStopnji.get(st) || { osnova: 0, ddv: 0 }
+    v.osnova += osn; v.ddv += bruto - osn
+    poStopnji.set(st, v)
+  }
+  if (poStopnji.size === 0) return ''
+  const vrstice = Array.from(poStopnji.entries())
+    .sort((a, b) => b[0] - a[0])
+    .map(([st, v]) => `<div class="r s"><span>${String(st).replace('.', ',')} % — osnova / DDV</span><span>-${eur(v.osnova)} / -${eur(v.ddv)}</span></div>`)
+    .join('')
+  return `<div class="s b">OBRAČUN DDV</div>${vrstice}<div class="dl"></div>`
+})()}
+${(vatExemptions || []).length > 0 ? `
+<div class="s" style="margin-top:4px">${(vatExemptions || []).map(t => escapeHtml(t)).join('<br/>')}</div>
+<div class="dl"></div>` : ''}
 ${voidEor ? `
 <div class="l"></div>
 <div class="s">ZOI: ${voidZoi || '—'}</div>
@@ -8403,6 +8445,10 @@ function OrdersScreen({ posData, auth }) {
                     voidEor: selectedOrder.void_furs_eor,
                     voidZoi: selectedOrder.void_furs_zoi,
                     reason: selectedOrder.void_reason || 'Storno',
+                    stornoNumber: stornoNumbers?.[selectedOrder.id] ?? null,
+                    vatExemptions: selectedOrder.vat_exemption_text
+                      ? String(selectedOrder.vat_exemption_text).split('\n').filter(Boolean)
+                      : [],
                   })
                   const w = window.open('', '_blank', 'width=380,height=700')
                   if (w) { w.document.write(html); w.document.close() }

@@ -142,12 +142,26 @@ export default function ZalogaIzBlagajne({ orgId, businessId }: { orgId: string;
     const skupajV = (data || []).reduce((s, r) => s + Number(r.value || 0), 0)
     vrsticeCsv.push(['', 'SKUPAJ', '', '', '', skupajV.toFixed(2).replace('.', ',')])
 
-    // Podpicje in BOM, da se v Excelu odpre pravilno s sumniki.
-    const csv = '\uFEFF' + [glava, ...vrsticeCsv]
-      .map(v => v.map(p => `"${String(p).replace(/"/g, '""')}"`).join(';')).join('\n')
+    // Enotno stevilo decimalk, da stolpec ni razmetan (42,3 proti 14,28).
+    const dveDecimalki = (v: string) => {
+      const n = Number(String(v).replace(',', '.'))
+      return Number.isFinite(n) ? n.toFixed(2).replace('.', ',') : v
+    }
+    for (const v of vrsticeCsv) {
+      v[3] = dveDecimalki(v[3])   // kolicina
+      v[5] = dveDecimalki(v[5])   // vrednost
+    }
 
+    // POPRAVLJENO (25.8.2026): BOM zapisemo kot BAJTE, ne kot znak v nizu -
+    // tako je nedvoumno prisoten, tudi ce ga bralnik ob dekodiranju odstrani.
+    // Prelomi so \r\n, ker jih Excel na Windowsu pricakuje; brez njih so
+    // dolge vrstice ponekod zlepljene.
+    const vsebina = [glava, ...vrsticeCsv]
+      .map(v => v.map(p => `"${String(p).replace(/"/g, '""')}"`).join(';')).join('\r\n') + '\r\n'
+
+    const BOM = new Uint8Array([0xEF, 0xBB, 0xBF])
     const a = document.createElement('a')
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    a.href = URL.createObjectURL(new Blob([BOM, vsebina], { type: 'text/csv;charset=utf-8' }))
     a.download = `popis-zalog-${datumPopisa}.csv`
     a.click()
     URL.revokeObjectURL(a.href)

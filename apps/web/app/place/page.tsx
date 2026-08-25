@@ -597,7 +597,8 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
     ${p.sundayAmt > 0 ? `<tr><td>Nedeljski dodatek (50%)</td><td class="r">${getExtras(emp.id).sundayBonus || 0} ur</td><td class="r">€${formatEurNumber(p.sundayAmt)}</td></tr>` : ''}
     ${p.holidayAmt > 0 ? `<tr><td>Praznični dodatek (100%)</td><td class="r">${getExtras(emp.id).holidayBonus || 0} ur</td><td class="r">€${formatEurNumber(p.holidayAmt)}</td></tr>` : ''}
     <tr class="total-row"><td>BRUTO PLAČA</td><td class="r">—</td><td class="r">€${formatEurNumber(p.taxableGross)}</td></tr>
-    <tr><td style="color:#666">− ZPIZ delavec (15.50%)</td><td class="r" style="color:#666">€${formatEurNumber(p.taxableGross)}</td><td class="r" style="color:#dc2626">−€${formatEurNumber(Number(p.ee_piz || 0))}</td></tr>
+    ${p.podOsnovo ? `<tr><td colspan="3" style="color:#8A5A00;font-size:11px;padding-top:4px">Prispevki so obračunani od najnižje osnove €${formatEurNumber(p.prispevkovnaOsnova)}, ker je plača nižja od nje.</td></tr>` : ''}
+    <tr><td style="color:#666">− ZPIZ delavec (15.50%)</td><td class="r" style="color:#666">€${formatEurNumber(p.prispevkovnaOsnova ?? p.taxableGross)}</td><td class="r" style="color:#dc2626">−€${formatEurNumber(Number(p.ee_piz || 0))}</td></tr>
     <tr><td style="color:#666">− ZZZS delavec (6.36%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${formatEurNumber(Number(p.ee_zzzs || 0))}</td></tr>
     <tr><td style="color:#666">− Brezposelnost (0.14%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${formatEurNumber(Number(p.ee_unemployment || 0))}</td></tr>
     <tr><td style="color:#666">− Starševsko varstvo (0.10%)</td><td class="r" style="color:#666">—</td><td class="r" style="color:#dc2626">−€${formatEurNumber(p.ee_parental)}</td></tr>
@@ -639,7 +640,16 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
   }
 
   const gross = parseFloat(calcGross) || 0
-  const calcResult = gross >= MIN_WAGE ? calcPayroll(gross, calcDeps, calcExtras) : null
+  // POPRAVLJENO (25.8.2026): kalkulator je pod minimalno placo vrnil NULL in
+  // ni izpisal nicesar - ne rezultata, ne opozorila. Posledica je bila tudi,
+  // da se obvestilo o POVECANI SPLOSNI OLAJSAVI ni moglo pokazati NIKOLI:
+  // olajsava pripada pod 1.480,52 EUR, kalkulator pa je delal sele od
+  // 1.481,88 EUR naprej.
+  //
+  // Placa pod minimalno je legitimna (krajsi delovni cas, del meseca), zato
+  // racunamo vedno; ce je pod minimalno za polni cas, na to OPOZORIMO.
+  const calcResult = gross > 0 ? calcPayroll(gross, calcDeps, calcExtras) : null
+  const podMinimalno = gross > 0 && gross < MIN_WAGE
   const now = new Date()
   const daysToJuly = Math.ceil((new Date(now.getFullYear(), 6, 1).getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
   const showRegresAlert = employees.length > 0 && daysToJuly > 0 && daysToJuly <= 60
@@ -777,6 +787,14 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
             </div>
             {/* OPOZORILA O OBRAČUNU (24.8.2026) — uporabnik mora vedeti, kje
                 obračun ne pove cele zgodbe. */}
+            {podMinimalno && (
+              <div style={{ marginBottom: 12, padding: '11px 13px', borderRadius: 9, background: 'rgba(184,140,40,0.1)', border: '1px solid rgba(184,140,40,0.3)', fontSize: 13, lineHeight: 1.55, color: '#8A5A00' }}>
+                <strong>Bruto je nižji od minimalne plače</strong> ({formatEurNumber(MIN_WAGE)} €).
+                Za polni delovni čas to ni dovoljeno — pri krajšem času ali delu
+                meseca pa je pravilno. Izračun je narejen za vpisani znesek.
+              </div>
+            )}
+
             {calcResult?.podOsnovo && (
               <div style={{ marginBottom: 12, padding: '11px 13px', borderRadius: 9, background: 'rgba(184,140,40,0.1)', border: '1px solid rgba(184,140,40,0.3)', fontSize: 13, lineHeight: 1.55, color: '#8A5A00' }}>
                 <strong>Prispevki od najnižje osnove.</strong> Bruto plača je nižja od
