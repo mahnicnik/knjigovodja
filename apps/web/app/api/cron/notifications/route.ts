@@ -216,7 +216,25 @@ export async function GET(req: NextRequest) {
       .eq('renewal_notice_sent', false)
       .not('expires', 'is', null)
 
-    for (const pkg of (expiringPkgs || [])) {
+    // IZKLOPLJENO (25.8.2026) — DVE POTI ZA ISTO STVAR.
+    //
+    // Ta blok je poslal SVOJ "predracun za podaljsanje" z lastno predlogo in
+    // stevilko, izmisljeno iz casovnega ziga (`PRE-` + zadnjih 6 stevk casa).
+    // Tak predracun se NI nikamor shranil: stranka je dobila placilni nalog za
+    // dokument, ki v knjigah ne obstaja, s sklicem, ki ga ni mogoce najti.
+    //
+    // Nastal je se en problem: stranka je isti dan prejela DVE razlicni
+    // sporocili - pravilni opomnik z gumbom "Podaljsaj kartico" in ta stari
+    // predracun.
+    //
+    // Nadomesca ga tok iz preleta 88: opomnik -> javna stran -> predracun, ki
+    // se zapise v `quotes`, dobi pravo zaporedno stevilko, PDF in QR kodo.
+    //
+    // Blok pustimo v kodi (ne brisemo), dokler novi tok ni preizkusen skozi
+    // celo sezono obnov.
+    const STARI_PREDRACUN_VKLOPLJEN = false
+
+    for (const pkg of (STARI_PREDRACUN_VKLOPLJEN ? (expiringPkgs || []) : [])) {
       const tmpl = pkg.package_templates as any
       const cust = pkg.customers as any
 

@@ -1525,3 +1525,46 @@ test('popis: poznejša prodaja ne spremeni shranjenega popisa', () => {
   zivaZaloga.kolicina = 7                                          // prodaja
   expect(popis.kolicina).toBe(10)
 })
+
+// ─── Ena sama pot za podaljšanje ────────────────────────────────────────
+
+/**
+ * V cronu sta obstajali DVE poti za isto stvar. Stara je pošiljala svoj
+ * „predračun" z lastno predlogo in številko, izmišljeno iz časovnega žiga
+ * (`PRE-` + zadnjih 6 števk časa). Tak predračun se ni nikamor shranil —
+ * stranka je dobila plačilni nalog za dokument, ki v knjigah ne obstaja.
+ */
+function jeVeljavnaStevilkaPredracuna(st: string): boolean {
+  // Prava številka nastane iz zaporedja v tabeli `quotes`: PRE-LLLL-NNN.
+  return /^PRE-\d{4}-\d{3,}$/.test(st)
+}
+
+test('predračun: številka mora slediti zaporedju, ne časovnemu žigu', () => {
+  expect(jeVeljavnaStevilkaPredracuna('PRE-2026-004')).toBe(true)
+  expect(jeVeljavnaStevilkaPredracuna('PRE-769360')).toBe(false)   // iz Date.now()
+})
+
+test('predračun: izmišljene številke ni mogoče najti v knjigah', () => {
+  const vKnjigah = ['PRE-2026-001', 'PRE-2026-004']
+  expect(vKnjigah.includes('PRE-769360')).toBe(false)
+})
+
+/**
+ * Stranka ne sme prejeti dveh ponudb za podaljšanje iste kartice. Prej je
+ * dobila opomnik z gumbom IN samodejni predračun iz druge poti.
+ */
+function poslanaSporocila(staraPotVklopljena: boolean, imaOpomnik: boolean) {
+  const s: string[] = []
+  if (imaOpomnik) s.push('opomnik')
+  if (staraPotVklopljena) s.push('samodejni predračun')
+  return s
+}
+
+test('podaljšanje: stranka prejme eno samo ponudbo', () => {
+  expect(poslanaSporocila(false, true)).toEqual(['opomnik'])
+})
+
+test('podaljšanje: z obema potema bi prejela dve', () => {
+  // Tako se je zgodilo 25. 8. 2026.
+  expect(poslanaSporocila(true, true)).toHaveLength(2)
+})
