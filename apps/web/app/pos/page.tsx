@@ -9343,6 +9343,91 @@ function ReportsScreen({ posData, auth, setScreen }) {
 // ================================================================
 // ADMIN SCREEN — full CRUD
 // ================================================================
+
+/**
+ * INTERNI AKT V BLAGAJNI (prestavljeno v nastavitve 25.8.2026).
+ *
+ * Ob nadzoru mora zavezanec akt predloziti na zahtevo. Prej je bil gumb v
+ * orodni vrstici, kjer je zasedal prostor, uporabi pa se redko. Zdaj je med
+ * nastavitvami, poleg FURS in DDV, kamor po vsebini sodi.
+ *
+ * Prikazemo SPREJETO razlicico, ne trenutnega stanja - akt velja v obliki, v
+ * kateri je bil sprejet.
+ */
+function InterniAktSection({ posData }) {
+  const [akt, setAkt] = React.useState<any>(null)
+  const [nalagam, setNalagam] = React.useState(true)
+
+  React.useEffect(() => {
+    const orgId = posData?.org?.id
+    if (!orgId) { setNalagam(false); return }
+    ;(async () => {
+      const { data } = await createClient().from('internal_acts')
+        .select('content_html, version, adopted_date, submitted_at')
+        .eq('org_id', orgId).is('superseded_at', null).maybeSingle()
+      setAkt(data || null)
+      setNalagam(false)
+    })()
+  }, [posData?.org?.id])
+
+  function odpri() {
+    if (!akt) return
+    const w = window.open('', '_blank', 'width=820,height=900')
+    if (!w) return
+    const opomba = akt.submitted_at
+      ? `Oddan v eDavke ${new Date(akt.submitted_at).toLocaleDateString('sl-SI')}.`
+      : 'OPOZORILO: ni označen kot oddan v eDavke.'
+    w.document.write(`<!DOCTYPE html><html lang="sl"><head><meta charset="utf-8">
+      <title>Interni akt</title><style>${SLOG_AKTA}
+      body{margin:0;padding:32px;background:#fff}
+      .vrh{position:sticky;top:0;background:#0D1F12;padding:10px;display:flex;gap:8px;justify-content:center;margin:-32px -32px 20px}
+      .vrh button{padding:9px 20px;border:0;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer}
+      .meta{font-size:11px;color:#666;text-align:center;margin-bottom:18px}
+      </style></head><body>
+      <div class="vrh noprint">
+        <button onclick="window.print()" style="background:#fff;color:#0D1F12">Natisni</button>
+        <button onclick="window.close()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.35)">Zapri</button>
+      </div>
+      <div class="meta noprint">Različica ${akt.version} · sprejet ${new Date(akt.adopted_date).toLocaleDateString('sl-SI')} · ${opomba}</div>
+      ${akt.content_html}</body></html>`)
+    w.document.close()
+  }
+
+  if (nalagam) return <div style={{ color:T.muted, fontSize:13 }}>Nalagam…</div>
+
+  return (
+    <div>
+      <div style={{ fontSize:22, fontWeight:800, marginBottom:4 }}>Interni akt</div>
+      <div style={{ fontSize:12, color:T.muted, marginBottom:18, lineHeight:1.6, maxWidth:560 }}>
+        Akt o popisu poslovnih prostorov in številčenju računov. Ob nadzoru ga
+        odprete in natisnete tukaj — brez iskanja po portalu.
+      </div>
+
+      {akt ? (
+        <>
+          <div style={{ padding:'14px 16px', borderRadius:10, background:T.accentSoft, marginBottom:14, maxWidth:560 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:T.accent }}>
+              Različica {akt.version} · sprejet {new Date(akt.adopted_date).toLocaleDateString('sl-SI')}
+            </div>
+            <div style={{ fontSize:12, color:T.accent, marginTop:3 }}>
+              {akt.submitted_at
+                ? `Oddan v eDavke ${new Date(akt.submitted_at).toLocaleDateString('sl-SI')}.`
+                : 'Še ni označen kot oddan v eDavke.'}
+            </div>
+          </div>
+          <button onClick={odpri} style={btnP}>📜 Odpri in natisni</button>
+        </>
+      ) : (
+        <div style={{ padding:'14px 16px', borderRadius:10, background:'rgba(184,140,40,0.1)', border:'1px solid rgba(184,140,40,0.3)', fontSize:13, lineHeight:1.6, color:'#8A5A00', maxWidth:560 }}>
+          <strong>Interni akt še ni sprejet.</strong><br/>
+          Sprejmete ga v portalu: Nastavitve → Davčna blagajna → Interni akt.
+          Oddati ga je treba v eDavke pred izdajo prvega računa.
+        </div>
+      )}
+    </div>
+  )
+}
+
 function AdminScreen({ auth, posData }) {
   const isOwner = !!(auth?.user?.is_master || auth?.user?.role === 'Lastnik')
   const [section, setSection] = useState(isOwner ? 'staff' : 'profile')
@@ -9358,6 +9443,7 @@ function AdminScreen({ auth, posData }) {
     { id:'kuhinja',    label:'Kuhinja & display',     icon:'receipt'  },
     { id:'autolock',   label:'Avt. zaklepanje',       icon:'pin'      },
     { id:'furs',       label:'FURS & DDV',            icon:'receipt', ownerOnly:true },
+    { id:'akt',        label:'Interni akt',           icon:'file',    ownerOnly:true },
     { id:'inventura',  label:'Inventura',             icon:'scale'    },
   ]
   const sections = allSections.filter(sec => !sec.ownerOnly || isOwner)
@@ -9381,6 +9467,7 @@ function AdminScreen({ auth, posData }) {
         {section==='kuhinja'    && <KuhinjaSection posData={posData}/>}
         {section==='autolock'   && <AutolockSection auth={auth}/>}
         {section==='furs'       && <FursSection/>}
+        {section==='akt'        && <InterniAktSection posData={posData}/>}
         {section==='profile'    && <ProfileSection posData={posData}/>}
         {section==='inventura'  && <InventuraScreen posData={posData} auth={auth}/>}
       </div>
@@ -12925,48 +13012,6 @@ function KlasikApp() {
   const [showClockIn, setShowClockIn] = useState(false)
   const [wsRefreshKey, setWsRefreshKey] = useState(0)
 
-  /**
-   * Odpre interni akt za predlozitev ob nadzoru (25.8.2026).
-   *
-   * Vsebina je ZAMRZNJENA ob sprejetju - prikazemo tisto, kar je bilo takrat
-   * sprejeto, ne trenutnega stanja. Sicer ob nadzoru ni mogoce dokazati, kaj
-   * je veljalo takrat, ko je bil racun izdan.
-   */
-  async function odpriInterniAkt() {
-    const orgId = posData?.org?.id
-    if (!orgId) { alert('Podatki organizacije še niso naloženi. Poskusite čez trenutek.'); return }
-
-    const { data, error } = await createClient()
-      .from('internal_acts')
-      .select('content_html, version, adopted_date, submitted_at')
-      .eq('org_id', orgId).is('superseded_at', null).maybeSingle()
-
-    if (error) { alert('Internega akta ni bilo mogoče prebrati: ' + error.message); return }
-    if (!data) {
-      alert('Interni akt še ni sprejet.\n\nSprejmete ga v Nastavitve → Davčna blagajna → Interni akt.')
-      return
-    }
-
-    const w = window.open('', '_blank', 'width=820,height=900')
-    if (!w) return
-    const opomba = data.submitted_at
-      ? `Oddan v eDavke ${new Date(data.submitted_at).toLocaleDateString('sl-SI')}.`
-      : 'OPOZORILO: ni označen kot oddan v eDavke.'
-    w.document.write(`<!DOCTYPE html><html lang="sl"><head><meta charset="utf-8">
-      <title>Interni akt</title><style>${SLOG_AKTA}
-      body{margin:0;padding:32px;background:#fff}
-      .vrh{position:sticky;top:0;background:#0D1F12;padding:10px;display:flex;gap:8px;justify-content:center;margin:-32px -32px 20px}
-      .vrh button{padding:9px 20px;border:0;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer}
-      .meta{font-size:11px;color:#666;text-align:center;margin-bottom:18px}
-      </style></head><body>
-      <div class="vrh noprint">
-        <button onclick="window.print()" style="background:#fff;color:#0D1F12">Natisni</button>
-        <button onclick="window.close()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.35)">Zapri</button>
-      </div>
-      <div class="meta noprint">Različica ${data.version} · sprejet ${new Date(data.adopted_date).toLocaleDateString('sl-SI')} · ${opomba}</div>
-      ${data.content_html}</body></html>`)
-    w.document.close()
-  }
   const [sellPackageModal, setSellPackageModal] = useState(null)
   const [heldOrdersOpen, setHeldOrdersOpen] = useState(false)
   const [heldOrders, setHeldOrders] = useState<any[]>([])
@@ -13055,13 +13100,9 @@ function KlasikApp() {
               ⚠ TESTNI NAČIN
             </div>
           )}
-          {/* INTERNI AKT (25.8.2026): ob nadzoru ga mora zavezanec predloziti
-              na zahtevo. Za pultom to pomeni, da mora biti PRI ROKI - ne doma
-              v predalu. Gumb ga odpre v novem oknu, pripravljenega za tisk. */}
-          <button onClick={odpriInterniAkt} title="Interni akt — za predložitev ob nadzoru"
-            style={{ fontSize:10, fontWeight:800, color:'#0D1F12', background:'rgba(255,255,255,0.85)', padding:'4px 9px', borderRadius:6, letterSpacing:'0.06em', border:'none', cursor:'pointer', fontFamily:'inherit' }}>
-            📜 AKT
-          </button>
+          {/* Gumb "📜 AKT" je bil PRESTAVLJEN V NASTAVITVE (25.8.2026): v
+              orodni vrstici je zasedal prostor, uporabi pa se redko - ob
+              nadzoru. Zdaj je Nastavitve → Interni akt, poleg FURS in DDV. */}
           <WorkStatusBar key={wsRefreshKey} posData={posData} onRequestClockIn={()=>setShowClockIn(true)}/>
           <BellNotifications notifications={posData.notifications} notifOpen={notifOpen} setNotifOpen={setNotifOpen} posData={posData} orderListOpen={orderListOpen} setOrderListOpen={setOrderListOpen}/>
           {orderListOpen && <OrderListModal posData={posData} onClose={()=>setOrderListOpen(false)}/>}
