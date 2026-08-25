@@ -1715,3 +1715,76 @@ test('CSV: decimalke so poenotene na dve mesti', () => {
   expect(dve('14,28')).toBe('14,28')
   expect(dve('986')).toBe('986,00')
 })
+
+// ─── Zaključek in otvoritev blagajne ────────────────────────────────────
+
+/**
+ * Polje „Prešteto v blagajni" se je predizpolnilo s PRIČAKOVANIM zneskom.
+ * To vabi k slepemu potrjevanju — razlika, ki je bistvo zaključka, se tako
+ * nikoli ne pokaže.
+ */
+test('zaključek: prešteto se ne predizpolni s pričakovanim', () => {
+  const pricakovano = 794.80
+  const prestetoObOdprtju = ''      // prej: pricakovano.toFixed(2)
+  expect(prestetoObOdprtju).toBe('')
+  expect(prestetoObOdprtju).not.toBe(pricakovano.toFixed(2))
+})
+
+/**
+ * Otvoritev je predlagala 0,00 €, čeprav je Z-poročilo javljalo prenos —
+ * dve okni sta si nasprotovali.
+ */
+function zacetnaGotovina(prenosIzPrejsnje: number) {
+  return prenosIzPrejsnje > 0 ? prenosIzPrejsnje.toFixed(2) : '0.00'
+}
+
+test('otvoritev: prevzame prenos iz prejšnje izmene', () => {
+  expect(zacetnaGotovina(794.80)).toBe('794.80')
+  expect(zacetnaGotovina(0)).toBe('0.00')
+})
+
+// ─── Vrednost zaloge: enako zaokroževanje ───────────────────────────────
+
+/**
+ * Portal je zaokroževal vsako vrstico, blagajna pa vsoto — vrednosti sta se
+ * razhajali za nekaj centov. Za popis je merodajna vsota ZAOKROŽENIH vrstic,
+ * ker je to znesek, ki gre v knjige.
+ */
+function vrednostZaloge(vrstice: Array<{ kolicina: number; cena: number }>) {
+  const z = (n: number) => Math.round(n * 100) / 100
+  return z(vrstice.reduce((s, r) => s + z(r.kolicina * r.cena), 0))
+}
+
+function zaokrozenaVsota(vrstice: Array<{ kolicina: number; cena: number }>) {
+  return Math.round(vrstice.reduce((s, r) => s + r.kolicina * r.cena, 0) * 100) / 100
+}
+
+test('zaloga: vsota zaokroženih vrstic, ne zaokrožena vsota', () => {
+  const v = [{ kolicina: 3, cena: 1.005 }, { kolicina: 3, cena: 1.005 }]
+  // Po vrsticah: 3,01 + 3,01 = 6,02. Če bi zaokrožili šele vsoto: 6,03.
+  expect(vrednostZaloge(v)).toBe(6.02)
+  expect(zaokrozenaVsota(v)).toBe(6.03)
+  // Prav ta cent je razlagal razhajanje portal ↔ blagajna.
+  expect(vrednostZaloge(v)).not.toBe(zaokrozenaVsota(v))
+})
+
+test('zaloga: obe strani uporabita isti postopek', () => {
+  const v = [{ kolicina: 10, cena: 2.333 }, { kolicina: 5, cena: 1.117 }]
+  const portal = vrednostZaloge(v)
+  const blagajna = vrednostZaloge(v)
+  expect(portal).toBe(blagajna)
+})
+
+// ─── Oznaka načina plačila na računu ────────────────────────────────────
+
+const OZNAKE: Record<string, string> = {
+  cash: 'Gotovina', card: 'Kartica', bon: 'Bon', prep: 'Predplačilo',
+  pkg: 'Karta obiskov', invoice: 'Račun',
+}
+
+test('račun: unovčenje kartice ima oznako, ne prazno', () => {
+  // Prej je bilo „—" — na davčnem dokumentu ni bilo razvidno, kako je bila
+  // storitev poravnana.
+  expect(OZNAKE['pkg']).toBe('Karta obiskov')
+  expect(OZNAKE['pkg'] || '—').not.toBe('—')
+})

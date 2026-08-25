@@ -52,6 +52,10 @@ export interface ReceiptData {
 
 const METHOD_LABELS: Record<string, string> = {
   cash: 'Gotovina', card: 'Kartica', bon: 'Bon', prep: 'Predplačilo',
+  // DODANO (25.8.2026): `pkg` v seznamu ni bil, zato je bila oznaka nacina
+  // placila na racunu PRAZNA ("—") - na davcnem dokumentu ni bilo razvidno,
+  // kako je bila storitev poravnana.
+  pkg: 'Karta obiskov', invoice: 'Račun',
 }
 
 function vatLabel(rate: number): string {
@@ -272,6 +276,8 @@ export async function buildReceiptHTML(d: ReceiptData): Promise<string> {
   ${discountHtml}
   ${tipHtml}
   ${vatHtml}
+  ${d.payment?.method === 'pkg' ? `
+  <div class="s c" style="margin:4px 0">Poravnano s karto obiskov — znesek postavke je informativen.</div>` : ''}
   ${vatExemptionHtml}
   <div class="doubleline"></div>
   <div class="total-row">

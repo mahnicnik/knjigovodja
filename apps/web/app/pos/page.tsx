@@ -5154,8 +5154,13 @@ function InventoryScreen({ posData }) {
   const lowStock = allItems.filter(i => jePodMinimumom(i.stock, i.low_stock))
   const lowIngr = allIngredients.filter(i => jePodMinimumom(i.stock_qty, i.min_stock))
   const totalAlerts = lowStock.length + lowIngr.length
-  const totalValueItems = allItems.reduce((s,i) => s + (i.cost_price||0)*(i.stock||0), 0)
-  const totalValueIngr = allIngredients.reduce((s,i) => s + (i.cost_price||0)*(i.stock_qty||0), 0)
+  // POPRAVLJENO (25.8.2026): tu se je zaokrozila SAMO vsota, v portalu pa
+  // vsaka vrstica posebej - zato sta se vrednosti razhajali za nekaj centov
+  // (550,02 proti 549,90). Za popis je merodajna vsota ZAOKROZENIH vrstic,
+  // ker je to znesek, ki gre v knjige.
+  const zaokrozi = (n: number) => Math.round(n * 100) / 100
+  const totalValueItems = allItems.reduce((s,i) => s + zaokrozi((i.cost_price||0)*(i.stock||0)), 0)
+  const totalValueIngr = allIngredients.reduce((s,i) => s + zaokrozi((i.cost_price||0)*(i.stock_qty||0)), 0)
   const totalValue = totalValueItems + totalValueIngr
 
   // Filtriraj in sortiraj
@@ -6222,7 +6227,28 @@ async function printCashReceipt(html: string) {
 
 function OpenCashModal({ posData, auth, onClose, onOpened }) {
   const [cashAmount, setCashAmount] = React.useState('0.00')
+  const [prenos, setPrenos] = React.useState<number | null>(null)
   const [note, setNote] = React.useState('')
+
+  /**
+   * PRENOS IZ PREJSNJE IZMENE (dodano 25.8.2026).
+   *
+   * Okno je predlagalo 0,00 EUR, cetudi je Z-porocilo v istem trenutku
+   * javljalo "Prenos iz prejsnje izmene: 794,80 EUR". Dve okni sta si
+   * nasprotovali, blagajnik pa je moral znesek prepisovati rocno.
+   */
+  React.useEffect(() => {
+    ;(async () => {
+      const { data } = await createClient()
+        .from('z_reports')
+        .select('cash_closing')
+        .eq('business_id', BUSINESS_ID)
+        .order('report_number', { ascending: false })
+        .limit(1)
+      const zadnji = Number(data?.[0]?.cash_closing ?? 0)
+      if (zadnji > 0) { setPrenos(zadnji); setCashAmount(zadnji.toFixed(2)) }
+    })()
+  }, [])
   const [saving, setSaving] = React.useState(false)
   const [error, setError] = React.useState('')
 
@@ -6295,6 +6321,11 @@ function OpenCashModal({ posData, auth, onClose, onOpened }) {
 
         <div>
           <div style={{ fontSize:12, fontWeight:600, marginBottom:6 }}>Znesek v blagajni (€)</div>
+          {prenos !== null && (
+            <div style={{ fontSize:11, color:T.accent, marginBottom:6 }}>
+              Prevzeto iz prejšnje izmene: {eur(prenos)} — popravite, če ste prešteli drugače.
+            </div>
+          )}
           <input
             type="number" onFocus={e => e.target.select()}
             min="0"
@@ -6427,7 +6458,11 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
   React.useEffect(() => {
     getSessionStats(session).then(s => {
       setStats(s)
-      setCashDeclared(s.cashExpected.toFixed(2))
+      // POPRAVLJENO (25.8.2026): polje "Presteto v blagajni" se je predizpolnilo
+      // s PRICAKOVANIM zneskom. To vabi k slepemu potrjevanju namesto k
+      // stetju - razlika, ki je bistvo zakljucka, se tako nikoli ne pokaze.
+      // Pricakovani znesek je izpisan zraven, vpise pa uporabnik presteto.
+      setCashDeclared('')
       setLoading(false)
     })
   }, [])
@@ -6612,7 +6647,10 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
             Izmena: {new Date(session.opened_at).toLocaleString('sl-SI')} – zdaj
           </div>
 
-          <div style={{ fontSize:12, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:1 }}>Promet dneva</div>
+          {/* POPRAVLJENO (25.8.2026): pisalo je "Promet dneva", izmena pa lahko
+              tece vec dni (pri preizkusu 117 ur). Obseg je od zadnjega
+              zakljucka, ne od polnoci. */}
+          <div style={{ fontSize:12, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:1 }}>Promet izmene</div>
           {[['Gotovina', stats.cash, stats.cashCount], ['Kartica', stats.card, stats.cardCount], ['Bon', stats.bon, stats.bonCount]].map(([label, amt, cnt]) => (
             <div key={label as string} style={{ display:'flex', justifyContent:'space-between', fontSize:13 }}>
               <span>{label as string}</span>
