@@ -22,6 +22,14 @@ export default function InterniAkt({ orgId }: { orgId: string }) {
   const [predogled, setPredogled] = useState<string | null>(null)
   const [datum, setDatum] = useState(() => new Date().toISOString().slice(0, 10))
   const [oddan, setOddan] = useState('')
+
+  // POPRAVLJENO (25.8.2026): zastopnik, stevilcne vrste in program so bili
+  // TRDO ZAPISANI v kodi. Za d.o.o. je zastopnik druga oseba kot naziv, kdor
+  // Stripa ne uporablja pa je v aktu dobil stevilcno vrsto, ki je nima.
+  // Akt je pravni dokument zavezanca — vsebino dolocа ON, ne aplikacija.
+  const [zastopnik, setZastopnik] = useState('')
+  const [program, setProgram] = useState('Računko (računko.si)')
+  const [vrste, setVrste] = useState<Array<{ vzorec: string; opis: string; primer: string }>>([])
   const [delam, setDelam] = useState(false)
   const [napaka, setNapaka] = useState<string | null>(null)
 
@@ -31,6 +39,19 @@ export default function InterniAkt({ orgId }: { orgId: string }) {
       .select('*').eq('org_id', orgId).is('superseded_at', null).maybeSingle()
     setAkt(data || null)
     setOddan(data?.submitted_at || '')
+
+    // Ce akt ze obstaja, prevzamemo njegove vrednosti; sicer PREDLAGAMO
+    // razumne, ki jih uporabnik lahko popravi ali izbrise.
+    const prej = (data?.snapshot ?? {}) as any
+    const db2 = createClient()
+    const { data: org } = await db2.from('organizations').select('name').eq('id', orgId).maybeSingle()
+
+    setZastopnik(prej.zastopnik || org?.name || '')
+    setProgram(prej.program || 'Računko (računko.si)')
+    setVrste(Array.isArray(prej.negotovinske) && prej.negotovinske.length > 0
+      ? prej.negotovinske
+      : [{ vzorec: 'LLLL-NNN', opis: 'računi, izdani ročno oziroma na podlagi opravljene storitve ali dobave', primer: '2026-001' }])
+
     setNalagam(false)
   }
 
@@ -68,9 +89,7 @@ export default function InterniAkt({ orgId }: { orgId: string }) {
       naslov: [org.address, [org.post_code, org.city].filter(Boolean).join(' ')]
         .filter(Boolean).join(', '),
       davcna: org.tax_number || '',
-      // `organizations` nima stolpca `owner_name` (preverjeno v bazi) —
-      // zastopnik je pri s.p. naziv sam.
-      zastopnik: org.name || '',
+      zastopnik: zastopnik.trim() || org.name || '',
       prostori: prostori.map((pr: any) => ({
         oznaka: pr.premise_id || '',
         naslov: [pr.address, [pr.postal_code, pr.city].filter(Boolean).join(' ')]
@@ -83,12 +102,9 @@ export default function InterniAkt({ orgId }: { orgId: string }) {
         prostorOznaka: poId[n.premise_id] || '',
         oznaka: n.device_id || '',
       })),
-      // Negotovinske vrste, ki jih aplikacija dejansko uporablja.
-      negotovinske: [
-        { vzorec: 'LLLL-NNN', opis: 'računi, izdani ročno oziroma na podlagi opravljene storitve ali dobave', primer: '2026-001' },
-        { vzorec: 'STR-LLLL-NNNN', opis: 'računi, izdani samodejno na podlagi prejetega spletnega plačila', primer: 'STR-2026-0001' },
-      ],
-      program: 'Računko (računko.si)',
+      // Stevilcne vrste vnese uporabnik — vsak posluje drugace.
+      negotovinske: vrste.filter(v => v.vzorec.trim()),
+      program: program.trim() || undefined,
       datumSprejetja: datum,
     }
   }
@@ -223,6 +239,63 @@ export default function InterniAkt({ orgId }: { orgId: string }) {
             <summary style={{ fontSize: 12, color: '#888', cursor: 'pointer' }}>
               Sprejmi novo različico (ob spremembi prostora ali naprave)
             </summary>
+
+      {/* OBRAZEC (25.8.2026): vsebino akta dolocа ZAVEZANEC, ne aplikacija.
+          Vrednosti so le PREDLAGANE — uporabnik jih popravi ali izbrise. */}
+      <div style={{ display: 'grid', gap: 12, marginBottom: 16 }}>
+        <div>
+          <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>
+            Zastopnik (kdor akt podpiše)
+          </label>
+          <input value={zastopnik} onChange={e => setZastopnik(e.target.value)}
+            placeholder="Ime in priimek"
+            style={{ width: '100%', padding: '9px 11px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.15)', fontSize: 13, boxSizing: 'border-box' }}/>
+          <div style={{ fontSize: 11, color: '#aaa', marginTop: 3 }}>
+            Pri s.p. običajno nosilec dejavnosti, pri d.o.o. direktor.
+          </div>
+        </div>
+
+        <div>
+          <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>
+            Programska oprema (neobvezno)
+          </label>
+          <input value={program} onChange={e => setProgram(e.target.value)}
+            placeholder="npr. Računko (računko.si)"
+            style={{ width: '100%', padding: '9px 11px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.15)', fontSize: 13, boxSizing: 'border-box' }}/>
+        </div>
+
+        <div>
+          <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>
+            Številčne vrste za negotovinske račune
+          </label>
+          <div style={{ fontSize: 11, color: '#aaa', marginBottom: 8, lineHeight: 1.5 }}>
+            Računi, ki niso plačani z gotovino in ne zapadejo pod davčno potrjevanje.
+            Vpišite samo tiste, ki jih dejansko uporabljate — če jih nimate, vrstice izbrišite.
+          </div>
+          {vrste.map((v, i) => (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr auto', gap: 6, marginBottom: 6 }}>
+              <input value={v.vzorec} placeholder="LLLL-NNN"
+                onChange={e => setVrste(p => p.map((x, j) => j === i ? { ...x, vzorec: e.target.value } : x))}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.15)', fontSize: 12, fontFamily: 'monospace', minWidth: 0 }}/>
+              <input value={v.opis} placeholder="opis vrste"
+                onChange={e => setVrste(p => p.map((x, j) => j === i ? { ...x, opis: e.target.value } : x))}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.15)', fontSize: 12, minWidth: 0 }}/>
+              <input value={v.primer} placeholder="2026-001"
+                onChange={e => setVrste(p => p.map((x, j) => j === i ? { ...x, primer: e.target.value } : x))}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.15)', fontSize: 12, fontFamily: 'monospace', minWidth: 0 }}/>
+              <button onClick={() => setVrste(p => p.filter((_, j) => j !== i))}
+                title="Odstrani vrsto"
+                style={{ padding: '8px 10px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.15)', background: '#fff', color: '#A32D2D', fontSize: 12, cursor: 'pointer' }}>
+                ✕
+              </button>
+            </div>
+          ))}
+          <button onClick={() => setVrste(p => [...p, { vzorec: '', opis: '', primer: '' }])}
+            style={{ padding: '7px 12px', borderRadius: 7, border: '0.5px solid rgba(0,0,0,0.15)', background: '#fff', fontSize: 12, cursor: 'pointer' }}>
+            + Dodaj vrsto
+          </button>
+        </div>
+      </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
               <input type="date" value={datum} onChange={e => setDatum(e.target.value)}
                 style={{ padding: '8px 10px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.15)', fontSize: 13 }}/>
@@ -241,6 +314,63 @@ export default function InterniAkt({ orgId }: { orgId: string }) {
             <strong>Interni akt še ni sprejet.</strong> Zavezanec ga mora sprejeti
             in oddati v eDavke pred izdajo prvega računa iz davčne blagajne.
           </div>
+
+      {/* OBRAZEC (25.8.2026): vsebino akta dolocа ZAVEZANEC, ne aplikacija.
+          Vrednosti so le PREDLAGANE — uporabnik jih popravi ali izbrise. */}
+      <div style={{ display: 'grid', gap: 12, marginBottom: 16 }}>
+        <div>
+          <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>
+            Zastopnik (kdor akt podpiše)
+          </label>
+          <input value={zastopnik} onChange={e => setZastopnik(e.target.value)}
+            placeholder="Ime in priimek"
+            style={{ width: '100%', padding: '9px 11px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.15)', fontSize: 13, boxSizing: 'border-box' }}/>
+          <div style={{ fontSize: 11, color: '#aaa', marginTop: 3 }}>
+            Pri s.p. običajno nosilec dejavnosti, pri d.o.o. direktor.
+          </div>
+        </div>
+
+        <div>
+          <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>
+            Programska oprema (neobvezno)
+          </label>
+          <input value={program} onChange={e => setProgram(e.target.value)}
+            placeholder="npr. Računko (računko.si)"
+            style={{ width: '100%', padding: '9px 11px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.15)', fontSize: 13, boxSizing: 'border-box' }}/>
+        </div>
+
+        <div>
+          <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>
+            Številčne vrste za negotovinske račune
+          </label>
+          <div style={{ fontSize: 11, color: '#aaa', marginBottom: 8, lineHeight: 1.5 }}>
+            Računi, ki niso plačani z gotovino in ne zapadejo pod davčno potrjevanje.
+            Vpišite samo tiste, ki jih dejansko uporabljate — če jih nimate, vrstice izbrišite.
+          </div>
+          {vrste.map((v, i) => (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr auto', gap: 6, marginBottom: 6 }}>
+              <input value={v.vzorec} placeholder="LLLL-NNN"
+                onChange={e => setVrste(p => p.map((x, j) => j === i ? { ...x, vzorec: e.target.value } : x))}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.15)', fontSize: 12, fontFamily: 'monospace', minWidth: 0 }}/>
+              <input value={v.opis} placeholder="opis vrste"
+                onChange={e => setVrste(p => p.map((x, j) => j === i ? { ...x, opis: e.target.value } : x))}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.15)', fontSize: 12, minWidth: 0 }}/>
+              <input value={v.primer} placeholder="2026-001"
+                onChange={e => setVrste(p => p.map((x, j) => j === i ? { ...x, primer: e.target.value } : x))}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.15)', fontSize: 12, fontFamily: 'monospace', minWidth: 0 }}/>
+              <button onClick={() => setVrste(p => p.filter((_, j) => j !== i))}
+                title="Odstrani vrsto"
+                style={{ padding: '8px 10px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.15)', background: '#fff', color: '#A32D2D', fontSize: 12, cursor: 'pointer' }}>
+                ✕
+              </button>
+            </div>
+          ))}
+          <button onClick={() => setVrste(p => [...p, { vzorec: '', opis: '', primer: '' }])}
+            style={{ padding: '7px 12px', borderRadius: 7, border: '0.5px solid rgba(0,0,0,0.15)', background: '#fff', fontSize: 12, cursor: 'pointer' }}>
+            + Dodaj vrsto
+          </button>
+        </div>
+      </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ fontSize: 12, color: '#888' }}>Datum sprejetja:</span>
             <input type="date" value={datum} onChange={e => setDatum(e.target.value)}

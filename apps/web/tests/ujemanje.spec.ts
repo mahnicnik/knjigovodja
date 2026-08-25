@@ -1615,3 +1615,57 @@ test('akt: sprejet še ne pomeni oddan', () => {
   expect(!!a.adopted_date).toBe(true)
   expect(!!a.submitted_at).toBe(false)   // zato opozorilo
 })
+
+// ─── Interni akt: nič ne sme biti vsiljeno ──────────────────────────────
+
+/**
+ * Akt je pravni dokument ZAVEZANCA — vsebino določa on, ne aplikacija.
+ *
+ * NAPAKA (popravljeno 25.8.2026): zastopnik, številčne vrste in programska
+ * oprema so bili trdo zapisani v kodi. Pri d.o.o. zastopnik ni naziv podjetja,
+ * kdor Stripa ne uporablja pa je v aktu dobil številčno vrsto, ki je nima.
+ */
+function podatkiAkta(vneseno: { zastopnik?: string; program?: string; vrste?: any[] }, org: { name: string }) {
+  return {
+    zastopnik: (vneseno.zastopnik || '').trim() || org.name,
+    program: (vneseno.program || '').trim() || undefined,
+    negotovinske: (vneseno.vrste || []).filter(v => String(v.vzorec || '').trim()),
+  }
+}
+
+test('akt: zastopnik je vnesen, ne naziv podjetja', () => {
+  const p = podatkiAkta({ zastopnik: 'Janez Novak' }, { name: 'Podjetje d.o.o.' })
+  expect(p.zastopnik).toBe('Janez Novak')
+})
+
+test('akt: brez vnosa se predlaga naziv (primerno za s.p.)', () => {
+  const p = podatkiAkta({}, { name: 'Ime s.p.' })
+  expect(p.zastopnik).toBe('Ime s.p.')
+})
+
+test('akt: številčne vrste niso vsiljene', () => {
+  // Kdor spletnih plačil nima, jih v aktu ne sme imeti.
+  const p = podatkiAkta({ vrste: [] }, { name: 'x' })
+  expect(p.negotovinske).toHaveLength(0)
+})
+
+test('akt: prazne vrstice se ne zapišejo v akt', () => {
+  const p = podatkiAkta({ vrste: [
+    { vzorec: 'LLLL-NNN', opis: 'ročni', primer: '2026-001' },
+    { vzorec: '   ', opis: '', primer: '' },
+  ]}, { name: 'x' })
+  expect(p.negotovinske).toHaveLength(1)
+})
+
+/**
+ * Če številčnih vrst ni, se člen o njih izpusti in členi se preštevilčijo —
+ * sicer bi akt imel luknjo v oštevilčenju.
+ */
+function zadnjiClen(steviloVrst: number) {
+  return steviloVrst > 0 ? '6' : '5'
+}
+
+test('akt: členi se preštevilčijo brez negotovinskih vrst', () => {
+  expect(zadnjiClen(0)).toBe('5')
+  expect(zadnjiClen(2)).toBe('6')
+})
