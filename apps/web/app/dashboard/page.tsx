@@ -43,7 +43,8 @@ const RAIL_GROUPS = [
       { href: '/expenses',            icon: 'receipt',  label: 'Prejeti računi' },
       { href: '/pos',                 icon: 'pos',      label: 'POS terminal' },
       { href: '/zaloge',              icon: 'box',      label: 'Zaloge' },
-      { href: '/integracije',         icon: 'link',     label: 'Integracije' },
+      // Integracije so od 24.8.2026 razdelek nastavitev — peljemo naravnost tja.
+      { href: '/nastavitve?razdelek=integracije', icon: 'link',     label: 'Integracije' },
     ],
   },
   {

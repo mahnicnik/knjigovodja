@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation'
 import BlagajnaSekcija from '@/components/nastavitve/Blagajna'
 import EkipaSekcija from '@/components/nastavitve/Ekipa'
 import ApiKljuciSekcija from '@/components/nastavitve/ApiKljuci'
+import IntegracijeSekcija from '@/components/nastavitve/Integracije'
 import EmailSkeniranjeSekcija from '@/components/nastavitve/EmailSkeniranje'
 import posthog from 'posthog-js'
 import UpgradeButton from '@/components/UpgradeButton'
@@ -56,7 +57,7 @@ const SECTIONS = [
   // DODANO (24.8.2026): integracije so bile edini razdelek nastavitev, ki je
   // zivel v glavnem meniju - uporabnik jih je iskal tu, ker so nastavitev.
   // Kartica pelje naravnost na /integracije, stran ostane, kjer je.
-  { id: 'integracije',  icon: '🔌', label: 'Integracije',        desc: 'Stripe, WooCommerce, Shopify', href: '/integracije' },
+  { id: 'integracije',  icon: '🔌', label: 'Integracije',        desc: 'Stripe, WooCommerce, Shopify' },
   { id: 'email',        icon: '📧', label: 'E-mail skeniranje',  desc: 'Avtomatski uvoz stroškov' },
 ]
 
@@ -558,6 +559,7 @@ export default function NastavitevPage() {
           </div>
         )}
         {activeSection === 'api'         && <ApiKljuciSekcija />}
+        {activeSection === 'integracije' && <IntegracijeSekcija />}
         {activeSection === 'email'       && <EmailSkeniranjeSekcija />}
 
         {/* PLAN */}
