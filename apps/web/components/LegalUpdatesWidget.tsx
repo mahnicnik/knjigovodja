@@ -12,7 +12,8 @@ interface LegalUpdate {
   source_url: string
   category: string
   severity: string
-  effective_date: string | null
+  effective_date: string
+  published_at?: string | null
   created_at: string
 }
 
@@ -43,7 +44,9 @@ export default function LegalUpdatesWidget() {
     const { data } = await supabase
       .from('legal_updates')
       .select('*')
-      .order('created_at', { ascending: false })
+      // POPRAVLJENO (25.8.2026): urejeno po `created_at` (kdaj smo zapis
+      // POBRALI), ne po datumu OBJAVE. Zdaj so na vrhu najnovejse objave.
+      .order('published_at', { ascending: false, nullsFirst: false })
       .limit(10)
     setUpdates(data || [])
     setLoading(false)
@@ -71,7 +74,10 @@ export default function LegalUpdatesWidget() {
         </button>
       </div>
       <div style={{ fontSize: '12px', color: '#aaa', marginTop: '10px', textAlign: 'center', padding: '12px 0' }}>
-        Kliknite "Preveri" za novosti iz FURS, ZPIZ in Uradnega lista
+        {/* POPRAVLJENO (25.8.2026): gumb je obljubljal novosti iz treh virov,
+            dejansko pa je vpisal sest trdo zapisanih zapisov iz leta 2025.
+            Zdaj vsebina prihaja iz virov FURS, osvezuje pa jo nocno opravilo. */}
+        Trenutno ni objav, ki bi zadevale s.p. Seznam osvežuje nočno opravilo.
       </div>
     </div>
   )
@@ -102,7 +108,10 @@ export default function LegalUpdatesWidget() {
       {updates.map((u, i) => {
         const style = SEVERITY_STYLE[u.severity] || SEVERITY_STYLE.info
         const isExpanded = expanded === u.id
-        return (
+        const dat = (d: string | null) =>
+    d ? new Date(d).toLocaleDateString('sl-SI', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
+
+  return (
           <div
             key={u.id}
             style={{ borderBottom: i < updates.length - 1 ? '0.5px solid rgba(0,0,0,0.04)' : 'none', cursor: 'pointer' }}
@@ -116,6 +125,13 @@ export default function LegalUpdatesWidget() {
                   <span style={{ fontSize: '10px', background: style.bg, color: style.color, padding: '1px 7px', borderRadius: '20px', fontWeight: '500' }}>
                     {u.source}
                   </span>
+                  {/* DATUM OBJAVE (25.8.2026): brez njega uporabnik ne loci
+                      lanske objave od tokratne. */}
+                  {u.published_at && (
+                    <span style={{ fontSize: '10px', color: '#888', fontWeight: 500 }}>
+                      {dat(u.published_at)}
+                    </span>
+                  )}
                   <span style={{ fontSize: '10px', color: '#aaa' }}>
                     {CATEGORY_LABELS[u.category] || u.category}
                   </span>

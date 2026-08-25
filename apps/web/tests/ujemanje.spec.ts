@@ -1859,3 +1859,62 @@ test('PIN: same enake števke niso dovoljene', () => {
   expect(pinVeljaven('1111')).toBe(false)
   expect(pinVeljaven('000000')).toBe(false)
 })
+
+// ─── Zakonske novosti iz pravega vira ───────────────────────────────────
+
+/**
+ * Prej je bil v kodi TRDO ZAPISAN seznam šestih vnosov iz leta 2025. Vsebina
+ * ni bila samo stara, ampak napačna: trdila je, da je minimalna plača
+ * 1.253,90 €, aplikacija pa je računala z 1.481,88 €.
+ */
+const KLJUCNE = [
+  { beseda: /davčn\w* blagajn|ZDavPR/i, kategorija: 'blagajna' },
+  { beseda: /minimaln\w* plač|regres/i, kategorija: 'zaposleni' },
+  { beseda: /\bDDV\b|ZDDV/i, kategorija: 'ddv' },
+  { beseda: /dohodnin\w*|ZDoh|olajšav\w*/i, kategorija: 'dohodnina' },
+]
+
+function jeRelevantno(naslov: string, opis = '') {
+  return KLJUCNE.filter(k => k.beseda.test(`${naslov} ${opis}`))
+}
+
+test('novosti: objava o DDV je relevantna', () => {
+  expect(jeRelevantno('Spremembe pri obračunu DDV za male zavezance')).toHaveLength(1)
+})
+
+test('novosti: carinska nomenklatura se izloči', () => {
+  // Vir FURS je večinoma tak — brez filtra bi razdelek napolnili s šumom.
+  expect(jeRelevantno('Kombinirana nomenklatura Evropske unije', 'Sprememba dokumenta.')).toHaveLength(0)
+  expect(jeRelevantno('Centralizirano carinjenje')).toHaveLength(0)
+})
+
+test('novosti: diplomatske oprostitve se izločijo', () => {
+  expect(jeRelevantno('Pogoji za oprostitev davkov za diplomatska predstavništva')).toHaveLength(0)
+})
+
+/**
+ * Objave, starejše od leta dni, niso več „novosti".
+ */
+function jeSveza(datum: string, danes: Date) {
+  return new Date(datum).getTime() >= danes.getTime() - 365 * 86400000
+}
+
+test('novosti: objava izpred dveh let se ne pokaže', () => {
+  expect(jeSveza('2024-01-01', new Date('2026-08-25'))).toBe(false)
+  expect(jeSveza('2026-05-15', new Date('2026-08-25'))).toBe(true)
+})
+
+/**
+ * Isti zapis iz vira se ne sme podvojiti ob vsakem teku crona.
+ */
+function zapisiBrezPodvojitev(obstojeci: string[], novGuid: string) {
+  return obstojeci.includes(novGuid) ? obstojeci : [...obstojeci, novGuid]
+}
+
+test('novosti: ponovni tek ne podvoji zapisov', () => {
+  let z = ['news-16376']
+  z = zapisiBrezPodvojitev(z, 'news-16376')
+  expect(z).toHaveLength(1)
+  z = zapisiBrezPodvojitev(z, 'news-16377')
+  expect(z).toHaveLength(2)
+})

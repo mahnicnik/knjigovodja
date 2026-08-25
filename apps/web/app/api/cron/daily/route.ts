@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GET as notificationsGET } from '../notifications/route'
+import { GET as legalUpdatesGET } from '../legal-updates/route'
 import { GET as emailScanGET } from '@/app/api/email-scan/cron/route'
 import { GET as unfreezeGET } from '../unfreeze-packages/route'
 import { GET as installmentsGET } from '../installments/route'
@@ -23,6 +24,15 @@ export async function GET(request: NextRequest) {
     results.notifications = await res.json()
   } catch (e: any) {
     results.notifications = { error: e.message }
+  }
+
+  // DODANO (25.8.2026): zakonske novosti iz uradnih virov. Prej je bil v kodi
+  // trdo zapisan seznam iz leta 2025, ki se ni nikoli osvezil.
+  try {
+    const res = await legalUpdatesGET(request)
+    results.legalUpdates = await res.json()
+  } catch (e: any) {
+    results.legalUpdates = { error: e.message }
   }
 
   try {
