@@ -283,7 +283,10 @@ export default function PageHelp() {
           .pagehelp-fab {
             /* POPRAVLJENO 30.7.2026 (2x): 16px je trcilo z Dashboardovim
                glavnim CTA gumbom "+ Nov racun" (bottom:28/right:32) IN se
-               vedno prekrivalo zadnje znake v karticah - premaknjeno visje. */
+               vedno prekrivalo zadnje znake v karticah - premaknjeno visje.
+               OPOMBA (25.8.2026): tisti CTA gumb je bil odstranjen, ker se je
+               prekrival z gumbom v skupni vrstici "Hitro". Ta izmik zdaj sluzi
+               samo se izogibanju vsebini kartic. */
             bottom: 80px !important;
             right: 16px !important;
             left: auto !important;

@@ -1206,8 +1206,10 @@ export default function DashboardPage() {
 
       </main>
 
-      {/* FAB */}
-      <Link href="/invoices/new" className="rk-fab">＋ Nov račun</Link>
+      {/* ODSTRANJENO (25.8.2026): plavajoci gumb "Nov racun" se je PREKRIVAL z
+          istim gumbom v skupni vrstici "Hitro" (AppLayout) - oba sta desno
+          spodaj. Vrstica je del skupne razporeditve in je na vseh straneh,
+          zato ostane ona; podvojeni gumb na dashboardu odpade. */}
 
       {/* QUICK ACTIONS MODAL (z drag-and-drop) */}
       {showQAModal && (
