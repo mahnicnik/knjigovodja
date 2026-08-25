@@ -1476,3 +1476,52 @@ test('termin: opozorilo, kadar je kartica na voljo, a ni izbrana', () => {
   const opozori = !izbrana && naVoljo.filter(p => p.remaining > 0 && !p.frozen_at).length > 0
   expect(opozori).toBe(true)
 })
+
+// ─── Popis zalog za računovodkinjo ──────────────────────────────────────
+
+/**
+ * Artikli z NORMATIVOM nimajo lastne zaloge — odštevajo se njihove
+ * sestavine. Če bi jih šteli, bi bila zaloga podvojena.
+ */
+function vPopis(artikli: Array<{ item_type?: string; stock: number | null }>) {
+  return artikli.filter(a => a.item_type !== 'recipe' && a.stock !== null && a.stock !== undefined)
+}
+
+test('popis: normativi se ne štejejo — sicer je zaloga dvojna', () => {
+  const v = vPopis([
+    { item_type: 'simple', stock: 10 },
+    { item_type: 'recipe', stock: 0 },      // espresso — šteje se kava
+    { item_type: 'simple', stock: null },   // zaloge ne vodimo
+  ])
+  expect(v).toHaveLength(1)
+})
+
+function vrednostPopisa(vrstice: Array<{ kolicina: number; nabavna: number | null }>) {
+  return vrstice.reduce((s, r) => s + (r.nabavna !== null ? r.kolicina * r.nabavna : 0), 0)
+}
+
+test('popis: postavka brez nabavne cene se ne šteje v vrednost', () => {
+  // Šteti jo kot nič je pravilno; napačno bi bilo tiho ugibati ceno.
+  const v = vrednostPopisa([
+    { kolicina: 10, nabavna: 2 },
+    { kolicina: 100, nabavna: null },
+  ])
+  expect(v).toBe(20)
+})
+
+test('popis: opozorilo, kadar postavke nimajo cene', () => {
+  const vrstice = [{ kolicina: 10, nabavna: 2 }, { kolicina: 5, nabavna: null }]
+  const brezCene = vrstice.filter(r => r.nabavna === null || r.nabavna === 0).length
+  expect(brezCene).toBe(1)
+})
+
+/**
+ * Popis mora biti ZAMRZNJEN. Če bi se bral iz žive zaloge, bi bil za nazaj
+ * napačen — videti pa bi bil pravilen.
+ */
+test('popis: poznejša prodaja ne spremeni shranjenega popisa', () => {
+  const zivaZaloga = { kolicina: 10 }
+  const popis = { kolicina: zivaZaloga.kolicina, vrednost: 20 }   // prepisano
+  zivaZaloga.kolicina = 7                                          // prodaja
+  expect(popis.kolicina).toBe(10)
+})

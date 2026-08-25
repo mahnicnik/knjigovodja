@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import ZalogaIzBlagajne from '@/components/ZalogaIzBlagajne'
 
 interface Item {
   id: string
@@ -43,6 +44,10 @@ export default function ZalogePage() {
   const supabase = createClient()
 
   const [orgId, setOrgId] = useState<string | null>(null)
+  // DODANO (25.8.2026): portal in blagajna sta imela LOCENI zalogi - v portalu
+  // 1 artikel, v blagajni 123. Ob koncu leta ni bilo od kod dobiti popisa za
+  // racunovodkinjo. Zdaj portal bere zalogo NEPOSREDNO iz blagajne.
+  const [posBusinessId, setPosBusinessId] = useState<string | null>(null)
   const [items, setItems] = useState<Item[]>([])
   const [movements, setMovements] = useState<Movement[]>([])
   const [loading, setLoading] = useState(true)
@@ -72,6 +77,7 @@ export default function ZalogePage() {
     const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
     if (!member) return
     setOrgId(member.org_id)
+    setPosBusinessId(((member as any).organizations?.pos_business_id) ?? null)
 
     const [itemRes, movRes] = await Promise.all([
       supabase.from('inventory_items').select('*').eq('org_id', member.org_id).order('name'),
@@ -242,6 +248,14 @@ export default function ZalogePage() {
       </div>
 
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 16px' }}>
+
+        {/* ZALOGA IZ BLAGAJNE (25.8.2026) — prikaze se samo, ce organizacija
+            blagajno DEJANSKO ima. Podatki se berejo neposredno iz nje, zato
+            se ne podvajajo in ne moreta razhajati. */}
+        {orgId && posBusinessId && (
+          <ZalogaIzBlagajne orgId={orgId} businessId={posBusinessId} />
+        )}
+
 
         {/* ARTIKLI */}
         {tab === 'items' && (
