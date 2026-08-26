@@ -143,12 +143,22 @@ export default function ZalogaIzBlagajne({ orgId, businessId }: { orgId: string;
     vrsticeCsv.push(['', 'SKUPAJ', '', '', '', skupajV.toFixed(2).replace('.', ',')])
 
     // Enotno stevilo decimalk, da stolpec ni razmetan (42,3 proti 14,28).
+    const stiriDecimalke = (v: string) => {
+      const n = Number(String(v).replace(',', '.'))
+      return Number.isFinite(n) ? n.toFixed(4).replace('.', ',') : v
+    }
     const dveDecimalki = (v: string) => {
       const n = Number(String(v).replace(',', '.'))
       return Number.isFinite(n) ? n.toFixed(2).replace('.', ',') : v
     }
     for (const v of vrsticeCsv) {
       v[3] = dveDecimalki(v[3])   // kolicina
+      // POPRAVLJENO (26.8.2026): stolpec z NABAVNO CENO je bil izpuscen -
+      // izpisoval se je s stirimi decimalkami (1,2983 proti 31,16). Nabavna
+      // cena je vrednost NA ENOTO in ima pri surovinah lahko vec decimalk
+      // (kava 0,018 EUR/g), zato jo zaokrozimo na STIRI, ne na dve: pri
+      // zaokrozitvi na dve bi 0,018 postal 0,02, kar je 11 % vec.
+      v[4] = stiriDecimalke(v[4])  // nabavna cena na enoto
       v[5] = dveDecimalki(v[5])   // vrednost
     }
 

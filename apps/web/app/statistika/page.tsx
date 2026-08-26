@@ -221,9 +221,18 @@ export default function StatistikaPage() {
                 <YAxis tick={{ fontSize:11, fill:'#888' }} axisLine={false} tickLine={false} tickFormatter={v => `€${v}`} width={55} />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend wrapperStyle={{ fontSize:'11px', paddingTop:'8px' }} />
-                <Bar dataKey="Prihodki" fill="#3B6D11" radius={[3,3,0,0]} maxBarSize={24} />
-                <Bar dataKey="Odhodki" fill="#F09595" radius={[3,3,0,0]} maxBarSize={24} />
-                <Bar dataKey="Dobiček" fill="#EF9F27" radius={[3,3,0,0]} maxBarSize={24} />
+                {/* POPRAVLJENO (26.8.2026): stolpci se ob nalaganju NISO izrisali -
+                    mreza in obe osi da, stolpci pa so ostali prazni. Podatki so
+                    prisli do grafa (os je bila skalirana nanje), le narisani niso
+                    bili. Popravilo ju je sele spremenjeno okno.
+
+                    Vzrok je animacija: stolpci se izrisujejo z visine 0 navzgor,
+                    animacija pa se ob dvojnem priklopu (React) zatakne na zacetku.
+                    Ker gre za poslovni pregled in ne za predstavitev, jo
+                    izklopimo - graf se izrise takoj in vedno. */}
+                <Bar dataKey="Prihodki" fill="#3B6D11" radius={[3,3,0,0]} maxBarSize={24}  isAnimationActive={false} />
+                <Bar dataKey="Odhodki" fill="#F09595" radius={[3,3,0,0]} maxBarSize={24}  isAnimationActive={false} />
+                <Bar dataKey="Dobiček" fill="#EF9F27" radius={[3,3,0,0]} maxBarSize={24}  isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -271,7 +280,7 @@ export default function StatistikaPage() {
             ) : (
               <div style={{ display:'flex', gap:'20px', alignItems:'center' }}>
                 <PieChart width={130} height={130}>
-                  <Pie data={pieData} cx={60} cy={60} innerRadius={38} outerRadius={58} dataKey="value" strokeWidth={0}>
+                  <Pie data={pieData} cx={60} cy={60} innerRadius={38} outerRadius={58} dataKey="value" strokeWidth={0} isAnimationActive={false}>
                     {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                   </Pie>
                 </PieChart>

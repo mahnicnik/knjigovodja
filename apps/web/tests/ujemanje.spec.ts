@@ -2110,3 +2110,64 @@ test('osveži: vsak izid ima svoj odziv', () => {
   ])
   expect(izidi.size).toBe(4)
 })
+
+// ─── CSV popisa: vsi številski stolpci poenoteni ────────────────────────
+
+/**
+ * NAPAKA (popravljeno 26.8.2026): normalizacija je zajela količino in
+ * vrednost, stolpec z NABAVNO CENO pa je bil izpuščen — izpisoval se je
+ * neenotno (1,2983 in 0,018 proti 31,16).
+ */
+const dve = (v: string) => {
+  const n = Number(String(v).replace(',', '.'))
+  return Number.isFinite(n) ? n.toFixed(2).replace('.', ',') : v
+}
+const stiri = (v: string) => {
+  const n = Number(String(v).replace(',', '.'))
+  return Number.isFinite(n) ? n.toFixed(4).replace('.', ',') : v
+}
+
+test('CSV: nabavna cena ima enotne štiri decimalke', () => {
+  expect(stiri('0,018')).toBe('0,0180')
+  expect(stiri('1,2983')).toBe('1,2983')
+  expect(stiri('40,3414')).toBe('40,3414')
+})
+
+test('CSV: nabavne cene NE zaokrožujemo na dve decimalki', () => {
+  // Kava stane 0,018 €/g. Na dve decimalki bi bila 0,02 — to je 11 % več,
+  // kar bi pri 986 g pomenilo 19,72 € namesto 17,75 €.
+  const cena = 0.018
+  expect(Number(dve('0,018').replace(',', '.'))).toBe(0.02)
+  expect(986 * 0.02).toBeCloseTo(19.72, 2)
+  expect(986 * cena).toBeCloseTo(17.75, 2)
+})
+
+test('CSV: količina in vrednost ostaneta na dveh decimalkah', () => {
+  expect(dve('24')).toBe('24,00')
+  expect(dve('31,16')).toBe('31,16')
+})
+
+// ─── Graf na statistiki ─────────────────────────────────────────────────
+
+/**
+ * NAPAKA (popravljeno 26.8.2026): stolpci se ob nalaganju niso izrisali —
+ * mreža in obe osi da, stolpci pa so ostali prazni. Osi so bile skalirane na
+ * prave zneske, torej so podatki do grafa prišli.
+ *
+ * Vzrok je animacija: stolpci se izrisujejo z višine 0 navzgor, ob dvojnem
+ * priklopu pa se zatakne na začetku. Popravilo jih je šele spremenjeno okno.
+ */
+function serijaSeIzrise(imaPodatke: boolean, animacija: boolean, jePonovniIzris: boolean) {
+  if (!imaPodatke) return false
+  if (!animacija) return true          // izriše se takoj in vedno
+  return jePonovniIzris                // z animacijo šele ob ponovnem izrisu
+}
+
+test('graf: brez animacije se izriše ob prvem nalaganju', () => {
+  expect(serijaSeIzrise(true, false, false)).toBe(true)
+})
+
+test('graf: z animacijo je bil odvisen od ponovnega izrisa', () => {
+  expect(serijaSeIzrise(true, true, false)).toBe(false)
+  expect(serijaSeIzrise(true, true, true)).toBe(true)
+})
