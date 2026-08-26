@@ -89,7 +89,14 @@ export default function PredracuniPage() {
   }, [router, supabase, periodMode, customFrom, customTo])
 
   async function convertToInvoice(quote: Quote) {
-    if (!confirm(`Pretvori predračun ${quote.quote_number} v račun?`)) return
+    // Potrditev pove, da bo racun tudi POSLAN - sicer je presenecenje
+    // (26.8.2026). Brez e-naslova to izrecno navedemo.
+    if (!confirm(
+      `Pretvori predračun ${quote.quote_number} v račun?\n\n`
+      + (quote.client_email
+          ? `Račun bo samodejno poslan na ${quote.client_email}.`
+          : 'Stranka nima e-naslova — račun ne bo poslan.')
+    )) return
     try {
       // Pridobi polne podatke predračuna
       const { data: q } = await supabase.from('quotes').select('*').eq('id', quote.id).single()
@@ -136,7 +143,35 @@ export default function PredracuniPage() {
     // pa je ostal odprt, zato bi ga bilo mogoce pretvoriti SE ENKRAT (podvojen racun).
     const { error: convErr } = await supabase.from('quotes').update({ status: 'accepted', converted_to_invoice_id: invoice.id }).eq('id', quote.id)
       setQuotes(prev => prev.map(q => q.id === quote.id ? { ...q, status: 'accepted', converted_to_invoice_id: invoice.id } : q))
-      showToast(`Račun ${invoiceNumber} ustvarjen`)
+      // DODANO (26.8.2026): racun POSLJEMO stranki. Prej je pretvorba racun
+      // samo ustvarila - stranka, ki je predracun placala, ni dobila nicesar,
+      // izdajatelj pa je moral posiljanje sprozati rocno.
+      let poslano = false
+      let napakaPoste: string | null = null
+      if (q.client_email) {
+        try {
+          const res = await fetch(`/api/invoices/${invoice.id}/send`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: q.client_email,
+              subject: `Račun ${invoiceNumber}`,
+              message: `V prilogi vam pošiljamo račun ${invoiceNumber}, izdan na podlagi predračuna ${quote.quote_number}.`,
+            }),
+          })
+          const d = await res.json().catch(() => ({}))
+          if (res.ok) poslano = true
+          else napakaPoste = d?.error || `HTTP ${res.status}`
+        } catch (e: any) {
+          napakaPoste = e?.message || String(e)
+        }
+      }
+
+      showToast(
+        !q.client_email ? `Račun ${invoiceNumber} ustvarjen — stranka nima e-naslova`
+        : poslano ? `Račun ${invoiceNumber} ustvarjen in poslan na ${q.client_email}`
+        : `Račun ${invoiceNumber} ustvarjen, POŠTE NI BILO MOGOČE POSLATI: ${napakaPoste}`
+      )
       router.push('/invoices')
     } catch (e: any) { showToast(`Napaka: ${e.message}`) }
   }

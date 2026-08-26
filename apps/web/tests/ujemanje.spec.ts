@@ -2562,3 +2562,49 @@ test('predračun: ponovno pošiljanje ne podvoji dokumenta', () => {
   const po = kajNarediKlik('quoted', true) === 'pošlji znova' ? pred : [...pred, 'PRE-2026-005']
   expect(po).toEqual(['PRE-2026-004'])
 })
+
+// ─── Pretvorba predračuna v račun ───────────────────────────────────────
+
+/**
+ * DODANO (26.8.2026): pretvorba je račun samo USTVARILA. Stranka, ki je
+ * predračun plačala, ni dobila ničesar — izdajatelj je moral pošiljanje
+ * sprožati ročno, kar je bilo lahko pozabiti.
+ */
+function pretvorba(quote: { quote_number: string; client_email?: string }, posiljanjeUspe: boolean) {
+  const racun = { invoice_number: '2026-010' }
+  if (!quote.client_email) return { racun, poslano: false, razlog: 'ni e-naslova' }
+  return { racun, poslano: posiljanjeUspe, razlog: posiljanjeUspe ? null : 'pošiljanje ni uspelo' }
+}
+
+test('pretvorba: račun se pošlje stranki', () => {
+  const r = pretvorba({ quote_number: 'PRE-2026-004', client_email: 'a@b.si' }, true)
+  expect(r.poslano).toBe(true)
+})
+
+test('pretvorba: brez e-naslova račun vseeno nastane', () => {
+  // Račun je davčni dokument — nastati mora tudi, če pošte ni kam poslati.
+  const r = pretvorba({ quote_number: 'PRE-2026-004' }, true)
+  expect(r.racun.invoice_number).toBe('2026-010')
+  expect(r.poslano).toBe(false)
+  expect(r.razlog).toBe('ni e-naslova')
+})
+
+test('pretvorba: neuspešno pošiljanje ne razveljavi računa', () => {
+  const r = pretvorba({ quote_number: 'PRE-2026-004', client_email: 'a@b.si' }, false)
+  expect(r.racun.invoice_number).toBe('2026-010')
+  expect(r.poslano).toBe(false)
+})
+
+/**
+ * Potrditev mora povedati, kaj se bo zgodilo.
+ */
+function besediloPotrditve(email?: string) {
+  return email
+    ? `Račun bo samodejno poslan na ${email}.`
+    : 'Stranka nima e-naslova — račun ne bo poslan.'
+}
+
+test('pretvorba: potrditev pove, kam gre račun', () => {
+  expect(besediloPotrditve('a@b.si')).toContain('a@b.si')
+  expect(besediloPotrditve()).toContain('ne bo poslan')
+})
