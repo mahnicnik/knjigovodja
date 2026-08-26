@@ -61,6 +61,23 @@ export default function InterniAkt({ orgId }: { orgId: string }) {
 
   useEffect(() => { if (orgId) nalozi() }, [orgId])
 
+  /**
+   * Premik na predogled (popravljeno 25.8.2026).
+   *
+   * Prej je bil `setTimeout(..., 60)` takoj za `setPredogled` - premik se je
+   * sprozil, PREDEN je React izrisal element, zato ni naredil nicesar. Klik
+   * na "Predogled" ni dal nobenega odziva in je bil videti, kot da gumb ne dela.
+   *
+   * Zdaj se sprozi ob SPREMEMBI predogleda, ko element ze obstaja.
+   */
+  useEffect(() => {
+    if (!predogled) return
+    requestAnimationFrame(() => {
+      document.getElementById('predogled-akta')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+  }, [predogled])
+
   /** Zbere podatke iz aplikacije in sestavi besedilo. */
   async function zberiPodatke(): Promise<PodatkiAkta | null> {
     const db = createClient()
@@ -122,12 +139,6 @@ export default function InterniAkt({ orgId }: { orgId: string }) {
     const p = await zberiPodatke()
     if (p) {
       setPredogled(sestaviInterniAkt(p))
-      // POPRAVLJENO (25.8.2026): predogled se je izrisal DALEC pod gumbom,
-      // izven vidnega polja - klik ni dal nobenega odziva in je bil videti,
-      // kot da gumb ne dela.
-      setTimeout(() => {
-        document.getElementById('predogled-akta')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      }, 60)
     }
     setDelam(false)
   }

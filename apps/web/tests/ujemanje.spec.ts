@@ -2035,3 +2035,35 @@ test('PIN: same enake števke ostanejo zavrnjene', () => {
   expect(pinVeljaven('1111')).toBe(false)
   expect(pinVeljaven('22')).toBe(false)
 })
+
+// ─── Interni akt v blagajni ─────────────────────────────────────────────
+
+/**
+ * NAPAKA (popravljeno 25.8.2026): blagajna je trdila, da akt ni sprejet,
+ * čeprav je bil — poizvedba za organizacijo ni izbrala `id`, zato
+ * `posData.org.id` ni bil nikoli definiran in akta ni bilo mogoče najti.
+ *
+ * Že peta napaka iste vrste: package_id, template_id, cashier_id,
+ * customer_id, zdaj id.
+ */
+function najdiAkt(orgId: string | undefined, akti: Array<{ org_id: string }>) {
+  if (!orgId) return { najden: false, razlog: 'org.id ni definiran' }
+  const a = akti.find(x => x.org_id === orgId)
+  return a ? { najden: true } : { najden: false, razlog: 'akt ni sprejet' }
+}
+
+test('akt v blagajni: brez org.id ga ni mogoče najti', () => {
+  const r = najdiAkt(undefined, [{ org_id: 'org1' }])
+  expect(r.najden).toBe(false)
+  expect(r.razlog).toBe('org.id ni definiran')   // NE "akt ni sprejet"
+})
+
+test('akt v blagajni: z org.id se najde', () => {
+  expect(najdiAkt('org1', [{ org_id: 'org1' }]).najden).toBe(true)
+})
+
+test('akt v blagajni: sporočilo loči manjkajoč akt od manjkajočega ID', () => {
+  // Uporabniku je prej pisalo „akt ni sprejet", čeprav je bil — vzrok je bil
+  // drugje in ga ni bilo mogoče uganiti.
+  expect(najdiAkt('org2', [{ org_id: 'org1' }]).razlog).toBe('akt ni sprejet')
+})

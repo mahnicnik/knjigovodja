@@ -262,7 +262,11 @@ function usePosData() {
           // POPRAVLJENO (24.8.2026): poizvedba ni prinesla telefona, e-poste in
           // IBAN-a, zato je opomnik pisal "Oglasite se pri nas" brez stevilke,
           // gumba za klic pa sploh ni bilo.
-          .select('name, address, post_code, city, tax_number, vat_registered, furs_test_mode, phone, email, iban, bic')
+          // POPRAVLJENO (25.8.2026): izbor ni vseboval `id`, zato `posData.org.id`
+          // ni bil nikoli definiran - blagajna internega akta ni nasla in je
+          // trdila, da ni sprejet, cetudi je bil. Ista vrsta napake kot
+          // `package_id`, `template_id` in `cashier_id`.
+          .select('id, name, address, post_code, city, tax_number, vat_registered, furs_test_mode, phone, email, iban, bic')
           .eq('id', mem.org_id).single()
         setFursTestMode(!!o?.furs_test_mode)
         setBusinessName(o?.name || '')
