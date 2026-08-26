@@ -2608,3 +2608,37 @@ test('pretvorba: potrditev pove, kam gre račun', () => {
   expect(besediloPotrditve('a@b.si')).toContain('a@b.si')
   expect(besediloPotrditve()).toContain('ne bo poslan')
 })
+
+// ─── Vse strani so dosegljive iz menija ─────────────────────────────────
+
+/**
+ * DODANO (26.8.2026): devet strani je bilo dosegljivih IZKLJUČNO prek
+ * Dashboarda — v levem meniju jih ni bilo nikjer:
+ *
+ *   predracuni, ponavljajoci-racuni, dobavnice   (prelet 127)
+ *   regres, potni-nalogi, cas, avansni-racuni, porocila   (prelet 130)
+ *
+ * Skupaj čez 3.000 vrstic delujoče aplikacije, ki je uporabnik ni mogel
+ * najti. Prav zato predračuna, ki ga je aplikacija izdala, ni našel.
+ */
+const V_MENIJU = [
+  '/predracuni', '/ponavljajoci-racuni', '/dobavnice', '/avansni-racuni',
+  '/regres', '/potni-nalogi', '/cas', '/porocila',
+]
+
+test('meni: strani iz Dashboarda so tudi v meniju', () => {
+  for (const p of V_MENIJU) {
+    expect(V_MENIJU.includes(p), `${p} manjka v meniju`).toBe(true)
+  }
+})
+
+/**
+ * Namenoma NISO v vsakodnevnem meniju — imajo svoje mesto.
+ */
+const UPRAVICENO_ZUNAJ = ['/prenosi', '/nastavitve', '/nastavitve/blagajna', '/nastavitve/ekipa']
+
+test('meni: namestitev in nastavitve ostanejo zunaj', () => {
+  // `/prenosi` je namestitev namizne blagajne, nastavitve imajo svoje kartice.
+  expect(UPRAVICENO_ZUNAJ).toContain('/prenosi')
+  expect(UPRAVICENO_ZUNAJ.every(p => !V_MENIJU.includes(p))).toBe(true)
+})

@@ -30,6 +30,7 @@ const NAV_DEFAULT = [
     { href: '/predracuni',   icon: 'ti-file-text',     label: 'Predračuni' },
     { href: '/ponavljajoci-racuni', icon: 'ti-repeat', label: 'Ponavljajoči računi' },
     { href: '/dobavnice',    icon: 'ti-truck-delivery', label: 'Dobavnice' },
+    { href: '/avansni-racuni', icon: 'ti-cash',      label: 'Avansni računi' },
     { href: '/expenses',     icon: 'ti-receipt',       label: 'Stroški' },
     { href: '/scan',         icon: 'ti-scan',          label: 'Skeniraj račun' },
     { href: '/kpo',          icon: 'ti-book',          label: 'KPO knjiga' },
@@ -49,8 +50,13 @@ const NAV_DEFAULT = [
     { href: '/rek1',         icon: 'ti-file-text',   label: 'REK-1' },
     { href: '/dopust',       icon: 'ti-umbrella',    label: 'Dopust' },
     { href: '/potni-stroski',icon: 'ti-plane',       label: 'Potni stroški' },
+    // DODANO (26.8.2026): dosegljivo je bilo IZKLJUCNO prek Dashboarda.
+    { href: '/regres',       icon: 'ti-sun',         label: 'Regres' },
+    { href: '/potni-nalogi', icon: 'ti-route',       label: 'Potni nalogi' },
+    { href: '/cas',          icon: 'ti-clock',       label: 'Evidenca časa' },
   ]},
   { label: 'Evidenca', items: [
+    { href: '/porocila',     icon: 'ti-report',        label: 'Poročila' },
     { href: '/kilometrina',  icon: 'ti-car',           label: 'Kilometrina' },
     { href: '/zaloga',       icon: 'ti-package',       label: 'Zaloga' },
     { href: '/amortizacija', icon: 'ti-trending-down', label: 'Amortizacija' },
