@@ -146,9 +146,15 @@ export default function ObnovaKartice() {
               <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Predračun je pripravljen</div>
               <div style={{ fontSize: 13, color: '#6b6962', lineHeight: 1.6, marginBottom: 18 }}>
                 {rezultat
-                  ? (rezultat.poslano === false
-                      ? 'Podatke za plačilo najdete spodaj. Sporočila vam nismo mogli poslati — prosimo, shranite si te podatke.'
-                      : 'Predračun smo vam poslali po e-pošti. Podatke za plačilo najdete tudi spodaj.')
+                  ? (rezultat.poslano === true
+                      ? 'Predračun smo vam poslali po e-pošti. Podatke za plačilo najdete tudi spodaj.'
+                      : rezultat.poslano === false
+                        ? 'Podatke za plačilo najdete spodaj. Sporočila vam nismo mogli poslati — prosimo, shranite si te podatke.'
+                        // POPRAVLJENO (26.8.2026): ob OSVEZITVI strani `poslano` ni
+                        // med podatki, koda pa je vsako vrednost razen `false`
+                        // stela kot uspeh - stran je trdila, da je bil predracun
+                        // poslan, cetudi tega ni vedela.
+                        : 'Podatke za plačilo najdete spodaj. Priporočamo, da si jih shranite.')
                   : 'Za to kartico je predračun že izdan. Če ga niste prejeli, nas pokličite.'}
               </div>
 

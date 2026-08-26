@@ -23,6 +23,13 @@ const NAV_DEFAULT = [
     // stran /integracije pa ostaja nespremenjena.
     { href: '/invoices/new', icon: 'ti-file-plus',     label: 'Nov račun' },
     { href: '/invoices',     icon: 'ti-file-invoice',  label: 'Računi' },
+    // DODANO (26.8.2026): predracuni, dobavnice in ponavljajoci racuni so
+    // OBSTAJALI kot strani, v meniju pa jih ni bilo - dosegljivi so bili le
+    // prek hitrih povezav na Dashboardu, kar je bilo enostavno spregledati.
+    // Uporabnik predracuna, ki ga je aplikacija izdala, ni mogel najti.
+    { href: '/predracuni',   icon: 'ti-file-text',     label: 'Predračuni' },
+    { href: '/ponavljajoci-racuni', icon: 'ti-repeat', label: 'Ponavljajoči računi' },
+    { href: '/dobavnice',    icon: 'ti-truck-delivery', label: 'Dobavnice' },
     { href: '/expenses',     icon: 'ti-receipt',       label: 'Stroški' },
     { href: '/scan',         icon: 'ti-scan',          label: 'Skeniraj račun' },
     { href: '/kpo',          icon: 'ti-book',          label: 'KPO knjiga' },

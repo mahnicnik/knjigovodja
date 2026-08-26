@@ -2463,3 +2463,55 @@ test('iskanje: po številki še vedno deluje', () => {
   const r = [{ stevilka: 31, eor: '9999ce32', zoi: '3b51b377' }]
   expect(najdi(r, '31')).toHaveLength(1)
 })
+
+// ─── Ali je bil predračun poslan ────────────────────────────────────────
+
+/**
+ * NAPAKA (popravljeno 26.8.2026): stran je vsako vrednost razen `false`
+ * štela kot uspeh. Ob osvežitvi `poslano` sploh ni bilo med podatki, zato je
+ * stran trdila „Predračun smo vam poslali po e-pošti", čeprav tega ni vedela.
+ */
+function sporociloOPosti(poslano: boolean | null | undefined) {
+  if (poslano === true) return 'poslano'
+  if (poslano === false) return 'ni poslano'
+  return 'ne vemo'
+}
+
+test('predračun: potrdimo pošiljanje samo, kadar vemo', () => {
+  expect(sporociloOPosti(true)).toBe('poslano')
+  expect(sporociloOPosti(false)).toBe('ni poslano')
+  expect(sporociloOPosti(undefined)).toBe('ne vemo')   // prej: 'poslano'
+  expect(sporociloOPosti(null)).toBe('ne vemo')
+})
+
+/**
+ * Če pošiljanje odpove PRED klicem Resend (npr. pri izdelavi PDF), se prej
+ * ni zabeležilo nič — v `invoice_emails` ni bilo vrstice in uporabnik ni
+ * imel kje videti, da predračun ni odšel.
+ */
+function zapisiPosto(izid: 'sent' | 'failed' | 'izjema') {
+  return izid === 'izjema' ? { status: 'failed', error_message: 'napaka pri izdelavi PDF' }
+    : { status: izid, error_message: null }
+}
+
+test('pošta: neuspeh se zabeleži tudi ob izjemi', () => {
+  expect(zapisiPosto('izjema').status).toBe('failed')
+  expect(zapisiPosto('izjema').error_message).toBeTruthy()
+})
+
+test('pošta: uspeh se zabeleži brez napake', () => {
+  expect(zapisiPosto('sent')).toEqual({ status: 'sent', error_message: null })
+})
+
+/**
+ * Stanje iz zapisa se prevede nazaj v to, kar stran pokaže.
+ */
+function stanjeIzZapisa(status?: string) {
+  return status === 'sent' ? true : status === 'failed' ? false : null
+}
+
+test('pošta: brez zapisa ne trdimo ničesar', () => {
+  expect(stanjeIzZapisa(undefined)).toBeNull()
+  expect(stanjeIzZapisa('sent')).toBe(true)
+  expect(stanjeIzZapisa('failed')).toBe(false)
+})

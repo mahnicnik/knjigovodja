@@ -104,7 +104,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     const { data: q } = await db2.from('quotes')
       .select('quote_number, amount_total, valid_until').eq('id', z.quote_id).maybeSingle()
     if (q) {
+      // DODANO (26.8.2026): ali je bil predracun DEJANSKO poslan. Prej tega
+      // GET ni vrnil, stran pa je vsako vrednost razen `false` stela kot
+      // uspeh - ob osvezitvi je trdila, da je bil poslan, cetudi ni bil.
+      const { data: posta } = await db2.from('invoice_emails')
+        .select('status').eq('quote_id', z.quote_id).order('id', { ascending: false }).limit(1)
+      const stanjePoste = posta?.[0]?.status
       placilo = {
+        poslano: stanjePoste === 'sent' ? true : stanjePoste === 'failed' ? false : null,
         stevilka: q.quote_number,
         znesek: Number(q.amount_total || 0),
         iban: org?.iban ?? null,
@@ -319,7 +326,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       if (!reErr) { poslano = true; qrZaStran = qr }
       else console.error('Predracuna ni bilo mogoce poslati:', reErr.message)
     } catch (e: any) {
+      // POPRAVLJENO (26.8.2026): ce je posiljanje odpovedalo PRED klicem
+      // Resend (npr. pri izdelavi PDF), se ni zabelezilo NIC - v
+      // `invoice_emails` ni bilo vrstice, uporabnik pa ni imel kje videti,
+      // da predracun ni odsel.
       console.error('Predracuna ni bilo mogoce poslati:', e?.message || e)
+      try {
+        await db.from('invoice_emails').insert({
+          quote_id: predracun.id,
+          org_id: org.id,
+          to_email: stranka.email,
+          subject: `Predračun ${predracun.quote_number} — podaljšanje kartice`,
+          message: 'Predračun za podaljšanje kartice, na zahtevo stranke',
+          status: 'failed',
+          error_message: String(e?.message || e).slice(0, 500),
+        })
+      } catch { /* ce tudi to ne gre, ostane samo strezniski dnevnik */ }
     }
   }
 
