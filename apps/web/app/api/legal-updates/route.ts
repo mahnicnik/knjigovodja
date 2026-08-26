@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { GET as crpajNovosti } from '../cron/legal-updates/route'
 import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
@@ -60,4 +61,34 @@ export async function GET() {
     console.error('Legal updates error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+}
+
+/**
+ * ROCNO OSVEZEVANJE (dodano 25.8.2026).
+ *
+ * Gumb "Preveri" v pripomocku je klical GET te poti, ta pa po preletu 112
+ * samo POROCA o stanju - vsebine ne prinese vec. Klik zato ni naredil
+ * nicesar: kazalnik se je zavrtel in seznam je ostal enak.
+ *
+ * Crpanje opravi ista koda kot nocno opravilo, le da se tu avtorizira s
+ * PRIJAVO namesto s skrivnostjo crona - uporabnik v brskalniku je nima.
+ */
+export async function POST(req: NextRequest) {
+  const cookieStore = await cookies()
+  const authClient = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } },
+  )
+  const { data: { user } } = await authClient.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Neprijavljen uporabnik' }, { status: 401 })
+
+  // Klic notranje: skrivnost crona podamo iz okolja, saj smo na strezniku.
+  const notranji = new NextRequest(new URL(req.url), {
+    headers: process.env.CRON_SECRET
+      ? { authorization: `Bearer ${process.env.CRON_SECRET}` }
+      : undefined,
+  })
+  const res = await crpajNovosti(notranji)
+  return NextResponse.json(await res.json())
 }

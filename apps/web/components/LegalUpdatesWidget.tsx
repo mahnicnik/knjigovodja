@@ -52,12 +52,35 @@ export default function LegalUpdatesWidget() {
     setLoading(false)
   }
 
+  const [odziv, setOdziv] = useState<string | null>(null)
+
+  /**
+   * POPRAVLJENO (25.8.2026): gumb je klical GET, ta pa po preletu 112 samo
+   * POROCA o stanju - vsebine ne prinese vec. Klik ni naredil nicesar in ni
+   * povedal, zakaj: kazalnik se je zavrtel, seznam pa ostal enak.
+   */
   async function refresh() {
     setRefreshing(true)
+    setOdziv(null)
     try {
-      await fetch('/api/legal-updates')
+      const res = await fetch('/api/legal-updates', { method: 'POST' })
+      const d = await res.json().catch(() => ({}))
       await load()
-    } catch {}
+
+      if (!res.ok) {
+        setOdziv('Virov ni bilo mogoče doseči. Poskusite pozneje.')
+      } else if ((d.obdrzanih ?? 0) > 0) {
+        setOdziv(`Dodanih ali osveženih: ${d.obdrzanih}.`)
+      } else if ((d.najdenih ?? 0) > 0) {
+        // Vir dela, le nobena objava ne zadeva s.p. - to je pogosto in
+        // uporabnik mora vedeti, da NI napaka.
+        setOdziv(`Vir deluje (${d.najdenih} objav), nobena pa ne zadeva s.p.`)
+      } else {
+        setOdziv('Vir trenutno ne vrača objav.')
+      }
+    } catch {
+      setOdziv('Povezave ni bilo mogoče vzpostaviti.')
+    }
     setRefreshing(false)
   }
 
@@ -77,7 +100,7 @@ export default function LegalUpdatesWidget() {
         {/* POPRAVLJENO (25.8.2026): gumb je obljubljal novosti iz treh virov,
             dejansko pa je vpisal sest trdo zapisanih zapisov iz leta 2025.
             Zdaj vsebina prihaja iz virov FURS, osvezuje pa jo nocno opravilo. */}
-        Trenutno ni objav, ki bi zadevale s.p. Seznam osvežuje nočno opravilo.
+        {odziv || 'Trenutno ni objav, ki bi zadevale s.p. Seznam osvežuje nočno opravilo.'}
       </div>
     </div>
   )
@@ -103,6 +126,14 @@ export default function LegalUpdatesWidget() {
           {refreshing ? 'Iščem...' : '↻ Osveži'}
         </button>
       </div>
+
+      {/* Odziv na osvezitev (25.8.2026): brez njega uporabnik ne ve, ali je
+          klik kaj naredil - seznam ostane enak tudi ob uspesnem teku. */}
+      {odziv && (
+        <div style={{ fontSize: '11px', color: '#0E5E3B', background: '#E1F5EE', borderRadius: '8px', padding: '7px 10px', marginBottom: '10px' }}>
+          {odziv}
+        </div>
+      )}
 
       {/* Updates list */}
       {updates.map((u, i) => {

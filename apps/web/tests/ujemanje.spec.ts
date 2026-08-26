@@ -2067,3 +2067,46 @@ test('akt v blagajni: sporočilo loči manjkajoč akt od manjkajočega ID', () =
   // drugje in ga ni bilo mogoče uganiti.
   expect(najdiAkt('org2', [{ org_id: 'org1' }]).razlog).toBe('akt ni sprejet')
 })
+
+// ─── Gumb „Osveži" pri zakonskih novostih ───────────────────────────────
+
+/**
+ * NAPAKA (popravljeno 25.8.2026): gumb je klical GET /api/legal-updates, ta
+ * pa po preletu 112 samo POROČA o stanju — vsebine ne prinese več. Klik ni
+ * naredil ničesar in ni povedal, zakaj: kazalnik se je zavrtel, seznam pa
+ * ostal enak.
+ */
+function odzivNaOsvezitev(ok: boolean, najdenih: number, obdrzanih: number) {
+  if (!ok) return 'napaka'
+  if (obdrzanih > 0) return 'dodano'
+  if (najdenih > 0) return 'vir dela, nič relevantnega'
+  return 'vir brez objav'
+}
+
+test('osveži: uspešen tek z novimi objavami', () => {
+  expect(odzivNaOsvezitev(true, 40, 3)).toBe('dodano')
+})
+
+test('osveži: vir dela, a nič ne zadeva s.p.', () => {
+  // To je POGOSTO in ni napaka — uporabnik mora vedeti razliko.
+  expect(odzivNaOsvezitev(true, 40, 0)).toBe('vir dela, nič relevantnega')
+})
+
+test('osveži: vir ne vrača nič', () => {
+  expect(odzivNaOsvezitev(true, 0, 0)).toBe('vir brez objav')
+})
+
+test('osveži: nedosegljiv vir', () => {
+  expect(odzivNaOsvezitev(false, 0, 0)).toBe('napaka')
+})
+
+test('osveži: vsak izid ima svoj odziv', () => {
+  // Prej je bil odziv enak v vseh štirih primerih: nobenega.
+  const izidi = new Set([
+    odzivNaOsvezitev(true, 40, 3),
+    odzivNaOsvezitev(true, 40, 0),
+    odzivNaOsvezitev(true, 0, 0),
+    odzivNaOsvezitev(false, 0, 0),
+  ])
+  expect(izidi.size).toBe(4)
+})
