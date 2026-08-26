@@ -214,6 +214,12 @@ export default function DashboardPage() {
     hasClients: false,
     hasInvoices: false,
     hasExpenses: false,
+    // DODANO (26.8.2026): zadnja dva uvodna koraka sta imela `done: false`
+    // TRDO ZAPISAN - kljukica se nikoli ni pojavila, cetudi je bila blagajna
+    // urejena in racunovodja povabljen. Prvi trije koraki so se preverjali iz
+    // podatkov, ta dva pa nikoli.
+    hasPos: false,
+    hasAccountant: false,
     legalForm: null as LegalForm | null,
     taxSystem: null as TaxSystem | null,
   })
@@ -456,6 +462,21 @@ export default function DashboardPage() {
 
       // Determine legal form from onboarding answers
       const onboardingAnswers = prefsRes2.data?.onboarding_answers as Record<string, any> | undefined
+      // Ali je davcna blagajna urejena in ali je racunovodja povabljen
+      // (26.8.2026). Blagajna velja za urejeno, ko sta vnesena poslovni
+      // prostor IN elektronska naprava - brez obojega racuna ni mogoce izdati.
+      let posDone = false, accountantDone = false
+      try {
+        const [prostori, naprave, clani] = await Promise.all([
+          supabase.from('business_premises').select('id').eq('org_id', member.org_id).limit(1),
+          supabase.from('electronic_devices').select('id').eq('org_id', member.org_id).limit(1),
+          supabase.from('org_members').select('role').eq('org_id', member.org_id),
+        ])
+        posDone = (prostori.data?.length ?? 0) > 0 && (naprave.data?.length ?? 0) > 0
+        accountantDone = (clani.data || []).some((c: any) =>
+          ['accountant', 'racunovodja', 'viewer'].includes(String(c.role || '').toLowerCase()))
+      } catch { /* ob napaki koraka ostaneta neoznacena */ }
+
       const legalForm: LegalForm | null = onboardingAnswers?.tip === 'sp' ? 'sp'
         : onboardingAnswers?.tip === 'doo' ? 'doo'
         : onboardingAnswers?.tip === 'zavod' ? 'zavod'
@@ -480,6 +501,8 @@ export default function DashboardPage() {
         hasClients: (cliRes.data || []).length > 0,
         hasInvoices: invoices.length > 0,
         hasExpenses: receipts.length > 0,
+        hasPos: posDone,
+        hasAccountant: accountantDone,
         legalForm,
         taxSystem: (o.tax_system as TaxSystem) || null,
       })
@@ -692,8 +715,8 @@ export default function DashboardPage() {
       { id: 1, label: 'Profil podjetja',       done: profileDone,         href: '/nastavitve',         optional: false },
       { id: 2, label: 'Prvi račun',             done: data.hasInvoices,    href: '/invoices/new',       optional: false },
       { id: 3, label: 'Uvozi prvi strošek',     done: data.hasExpenses,    href: '/expenses',           optional: false },
-      { id: 4, label: 'Nastavi davčno blagajno', done: false,              href: '/nastavitve/blagajna', optional: true },
-      { id: 5, label: 'Povabi računovodjo',     done: false,               href: '/nastavitve/ekipa',   optional: true },
+      { id: 4, label: 'Nastavi davčno blagajno', done: data.hasPos,        href: '/nastavitve/blagajna', optional: true },
+      { id: 5, label: 'Povabi računovodjo',     done: data.hasAccountant,  href: '/nastavitve/ekipa',   optional: true },
     ].filter(s => !dismissedSteps.includes(s.id))
   }, [org, data, dismissedSteps])
   const onboardingDone = onboardingSteps.filter(s => s.done).length

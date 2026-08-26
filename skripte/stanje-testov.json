@@ -1,16 +1,16 @@
 {
-  "skupaj": 382,
+  "skupaj": 388,
   "poDatotekah": {
     "baza.spec.ts": 13,
     "blagajna.spec.ts": 30,
-    "davki.spec.ts": 41,
+    "davki.spec.ts": 43,
     "integracije.spec.ts": 12,
     "kategorizacija.spec.ts": 13,
     "mobilno.spec.ts": 30,
     "racunko.spec.ts": 5,
     "sandbox.spec.ts": 2,
     "skener.spec.ts": 14,
-    "ujemanje.spec.ts": 222
+    "ujemanje.spec.ts": 226
   },
   "datum": "2026-08-26"
 }

@@ -406,7 +406,21 @@ function extractFursError(xml: string): { code: string; message: string } | null
   const codeMatch = xml.match(/<fu:ErrorCode>([^<]+)<\/fu:ErrorCode>/) || xml.match(/<ErrorCode>([^<]+)<\/ErrorCode>/)
   const msgMatch = xml.match(/<fu:ErrorMessage>([^<]+)<\/fu:ErrorMessage>/) || xml.match(/<ErrorMessage>([^<]+)<\/ErrorMessage>/)
   if (codeMatch?.[1]) {
-    return { code: codeMatch[1].trim(), message: msgMatch?.[1]?.trim() || 'Neznana FURS napaka' }
+    const code = codeMatch[1].trim()
+    let message = msgMatch?.[1]?.trim() || 'Neznana FURS napaka'
+
+    // DODANO (26.8.2026): S001 se glasi "Sporocilo ni v skladu s shemo XML",
+    // kar zveni kot napaka v programu. Najpogostejsi vzrok pa je DRUGACEN:
+    // davcna stevilka v nastavitvah se ne ujema s tisto v digitalnem potrdilu.
+    //
+    // Prav to se je zgodilo 26.8.2026 - sporocilo je bilo pravilno oblikovano,
+    // le davcna stevilka je bila napacna. Brez tega namiga je iskanje vzroka
+    // steklo v napacno smer.
+    if (code === 'S001') {
+      message += ' — najpogostejši vzrok: davčna številka v nastavitvah se ne '
+        + 'ujema s tisto v digitalnem potrdilu. Preverite obe.'
+    }
+    return { code, message }
   }
   return null
 }

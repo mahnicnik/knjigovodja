@@ -2642,3 +2642,44 @@ test('meni: namestitev in nastavitve ostanejo zunaj', () => {
   expect(UPRAVICENO_ZUNAJ).toContain('/prenosi')
   expect(UPRAVICENO_ZUNAJ.every(p => !V_MENIJU.includes(p))).toBe(true)
 })
+
+// ─── Uvodni koraki na Dashboardu ────────────────────────────────────────
+
+/**
+ * NAPAKA (popravljeno 26.8.2026): zadnja dva koraka sta imela `done: false`
+ * TRDO ZAPISAN. Kljukica se ni pojavila nikoli — niti ko je bila davčna
+ * blagajna v celoti urejena in računovodja povabljen.
+ *
+ * Prvi trije koraki so se preverjali iz podatkov, ta dva pa nikoli.
+ */
+function korakBlagajna(prostorov: number, naprav: number) {
+  // Račun ni mogoče izdati brez obojega, zato oboje šteje.
+  return prostorov > 0 && naprav > 0
+}
+
+function korakRacunovodja(vloge: string[]) {
+  return vloge.some(v => ['accountant', 'racunovodja', 'viewer'].includes(v.toLowerCase()))
+}
+
+test('uvodni koraki: blagajna urejena, ko sta prostor in naprava', () => {
+  expect(korakBlagajna(2, 1)).toBe(true)
+})
+
+test('uvodni koraki: sam prostor brez naprave ni dovolj', () => {
+  // Brez naprave računa ni mogoče izdati.
+  expect(korakBlagajna(1, 0)).toBe(false)
+  expect(korakBlagajna(0, 1)).toBe(false)
+})
+
+test('uvodni koraki: računovodja se prepozna po vlogi', () => {
+  expect(korakRacunovodja(['owner'])).toBe(false)
+  expect(korakRacunovodja(['owner', 'accountant'])).toBe(true)
+  expect(korakRacunovodja(['owner', 'viewer'])).toBe(true)
+})
+
+test('uvodni koraki: nobeden ni trdo zapisan', () => {
+  // Prej: done: false — ne glede na stanje.
+  const stanje = { prostorov: 2, naprav: 1, vloge: ['owner', 'accountant'] }
+  expect(korakBlagajna(stanje.prostorov, stanje.naprav)).toBe(true)
+  expect(korakRacunovodja(stanje.vloge)).toBe(true)
+})

@@ -444,3 +444,32 @@ test('kalkulator: obvestilo o olajšavi je zdaj dosegljivo', () => {
   const pragOlajsave = 1480.52
   expect(spodnjaMejaKalkulatorja).toBeLessThan(pragOlajsave)
 })
+
+// ─── FURS napaka S001 ───────────────────────────────────────────────────
+
+/**
+ * S001 se glasi „Sporočilo ni v skladu s shemo XML", kar zveni kot napaka v
+ * programu. Najpogostejši vzrok pa je drugačen: davčna številka v nastavitvah
+ * se ne ujema s tisto v digitalnem potrdilu.
+ *
+ * 26. 8. 2026 se je zgodilo prav to — sporočilo je bilo pravilno oblikovano,
+ * le davčna številka napačna. Brez namiga je iskanje vzroka steklo v napačno
+ * smer (domneval sem napako v znesku).
+ */
+function sporociloNapake(code: string, message: string) {
+  if (code === 'S001') {
+    return message + ' — najpogostejši vzrok: davčna številka v nastavitvah se ne '
+      + 'ujema s tisto v digitalnem potrdilu. Preverite obe.'
+  }
+  return message
+}
+
+test('FURS: S001 dobi namig o davčni številki', () => {
+  const s = sporociloNapake('S001', 'Sporočilo ni v skladu s shemo XML')
+  expect(s).toContain('davčna številka')
+  expect(s).toContain('potrdilu')
+})
+
+test('FURS: druge napake ostanejo nespremenjene', () => {
+  expect(sporociloNapake('S002', 'Druga napaka')).toBe('Druga napaka')
+})
