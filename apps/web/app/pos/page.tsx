@@ -7591,6 +7591,8 @@ function VoidModal({ order, lines, payment, posData, auth, onClose, onVoided }) 
         reason: reason || 'Storno',
         // Lastna stevilka storna in klavzule (25.8.2026).
         stornoNumber: fursData?.invoiceNumber ?? null,
+        // Cas storna podamo izrecno - `order.voided_at` je se prazen (26.8.2026).
+        stornoCas: new Date().toISOString(),
         vatExemptions: Array.from(new Set((lines || [])
           .filter((l: any) => Number(l.vat_rate ?? 22) === 0)
           .map((l: any) => {
@@ -7848,7 +7850,7 @@ function RefundModal({ order, lines, payment, auth, onClose, onRefunded }) {
  *      "Storno racuna: #22".
  *   3. Manjkala sta OBRACUN DDV in klavzula o oprostitvi, ki ju original ima.
  */
-function buildStornoReceiptHTML({ order, lines, payment, org, cashierName, voidEor, voidZoi, reason, stornoNumber, vatExemptions }) {
+function buildStornoReceiptHTML({ order, lines, payment, org, cashierName, voidEor, voidZoi, reason, stornoNumber, vatExemptions, stornoCas }) {
   const eur = n => '€' + Number(n).toFixed(2).replace('.', ',')
   const addr = [org?.address, [org?.post_code, org?.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>STORNO #${order.number}</title>
@@ -7866,7 +7868,13 @@ function buildStornoReceiptHTML({ order, lines, payment, org, cashierName, voidE
 <div class="l"></div>
 ${typeof stornoNumber === 'string' && stornoNumber ? `<div class="r"><span>Št. storna:</span><span class="b">${escapeHtml(stornoNumber)}</span></div>` : ''}
 <div class="r"><span>Storno računa:</span><span class="b">#${order.number || order.id.slice(-6)}</span></div>
-<div class="r"><span>Datum:</span><span>${new Date(order.voided_at || order.closed_at || Date.now()).toLocaleString('sl-SI')}</span></div>
+${/* POPRAVLJENO (26.8.2026): pri PRVEM izpisu - tistem, ki ga stranka dobi v
+     roke - `order.voided_at` se ni bil nastavljen, ker ga je pravkar zapisala
+     baza, predmet v pomnilniku pa je bil se star. Izpis je zato pokazal cas
+     ORIGINALNEGA racuna (10:27:24) namesto casa storna (10:33:22). Ponovni
+     izpis je bil pravilen, ker je predmet medtem prebral iz baze.
+     Zato cas podamo IZRECNO ob stornu. */''}
+<div class="r"><span>Datum:</span><span>${new Date(stornoCas || order.voided_at || order.closed_at || Date.now()).toLocaleString('sl-SI')}</span></div>
 <div class="r"><span>Blagajnik:</span><span>${escapeHtml(cashierName)}</span></div>
 <div class="r"><span>Razlog:</span><span>${escapeHtml(reason)}</span></div>
 <div class="l"></div>
@@ -9228,8 +9236,15 @@ function ReportsScreen({ posData, auth, setScreen }) {
     refunds.forEach(r => { vracila += Number(r.amount || 0) })
 
     // Top artikli iz order_lines
+    // POPRAVLJENO (26.8.2026): izbor ni poznal NACINA PLACILA, zato so se
+    // racuni, poravnani s karto obiskov, steli po POLNI ceni postavke - v
+    // "Najbolj prodajani artikli" je bil prihodek napihnjen. Storitev je bila
+    // placana ze ob nakupu kartice; unovcenje ni nov prihodek.
+    //
+    // KOLICINO vseeno stejemo: za vprasanje "kaj se najbolj prodaja" je
+    // unovcen obisk enako pomemben kot placan.
     const linesRes = await db.from('order_lines')
-      .select('name, qty, unit_price, orders!inner(closed_at, status, business_id)')
+      .select('name, qty, unit_price, orders!inner(closed_at, status, business_id, payments(method))')
       .eq('orders.business_id', BUSINESS_ID)
       .eq('orders.status', 'paid')
       .gte('orders.closed_at', fromStr)
@@ -9238,9 +9253,10 @@ function ReportsScreen({ posData, auth, setScreen }) {
     const itemMap = {}
     ;(linesRes.data || []).forEach(l => {
       const k = l.name
+      const sKartico = ((l as any).orders?.payments || []).some((p: any) => p.method === 'pkg')
       if (!itemMap[k]) itemMap[k] = { name:k, qty:0, total:0 }
       itemMap[k].qty += Number(l.qty || 1)
-      itemMap[k].total += Number(l.unit_price || 0) * Number(l.qty || 1)
+      if (!sKartico) itemMap[k].total += Number(l.unit_price || 0) * Number(l.qty || 1)
     })
     const topItems = Object.values(itemMap).sort((a:any,b:any) => b.total - a.total).slice(0,5)
 

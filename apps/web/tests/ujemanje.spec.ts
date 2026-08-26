@@ -2233,3 +2233,97 @@ test('Z-poročilo: kartično vračilo ne zmanjša pričakovane gotovine', () => 
 test('Z-poročilo: gotovinsko vračilo jo zmanjša', () => {
   expect(pricakovanaGotovina(100, 50, 30)).toBe(120)
 })
+
+// ─── Čas storna na prvem izpisu ─────────────────────────────────────────
+
+/**
+ * NAPAKA (popravljeno 26.8.2026): pri PRVEM izpisu — tistem, ki ga stranka
+ * dobi v roke — je bil izpisan čas ORIGINALNEGA računa (10:27:24) namesto
+ * časa storna (10:33:22). Ponovni izpis je bil pravilen.
+ *
+ * Vzrok: `order.voided_at` je pravkar zapisala baza, predmet v pomnilniku pa
+ * je bil še star.
+ */
+function casNaIzpisu(stornoCas: string | null, order: { voided_at?: string; closed_at: string }) {
+  return stornoCas || order.voided_at || order.closed_at
+}
+
+test('storno: prvi izpis pokaže čas storna, ne računa', () => {
+  const order = { closed_at: '2026-08-26T10:27:24Z' }   // voided_at še ni
+  expect(casNaIzpisu('2026-08-26T10:33:22Z', order)).toBe('2026-08-26T10:33:22Z')
+})
+
+test('storno: ponovni izpis pokaže isti čas', () => {
+  const order = { voided_at: '2026-08-26T10:33:22Z', closed_at: '2026-08-26T10:27:24Z' }
+  expect(casNaIzpisu(null, order)).toBe('2026-08-26T10:33:22Z')
+})
+
+test('storno: oba izpisa dasta enak čas', () => {
+  const cas = '2026-08-26T10:33:22Z'
+  const prvi = casNaIzpisu(cas, { closed_at: '2026-08-26T10:27:24Z' })
+  const drugi = casNaIzpisu(null, { voided_at: cas, closed_at: '2026-08-26T10:27:24Z' })
+  expect(prvi).toBe(drugi)
+})
+
+// ─── Karta obiskov v poročilih ──────────────────────────────────────────
+
+/**
+ * „Najbolj prodajani artikli" so šteli karto obiskov po POLNI ceni — prihodek
+ * je bil napihnjen. Storitev je bila plačana že ob nakupu kartice.
+ */
+function prihodekPoArtiklih(vrstice: Array<{ ime: string; kolicina: number; cena: number; sKartico: boolean }>) {
+  const m: Record<string, { qty: number; total: number }> = {}
+  for (const v of vrstice) {
+    if (!m[v.ime]) m[v.ime] = { qty: 0, total: 0 }
+    m[v.ime].qty += v.kolicina                       // količino štejemo vedno
+    if (!v.sKartico) m[v.ime].total += v.cena * v.kolicina
+  }
+  return m
+}
+
+test('poročila: karta obiskov ne šteje v prihodek', () => {
+  const r = prihodekPoArtiklih([
+    { ime: 'Fizioterapija', kolicina: 1, cena: 50, sKartico: false },
+    { ime: 'Fizioterapija', kolicina: 1, cena: 50, sKartico: true },
+  ])
+  expect(r['Fizioterapija'].total).toBe(50)   // prej 100
+})
+
+test('poročila: količina se šteje tudi pri karti obiskov', () => {
+  // Za vprašanje „kaj se najbolj prodaja" je unovčen obisk enako pomemben.
+  const r = prihodekPoArtiklih([
+    { ime: 'Fizioterapija', kolicina: 1, cena: 50, sKartico: true },
+  ])
+  expect(r['Fizioterapija'].qty).toBe(1)
+  expect(r['Fizioterapija'].total).toBe(0)
+})
+
+// ─── Organizacija pri več članstvih ─────────────────────────────────────
+
+/**
+ * `maybeSingle()` vrne NULL, če je lastnik član več organizacij — javna stran
+ * bi pokazala prazen naziv brez IBAN-a in stranka ne bi imela kam nakazati.
+ */
+function najdiOrganizacijo(clanstva: string[], orgi: Array<{ id: string; pos_business_id?: string }>, businessId: string) {
+  if (clanstva.length === 0) return null
+  const povezana = orgi.find(o => clanstva.includes(o.id) && o.pos_business_id === businessId)
+  if (povezana) return povezana
+  return orgi.find(o => clanstva.includes(o.id)) ?? null
+}
+
+test('organizacija: pri več članstvih se najde povezana z blagajno', () => {
+  const o = najdiOrganizacijo(
+    ['a', 'b'],
+    [{ id: 'a' }, { id: 'b', pos_business_id: 'biz1' }],
+    'biz1',
+  )
+  expect(o?.id).toBe('b')
+})
+
+test('organizacija: brez povezave se vzame prva', () => {
+  expect(najdiOrganizacijo(['a', 'b'], [{ id: 'a' }, { id: 'b' }], 'biz1')?.id).toBe('a')
+})
+
+test('organizacija: brez članstev ni rezultata', () => {
+  expect(najdiOrganizacijo([], [{ id: 'a' }], 'biz1')).toBeNull()
+})

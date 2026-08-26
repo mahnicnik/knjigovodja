@@ -57,11 +57,26 @@ async function orgZaBlagajno(businessId: string) {
   const { data: biz } = await db
     .from('businesses').select('owner_user_id, name').eq('id', businessId).maybeSingle()
   if (!biz?.owner_user_id) return null
-  const { data: mem } = await db
-    .from('org_members').select('org_id').eq('user_id', biz.owner_user_id).maybeSingle()
-  if (!mem?.org_id) return null
+  // POPRAVLJENO (26.8.2026): `maybeSingle()` vrne NULL, ce je lastnik clan
+  // VEC organizacij - javna stran bi takrat pokazala prazen naziv brez IBAN-a,
+  // stranka pa ne bi imela kam nakazati. Isto past sem ze popravil v
+  // `potrdi-placilo`, tu je ostala.
+  //
+  // Vzamemo organizacijo, ki ji pripada TA blagajna; ce te povezave ni,
+  // najstarejso, kar ustreza pricakovanju "moja glavna dejavnost".
+  const { data: clanstva } = await db
+    .from('org_members').select('org_id').eq('user_id', biz.owner_user_id)
+  const orgIdi = (clanstva || []).map((m: any) => m.org_id)
+  if (orgIdi.length === 0) return null
+
+  const { data: povezana } = await db
+    .from('organizations').select('*')
+    .in('id', orgIdi).eq('pos_business_id', businessId).maybeSingle()
+  if (povezana) return povezana
+
   const { data: org } = await db
-    .from('organizations').select('*').eq('id', mem.org_id).maybeSingle()
+    .from('organizations').select('*')
+    .in('id', orgIdi).order('created_at', { ascending: true }).limit(1).maybeSingle()
   return org
 }
 
