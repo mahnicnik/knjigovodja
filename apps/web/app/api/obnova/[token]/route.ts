@@ -162,10 +162,76 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (!z) return NextResponse.json({ napaka: 'neveljavna_povezava' }, { status: 404 })
   if (z.status === 'expired') return NextResponse.json({ napaka: 'potekla_povezava' }, { status: 410 })
 
-  // Ce je predracun ze ustvarjen, ga NE podvojimo - stranka je morda dvakrat
+  // Ce predracun ze obstaja, ga NE podvojimo - stranka je morda dvakrat
   // kliknila ali osvezila stran.
+  //
+  // POPRAVLJENO (26.8.2026): prej se je tu koncalo in NI se zgodilo nic -
+  // ne posta, ne odgovor s podatki. Stranka pa klikne prav zato, ker
+  // predracuna NI dobila. Zato ga POSLJEMO ZNOVA in vrnemo podatke za
+  // placilo; nov dokument ne nastane.
   if (z.status !== 'pending' && z.quote_id) {
-    return NextResponse.json({ ze_ustvarjen: true, status: z.status })
+    const org0 = await orgZaBlagajno(z.business_id)
+    const { data: q0 } = await db.from('quotes')
+      .select('id, quote_number, amount_total, valid_until, issue_date, amount_net, vat_amount, line_items')
+      .eq('id', z.quote_id).maybeSingle()
+
+    let poslanoZnova = false
+    if (q0 && org0 && (z.customers as any)?.email && process.env.RESEND_API_KEY) {
+      try {
+        const zaPdf = {
+          invoice_number: q0.quote_number,
+          issue_date: q0.issue_date,
+          due_date: q0.valid_until,
+          service_date: q0.valid_until,
+          client_name: (z.customers as any).name ?? '',
+          line_items: q0.line_items ?? [],
+          amount_net: q0.amount_net,
+          vat_amount: q0.vat_amount,
+          amount_total: q0.amount_total,
+          reference: `SI00 ${q0.quote_number}`,
+          is_quote: true,
+        }
+        const qr0 = await generateUpnQr(zaPdf, org0)
+        const pdf0 = await renderToBuffer(InvoicePDF({ invoice: zaPdf, org: org0, qrDataUrl: qr0 }) as any)
+        const resend0 = new Resend(process.env.RESEND_API_KEY)
+        const { error: e0 } = await resend0.emails.send({
+          from: FROM_EMAIL,
+          to: [(z.customers as any).email],
+          subject: `Predračun ${q0.quote_number} — podaljšanje kartice`,
+          html: buildInvoiceEmailHtml({
+            orgName: org0.name, invoiceNumber: q0.quote_number,
+            issueDate: q0.issue_date, amount: Number(q0.amount_total),
+            dueDate: q0.valid_until, iban: org0.iban ?? null,
+            reference: `SI00 ${q0.quote_number}`, qrCid: qr0 ? 'upnqr' : null,
+            customMessage: 'Ponovno pošiljamo predračun za podaljšanje kartice.',
+          }),
+          attachments: [
+            { filename: `predracun-${q0.quote_number}.pdf`, content: pdf0 },
+            ...(qr0 ? [{ filename: 'upnqr.png', content: Buffer.from(qr0.split(',')[1] || '', 'base64'), contentId: 'upnqr' }] : []),
+          ],
+        } as any)
+        poslanoZnova = !e0
+        await db.from('invoice_emails').insert({
+          quote_id: q0.id, org_id: org0.id, to_email: (z.customers as any).email,
+          subject: `Predračun ${q0.quote_number} — podaljšanje kartice`,
+          message: 'Ponovno pošiljanje na zahtevo stranke',
+          status: e0 ? 'failed' : 'sent',
+          error_message: e0 ? String(e0.message).slice(0, 500) : null,
+          sent_at: e0 ? null : new Date().toISOString(),
+        })
+      } catch (e: any) {
+        console.error('Ponovnega posiljanja ni bilo mogoce izvesti:', e?.message || e)
+      }
+    }
+
+    return NextResponse.json({
+      ok: true, ze_ustvarjen: true, poslano: poslanoZnova,
+      stevilka: q0?.quote_number ?? null,
+      znesek: Number(q0?.amount_total ?? 0),
+      iban: org0?.iban ?? null,
+      sklic: q0 ? `SI00 ${q0.quote_number}` : null,
+      veljaDo: q0?.valid_until ?? null,
+    })
   }
 
   const org = await orgZaBlagajno(z.business_id)

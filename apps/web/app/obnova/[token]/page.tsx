@@ -42,7 +42,10 @@ export default function ObnovaKartice() {
         // POPRAVLJENO (24.8.2026): ob osvezitvi so podatki za placilo izginili
         // - stran je pokazala le "predracun je ze izdan". Zdaj jih GET vrne.
         if (d.placilo) setRezultat(d.placilo)
-        setStanje(d.status === 'quoted' || d.status === 'paid' ? 'ustvarjen' : 'ponudba')
+        // POPRAVLJENO (26.8.2026): pri ze izdanem predracunu se je pokazalo
+        // samo "predracun je ze izdan" BREZ gumba - stranka, ki poste ni
+        // dobila, ni imela kaj narediti. Zdaj lahko posiljanje ponovi.
+        setStanje(d.status === 'paid' ? 'ustvarjen' : 'ponudba')
       } catch {
         setNapaka('Strani ni bilo mogoče naložiti. Poskusite znova.')
         setStanje('napaka')
@@ -67,6 +70,9 @@ export default function ObnovaKartice() {
       }
       setRezultat(d)
       setStanje('ustvarjen')
+      if (d.ze_ustvarjen && d.poslano === false) {
+        setNapaka('Predračuna vam nismo mogli poslati. Podatke za plačilo najdete spodaj.')
+      }
     } catch {
       setNapaka('Povezave ni bilo mogoče vzpostaviti. Poskusite znova.')
     }
@@ -132,7 +138,7 @@ export default function ObnovaKartice() {
 
               <button onClick={ustvariPredracun} disabled={posiljam}
                 style={{ width: '100%', padding: '14px', borderRadius: 10, border: 0, background: posiljam ? '#8AA396' : '#1f6b3a', color: '#fff', fontWeight: 700, fontSize: 15, cursor: posiljam ? 'wait' : 'pointer' }}>
-                {posiljam ? 'Pripravljam…' : 'Naroči podaljšanje'}
+                {posiljam ? 'Pripravljam…' : podatki.status === 'quoted' ? 'Pošlji predračun znova' : 'Naroči podaljšanje'}
               </button>
 
               <div style={{ fontSize: 11, color: '#8a8880', marginTop: 10, lineHeight: 1.5, textAlign: 'center' }}>

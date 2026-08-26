@@ -2515,3 +2515,50 @@ test('pošta: brez zapisa ne trdimo ničesar', () => {
   expect(stanjeIzZapisa('sent')).toBe(true)
   expect(stanjeIzZapisa('failed')).toBe(false)
 })
+
+// ─── Ponovno pošiljanje obstoječega predračuna ──────────────────────────
+
+/**
+ * NAPAKA (popravljeno 26.8.2026): če je predračun že obstajal, se ob kliku
+ * NI zgodilo nič — ne pošta, ne odgovor s podatki. Stranka pa klikne prav
+ * zato, ker predračuna NI dobila.
+ *
+ * Tako je 26. 8. izpadlo: zahtevek z 24. 8. je še veljal, zato se je token
+ * ponovno uporabil, POST je videl obstoječ predračun in se tiho ustavil.
+ */
+function kajNarediKlik(status: string, imaPredracun: boolean) {
+  if (status === 'paid') return 'nič — že plačano'
+  if (imaPredracun) return 'pošlji znova'      // prej: 'nič'
+  return 'ustvari nov'
+}
+
+test('predračun: obstoječi se pošlje znova, ne ustvari nov', () => {
+  expect(kajNarediKlik('quoted', true)).toBe('pošlji znova')
+})
+
+test('predračun: brez obstoječega se ustvari nov', () => {
+  expect(kajNarediKlik('pending', false)).toBe('ustvari nov')
+})
+
+test('predračun: po plačilu se ne dela nič', () => {
+  expect(kajNarediKlik('paid', true)).toBe('nič — že plačano')
+})
+
+/**
+ * Gumb mora povedati, kaj bo naredil.
+ */
+function napisGumba(status: string) {
+  return status === 'quoted' ? 'Pošlji predračun znova' : 'Naroči podaljšanje'
+}
+
+test('gumb: pri obstoječem predračunu piše „pošlji znova"', () => {
+  expect(napisGumba('quoted')).toBe('Pošlji predračun znova')
+  expect(napisGumba('pending')).toBe('Naroči podaljšanje')
+})
+
+test('predračun: ponovno pošiljanje ne podvoji dokumenta', () => {
+  // Nov dokument NE nastane — pošlje se isti.
+  const pred = ['PRE-2026-004']
+  const po = kajNarediKlik('quoted', true) === 'pošlji znova' ? pred : [...pred, 'PRE-2026-005']
+  expect(po).toEqual(['PRE-2026-004'])
+})
