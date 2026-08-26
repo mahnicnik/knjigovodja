@@ -2327,3 +2327,31 @@ test('organizacija: brez povezave se vzame prva', () => {
 test('organizacija: brez članstev ni rezultata', () => {
   expect(najdiOrganizacijo([], [{ id: 'a' }], 'biz1')).toBeNull()
 })
+
+// ─── Sklanjatev pri odprtih računih ─────────────────────────────────────
+
+/**
+ * NAPAKA (popravljeno 26.8.2026): opozorilo je bilo v ednini in množini
+ * enako — „1 računov je še odprtih". Znesek je bil zapisan po angleško
+ * (€1.60 namesto 1,60 €).
+ */
+function opisOdprtih(n: number) {
+  return n === 1 ? '1 račun je še odprt'
+    : n === 2 ? '2 računa sta še odprta'
+    : n <= 4 ? `${n} računi so še odprti`
+    : `${n} računov je še odprtih`
+}
+
+test('opozorilo: pravilna sklanjatev za 1, 2, 3–4 in 5+', () => {
+  expect(opisOdprtih(1)).toBe('1 račun je še odprt')
+  expect(opisOdprtih(2)).toBe('2 računa sta še odprta')
+  expect(opisOdprtih(3)).toBe('3 računi so še odprti')
+  expect(opisOdprtih(5)).toBe('5 računov je še odprtih')
+  expect(opisOdprtih(11)).toBe('11 računov je še odprtih')
+})
+
+test('zneski: slovenski zapis z vejico', () => {
+  const eur = (v: number) => '€ ' + Number(v).toFixed(2).replace('.', ',')
+  expect(eur(1.6)).toBe('€ 1,60')
+  expect(eur(1.6)).not.toContain('.')
+})

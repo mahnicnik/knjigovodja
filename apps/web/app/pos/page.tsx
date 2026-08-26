@@ -6580,9 +6580,16 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
         .in('status', ['open','on_hold'])
       if (odprti?.length) {
         const skupaj = odprti.reduce((s: number, o: any) => s + Number(o.total || 0), 0)
-        const seznam = odprti.slice(0, 5).map((o: any) => '• ' + (o.tables?.name || 'brez mize') + ' — €' + Number(o.total || 0).toFixed(2)).join('\n')
+        const seznam = odprti.slice(0, 5).map((o: any) => '• ' + (o.tables?.name || 'brez mize') + ' — ' + eur(o.total || 0)).join('\n')
         const vec = odprti.length > 5 ? `\n… in še ${odprti.length - 5}` : ''
-        if (!confirm(`Pozor: ${odprti.length} računov je še odprtih (skupaj €${skupaj.toFixed(2)}):\n\n${seznam}${vec}\n\nTi računi NE bodo zajeti v Z-poročilu. Vseeno zaključim blagajno?`)) {
+        // POPRAVLJENO (26.8.2026): besedilo je bilo v ednini in mnozini enako
+        // ("1 racunov je se odprtih"), znesek pa zapisan po anglesko (1.60).
+        const n = odprti.length
+        const opisRacunov = n === 1 ? '1 račun je še odprt'
+          : n === 2 ? '2 računa sta še odprta'
+          : n <= 4 ? `${n} računi so še odprti`
+          : `${n} računov je še odprtih`
+        if (!confirm(`Pozor: ${opisRacunov} (skupaj ${eur(skupaj)}):\n\n${seznam}${vec}\n\nTi računi NE bodo zajeti v Z-poročilu. Vseeno zaključim blagajno?`)) {
           setSaving(false)
           return
         }
@@ -7798,7 +7805,7 @@ function RefundModal({ order, lines, payment, auth, onClose, onRefunded }) {
                 type="number" onFocus={e => e.target.select()} min="0.01" step="0.01" max={order.total}
                 value={customAmount}
                 onChange={e => setCustomAmount(e.target.value)}
-                placeholder={`Max: €${Number(order.total).toFixed(2)}`}
+                placeholder={`Max: ${eur(order.total)}`}
                 style={{ width:'100%', padding:'10px 12px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:14, fontWeight:700, background:T.inputBg, outline:'none' }}
                 autoFocus
               />
@@ -7827,7 +7834,7 @@ function RefundModal({ order, lines, payment, auth, onClose, onRefunded }) {
           <div style={{ display:'flex', gap:8, marginTop:4 }}>
             <button onClick={onClose} disabled={saving} style={{ flex:1, padding:'11px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'1px solid '+T.line, background:'transparent', fontWeight:600, fontSize:13 }}>Prekliči</button>
             <button onClick={handleRefund} disabled={saving || refundAmount <= 0} style={{ flex:2, padding:'11px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'none', background: refundAmount > 0 ? T.accent : T.line, color:'#fff', fontWeight:700, fontSize:13 }}>
-              {saving ? 'Shranjujem...' : `↩️ Vrni €${refundAmount.toFixed(2)}`}
+              {saving ? 'Shranjujem…' : `↩️ Vrni ${eur(refundAmount)}`}
             </button>
           </div>
         </>)}
