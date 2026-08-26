@@ -1,5 +1,5 @@
 {
-  "skupaj": 341,
+  "skupaj": 347,
   "poDatotekah": {
     "baza.spec.ts": 13,
     "blagajna.spec.ts": 30,
@@ -10,7 +10,7 @@
     "racunko.spec.ts": 5,
     "sandbox.spec.ts": 2,
     "skener.spec.ts": 14,
-    "ujemanje.spec.ts": 181
+    "ujemanje.spec.ts": 187
   },
   "datum": "2026-08-26"
 }

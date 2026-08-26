@@ -1959,9 +1959,9 @@ test('storno: predmet brez številke se ne izpiše', () => {
  * opozorila. Najpogostejši vzrok ni tatvina, ampak znesek v napačnem polju.
  */
 function zahtevaPotrditev(pricakovano: number, presteto: number) {
-  const razlika = presteto - pricakovano
-  const meja = Math.max(20, pricakovano * 0.05)
-  return Math.abs(razlika) > meja
+  // POPRAVLJENO (26.8.2026): prej `max(20, 5 %)` — pri veliki blagajni je to
+  // delovalo narobe obrnjeno. Napake pri štetju so absolutne, ne odstotne.
+  return Math.abs(presteto - pricakovano) > 20
 }
 
 test('zaključek: manjko cele blagajne zahteva potrditev', () => {
@@ -1972,10 +1972,17 @@ test('zaključek: nekaj centov razlike ne moti', () => {
   expect(zahtevaPotrditev(898.40, 898.35)).toBe(false)
 })
 
-test('zaključek: meja je vsaj 20 € tudi pri majhni blagajni', () => {
-  // Pri 50 € v blagajni bi 5 % pomenilo 2,50 € — preveč občutljivo.
-  expect(zahtevaPotrditev(50, 40)).toBe(false)
-  expect(zahtevaPotrditev(50, 20)).toBe(true)
+test('zaključek: meja je enaka pri majhni in veliki blagajni', () => {
+  expect(zahtevaPotrditev(50, 40)).toBe(false)      // 10 € razlike
+  expect(zahtevaPotrditev(50, 20)).toBe(true)       // 30 € razlike
+})
+
+test('zaključek: velika blagajna ne dobi ohlapnejše meje', () => {
+  // NAPAKA (popravljeno 26.8.2026): pri 5 % je bil prag pri 2.000 € kar
+  // 100 € — manjko 90 € bi šel tiho skozi. Napačno presteti bankovec za
+  // 50 € je 50 €, ne glede na to, koliko je v blagajni.
+  expect(zahtevaPotrditev(2000, 1910)).toBe(true)   // 90 € manjka
+  expect(zahtevaPotrditev(2000, 1985)).toBe(false)  // 15 € je še znotraj
 })
 
 // ─── Oznaka načina plačila povsod ───────────────────────────────────────
@@ -2170,4 +2177,59 @@ test('graf: brez animacije se izriše ob prvem nalaganju', () => {
 test('graf: z animacijo je bil odvisen od ponovnega izrisa', () => {
   expect(serijaSeIzrise(true, true, false)).toBe(false)
   expect(serijaSeIzrise(true, true, true)).toBe(true)
+})
+
+// ─── Odklep blagajne preživi ponovno nalaganje ──────────────────────────
+
+/**
+ * NAPAKA (popravljeno 26.8.2026): `locked` se je vedno začel kot `true` in
+ * odklep se ni nikamor shranil. Vsako nalaganje strani je blagajnika vrglo
+ * na zaslon za PIN — tudi sredi izmene, ob kliku na „Na voljo je nova
+ * različica · Osveži". Vsaka objava je prekinila delo za pultom.
+ */
+function odklepPoNalaganju(zapis: { staffId: string; ob: number } | null, samodejnoZaklepanje: number, zdaj: number) {
+  if (!zapis) return { odklenjen: false, razlog: 'ni zapisa' }
+  if (samodejnoZaklepanje > 0 && zdaj - zapis.ob > samodejnoZaklepanje) {
+    return { odklenjen: false, razlog: 'potekel' }
+  }
+  return { odklenjen: true }
+}
+
+test('odklep: preživi ponovno nalaganje sredi izmene', () => {
+  const r = odklepPoNalaganju({ staffId: 's1', ob: 1_000_000 }, 0, 1_000_060_000)
+  expect(r.odklenjen).toBe(true)
+})
+
+test('odklep: samodejno zaklepanje ga vseeno prekine', () => {
+  // Brez tega bi shranjen odklep obšel samodejno zaklepanje.
+  const petMinut = 5 * 60 * 1000
+  const r = odklepPoNalaganju({ staffId: 's1', ob: 0 }, petMinut, petMinut + 1)
+  expect(r.odklenjen).toBe(false)
+  expect(r.razlog).toBe('potekel')
+})
+
+test('odklep: brez zapisa ostane zaklenjeno', () => {
+  expect(odklepPoNalaganju(null, 0, Date.now()).odklenjen).toBe(false)
+})
+
+// ─── Gotovinska vračila na Z-poročilu ───────────────────────────────────
+
+/**
+ * NAPAKA (popravljeno 26.8.2026): izpis je od pričakovane gotovine odšteval
+ * VSA vračila, tudi kartična, izračun pa samo gotovinska. Pri kartičnem
+ * vračilu se vrstice niso izšle.
+ */
+function pricakovanaGotovina(zacetna: number, gotovinskiRacuni: number, gotovinskaVracila: number) {
+  return zacetna + gotovinskiRacuni - gotovinskaVracila
+}
+
+test('Z-poročilo: kartično vračilo ne zmanjša pričakovane gotovine', () => {
+  const zacetna = 100, gotovina = 50
+  const vracila = { gotovinska: 0, karticna: 30 }
+  const pricakovano = pricakovanaGotovina(zacetna, gotovina, vracila.gotovinska)
+  expect(pricakovano).toBe(150)   // prej bi izpis kazal 120
+})
+
+test('Z-poročilo: gotovinsko vračilo jo zmanjša', () => {
+  expect(pricakovanaGotovina(100, 50, 30)).toBe(120)
 })

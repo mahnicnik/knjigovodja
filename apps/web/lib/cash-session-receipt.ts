@@ -296,10 +296,14 @@ export function buildXReportReceipt(params: {
       <span>+ Gotov. računi:</span>
       <span>${eur(stats.cash)}</span>
     </div>
-    ${stats.refundTotal > 0 ? `
+    ${/* POPRAVLJENO (26.8.2026): odstevala so se VSA vracila, tudi karticna,
+          pricakovana gotovina pa se racuna SAMO iz gotovinskih. Pri karticnem
+          vracilu se vrstice niso izsle: zacetna + gotovinski racuni minus
+          izpisano vracilo ni dalo pricakovanega zneska. */''}
+    ${(stats.cashRefundTotal ?? stats.refundTotal) > 0 ? `
     <div class="row sub">
-      <span>− Vračila:</span>
-      <span>${eur(stats.refundTotal)}</span>
+      <span>− Gotov. vračila:</span>
+      <span>${eur(stats.cashRefundTotal ?? stats.refundTotal)}</span>
     </div>
     ` : ''}
     <div class="dline"></div>
@@ -451,10 +455,14 @@ export function buildZReportReceipt(params: {
       <span>+ Gotov. računi:</span>
       <span>${eur(stats.cash)}</span>
     </div>
-    ${stats.refundTotal > 0 ? `
+    ${/* POPRAVLJENO (26.8.2026): odstevala so se VSA vracila, tudi karticna,
+          pricakovana gotovina pa se racuna SAMO iz gotovinskih. Pri karticnem
+          vracilu se vrstice niso izsle: zacetna + gotovinski racuni minus
+          izpisano vracilo ni dalo pricakovanega zneska. */''}
+    ${(stats.cashRefundTotal ?? stats.refundTotal) > 0 ? `
     <div class="row sub">
-      <span>− Vračila:</span>
-      <span>${eur(stats.refundTotal)}</span>
+      <span>− Gotov. vračila:</span>
+      <span>${eur(stats.cashRefundTotal ?? stats.refundTotal)}</span>
     </div>
     ` : ''}
     <div class="dline"></div>

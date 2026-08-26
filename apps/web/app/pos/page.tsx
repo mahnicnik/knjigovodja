@@ -378,6 +378,19 @@ function setActiveDevice(d) {
 // ================================================================
 function useAuthState(autoLockMs = 60000) {
   const [user, setUser] = useState(null)
+
+  /**
+   * ODKLEP PREZIVI PONOVNO NALAGANJE (26.8.2026).
+   *
+   * Prej se je `locked` vedno zacel kot `true`, odklep pa se ni nikamor
+   * shranil. Vsako ponovno nalaganje strani je blagajnika vrglo na zaslon za
+   * PIN - tudi sredi izmene, ob kliku na "Na voljo je nova razlicica · Osvezi".
+   * Vsaka objava je torej prekinila delo za pultom.
+   *
+   * Odklep hranimo v `sessionStorage`, ne v `localStorage`: velja SAMO za ta
+   * zavihek in izgine ob zaprtju. Zraven hranimo cas, da odklep po
+   * `pos_autolock` vseeno potece - sicer bi obsel samodejno zaklepanje.
+   */
   const [locked, setLocked] = useState(true)
   const [autoLock, setAutoLock] = useState(() => {
     if (typeof window === 'undefined') return autoLockMs
@@ -395,7 +408,10 @@ function useAuthState(autoLockMs = 60000) {
   useEffect(() => {
     if (autoLock === 0) return
     const t = setInterval(() => {
-      if (!locked && Date.now() - lastActivity.current > autoLock) setLocked(true)
+      if (!locked && Date.now() - lastActivity.current > autoLock) {
+        setLocked(true)
+        try { sessionStorage.removeItem('pos_odklep') } catch {}
+      }
     }, 1000)
     return () => clearInterval(t)
   }, [autoLock, locked])
@@ -406,6 +422,26 @@ function useAuthState(autoLockMs = 60000) {
     return user.permissions || CFG.rolePresets[user.role] || {}
   }, [user])
 
+  // Obnovitev odklepa po ponovnem nalaganju (26.8.2026).
+  React.useEffect(() => {
+    try {
+      const zapis = sessionStorage.getItem('pos_odklep')
+      if (!zapis) return
+      const { staffId, ob } = JSON.parse(zapis)
+      // Ce je samodejno zaklepanje vklopljeno, spostujemo njegov cas.
+      if (autoLock > 0 && Date.now() - Number(ob) > autoLock) {
+        sessionStorage.removeItem('pos_odklep'); return
+      }
+      // `useAuthState` osebja ne pozna, zato ga naloziimo neposredno.
+      createClient().from('staff').select('*').eq('id', staffId).eq('active', true)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) { setUser(data); setLocked(false); lastActivity.current = Date.now() }
+          else { try { sessionStorage.removeItem('pos_odklep') } catch {} }
+        })
+    } catch { /* pokvarjen zapis - ostanemo zaklenjeni */ }
+  }, [])
+
   async function unlock(pin) {
     try {
       // DB PIN login (edina pot po odstranitvi master PIN - 24.7.2026, audit K4)
@@ -414,6 +450,9 @@ function useAuthState(autoLockMs = 60000) {
         setUser(staff)
         setLocked(false)
         lastActivity.current = Date.now()
+        try {
+          sessionStorage.setItem('pos_odklep', JSON.stringify({ staffId: staff.id, ob: Date.now() }))
+        } catch { /* brez shrambe deluje kot prej */ }
         return true
       }
       return false
@@ -423,7 +462,10 @@ function useAuthState(autoLockMs = 60000) {
     }
   }
 
-  function lock() { setLocked(true) }
+  function lock() {
+    setLocked(true)
+    try { sessionStorage.removeItem('pos_odklep') } catch {}
+  }
 
   function saveAutoLock(ms) {
     setAutoLock(ms)
@@ -6499,7 +6541,13 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
     // (pri preizkusu 898,40 EUR) tako hitro, kot bi jo zakljucil pravilno -
     // brez enega samega opozorila. Najpogostejsi vzrok ni tatvina, ampak
     // znesek, vpisan v napacno polje.
-    const mejaOpozorila = Math.max(20, expected * 0.05)
+    // POPRAVLJENO (26.8.2026): meja je bila `max(20, 5 % pricakovanega)`, kar
+    // je pri veliki blagajni delovalo NAROBE OBRNJENO: pri 2.000 EUR je bil
+    // prag 100 EUR, torej bi manjko 90 EUR sel tiho skozi.
+    //
+    // Napake pri stetju so ABSOLUTNE, ne odstotne - napacno presteti bankovec
+    // za 50 EUR je 50 EUR ne glede na velikost blagajne. Zato ravna meja.
+    const mejaOpozorila = 20
     if (Math.abs(difference) > mejaOpozorila) {
       const smer = difference < 0 ? 'MANJKO' : 'VIŠEK'
       if (!confirm(

@@ -58,6 +58,7 @@ export interface SessionStats {
   // VRAČILA
   refundCount: number
   refundTotal: number
+  cashRefundTotal: number
 
   // DDV (bruto razdelitev po stopnji)
   vatBase22: number
@@ -305,6 +306,11 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
     orderCount: (orders || []).length,
     tips,
     refundCount, refundTotal,
+    // DODANO (26.8.2026): SAMO gotovinska vracila. Izpis Z-porocila je od
+    // pricakovane gotovine odsteval VSA vracila (tudi karticna), izracun
+    // `cashExpected` pa samo gotovinska - vrstice se pri karticnem vracilu
+    // niso izsle.
+    cashRefundTotal,
     vatBase22, vat22, vatBase95, vat95, vatBase0, vatBaseOther,
     cashExpected,
   }
