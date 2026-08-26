@@ -2411,3 +2411,55 @@ test('DDV: vračilo je ne razveljavi', () => {
   // Račun ostane izdan; brez dobropisa DDV ostane obračunan.
   expect(ddvPoDogodku('vracilo', 1.74)).toBe(1.74)
 })
+
+// ─── ZOI in EOR v podrobnostih računa ───────────────────────────────────
+
+/**
+ * DODANO (26.8.2026): v podrobnostih računa je bil viden samo EOR. ZOI se je
+ * hranil in tiskal na račun, na zaslonu pa ga ni bilo.
+ *
+ * Ob nadzoru FURS preverja OBA: EOR potrjuje prijavo pri davčnem organu,
+ * ZOI pa je zaščitna oznaka izdajatelja — in edina, ki jo je mogoče preveriti
+ * brez povezave.
+ */
+function oznakeNaZaslonu(p: { furs_eor?: string; furs_zoi?: string }) {
+  const o: string[] = []
+  if (p.furs_eor) o.push('EOR')
+  if (p.furs_zoi) o.push('ZOI')
+  return o
+}
+
+test('račun: prikazana sta EOR in ZOI', () => {
+  const o = oznakeNaZaslonu({ furs_eor: '9999ce32-97de', furs_zoi: '3b51b377' })
+  expect(o).toEqual(['EOR', 'ZOI'])
+})
+
+test('račun: brez fiskalizacije ni oznak', () => {
+  expect(oznakeNaZaslonu({})).toHaveLength(0)
+})
+
+/**
+ * Iskanje po obeh oznakah — ob nadzoru inšpektor navede eno ali drugo.
+ */
+function najdi(racuni: Array<{ stevilka: number; eor?: string; zoi?: string }>, iskano: string) {
+  const q = iskano.toLowerCase()
+  return racuni.filter(r =>
+    String(r.stevilka).includes(iskano)
+    || (r.eor || '').toLowerCase().includes(q)
+    || (r.zoi || '').toLowerCase().includes(q))
+}
+
+test('iskanje: po ZOI se račun najde', () => {
+  const r = [{ stevilka: 31, eor: '9999ce32', zoi: '3b51b377' }]
+  expect(najdi(r, '3b51b')).toHaveLength(1)
+})
+
+test('iskanje: po EOR še vedno deluje', () => {
+  const r = [{ stevilka: 31, eor: '9999ce32', zoi: '3b51b377' }]
+  expect(najdi(r, '9999ce')).toHaveLength(1)
+})
+
+test('iskanje: po številki še vedno deluje', () => {
+  const r = [{ stevilka: 31, eor: '9999ce32', zoi: '3b51b377' }]
+  expect(najdi(r, '31')).toHaveLength(1)
+})

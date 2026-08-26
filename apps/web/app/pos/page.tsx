@@ -7999,6 +7999,9 @@ function buildRefundReceiptHTML({ order, refundAmount, reason, cashierName }) {
 }
 
 function OrdersScreen({ posData, auth }) {
+  // Odziv ob kopiranju oznak (26.8.2026). `OrdersScreen` nima obvestil, zato
+  // ga pokazemo kar na elementu samem.
+  const [kopirano, setKopirano] = React.useState<string | null>(null)
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedOrder, setSelectedOrder] = useState(null)
@@ -8111,10 +8114,16 @@ function OrdersScreen({ posData, auth }) {
 
   useEffect(() => { if(period !== 'custom') loadOrders() }, [period])
 
-  const filtered = orders.filter(o =>
-    !search || String(o.number).includes(search) ||
-    (o.payments?.[0]?.furs_eor || '').toLowerCase().includes(search.toLowerCase())
-  )
+  // DODANO (26.8.2026): iskanje tudi po ZOI. Ob nadzoru inspektor navede eno
+  // ali drugo oznako; prej je bilo mogoce iskati samo po EOR.
+  const filtered = orders.filter(o => {
+    if (!search) return true
+    const q = search.toLowerCase()
+    const p = o.payments?.[0]
+    return String(o.number).includes(search)
+      || (p?.furs_eor || '').toLowerCase().includes(q)
+      || (p?.furs_zoi || '').toLowerCase().includes(q)
+  })
 
   // POPRAVLJENO (16.8.2026): vsota je vstevala tudi STORNIRANE racune, zato je
   // stevec nad seznamom kazal promet, ki ga v resnici ni bilo. Zakljucek blagajne
@@ -8365,7 +8374,7 @@ function OrdersScreen({ posData, auth }) {
           </div>
         </div>
         <div style={{ padding:'10px 16px', borderBottom:'1px solid '+T.line, display:'flex', gap:10, alignItems:'center' }}>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Išči po številki ali EOR..." style={{ flex:1, padding:'7px 10px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:12, background:T.inputBg, outline:'none' }}/>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Išči po številki, EOR ali ZOI…" style={{ flex:1, padding:'7px 10px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:12, background:T.inputBg, outline:'none' }}/>
           <div style={{ fontSize:12, color:T.muted, whiteSpace:'nowrap' }}>
             {filtered.length} računov · €{totalFiltered.toFixed(2)}
             {stStorniranih > 0 && <span style={{ color:T.danger }}> · {stStorniranih} storn.</span>}
@@ -8644,10 +8653,42 @@ function OrdersScreen({ posData, auth }) {
               {orderPayment?.furs_eor && (
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:10, color:T.muted, fontWeight:700, textTransform:'uppercase' }}>EOR (FURS)</div>
-                  <div style={{ fontWeight:600, fontSize:11, fontFamily:'monospace', overflow:'hidden', textOverflow:'ellipsis' }}>{orderPayment.furs_eor}</div>
+                  <div onClick={() => { navigator.clipboard?.writeText(orderPayment.furs_eor); setKopirano('eor'); setTimeout(()=>setKopirano(null), 1500) }}
+                    title="Klikni za kopiranje"
+                    style={{ fontWeight:600, fontSize:11, fontFamily:'monospace', overflow:'hidden', textOverflow:'ellipsis', cursor:'pointer' }}>
+                    {kopirano === 'eor' ? '✓ kopirano' : orderPayment.furs_eor}
+                  </div>
                 </div>
               )}
             </div>
+
+            {/* Oznake STORNA (26.8.2026): storniran racun ima SVOJ ZOI in EOR,
+                ki sta prav tako davcna podatka - v podrobnostih ju ni bilo. */}
+            {selectedOrder.void_furs_eor && (
+              <div style={{ marginBottom:12, padding:'8px 10px', borderRadius:8, background:'rgba(168,50,50,0.06)' }}>
+                <div style={{ fontSize:10, color:T.danger, fontWeight:700, textTransform:'uppercase', marginBottom:2 }}>Storno — EOR / ZOI</div>
+                <div style={{ fontSize:11, fontFamily:'monospace', wordBreak:'break-all', lineHeight:1.4 }}>
+                  {selectedOrder.void_furs_eor}
+                  {selectedOrder.void_furs_zoi && <><br/>{selectedOrder.void_furs_zoi}</>}
+                </div>
+              </div>
+            )}
+
+            {/* DODANO (26.8.2026): ZOI se je hranil in tiskal na racun, v
+                podrobnostih racuna pa ga ni bilo - viden je bil samo EOR.
+                Ob nadzoru FURS preverja OBA: EOR potrjuje prijavo, ZOI pa je
+                zascitna oznaka izdajatelja in edina, ki jo je mogoce preveriti
+                brez povezave. Klik kopira, ker se ob nadzoru prepisuje rocno. */}
+            {orderPayment?.furs_zoi && (
+              <div style={{ marginBottom:12, padding:'8px 10px', borderRadius:8, background:T.inputBg }}>
+                <div style={{ fontSize:10, color:T.muted, fontWeight:700, textTransform:'uppercase', marginBottom:2 }}>ZOI (zaščitna oznaka)</div>
+                <div onClick={() => { navigator.clipboard?.writeText(orderPayment.furs_zoi); setKopirano('zoi'); setTimeout(()=>setKopirano(null), 1500) }}
+                  title="Klikni za kopiranje"
+                  style={{ fontWeight:600, fontSize:11, fontFamily:'monospace', wordBreak:'break-all', cursor:'pointer', lineHeight:1.4 }}>
+                  {kopirano === 'zoi' ? '✓ kopirano' : orderPayment.furs_zoi}
+                </div>
+              </div>
+            )}
             {/* Artikli */}
             <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', marginBottom:8 }}>ARTIKLI</div>
             <table style={{ width:'100%', borderCollapse:'collapse' }}>
