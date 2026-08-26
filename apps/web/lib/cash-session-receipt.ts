@@ -420,6 +420,13 @@ export function buildZReportReceipt(params: {
     <div style="height:4px"></div>
     <div class="row sub"><span>Število:</span><span>${stats.refundCount}</span></div>
     <div class="row sub"><span>Skupaj:</span><span>${eur(stats.refundTotal)}</span></div>
+    ${/* POJASNILO (26.8.2026): vracilo je PREMIK DENARJA, ne davcni dokument -
+         ne gre na FURS in ne dobi ZOI ne EOR. Zato NE zmanjsa obracuna DDV:
+         izdani racun ostane v veljavi in DDV od njega ostane obracunan.
+         Za znizanje DDV je treba izdati STORNO (dobropis), ki se fiskalizira
+         in ima svojo stevilko - tak racun je iz obracuna DDV izlocen.
+         Brez tega pojasnila je videti, kot da se poroCilo ne izide. */''}
+    <div class="row sub" style="font-size:9px;opacity:.75">Vračila ne znižajo obračuna DDV — za to je potreben storno.</div>
     ` : ''}
 
     ${(stats.vatBase22 + stats.vatBase95 + (stats.vatBase0 || 0) + (stats.vatBaseOther || 0)) > 0 ? `

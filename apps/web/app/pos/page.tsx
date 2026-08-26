@@ -6749,7 +6749,11 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
           <div style={{ background:T.surface, borderRadius:8, padding:'10px 12px', fontSize:12 }}>
             <div style={{ display:'flex', justifyContent:'space-between' }}><span>Začetna:</span><span>{eur(Number(session.cash_opening))}</span></div>
             <div style={{ display:'flex', justifyContent:'space-between' }}><span>+ Gotovinski računi:</span><span>{eur(stats.cash)}</span></div>
-            {stats.refundTotal > 0 && <div style={{ display:'flex', justifyContent:'space-between' }}><span>− Vračila:</span><span>{eur(stats.refundTotal)}</span></div>}
+            {/* POPRAVLJENO (26.8.2026): prelet 122 je popravil IZPIS Z-porocila,
+                to okno pa ne - tu se je od pricakovane gotovine se vedno
+                odstevalo VSA vracila, tudi karticna. Pri karticnem vracilu se
+                stevilke na zaslonu niso izsle. */}
+            {(stats.cashRefundTotal ?? stats.refundTotal) > 0 && <div style={{ display:'flex', justifyContent:'space-between' }}><span>− Gotov. vračila:</span><span>{eur(stats.cashRefundTotal ?? stats.refundTotal)}</span></div>}
             <div style={{ display:'flex', justifyContent:'space-between', fontWeight:700, borderTop:'1px solid '+T.line, marginTop:6, paddingTop:6 }}>
               <span>Pričakovano v blagajni:</span><span>{eur(expected)}</span>
             </div>
@@ -6926,6 +6930,13 @@ function ZReportModal({ posData, onClose }) {
       .sort((a, b) => b.stopnja - a.stopnja)
 
     const totalRefunds = (refunds || []).reduce((s, r) => s + Number(r.amount || 0), 0)
+    // DODANO (26.8.2026): SAMO gotovinska vracila. Z-porocilo po e-posti je
+    // od gotovine odstevalo vsa vracila, tudi karticna - stevilke se pri
+    // karticnem vracilu niso izsle. Zapisi brez metode stejemo kot gotovinske,
+    // kar je najbolj konservativna izbira.
+    const cashRefunds = (refunds || [])
+      .filter((r: any) => r.method === 'cash' || !r.method)
+      .reduce((s: number, r: any) => s + Number(r.amount || 0), 0)
     const totalRevenue = cash + card + bon + other
 
     setData({
@@ -6933,7 +6944,7 @@ function ZReportModal({ posData, onClose }) {
       orderCount: ords.length,
       cash, card, bon, other, tips,
       totalRevenue,
-      totalRefunds,
+      totalRefunds, cashRefunds,
       netRevenue: totalRevenue - totalRefunds,
       ddvPoStopnjah,
       zacetekIzmene: zacetekIzmene.toISOString(),
@@ -7072,7 +7083,8 @@ function ZReportModal({ posData, onClose }) {
 </div>
 <div style="border-top:2px solid #000;padding-top:10px;margin-bottom:12px">
   <div style="display:flex;justify-content:space-between"><span>Skupni promet:</span><span>${d.totalRevenue.toFixed(2)} €</span></div>
-  <div style="display:flex;justify-content:space-between"><span>Vračila:</span><span>-${d.totalRefunds.toFixed(2)} €</span></div>
+  <div style="display:flex;justify-content:space-between"><span>Gotov. vračila:</span><span>-${(d.cashRefunds ?? d.totalRefunds).toFixed(2)} €</span></div>
+  ${d.totalRefunds > (d.cashRefunds ?? d.totalRefunds) ? `<div style="display:flex;justify-content:space-between;font-size:11px;opacity:.75"><span>Negotovinska vračila:</span><span>-${(d.totalRefunds - (d.cashRefunds ?? 0)).toFixed(2)} €</span></div>` : ''}
   <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:14px"><span>NETO PROMET:</span><span>${d.netRevenue.toFixed(2)} €</span></div>
   <div style="display:flex;justify-content:space-between"><span>Število računov:</span><span>${d.orderCount}</span></div>
   <div style="display:flex;justify-content:space-between"><span>Napitnine:</span><span>${d.tips.toFixed(2)} €</span></div>
@@ -7801,6 +7813,14 @@ function RefundModal({ order, lines, payment, auth, onClose, onRefunded }) {
           ) : (
             <div>
               <div style={{ fontSize:12, fontWeight:600, marginBottom:6 }}>Znesek vračila (€)</div>
+              {/* POJASNILO (26.8.2026): vracilo je premik denarja, ne davcni
+                  dokument - izdani racun ostane v veljavi in DDV od njega tudi.
+                  Za znizanje DDV je treba izdati STORNO. Brez tega bi kdo
+                  uporabil vracilo tam, kjer je potreben storno. */}
+              <div style={{ fontSize:11, color:T.muted, marginBottom:8, lineHeight:1.5 }}>
+                Vračilo <strong>ne razveljavi računa</strong> in ne zniža DDV — je le
+                izplačilo iz blagajne. Če želite račun razveljaviti, uporabite <strong>Storno</strong>.
+              </div>
               <input
                 type="number" onFocus={e => e.target.select()} min="0.01" step="0.01" max={order.total}
                 value={customAmount}

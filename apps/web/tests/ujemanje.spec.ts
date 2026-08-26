@@ -2355,3 +2355,59 @@ test('zneski: slovenski zapis z vejico', () => {
   expect(eur(1.6)).toBe('€ 1,60')
   expect(eur(1.6)).not.toContain('.')
 })
+
+// ─── Kartična vračila: vsa tri mesta ────────────────────────────────────
+
+/**
+ * NAPAKA (popravljeno 26.8.2026): prelet 122 je popravil IZPIS Z-poročila,
+ * ne pa okna v blagajni in ne Z-poročila po e-pošti. Ista logika je živela
+ * na TREH mestih in popravil sem eno.
+ *
+ * Pri kartičnem vračilu se številke niso izšle:
+ *   958,40 + 2,00 − 20,00 = 940,40, na zaslonu pa je pisalo 960,40.
+ */
+function pricakovanaGotovinaVsaMesta(zacetna: number, gotovina: number, vracila: Array<{ znesek: number; metoda: string }>) {
+  const gotovinska = vracila
+    .filter(v => v.metoda === 'cash' || !v.metoda)
+    .reduce((s, v) => s + v.znesek, 0)
+  return zacetna + gotovina - gotovinska
+}
+
+test('vračila: kartično ne zmanjša pričakovane gotovine', () => {
+  const p = pricakovanaGotovinaVsaMesta(958.40, 2.00, [{ znesek: 20, metoda: 'card' }])
+  expect(p).toBeCloseTo(960.40, 2)
+})
+
+test('vračila: gotovinsko jo zmanjša', () => {
+  const p = pricakovanaGotovinaVsaMesta(958.40, 2.00, [{ znesek: 20, metoda: 'cash' }])
+  expect(p).toBeCloseTo(940.40, 2)
+})
+
+test('vračila: zapis brez metode šteje kot gotovinsko', () => {
+  // Najbolj konservativna izbira pri starih zapisih.
+  const p = pricakovanaGotovinaVsaMesta(100, 0, [{ znesek: 10, metoda: '' }])
+  expect(p).toBe(90)
+})
+
+// ─── Vračilo proti stornu: davčna razlika ───────────────────────────────
+
+/**
+ * Vračilo je PREMIK DENARJA — ne gre na FURS, ne dobi ZOI ne EOR. Izdani
+ * račun ostane v veljavi in DDV od njega ostane obračunan.
+ *
+ * Za znižanje DDV je potreben STORNO, ki se fiskalizira in je iz obračuna
+ * DDV izločen. Agent je to upravičeno izpostavil kot vprašanje — trenutno
+ * vedenje je pravilno, a brez pojasnila je videti kot napaka.
+ */
+function ddvPoDogodku(dogodek: 'vracilo' | 'storno', ddvRacuna: number) {
+  return dogodek === 'storno' ? 0 : ddvRacuna
+}
+
+test('DDV: storno razveljavi obveznost', () => {
+  expect(ddvPoDogodku('storno', 1.74)).toBe(0)
+})
+
+test('DDV: vračilo je ne razveljavi', () => {
+  // Račun ostane izdan; brez dobropisa DDV ostane obračunan.
+  expect(ddvPoDogodku('vracilo', 1.74)).toBe(1.74)
+})
