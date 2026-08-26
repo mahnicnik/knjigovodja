@@ -1838,28 +1838,6 @@ test('zgodovina: obrok kaže svoj znesek, ne 0 €', () => {
   expect(znesekVZgodovini([{ amount: 45 }], 45)).toBe(45)
 })
 
-// ─── PIN blagajne ───────────────────────────────────────────────────────
-
-function pinVeljaven(pin: string) {
-  return /^\d{4,6}$/.test(pin) && !/^(\d)\1+$/.test(pin)
-}
-
-test('PIN: enoznakovni ni dovoljen', () => {
-  // V bazi je bil PIN dolg ENO števko — deset možnih kombinacij.
-  expect(pinVeljaven('1')).toBe(false)
-  expect(pinVeljaven('123')).toBe(false)
-})
-
-test('PIN: štiri do šest števk je v redu', () => {
-  expect(pinVeljaven('1234')).toBe(true)
-  expect(pinVeljaven('928471')).toBe(true)
-})
-
-test('PIN: same enake števke niso dovoljene', () => {
-  expect(pinVeljaven('1111')).toBe(false)
-  expect(pinVeljaven('000000')).toBe(false)
-})
-
 // ─── Zakonske novosti iz pravega vira ───────────────────────────────────
 
 /**
@@ -1998,4 +1976,62 @@ test('zaključek: meja je vsaj 20 € tudi pri majhni blagajni', () => {
   // Pri 50 € v blagajni bi 5 % pomenilo 2,50 € — preveč občutljivo.
   expect(zahtevaPotrditev(50, 40)).toBe(false)
   expect(zahtevaPotrditev(50, 20)).toBe(true)
+})
+
+// ─── Oznaka načina plačila povsod ───────────────────────────────────────
+
+/**
+ * `pkg` je bil dodan na račun (prelet 110), v SEZNAMU računov pa ne — tam je
+ * oznaka ostala prazna.
+ */
+const OZNAKE_SEZNAM: Record<string, string> = {
+  cash: 'Gotovina', card: 'Kartica', bon: 'Bon',
+  prep: 'Predplačilo', split: 'Deljeno', pkg: 'Karta obiskov', invoice: 'Račun',
+}
+
+test('seznam računov: karta obiskov ima oznako', () => {
+  expect(OZNAKE_SEZNAM['pkg']).toBe('Karta obiskov')
+})
+
+test('seznam računov: vsi načini imajo oznako', () => {
+  for (const m of ['cash', 'card', 'bon', 'prep', 'split', 'pkg', 'invoice']) {
+    expect(OZNAKE_SEZNAM[m], `manjka oznaka za ${m}`).toBeTruthy()
+  }
+})
+
+// ─── PIN blagajne: dolžina je NAMERNO kratka ────────────────────────────
+
+/**
+ * PIN ima 1–4 mesta. To je NAMERNA odločitev (19.8.2026, prej 4-6):
+ *
+ * Do blagajne se pride SAMO iz prijavljene seje — `/pos` ni javna pot. PIN
+ * torej ni zapora proti internetu, ampak ločevanje med osebjem za pultom,
+ * kjer sta hitrost in vnos z eno roko pomembnejša od dolžine.
+ *
+ * Poskus zaostritve na 4 mesta (25.8.2026) je bil vrnjen. Ta test obstaja,
+ * da se to ne ponovi po nesreči.
+ */
+function pinVeljaven(pin: string) {
+  const p = String(pin).trim()
+  return /^\d{1,4}$/.test(p) && !/^(\d)\1+$/.test(p)
+}
+
+test('PIN: ena števka je dovoljena — to ni napaka', () => {
+  expect(pinVeljaven('1')).toBe(true)
+  expect(pinVeljaven('9')).toBe(true)
+})
+
+test('PIN: dve do štiri števke so dovoljene', () => {
+  expect(pinVeljaven('27')).toBe(true)
+  expect(pinVeljaven('2468')).toBe(true)
+})
+
+test('PIN: pet števk je preveč', () => {
+  expect(pinVeljaven('12345')).toBe(false)
+})
+
+test('PIN: same enake števke ostanejo zavrnjene', () => {
+  // Edina omejitev, ki je bila tu že prej.
+  expect(pinVeljaven('1111')).toBe(false)
+  expect(pinVeljaven('22')).toBe(false)
 })

@@ -507,11 +507,10 @@ function PrvaNastavitev({ imePodjetja, onKoncano }) {
     if (!ime.trim()) { setNapaka('Vnesite svoje ime.'); return }
     // POPRAVLJENO (19.8.2026): dolzina PIN-a je zdaj 1-4 (prej 4-6).
     if (!/^\d{1,4}$/.test(pin)) { setNapaka('PIN mora imeti od 1 do 4 številke.'); return }
-    // DODANO (25.8.2026): dolzina PIN-a se NI preverjala - shranil se je tudi
-    // enoznakovni, cetudi zaslon kaze stiri pike. Blagajno je odklenila ena
-    // stevka, kar pomeni deset moznih PIN-ov.
-    if (!/^\d{4,6}$/.test(pin)) { setNapaka('PIN mora imeti od 4 do 6 števk.'); return }
-    if (/^(\d)\1+$/.test(pin)) { setNapaka('PIN ne sme biti sestavljen iz istih števk.'); return }
+    // OPOMBA (25.8.2026): tu sem zaostril pravilo na 4-6 stevk in ga takoj
+    // VRNIL. Dolzina 1-4 je NAMERNA (glej spremembo 19.8.2026): do blagajne se
+    // pride samo iz prijavljene seje, zato PIN ni zapora proti internetu,
+    // ampak locevanje med osebjem za pultom.
     if (pin !== pin2) { setNapaka('PIN-a se ne ujemata.'); return }
     if (/^(\d)\1+$/.test(pin)) { setNapaka('PIN naj ne bo sestavljen iz enakih številk (npr. 1111).'); return }
     setShranjujem(true)
@@ -7938,7 +7937,9 @@ function OrdersScreen({ posData, auth }) {
       d.getDate() === now.getDate()
   }
 
-  const METHOD_LABELS = { cash:'Gotovina', card:'Kartica', bon:'Bon', prep:'Predplačilo', split:'Deljeno' }
+  // POPRAVLJENO (25.8.2026): `pkg` in `invoice` v seznamu nista bila - oznaka
+  // nacina placila je bila prazna. Na racunu je bila ze popravljena (110), tu ne.
+  const METHOD_LABELS = { cash:'Gotovina', card:'Kartica', bon:'Bon', prep:'Predplačilo', split:'Deljeno', pkg:'Karta obiskov', invoice:'Račun' }
 
   async function loadOrders() {
     setLoading(true)
@@ -9606,6 +9607,10 @@ function StaffSection({ posData }) {
     // ujela sele baza in vrnila surovo anglesko napako
     // ("duplicate key value violates unique constraint idx_staff_pin"), ki
     // uporabniku ne pove nicesar.
+    // PIN je namenoma kratek (1-4 mesta): do blagajne se pride SAMO iz
+    // prijavljene seje - `/pos` ni javna pot. PIN torej ni zapora proti
+    // internetu, ampak locevanje med osebjem za pultom, kjer sta hitrost in
+    // vnos z eno roko pomembnejsa od dolzine.
     if (!/^\d{1,4}$/.test(String(modal.pin).trim())) { showToast('PIN mora imeti od 1 do 4 številke', false); return }
     if (/^(\d)\1+$/.test(String(modal.pin).trim())) { showToast('PIN naj ne bo sestavljen iz enakih številk', false); return }
     const zaseden = (posData.staffList || []).some((o: any) => String(o.pin) === String(modal.pin).trim() && o.id !== modal.id)

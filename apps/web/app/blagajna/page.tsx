@@ -179,7 +179,7 @@ ${receipt.vat22 > 0 ? `<div class="row"><span>DDV 22%</span><span>€${formatEur
 ${receipt.vat95 > 0 ? `<div class="row"><span>DDV 9.5%</span><span>€${formatEurNumber(receipt.vat95)}</span></div>` : ''}
 <div class="line"></div>
 <div class="row total"><span>SKUPAJ</span><span>€${formatEurNumber(receipt.total)}</span></div>
-<div class="row"><span>${receipt.paymentMethod === 'cash' ? 'Gotovina' : 'Kartica'}</span><span>€${formatEurNumber(receipt.total)}</span></div>
+<div class="row"><span>${({ cash:'Gotovina', card:'Kartica', bon:'Bon', prep:'Predplačilo', pkg:'Karta obiskov', invoice:'Račun' }[receipt.paymentMethod] || 'Kartica')}</span><span>€${formatEurNumber(receipt.total)}</span></div>
 ${receipt.change > 0 ? `<div class="row"><span>Vračilo</span><span>€${formatEurNumber(receipt.change)}</span></div>` : ''}
 <div class="line"></div>
 <div class="center" style="font-size:10px">Hvala za obisk!</div>
