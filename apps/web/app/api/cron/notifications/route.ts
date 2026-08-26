@@ -50,7 +50,10 @@ export async function GET(req: NextRequest) {
         if (mem?.org_id) {
           const { data: o } = await supabase
             .from('organizations')
-            .select('name, tax_number, iban, bic, email')
+            // POPRAVLJENO (26.8.2026): izbor ni imel `phone`, zato je SAMODEJNI
+            // opomnik pisal "Oglasite se pri nas" brez stevilke - pri rocnem
+            // posiljanju iz blagajne je bilo pravilno, tu pa ne.
+            .select('name, tax_number, iban, bic, email, phone')
             .eq('id', mem.org_id)
             .maybeSingle()
           orgForBiz = o
