@@ -697,13 +697,23 @@ export default function DashboardPage() {
   }, [data.yearRevenue, data.taxSystem, month])
 
   /* ============ COMPUTED: ONBOARDING CHECKLIST ============ */
-  const [dismissedSteps, setDismissedSteps] = useState<number[]>(() => {
-    try { return JSON.parse(localStorage.getItem('rk_dismissed_steps') || '[]') } catch { return [] }
-  })
+  // POPRAVLJENO (26.8.2026): kljuc ni bil vezan na ORGANIZACIJO - opusceni
+  // koraki so se prenesli na vsako naslednjo. Nova organizacija je zacela brez
+  // uvodnih korakov, ki jih ni nikoli videla.
+  const [dismissedSteps, setDismissedSteps] = useState<number[]>([])
+
+  useEffect(() => {
+    if (!org?.id) return
+    try {
+      setDismissedSteps(JSON.parse(localStorage.getItem(`rk_dismissed_steps_${org.id}`) || '[]'))
+    } catch { setDismissedSteps([]) }
+    try { localStorage.removeItem('rk_dismissed_steps') } catch {}
+  }, [org?.id])
+
   function dismissStep(id: number) {
     const next = [...dismissedSteps, id]
     setDismissedSteps(next)
-    localStorage.setItem('rk_dismissed_steps', JSON.stringify(next))
+    if (org?.id) localStorage.setItem(`rk_dismissed_steps_${org.id}`, JSON.stringify(next))
   }
 
   const onboardingSteps = useMemo(() => {

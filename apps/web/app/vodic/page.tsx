@@ -406,7 +406,14 @@ export default function VodicPage() {
   const now = new Date()
   const month = now.getMonth()
   const year = now.getFullYear()
-  const storageKey = `vodic_${year}_${month}`
+  // POPRAVLJENO (26.8.2026): kljuc ni bil vezan na ORGANIZACIJO - napredek se
+  // je hranil pod `vodic_2026_7` za vse. Po brisanju ene organizacije in
+  // ustvarjanju druge v istem brskalniku je nov profil podedoval stanje
+  // starega: vodic je ob PRVEM odprtju kazal vse opravljeno.
+  //
+  // Drugod so kljuci ze vezani na organizacijo (`rokovnik_done_${org.id}`),
+  // vodic je bil edina izjema.
+  const storageKey = org?.id ? `vodic_${org.id}_${year}_${month}` : `vodic_nalagam_${year}_${month}`
 
   useEffect(() => { load() }, [])
 
@@ -416,8 +423,11 @@ export default function VodicPage() {
 
     const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
 
+    // `o` potrebujemo TUDI nize (za kljuc napredka), zato ga deklariramo
+    // izven pogoja (26.8.2026).
+    let o: any = null
     if (member) {
-      const o = (member as any).organizations
+      o = (member as any).organizations
       setOrg(o)
     }
 
@@ -431,38 +441,55 @@ export default function VodicPage() {
     // POPRAVLJENO (17.8.2026): branje iz shrambe brskalnika brez varovalke -
     // pokvarjen zapis bi podrl celotno stran. Zdaj se ob napaki obnasa, kot da
     // profila ni, in ponudi ponovno nastavitev.
-    const savedProfile = localStorage.getItem('vodic_profile')
+    const kljucProfila = o?.id ? `vodic_profile_${o.id}` : 'vodic_profile'
+    const savedProfile = localStorage.getItem(kljucProfila)
     let profilPrebran = false
     if (savedProfile) {
       try { setProfile(JSON.parse(savedProfile)); profilPrebran = true }
-      catch { localStorage.removeItem('vodic_profile') }
+      catch { localStorage.removeItem(kljucProfila) }
     }
     if (profilPrebran) {
       // profil je nalozen
     } else if (prefs?.onboarding_answers) {
       const derived = onboardingToProfile(prefs.onboarding_answers)
       setProfile(derived)
-      localStorage.setItem('vodic_profile', JSON.stringify(derived))
+      localStorage.setItem(kljucProfila, JSON.stringify(derived))
     } else {
       setShowProfileSetup(true)
     }
 
-    const savedProgress = localStorage.getItem(storageKey)
-    if (savedProgress) {
-      try { setCompleted(new Set(JSON.parse(savedProgress))) }
-      catch { localStorage.removeItem(storageKey) }
+    // Kljuc sestavimo iz `o.id` NEPOSREDNO: `org` v stanju tu se ni
+    // posodobljen, zato bi `storageKey` uporabil nadomestno vrednost.
+    const kljuc = o?.id ? `vodic_${o.id}_${year}_${month}` : null
+
+    if (kljuc) {
+      const savedProgress = localStorage.getItem(kljuc)
+      if (savedProgress) {
+        try { setCompleted(new Set(JSON.parse(savedProgress))) }
+        catch { localStorage.removeItem(kljuc) }
+      }
+      const savedChecks = localStorage.getItem(`${kljuc}_checks`)
+      if (savedChecks) {
+        try { setCheckedItems(new Set(JSON.parse(savedChecks))) }
+        catch { localStorage.removeItem(`${kljuc}_checks`) }
+      }
     }
 
-    const savedChecks = localStorage.getItem(`${storageKey}_checks`)
-    if (savedChecks) {
-      try { setCheckedItems(new Set(JSON.parse(savedChecks))) }
-      catch { localStorage.removeItem(`${storageKey}_checks`) }
-    }
+    // Enkratno ciscenje starih skupnih kljucev - prav ti so vzrok, da je nov
+    // profil podedoval napredek prejsnjega.
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i)
+        if (k && (/^vodic_\d{4}_\d{1,2}(_checks)?$/.test(k) || k === 'vodic_profile')) {
+          localStorage.removeItem(k)
+        }
+      }
+    } catch { /* brez shrambe ni kaj cistiti */ }
     setLoading(false)
   }
 
   function saveProfile(p: Profile) {
-    localStorage.setItem('vodic_profile', JSON.stringify(p))
+    localStorage.setItem(org?.id ? `vodic_profile_${org.id}` : 'vodic_profile', JSON.stringify(p))
     setProfile(p)
     setShowProfileSetup(false)
   }

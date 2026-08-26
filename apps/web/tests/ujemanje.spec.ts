@@ -2683,3 +2683,53 @@ test('uvodni koraki: nobeden ni trdo zapisan', () => {
   expect(korakBlagajna(stanje.prostorov, stanje.naprav)).toBe(true)
   expect(korakRacunovodja(stanje.vloge)).toBe(true)
 })
+
+// ─── Napredek v brskalniku je vezan na organizacijo ─────────────────────
+
+/**
+ * NAPAKA (popravljeno 26.8.2026): mesečni vodič je hranil napredek pod
+ * ključem `vodic_2026_7` — brez organizacije. Ob preklopu med organizacijami
+ * (ali po brisanju ene in ustvarjanju druge v istem brskalniku) je NOV profil
+ * podedoval stanje starega: vodič je ob PRVEM odprtju kazal vse opravljeno.
+ *
+ * Drugod so ključi že bili vezani na organizacijo — vodič je bil izjema.
+ */
+function kljucNapredka(orgId: string | null, leto: number, mesec: number) {
+  return orgId ? `vodic_${orgId}_${leto}_${mesec}` : `vodic_nalagam_${leto}_${mesec}`
+}
+
+test('vodič: napredek je ločen po organizacijah', () => {
+  const a = kljucNapredka('org-a', 2026, 7)
+  const b = kljucNapredka('org-b', 2026, 7)
+  expect(a).not.toBe(b)
+})
+
+test('vodič: brez organizacije se ne bere tujega napredka', () => {
+  const k = kljucNapredka(null, 2026, 7)
+  expect(k).not.toBe('vodic_2026_7')     // stari, skupni ključ
+  expect(k).toContain('nalagam')
+})
+
+/**
+ * Stari skupni ključi se ob prvem obisku počistijo — prav ti so vzrok, da je
+ * nov profil podedoval napredek prejšnjega.
+ */
+function jeStarKljuc(k: string) {
+  return /^vodic_\d{4}_\d{1,2}(_checks)?$/.test(k) || k === 'vodic_profile'
+}
+
+test('vodič: stari skupni ključi se prepoznajo', () => {
+  expect(jeStarKljuc('vodic_2026_7')).toBe(true)
+  expect(jeStarKljuc('vodic_2026_7_checks')).toBe(true)
+  expect(jeStarKljuc('vodic_profile')).toBe(true)
+})
+
+test('vodič: novi ključi se NE počistijo', () => {
+  expect(jeStarKljuc('vodic_org-a_2026_7')).toBe(false)
+  expect(jeStarKljuc('vodic_profile_org-a')).toBe(false)
+})
+
+test('dashboard: opuščeni koraki so ločeni po organizacijah', () => {
+  const k = (org: string) => `rk_dismissed_steps_${org}`
+  expect(k('org-a')).not.toBe(k('org-b'))
+})
