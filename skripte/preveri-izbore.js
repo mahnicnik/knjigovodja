@@ -161,6 +161,22 @@ for (const dat of najdiDatoteke(path.join(KOREN, 'apps', 'web'))) {
   }
 }
 
+// ─── Trdo zapisani identifikatorji ─────────────────────────────────────
+//  Aplikacija je vecuporabniska. Trdo zapisan UUID pomeni, da nekaj deluje
+//  SAMO za eno organizacijo - 26.8.2026 je bila taka ponovna oddaja na FURS,
+//  ki je vsakemu drugemu uporabniku vracala "nimate pravic".
+for (const dat of najdiDatoteke(path.join(KOREN, 'apps', 'web'))) {
+  const vsebina = fs.readFileSync(dat, 'utf8')
+  const rel = dat.replace(KOREN + '/', '')
+  const rx = /['"]([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})['"]/g
+  let m
+  while ((m = rx.exec(vsebina)) !== null) {
+    if (/^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(m[1])) continue   // nicelni je vzorec
+    const vrstica = vsebina.slice(0, m.index).split('\n').length
+    napake.push(`${rel}:${vrstica}  trdo zapisan identifikator "${m[1]}" — aplikacija je večuporabniška`)
+  }
+}
+
 // ─── Izpis ─────────────────────────────────────────────────────────────
 console.log('\n═══ PREVERBA IZBOROV IN STOLPCEV ═══\n')
 

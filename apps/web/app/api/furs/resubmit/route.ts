@@ -8,7 +8,12 @@ import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/a
 
 export const maxDuration = 300 // dolg zaporeden postopek
 
-const ORG_ID = '1d406efe-58d0-4573-8679-d9f666fce964'
+// ODSTRANJENO (26.8.2026): tu je bil TRDO ZAPISAN identifikator ene same
+// organizacije. Ponovna oddaja na FURS je zato delovala SAMO zanjo - vsak
+// drug uporabnik aplikacije je dobil zavrnitev "nimate pravic", cetudi je bil
+// lastnik svoje organizacije s svojim certifikatom.
+//
+// Organizacijo zdaj dolocimo iz PRIJAVLJENE SEJE, tako kot povsod drugod.
 
 // POPRAVLJENO (17.8.2026): funkcija je uporabljala `req`, a ga ni prejela kot
 // parameter (ReferenceError ob vsakem klicu -> ponovna oddaja na FURS je bila
@@ -24,8 +29,10 @@ async function assertOwner(req: NextRequest) {
   if (!user) return null
   const { orgId: __orgId, role: __role } = await resolveActiveOrgId(supabase, user.id, getRequestedOrgId(req))
     const member = __orgId ? { org_id: __orgId, role: __role } : null // vec-org podpora (30.7.2026)
-  if (!member || member.org_id !== ORG_ID) return null
-  return user
+  // Lastnik SVOJE organizacije - ne ene same vnaprej dolocene.
+  if (!member?.org_id) return null
+  if (member.role && !['owner', 'lastnik', 'admin'].includes(String(member.role).toLowerCase())) return null
+  return { user, orgId: member.org_id }
 }
 
 /**
@@ -39,8 +46,9 @@ async function assertOwner(req: NextRequest) {
  * - dryRun=false: zaporedno posiljanje s porocilom; pravi EOR se zapise v payments
  */
 export async function POST(req: NextRequest) {
-  const user = await assertOwner(req)
-  if (!user) return NextResponse.json({ error: 'Ni dostopa' }, { status: 401 })
+  const dostop = await assertOwner(req)
+  if (!dostop) return NextResponse.json({ error: 'Ni dostopa' }, { status: 401 })
+  const ORG_ID = dostop.orgId   // organizacija PRIJAVLJENEGA uporabnika
 
   const body = await req.json().catch(() => ({}))
   const dryRun: boolean = body.dryRun !== false // privzeto TRUE (varno)
