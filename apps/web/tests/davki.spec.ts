@@ -511,3 +511,57 @@ test('davčna brez predpone: za FURS in uradne obrazce', () => {
   expect(davcnaBrezPredpone('SI91390419')).toBe('91390419')
   expect(davcnaBrezPredpone('91390419')).toBe('91390419')
 })
+
+// ─── UPN QR za prispevke ────────────────────────────────────────────────
+
+/**
+ * NAPAKA (popravljeno 26.8.2026): zapis je imel 17 polj in NI imel kontrolne
+ * vsote, ki jo standard UPN QR zahteva kot zadnjo vrstico. Za „UPNQR" so
+ * sledile le TRI prazne vrstice namesto štirih, prejemnika pa ni bilo nikjer.
+ *
+ * Banke so kodo zavrnile s sporočilom o napačni strukturi zapisa.
+ *
+ * Računi so imeli pravilno zgradbo in so delovali — stran s prispevki je
+ * uporabljala svojo, ki se je od nje razlikovala.
+ */
+function upnZapis(polja: string[]) {
+  const vsota = polja.reduce((s, f) => s + f.length + 1, 0)
+  return { vrstic: polja.length, zapis: polja.join('\n') + '\n' + String(vsota).padStart(3, '0') }
+}
+
+const POLJA_PRISPEVKI = [
+  'UPNQR', '', '', '', '',
+  'Podjetje s.p.', 'Ulica 1', '1000 Ljubljana',
+  '00000012345', '', '', 'OTHR',
+  'Prispevki za PIZ Avgust 2026', '15.09.2026',
+  'SI56011008882000003', 'SI1991390419-44008',
+  'Finančna uprava Republike Slovenije', 'Gregorčičeva ulica 20', '1000 Ljubljana',
+]
+
+test('UPN QR: zapis ima 19 polj', () => {
+  expect(upnZapis(POLJA_PRISPEVKI).vrstic).toBe(19)
+})
+
+test('UPN QR: za UPNQR sledijo ŠTIRI prazne vrstice', () => {
+  // Prej so bile tri — banka je zaradi tega zamaknila vsa nadaljnja polja.
+  expect(POLJA_PRISPEVKI.slice(1, 5)).toEqual(['', '', '', ''])
+})
+
+test('UPN QR: zadnja vrstica je kontrolna vsota', () => {
+  const { zapis } = upnZapis(POLJA_PRISPEVKI)
+  const zadnja = zapis.split('\n').pop()!
+  expect(zadnja).toMatch(/^\d{3}$/)
+})
+
+test('UPN QR: brez kontrolne vsote banka zavrne', () => {
+  const brez = POLJA_PRISPEVKI.join('\n')
+  expect(brez.split('\n')).toHaveLength(19)          // manjka 20. vrstica
+  expect(upnZapis(POLJA_PRISPEVKI).zapis.split('\n')).toHaveLength(20)
+})
+
+test('UPN QR: prejemnik je izpolnjen', () => {
+  // Pri prispevkih je to vedno FURS; polja so po standardu obvezna.
+  expect(POLJA_PRISPEVKI[16]).toContain('Finančna uprava')
+  expect(POLJA_PRISPEVKI[17]).toBeTruthy()
+  expect(POLJA_PRISPEVKI[18]).toBeTruthy()
+})

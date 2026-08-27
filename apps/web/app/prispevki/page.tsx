@@ -10,34 +10,56 @@ import { formatEurNumber } from '@/lib/format'
 const MONTHS_FULL = ['Januar','Februar','Marec','April','Maj','Junij',
                      'Julij','Avgust','September','Oktober','November','December']
 
+/**
+ * UPN QR za prispevke (popravljeno 26.8.2026).
+ *
+ * NAPAKA: zapis je imel 17 polj in NI imel kontrolne vsote, ki jo standard
+ * UPN QR zahteva kot zadnjo vrstico. Poleg tega je za "UPNQR" sledilo le TRI
+ * prazne vrstice namesto stirih. Banke so kodo zato zavrnile s sporocilom o
+ * napacni strukturi zapisa.
+ *
+ * Racuni so imeli PRAVILNO zgradbo (glej lib/invoice-pdf.tsx) in so delovali -
+ * ta stran je uporabljala svojo, ki se je od nje razlikovala.
+ *
+ * Zgradba po standardu (19 polj + kontrolna vsota):
+ *   UPNQR, IBAN placnika, polog, dvig, referenca placnika,
+ *   ime placnika, ulica, kraj, znesek, datum placila, nujno,
+ *   koda namena, namen, rok placila, IBAN prejemnika, referenca prejemnika,
+ *   ime prejemnika, ulica prejemnika, kraj prejemnika
+ */
 function buildUPN(p: {
   payerName: string; payerAddress: string; payerCity: string;
   amount: number; iban: string; reference: string; description: string; dueDate: string;
+  recipientName?: string; recipientAddress?: string; recipientCity?: string;
 }) {
   const amt = Math.round(p.amount * 100).toString().padStart(11, '0')
   const [y, m, d] = p.dueDate.split('-')
-  const due = d + '.' + m + '.' + y
+  const rok = `${d}.${m}.${y}`
   const iban = p.iban.replace(/\s/g, '')
   const ref = p.reference.replace(/\s/g, '')
-  return [
-    'UPNQR',
-    '',
-    '',
-    '',
-    p.payerName,
-    p.payerAddress,
-    p.payerCity,
+
+  const polja = [
+    'UPNQR', '', '', '', '',
+    (p.payerName || '').slice(0, 33),
+    (p.payerAddress || '').slice(0, 33),
+    (p.payerCity || '').slice(0, 33),
     amt,
-    due,
-    'OTHR',
-    p.description,
+    '', '', 'OTHR',
+    (p.description || '').slice(0, 42),
+    rok,
     iban,
     ref,
-    '',
-    '',
-    '',
-  ].join('\n')
+    (p.recipientName || '').slice(0, 33),
+    (p.recipientAddress || '').slice(0, 33),
+    (p.recipientCity || '').slice(0, 33),
+  ]
+
+  // Kontrolna vsota: stevilo znakov vseh polj skupaj z locili. Brez nje
+  // banka javi "napacna struktura zapisa".
+  const vsota = polja.reduce((s, f) => s + f.length + 1, 0)
+  return polja.join('\n') + '\n' + String(vsota).padStart(3, '0')
 }
+
 export default function PrispevkiPage() {
   const [org, setOrg] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -99,7 +121,13 @@ export default function PrispevkiPage() {
     const payer = {
       payerName: org.name || '',
       payerAddress: org.address || '',
-      payerCity: `${org.post_code || ''} ${org.city || ''}`,
+      payerCity: `${org.post_code || ''} ${org.city || ''}`.trim(),
+      // DODANO (26.8.2026): prejemnika prej ni bilo nikjer. Pri prispevkih je
+      // to vedno Financna uprava - polja so po standardu obvezna, brez njih
+      // banka javi napacno strukturo zapisa.
+      recipientName: 'Finančna uprava Republike Slovenije',
+      recipientAddress: 'Gregorčičeva ulica 20',
+      recipientCity: '1000 Ljubljana',
     }
 
     const pizUPN = buildUPN({ ...payer, amount: Number(contrib.piz),
