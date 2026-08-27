@@ -18,6 +18,9 @@ import { WorkStatusBar, ClockInModal } from '@/lib/work-session-components'
 import { getCurrentSession, openSession, getSessionStats, closeSession, getLastCarryOver, type CashSession, type SessionStats } from '@/lib/cash-session'
 import { getActiveMembership } from '@/lib/active-org'
 import { buildOpeningReceipt, buildXReportReceipt, buildZReportReceipt } from '@/lib/cash-session-receipt'
+// POPRAVLJENO (26.8.2026): prelet 136 je uporabil `idZaDdv`, uvoza pa ni
+// dodal. `@ts-nocheck` je napako skril; ujela jo je skripta preveri-stolpce.
+import { idZaDdv } from '@/lib/format'
 
 // ================================================================
 // TEMA
@@ -9736,6 +9739,7 @@ function AdminScreen({ auth, posData }) {
     { id:'categories', label:'Kategorije & Artikli',  icon:'grid'     },
     { id:'storitve',   label:'Storitve & Paketi',      icon:'calendar' },
     { id:'happyhour',  label:'Happy hour',            icon:'happy'    },
+    { id:'rojstni',    label:'Rojstnodnevne čestitke', icon:'users'   },
     { id:'kuhinja',    label:'Kuhinja & display',     icon:'receipt'  },
     { id:'autolock',   label:'Avt. zaklepanje',       icon:'pin'      },
     { id:'furs',       label:'FURS & DDV',            icon:'receipt', ownerOnly:true },
@@ -9760,6 +9764,7 @@ function AdminScreen({ auth, posData }) {
         {section==='spaces'     && <SpacesSection posData={posData}/>}
         {section==='storitve'   && <StoritveInPaketiSection posData={posData}/>}
         {section==='happyhour'  && <HappyHourSection posData={posData}/>}
+        {section==='rojstni'    && <RojstniDneviSection posData={posData}/>}
         {section==='kuhinja'    && <KuhinjaSection posData={posData}/>}
         {section==='autolock'   && <AutolockSection auth={auth}/>}
         {section==='furs'       && <FursSection/>}
@@ -11979,6 +11984,104 @@ function AutolockSection({ auth }) {
 }
 
 // ─── FURS ─────────────────────────────────────────────────────
+/**
+ * ROJSTNODNEVNE ČESTITKE (26.8.2026).
+ *
+ * Cestitka je neposredno trzenje, zato sta pogoja DVA in oba obvezna:
+ * organizacija mora imeti to vklopljeno IN stranka mora imeti privolitev.
+ * Razdelek pokaze, koliko strank bi dejansko prejelo sporocilo - brez tega
+ * bi bilo videti, kot da stikalo ne dela.
+ */
+function RojstniDneviSection({ posData }) {
+  const [vklopljeno, setVklopljeno] = React.useState(false)
+  const [besedilo, setBesedilo] = React.useState('')
+  const [stanje, setStanje] = React.useState({ zRojstnimDnem: 0, sPrivolitvijo: 0, biPrejeli: 0 })
+  const [shranjujem, setShranjujem] = React.useState(false)
+  const [sporocilo, setSporocilo] = React.useState('')
+
+  React.useEffect(() => {
+    ;(async () => {
+      const db = createClient()
+      const orgId = posData?.org?.id
+      if (orgId) {
+        const { data } = await db.from('organizations')
+          .select('birthday_emails_enabled, birthday_email_text').eq('id', orgId).maybeSingle()
+        setVklopljeno(!!data?.birthday_emails_enabled)
+        setBesedilo(data?.birthday_email_text || '')
+      }
+      const { data: str } = await db.from('customers')
+        .select('birth_date, email, marketing_consent')
+        .eq('business_id', BUSINESS_ID).eq('archived', false)
+      const v = str || []
+      setStanje({
+        zRojstnimDnem: v.filter((c: any) => c.birth_date).length,
+        sPrivolitvijo: v.filter((c: any) => c.marketing_consent === true).length,
+        biPrejeli: v.filter((c: any) => c.birth_date && c.email && c.marketing_consent === true).length,
+      })
+    })()
+  }, [posData?.org?.id])
+
+  async function shrani() {
+    const orgId = posData?.org?.id
+    if (!orgId) { setSporocilo('Organizacije ni bilo mogoče določiti.'); return }
+    setShranjujem(true); setSporocilo('')
+    const { error } = await createClient().from('organizations')
+      .update({ birthday_emails_enabled: vklopljeno, birthday_email_text: besedilo || null })
+      .eq('id', orgId)
+    setShranjujem(false)
+    setSporocilo(error ? `Napaka: ${error.message}` : 'Shranjeno.')
+  }
+
+  return (
+    <div style={{ maxWidth:640 }}>
+      <div style={{ fontSize:22, fontWeight:800, marginBottom:6 }}>Rojstnodnevne čestitke</div>
+      <div style={{ fontSize:13, color:T.muted, marginBottom:20, lineHeight:1.6 }}>
+        Stranka prejme čestitko na dan svojega rojstnega dne. Pošlje jo nočno opravilo.
+      </div>
+
+      <label style={{ display:'flex', alignItems:'center', gap:10, padding:'12px 14px', borderRadius:10, border:'1px solid '+T.line, cursor:'pointer', marginBottom:16 }}>
+        <input type="checkbox" checked={vklopljeno} onChange={e=>setVklopljeno(e.target.checked)}/>
+        <span style={{ fontWeight:600, fontSize:14 }}>Pošiljaj rojstnodnevne čestitke</span>
+      </label>
+
+      <div style={{ padding:'12px 14px', borderRadius:10, background:'rgba(184,140,40,0.10)', border:'1px solid rgba(184,140,40,0.25)', marginBottom:16 }}>
+        <div style={{ fontSize:12, fontWeight:700, color:'#8a6a1f', marginBottom:6 }}>Potrebna je privolitev stranke</div>
+        <div style={{ fontSize:11.5, lineHeight:1.6, color:T.ink }}>
+          Čestitka je trženjsko sporočilo. Odide samo strankam, ki imajo pri
+          svojem zapisu potrjeno <strong>privolitev za obveščanje</strong> —
+          ne glede na to stikalo.
+        </div>
+      </div>
+
+      <div style={{ display:'flex', gap:10, marginBottom:18 }}>
+        {[
+          { n: stanje.zRojstnimDnem, l: 'z rojstnim dnem' },
+          { n: stanje.sPrivolitvijo, l: 's privolitvijo' },
+          { n: stanje.biPrejeli,     l: 'bi prejelo čestitko' },
+        ].map(x => (
+          <div key={x.l} style={{ flex:1, padding:'10px 12px', borderRadius:9, background:T.surface3, textAlign:'center' }}>
+            <div style={{ fontSize:20, fontWeight:800, color: x.n > 0 ? T.accent : T.muted }}>{x.n}</div>
+            <div style={{ fontSize:10.5, color:T.muted, marginTop:2 }}>{x.l}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ fontSize:12, fontWeight:600, marginBottom:6 }}>Besedilo čestitke (neobvezno)</div>
+      <textarea value={besedilo} onChange={e=>setBesedilo(e.target.value)} rows={3}
+        placeholder="vse najboljše za rojstni dan! Želimo vam lep dan in se veselimo naslednjega obiska."
+        style={{ width:'100%', padding:'10px 12px', borderRadius:9, border:'1px solid '+T.line, fontSize:13, fontFamily:'inherit', boxSizing:'border-box', resize:'vertical' }}/>
+      <div style={{ fontSize:11, color:T.muted, marginTop:4, marginBottom:16 }}>
+        Sporočilo se začne z imenom stranke. Prazno = privzeto besedilo.
+      </div>
+
+      <button onClick={shrani} disabled={shranjujem} style={{ ...btnP, opacity: shranjujem ? 0.6 : 1 }}>
+        {shranjujem ? 'Shranjujem…' : 'Shrani'}
+      </button>
+      {sporocilo && <span style={{ marginLeft:12, fontSize:12, color: sporocilo.startsWith('Napaka') ? T.danger : T.accent }}>{sporocilo}</span>}
+    </div>
+  )
+}
+
 function FursSection() {
   const [settings, setSettings] = useState({
     autoFurs: true,

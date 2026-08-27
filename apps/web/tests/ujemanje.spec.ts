@@ -2887,3 +2887,68 @@ test('kartica: začetek za koncem je zavrnjen', () => {
   expect(veljavnoObdobje('2026-10-01', '2026-09-01')).toBe(false)
   expect(veljavnoObdobje('2026-09-01', '2026-10-01')).toBe(true)
 })
+
+// ─── Rojstnodnevne čestitke ─────────────────────────────────────────────
+
+/**
+ * DODANO (26.8.2026): stranka prejme čestitko na dan rojstnega dne.
+ *
+ * Čestitka je NEPOSREDNO TRŽENJE, zato sta pogoja dva in oba obvezna:
+ * organizacija mora imeti to vklopljeno IN stranka mora imeti privolitev.
+ */
+function jeRojstniDanDanes(rojstvo: string, danes: Date) {
+  const [, mesec, dan] = rojstvo.split('-').map(Number)
+  const m = danes.getMonth() + 1
+  const d = danes.getDate()
+  if (mesec === m && dan === d) return true
+  if (mesec === 2 && dan === 29 && m === 2 && d === 28) {
+    const l = danes.getFullYear()
+    return !((l % 4 === 0 && l % 100 !== 0) || l % 400 === 0)
+  }
+  return false
+}
+
+test('rojstni dan: ujame se na pravi dan', () => {
+  expect(jeRojstniDanDanes('2000-08-26', new Date('2026-08-26T12:00:00'))).toBe(true)
+  expect(jeRojstniDanDanes('2000-08-25', new Date('2026-08-26T12:00:00'))).toBe(false)
+})
+
+test('rojstni dan: 29. februarja v navadnem letu čestitamo 28.', () => {
+  // Sicer bi ti ljudje čestitko prejeli le vsako četrto leto.
+  expect(jeRojstniDanDanes('2000-02-29', new Date('2026-02-28T12:00:00'))).toBe(true)
+})
+
+test('rojstni dan: v prestopnem letu čestitamo 29., ne 28.', () => {
+  expect(jeRojstniDanDanes('2000-02-29', new Date('2028-02-29T12:00:00'))).toBe(true)
+  expect(jeRojstniDanDanes('2000-02-29', new Date('2028-02-28T12:00:00'))).toBe(false)
+})
+
+/**
+ * Brez privolitve sporočilo NE odide — tudi če je vse ostalo izpolnjeno.
+ */
+function posljemo(o: { vklopljeno: boolean }, s: { email?: string; privolitev?: boolean; letoZadnje?: number }, letos: number) {
+  if (!o.vklopljeno) return false
+  if (s.privolitev !== true) return false
+  if (!s.email) return false
+  if (s.letoZadnje === letos) return false
+  return true
+}
+
+test('čestitka: brez privolitve ne odide', () => {
+  expect(posljemo({ vklopljeno: true }, { email: 'a@b.si', privolitev: false }, 2026)).toBe(false)
+  expect(posljemo({ vklopljeno: true }, { email: 'a@b.si' }, 2026)).toBe(false)
+})
+
+test('čestitka: brez vklopa organizacije ne odide', () => {
+  expect(posljemo({ vklopljeno: false }, { email: 'a@b.si', privolitev: true }, 2026)).toBe(false)
+})
+
+test('čestitka: z obojim odide', () => {
+  expect(posljemo({ vklopljeno: true }, { email: 'a@b.si', privolitev: true }, 2026)).toBe(true)
+})
+
+test('čestitka: drugič isto leto ne odide', () => {
+  // Ponovni tek crona istega dne ne sme poslati drugega sporočila.
+  expect(posljemo({ vklopljeno: true }, { email: 'a@b.si', privolitev: true, letoZadnje: 2026 }, 2026)).toBe(false)
+  expect(posljemo({ vklopljeno: true }, { email: 'a@b.si', privolitev: true, letoZadnje: 2025 }, 2026)).toBe(true)
+})
