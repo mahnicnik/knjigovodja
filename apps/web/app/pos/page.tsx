@@ -6733,7 +6733,9 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
 
   return (
     <Modal open onClose={saving ? undefined : onClose} width={420}>
-      <ModalHeader title="Zaključek blagajne" onClose={onClose}/>
+      {/* Naslov pove, da to okno naredi OBOJE (26.8.2026) - prej je bilo iz
+          imena nemogoce lociti od "Z-poročilo (zaključi izmeno)" v Poročilih. */}
+      <ModalHeader title="Zaključek blagajne — štetje in Z-poročilo" onClose={onClose}/>
       <div style={{ padding:'20px', display:'flex', flexDirection:'column', gap:14 }}>
         {loading ? (
           <div style={{ textAlign:'center', padding:20, color:T.muted }}>Nalagam...</div>
@@ -7121,7 +7123,21 @@ function ZReportModal({ posData, onClose }) {
 
   return (
     <Modal open onClose={onClose} width={480}>
-      <ModalHeader title={`🖨️ Z-poročilo #${reportNumber} — Zaključek izmene`} onClose={onClose}/>
+      {/* POPRAVLJENO (26.8.2026): naslov je pisal "Zaključek izmene", česar to
+          okno ne naredi - ustvari samo davčni obračun. */}
+      <ModalHeader title={`🖨️ Z-poročilo #${reportNumber} — davčni obračun`} onClose={onClose}/>
+
+      {/* Pojasnilo tam, kjer se odločitev sprejme. Brez njega je bilo mogoče
+          zaključek opraviti dvakrat: enkrat tu, enkrat v glavi. */}
+      <div style={{ margin:'0 20px 14px', padding:'10px 12px', borderRadius:8, background:'rgba(184,140,40,0.10)', border:'1px solid rgba(184,140,40,0.25)' }}>
+        <div style={{ fontSize:12, fontWeight:700, color:'#8a6a1f', marginBottom:3 }}>To ni zaključek blagajne</div>
+        <div style={{ fontSize:11.5, color:T.ink, lineHeight:1.55 }}>
+          Nastane samo <strong>davčni obračun</strong> prometa in DDV. Gotovina se
+          ne prešteje, razlika se ne izračuna in prenos v naslednjo izmeno se ne
+          predlaga. Za dnevni zaključek uporabite <strong>🔒 Zaključi</strong> v
+          glavi blagajne — ta naredi oboje.
+        </div>
+      </div>
       <div style={{ padding:'20px 22px', maxHeight:'80vh', overflowY:'auto' }}>
         {loading ? (
           <div style={{ padding:40, textAlign:'center', color:T.muted }}>Nalagam podatke...</div>
@@ -9395,7 +9411,12 @@ function ReportsScreen({ posData, auth, setScreen }) {
             <KI name="calendar" size={13}/> Spremeni obdobje
           </button>
           <button onClick={()=>setShowZReport(true)} style={{ ...btnP, display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
-            <KI name="print" size={13}/> Z-poročilo (zaključi izmeno)
+            {/* POPRAVLJENO (26.8.2026): pisalo je "(zaključi izmeno)", česar ta
+                gumb NE naredi - ustvari samo Z-poročilo (davčni obračun prometa
+                in DDV). Denarne izmene ne zapre, gotovine ne prešteje in
+                prenosa v naslednjo izmeno ne predlaga. To naredi "🔒 Zaključi"
+                v glavi blagajne. */}
+            <KI name="print" size={13}/> Z-poročilo (samo obračun)
           </button>
         </div>
       </div>

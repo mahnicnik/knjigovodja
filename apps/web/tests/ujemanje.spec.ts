@@ -2773,3 +2773,58 @@ test('marža: brez nabavne cene ni rezultata', () => {
   expect(marza(0, 3.00, 22)).toBe(100)   // nabavna 0 pomeni 100 % marže
   expect(marza(1.00, 0, 22)).toBeNull()  // brez prodajne cene ni marže
 })
+
+// ─── Ločevanje Z-poročila od zaključka blagajne ─────────────────────────
+
+/**
+ * NAPAKA (popravljeno 26.8.2026): gumb v Poročilih je pisal
+ * „Z-poročilo (zaključi izmeno)", česar NE naredi — ustvari samo davčni
+ * obračun. Denarne izmene ne zapre, gotovine ne prešteje, prenosa ne predlaga.
+ *
+ * Napis je obljubljal več, kot naredi, zato je bilo mogoče zaključek opraviti
+ * dvakrat, ne da bi bilo jasno, zakaj.
+ */
+type Pot = 'porocila' | 'glava'
+
+function kajNaredi(pot: Pot) {
+  return {
+    zPorocilo: true,                    // obe poti ustvarita Z-poročilo
+    zapreIzmeno: pot === 'glava',
+    prestejeGotovino: pot === 'glava',
+    predlagaPrenos: pot === 'glava',
+  }
+}
+
+test('Z-poročilo: obe poti ustvarita davčni obračun', () => {
+  expect(kajNaredi('porocila').zPorocilo).toBe(true)
+  expect(kajNaredi('glava').zPorocilo).toBe(true)
+})
+
+test('Z-poročilo: samo pot iz glave zapre izmeno', () => {
+  expect(kajNaredi('porocila').zapreIzmeno).toBe(false)
+  expect(kajNaredi('glava').zapreIzmeno).toBe(true)
+})
+
+test('Z-poročilo: samo pot iz glave prešteje gotovino', () => {
+  expect(kajNaredi('porocila').prestejeGotovino).toBe(false)
+  expect(kajNaredi('glava').prestejeGotovino).toBe(true)
+})
+
+/**
+ * Napis mora ustrezati temu, kar gumb naredi.
+ */
+function napis(pot: Pot) {
+  return pot === 'porocila'
+    ? 'Z-poročilo (samo obračun)'
+    : 'Zaključek blagajne — štetje in Z-poročilo'
+}
+
+test('napisi: nobeden ne obljublja več, kot naredi', () => {
+  expect(napis('porocila')).not.toContain('zaključi')
+  expect(napis('porocila')).toContain('samo obračun')
+  expect(napis('glava')).toContain('štetje')
+})
+
+test('napisi: poti sta razločljivi', () => {
+  expect(napis('porocila')).not.toBe(napis('glava'))
+})
