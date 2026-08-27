@@ -2733,3 +2733,43 @@ test('dashboard: opuščeni koraki so ločeni po organizacijah', () => {
   const k = (org: string) => `rk_dismissed_steps_${org}`
   expect(k('org-a')).not.toBe(k('org-b'))
 })
+
+// ─── Marža v zalogi ─────────────────────────────────────────────────────
+
+/**
+ * NAPAKA (popravljeno 26.8.2026): marža je primerjala BRUTO prodajno ceno z
+ * NETO nabavno. Prodajna cena v blagajni je z DDV, nabavna iz dobavnice pa
+ * brez njega — marža je bila prikazana VIŠJA, kot je v resnici.
+ */
+function marza(nabavna: number, prodajnaZDdv: number, stopnja: number) {
+  const prodajnaNeto = stopnja > 0 ? prodajnaZDdv / (1 + stopnja / 100) : prodajnaZDdv
+  if (!(prodajnaNeto > 0)) return null
+  return Math.round((prodajnaNeto - nabavna) / prodajnaNeto * 100)
+}
+
+test('marža: primerja neto z neto', () => {
+  // Pivo: nabavna 1,00 brez DDV, prodajna 3,00 z DDV pri 22 %.
+  expect(marza(1.00, 3.00, 22)).toBe(59)
+})
+
+test('marža: stara formula je dajala previsoko vrednost', () => {
+  const staro = Math.round((3.00 - 1.00) / 3.00 * 100)
+  expect(staro).toBe(67)
+  expect(staro).toBeGreaterThan(marza(1.00, 3.00, 22)!)   // 8 odstotnih točk
+})
+
+test('marža: pri oproščenem artiklu ni preračuna', () => {
+  // Pri 0 % je prodajna cena že neto.
+  expect(marza(30, 50, 0)).toBe(40)
+})
+
+test('marža: 9,5 % da drugačen rezultat kot 22 %', () => {
+  const a = marza(1.00, 3.00, 9.5)!
+  const b = marza(1.00, 3.00, 22)!
+  expect(a).toBeGreaterThan(b)   // nižji DDV → več ostane prodajalcu
+})
+
+test('marža: brez nabavne cene ni rezultata', () => {
+  expect(marza(0, 3.00, 22)).toBe(100)   // nabavna 0 pomeni 100 % marže
+  expect(marza(1.00, 0, 22)).toBeNull()  // brez prodajne cene ni marže
+})

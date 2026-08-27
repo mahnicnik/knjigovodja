@@ -5330,9 +5330,25 @@ function InventoryScreen({ posData }) {
     posData.refresh()
   }
 
+  /**
+   * MARZA (popravljeno 26.8.2026).
+   *
+   * NAPAKA: primerjala je BRUTO prodajno ceno z NETO nabavno. Prodajna cena
+   * v blagajni je z DDV, nabavna iz dobavnice pa brez njega - marza je bila
+   * zato prikazana VISJA, kot je v resnici.
+   *
+   * Pivo z nabavno 1,00 in prodajno 3,00 pri 22 %:
+   *   prej:     (3,00 - 1,00) / 3,00 = 67 %
+   *   pravilno: (2,46 - 1,00) / 2,46 = 59 %
+   *
+   * Osem odstotnih tock razlike - dovolj, da se pri odlocitvi o ceni zmotis.
+   */
   const margin = (item) => {
     if (!item.cost_price || !item.price) return null
-    return ((item.price - item.cost_price) / item.price * 100).toFixed(0)
+    const stopnja = Number(item.vat_rate ?? 22)
+    const prodajnaNeto = stopnja > 0 ? Number(item.price) / (1 + stopnja / 100) : Number(item.price)
+    if (!(prodajnaNeto > 0)) return null
+    return ((prodajnaNeto - Number(item.cost_price)) / prodajnaNeto * 100).toFixed(0)
   }
 
 
