@@ -6057,7 +6057,8 @@ function InventoryScreen({ posData }) {
                   <select value={itemModal?.vat_rate??''} onChange={e=>setItemModal(p=>({...p,vat_rate:e.target.value}))} style={inp}>
                     <option value="">— izberi DDV —</option>
                     <option value={0}>0% (oproščeno)</option>
-                    <option value={9.5}>9.5% (hrana, pijača)</option>
+                    <option value={5}>5% (knjige, časopisi)</option>
+                    <option value={9.5}>9.5% (gostinstvo, šport)</option>
                     <option value={22}>22% (splošna)</option>
                   </select>
                 </Field>
@@ -10101,6 +10102,7 @@ function CenikImportModal({ onClose, posData }) {
                   <select value={it.vat_rate} onChange={e => updateItem(i, 'vat_rate', Number(e.target.value))} style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '4px 2px', fontSize: 12 }}>
                     <option value={22}>22%</option>
                     <option value={9.5}>9.5%</option>
+                    <option value={5}>5%</option>
                     <option value={0}>0%</option>
                   </select>
                   <button onClick={() => removeItem(i)} style={{ background: 'none', border: 0, color: '#aaa', cursor: 'pointer', fontSize: 16 }}>×</button>
@@ -10379,7 +10381,8 @@ function CatalogSection({ posData }) {
                 style={{ ...inp, border: (itemModal?.vat_rate===undefined||itemModal?.vat_rate==='')?'1.5px solid '+T.warn:inp.border }}>
                 <option value="">— izberi DDV —</option>
                 <option value={0}>0% (oproščeno)</option>
-                <option value={9.5}>9.5% (hrana, pijača)</option>
+                <option value={5}>5% (knjige, časopisi)</option>
+                <option value={9.5}>9.5% (gostinstvo, šport)</option>
                 <option value={22}>22% (splošna)</option>
               </select>
             </Field>
@@ -11027,8 +11030,9 @@ function PackagesAdminSection({ posData, modal, setModal }) {
             </Field>
             <Field label="DDV stopnja *">
               <select value={modal?.vat_rate??22} onChange={e=>setModal(p=>({...p,vat_rate:e.target.value}))} style={inp}>
-                <option value={0}>0% (bon, kuponi)</option>
-                <option value={9.5}>9.5% (storitve)</option>
+                <option value={0}>0% (oproščeno)</option>
+                <option value={5}>5% (knjige, časopisi)</option>
+                <option value={9.5}>9.5% (gostinstvo, šport)</option>
                 <option value={22}>22% (splošna)</option>
               </select>
             </Field>
@@ -12100,10 +12104,17 @@ function FursSection() {
       {/* DDV stopnje info */}
       <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:20 }}>
         <div style={{ fontWeight:700, fontSize:14, marginBottom:14 }}>DDV stopnje (Slovenia)</div>
+        {/* POPRAVLJENO (26.8.2026): opisi so bili napacni prav pri dejavnostih,
+            za katere se aplikacija uporablja.
+              - "fitnes" je bil naveden pri 22 % — uporaba sportnih objektov je 9,5 %
+              - "fizioterapija" je bila pri 22 % — zdravstvene storitve so OPROSCENE
+              - manjkala je 5 % stopnja (knjige, casopisi)
+              - 9,5 % je pisalo "hrana za s seboj", kar izpusti gostinske storitve */}
         {[
-          { rate:'0%', label:'Oproščeno', desc:'Boni, vrednostni kuponi, finančne storitve', color:'#64748b' },
-          { rate:'9,5%', label:'Nižja stopnja', desc:'Hrana in pijača (za s seboj), hotelske storitve, kulturne prireditve', color:'#3a6e8f' },
-          { rate:'22%', label:'Splošna stopnja', desc:'Večina storitev in blaga — fitnes, fizioterapija, oblačila...', color:'#1f6b3a' },
+          { rate:'0%', label:'Oproščeno', desc:'Zdravstvene storitve (fizioterapija, masaža po 42. členu), izobraževanje, boni in vrednostni kuponi', color:'#64748b' },
+          { rate:'5%', label:'Posebno nižja', desc:'Knjige, časopisi in periodične publikacije', color:'#8f6e3a' },
+          { rate:'9,5%', label:'Nižja stopnja', desc:'Gostinske storitve, hrana in brezalkoholne pijače, uporaba športnih objektov (samostojna vadba), nastanitev', color:'#3a6e8f' },
+          { rate:'22%', label:'Splošna stopnja', desc:'Alkoholne pijače, vodena vadba in osebno trenerstvo, blago, večina drugih storitev', color:'#1f6b3a' },
         ].map(d => (
           <div key={d.rate} style={{ display:'flex', alignItems:'center', gap:14, padding:'10px 0', borderBottom:'1px solid '+T.lineSoft }}>
             <div style={{ width:48, textAlign:'center', fontWeight:800, fontSize:16, color:d.color, fontVariantNumeric:'tabular-nums' }}>{d.rate}</div>

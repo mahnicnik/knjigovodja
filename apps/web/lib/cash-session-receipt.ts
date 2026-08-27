@@ -313,7 +313,7 @@ export function buildXReportReceipt(params: {
       <span>${eur(stats.cashExpected)}</span>
     </div>
 
-    ${(stats.vatBase22 + stats.vatBase95 + (stats.vatBase0 || 0) + (stats.vatBaseOther || 0)) > 0 ? `
+    ${(stats.vatBase22 + stats.vatBase95 + (stats.vatBase5 || 0) + (stats.vatBase0 || 0) + (stats.vatBaseOther || 0)) > 0 ? `
     <div class="line"></div>
     <div class="section">OBRAČUN DDV</div>
     <div style="height:4px"></div>
@@ -327,6 +327,10 @@ export function buildXReportReceipt(params: {
     ` : ''}
     ${(stats.vatBaseOther || 0) > 0 ? `
     <div class="row sub"><span>Druge stopnje — osnova:</span><span>${eur(stats.vatBaseOther)}</span></div>
+    ` : ''}
+    ${(stats.vatBase5 || 0) > 0 ? `
+    <div class="row sub"><span>Osnova 5%:</span><span>${eur(stats.vatBase5)}</span></div>
+    <div class="row sub"><span>DDV 5%:</span><span>${eur(stats.vat5)}</span></div>
     ` : ''}
     ${stats.vatBase95 > 0 ? `
     <div class="row sub"><span>Osnova 9,5%:</span><span>${eur(stats.vatBase95)}</span></div>
@@ -430,7 +434,7 @@ export function buildZReportReceipt(params: {
     <div class="row sub" style="font-size:9px;opacity:.75">Vračila ne znižajo obračuna DDV — za to je potreben storno.</div>
     ` : ''}
 
-    ${(stats.vatBase22 + stats.vatBase95 + (stats.vatBase0 || 0) + (stats.vatBaseOther || 0)) > 0 ? `
+    ${(stats.vatBase22 + stats.vatBase95 + (stats.vatBase5 || 0) + (stats.vatBase0 || 0) + (stats.vatBaseOther || 0)) > 0 ? `
     <div class="line"></div>
     <div class="section">OBRAČUN DDV</div>
     <div style="height:4px"></div>
@@ -444,6 +448,10 @@ export function buildZReportReceipt(params: {
     ` : ''}
     ${(stats.vatBaseOther || 0) > 0 ? `
     <div class="row sub"><span>Druge stopnje — osnova:</span><span>${eur(stats.vatBaseOther)}</span></div>
+    ` : ''}
+    ${(stats.vatBase5 || 0) > 0 ? `
+    <div class="row sub"><span>Osnova 5%:</span><span>${eur(stats.vatBase5)}</span></div>
+    <div class="row sub"><span>DDV 5%:</span><span>${eur(stats.vat5)}</span></div>
     ` : ''}
     ${stats.vatBase95 > 0 ? `
     <div class="row sub"><span>Osnova 9,5%:</span><span>${eur(stats.vatBase95)}</span></div>

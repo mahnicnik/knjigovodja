@@ -64,6 +64,8 @@ export interface SessionStats {
   vatBase22: number
   vat22: number
   vatBase95: number
+  vatBase5: number
+  vat5: number
   vat95: number
   vatBase0: number
   vatBaseOther: number
@@ -227,7 +229,7 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
   // Akumulacija
   let cash = 0, card = 0, bon = 0, prep = 0, other = 0, tips = 0
   let cashCount = 0, cardCount = 0, bonCount = 0, prepCount = 0, otherCount = 0
-  let vatBase22 = 0, vat22 = 0, vatBase95 = 0, vat95 = 0
+  let vatBase22 = 0, vat22 = 0, vatBase95 = 0, vat95 = 0, vatBase5 = 0, vat5 = 0
   // R9 (24.7.2026): 0% za nedavcne zavezance + varovalka za nepricakovane
   // stopnje (namesto tihega izginotja iz DDV osnove).
   let vatBase0 = 0, vatBaseOther = 0
@@ -278,6 +280,13 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
         const base = lineTotal / 1.095
         vatBase95 += base
         vat95 += lineTotal - base
+      } else if (rate === 5) {
+        // DODANO (26.8.2026): 5 % stopnja (knjige, casopisi). Prej je pristala
+        // med "druge stopnje", kjer se osnova sicer prikaze, DDV pa se NE
+        // obracuna - Z-porocilo se pri prodaji s to stopnjo ne bi izslo.
+        const base = lineTotal / 1.05
+        vatBase5 += base
+        vat5 += lineTotal - base
       } else if (rate === 0) {
         // Nedavcni zavezanec - cela vrednost je osnova, DDV je 0
         vatBase0 += lineTotal
@@ -311,7 +320,7 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
     // `cashExpected` pa samo gotovinska - vrstice se pri karticnem vracilu
     // niso izsle.
     cashRefundTotal,
-    vatBase22, vat22, vatBase95, vat95, vatBase0, vatBaseOther,
+    vatBase22, vat22, vatBase95, vat95, vatBase5, vat5, vatBase0, vatBaseOther,
     cashExpected,
   }
 }

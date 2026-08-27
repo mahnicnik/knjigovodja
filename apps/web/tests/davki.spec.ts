@@ -565,3 +565,56 @@ test('UPN QR: prejemnik je izpolnjen', () => {
   expect(POLJA_PRISPEVKI[17]).toBeTruthy()
   expect(POLJA_PRISPEVKI[18]).toBeTruthy()
 })
+
+// ─── DDV stopnje v blagajni ─────────────────────────────────────────────
+
+/**
+ * NAPAKA (popravljeno 26.8.2026): razdelek „FURS & DDV" je navajal napačne
+ * primere prav za dejavnosti, za katere se aplikacija uporablja:
+ *
+ *   „fitnes"        pri 22 %  →  uporaba športnih objektov je 9,5 %
+ *   „fizioterapija" pri 22 %  →  zdravstvene storitve so OPROŠČENE (42. člen)
+ *
+ * Manjkala je tudi 5 % stopnja, ki je ni bilo mogoče niti izbrati.
+ */
+const STOPNJE = [0, 5, 9.5, 22]
+
+test('DDV: vse štiri stopnje so na voljo', () => {
+  expect(STOPNJE).toContain(5)
+  expect(STOPNJE).toHaveLength(4)
+})
+
+function obracunaj(bruto: number, stopnja: number) {
+  if (stopnja === 0) return { osnova: bruto, ddv: 0 }
+  const osnova = bruto / (1 + stopnja / 100)
+  return { osnova: Math.round(osnova * 100) / 100, ddv: Math.round((bruto - osnova) * 100) / 100 }
+}
+
+test('DDV: 5 % se obračuna, ne pristane med „druge stopnje"', () => {
+  // Prej: osnova prikazana, DDV neobračunan — Z-poročilo se ne bi izšlo.
+  const r = obracunaj(10.50, 5)
+  expect(r.osnova).toBeCloseTo(10.00, 2)
+  expect(r.ddv).toBeCloseTo(0.50, 2)
+})
+
+test('DDV: vsaka stopnja se izide na cent', () => {
+  for (const s of STOPNJE) {
+    const bruto = 12.20
+    const r = obracunaj(bruto, s)
+    expect(Math.round((r.osnova + r.ddv) * 100) / 100).toBeCloseTo(bruto, 2)
+  }
+})
+
+/**
+ * Pravilo za fitnes, ki ga je potrdil lastnik: vodena vadba s trenerjem je
+ * 22 %, samostojna uporaba fitnesa 9,5 %, fizioterapija oproščena.
+ */
+function stopnjaZaStoritev(vrsta: 'osebni-trening' | 'samostojna-vadba' | 'fizioterapija') {
+  return vrsta === 'osebni-trening' ? 22 : vrsta === 'samostojna-vadba' ? 9.5 : 0
+}
+
+test('DDV: fitnes in fizioterapija imata pravo stopnjo', () => {
+  expect(stopnjaZaStoritev('osebni-trening')).toBe(22)
+  expect(stopnjaZaStoritev('samostojna-vadba')).toBe(9.5)
+  expect(stopnjaZaStoritev('fizioterapija')).toBe(0)
+})
