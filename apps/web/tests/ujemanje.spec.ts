@@ -2828,3 +2828,62 @@ test('napisi: nobeden ne obljublja več, kot naredi', () => {
 test('napisi: poti sta razločljivi', () => {
   expect(napis('porocila')).not.toBe(napis('glava'))
 })
+
+// ─── Začetek veljavnosti kartice ────────────────────────────────────────
+
+/**
+ * DODANO (26.8.2026): prej je bilo mogoče urediti samo „Velja do", začetek pa
+ * se je vedno štel od dneva vnosa. Kartice, ki naj bi začela veljati pozneje
+ * (član gre na dopust, želi začeti prvega v mesecu), ni bilo mogoče vnesti.
+ */
+function izracunajVeljavnost(veljaOd: string, dniVeljavnosti: number | null) {
+  const zacetek = new Date(veljaOd + 'T00:00:00')
+  if (!dniVeljavnosti) return { od: veljaOd, do: null }
+  const konec = new Date(zacetek)
+  konec.setDate(konec.getDate() + dniVeljavnosti)
+  return { od: veljaOd, do: konec.toISOString().slice(0, 10) }
+}
+
+test('kartica: veljavnost se šteje od izbranega začetka', () => {
+  const v = izracunajVeljavnost('2026-09-01', 30)
+  expect(v.od).toBe('2026-09-01')
+  expect(v.do).toBe('2026-10-01')      // prej bi se štelo od danes
+})
+
+test('kartica: brez omejitve dni ni konca', () => {
+  expect(izracunajVeljavnost('2026-09-01', null).do).toBeNull()
+})
+
+/**
+ * Kartica, ki se še ni začela, ni uporabna — sicer bi se ponujala za
+ * unovčenje že danes.
+ */
+function jeUporabna(k: { remaining: number | null; activated_at?: string }, danes: string) {
+  if (k.remaining === null || k.remaining <= 0) return false
+  if (k.activated_at && k.activated_at.slice(0, 10) > danes) return false
+  return true
+}
+
+test('kartica: pred začetkom veljavnosti ni na voljo', () => {
+  expect(jeUporabna({ remaining: 10, activated_at: '2026-09-01' }, '2026-08-26')).toBe(false)
+})
+
+test('kartica: na dan začetka je na voljo', () => {
+  expect(jeUporabna({ remaining: 10, activated_at: '2026-08-26' }, '2026-08-26')).toBe(true)
+})
+
+test('kartica: brez obiskov ni na voljo ne glede na datum', () => {
+  expect(jeUporabna({ remaining: 0, activated_at: '2026-01-01' }, '2026-08-26')).toBe(false)
+})
+
+/**
+ * Začetek ne sme biti za koncem — taka kartica ne bi veljala nikoli.
+ */
+function veljavnoObdobje(od: string, doDne: string) {
+  return od <= doDne
+}
+
+test('kartica: začetek za koncem je zavrnjen', () => {
+  expect(veljavnoObdobje('2026-10-01', '2026-09-01')).toBe(false)
+  expect(veljavnoObdobje('2026-09-01', '2026-10-01')).toBe(true)
+})

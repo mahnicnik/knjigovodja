@@ -823,7 +823,14 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         .order('expires', { ascending: true })
       if (!veljavno) return
       // Samo kartice z OBISKI - clanarine se ne odstevajo po obiskih.
-      const uporabne = (data || []).filter((k: any) => k.remaining !== null && k.remaining > 0)
+      //
+      // DODANO (26.8.2026): kartica, ki se NI zacela veljati, ni uporabna.
+      // Odkar je mogoce vnesti zacetek veljavnosti v prihodnosti, bi se taka
+      // kartica sicer ponujala za unovcenje ze danes.
+      const danes = lokalniDatum(new Date())
+      const uporabne = (data || []).filter((k: any) =>
+        k.remaining !== null && k.remaining > 0
+        && !(k.activated_at && String(k.activated_at).slice(0, 10) > danes))
       setStrankineKartice(uporabne)
       if (uporabne.length === 1) setIzbranaKartica(uporabne[0].id)
 
@@ -13748,6 +13755,10 @@ function ManualAddCardModal({ customer, posData, onClose, onDone }) {
   const [templateId, setTemplateId] = useState('')
   const [reason, setReason] = useState('')
   const [customVisits, setCustomVisits] = useState('')
+  // DODANO (26.8.2026): ZACETEK veljavnosti. Prej se je vedno stelo od danes -
+  // kartice, ki naj bi zacela veljati pozneje (clan gre na dopust, zeli zaceti
+  // prvega v mesecu), ni bilo mogoce vnesti.
+  const [veljaOd, setVeljaOd] = useState(() => lokalniDatum(new Date()))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const tpl = posData.packageTemplates.find(t => t.id === templateId)
@@ -13767,10 +13778,12 @@ function ManualAddCardModal({ customer, posData, onClose, onDone }) {
     if (saving) return
     setSaving(true)
     try {
-      const now = new Date().toISOString()
+      // Veljavnost se steje od IZBRANEGA zacetka, ne od danes (26.8.2026).
+      const zacetek = veljaOd ? new Date(veljaOd + 'T00:00:00') : new Date()
+      const now = zacetek.toISOString()
       let expires = null
       if (tpl.validity_days) {
-        const d = new Date()
+        const d = new Date(zacetek)
         d.setDate(d.getDate() + Number(tpl.validity_days))
         expires = lokalniDatum(d)
       }
@@ -13817,6 +13830,11 @@ function ManualAddCardModal({ customer, posData, onClose, onDone }) {
             <input type="number" onFocus={e => e.target.select()} min={1} value={customVisits} onChange={e=>setCustomVisits(e.target.value)} style={inp}/>
           </Field>
         )}
+        {/* DODANO (26.8.2026): datum zacetka. Veljavnost se steje od tu, ne od
+            danes - tako je mogoce vnesti kartico, ki zacne veljati pozneje. */}
+        <Field label="Velja od">
+          <input type="date" value={veljaOd} onChange={e=>setVeljaOd(e.target.value)} style={inp}/>
+        </Field>
         <Field label="Razlog (obvezno)">
           <input value={reason} onChange={e=>setReason(e.target.value)} placeholder="npr. migracija iz starega sistema" style={inp}/>
         </Field>
@@ -13832,6 +13850,13 @@ function ManualAddCardModal({ customer, posData, onClose, onDone }) {
 
 // ─── Rocno urejanje kartice (Velja od/do, preostali obiski) ────
 function EditPackageModal({ pkg, onClose, onDone }) {
+  // DODANO (26.8.2026): ZACETEK veljavnosti. Prej je bilo mogoce urediti samo
+  // "Velja do" - kartico, ki naj bi zacela veljati pozneje (npr. clan gre na
+  // dopust in zeli zaceti prvega v mesecu), je bilo treba obdrzati kot je ali
+  // izbrisati in ustvariti znova.
+  const [activated, setActivated] = useState(
+    pkg.activated_at ? String(pkg.activated_at).slice(0, 10) : ''
+  )
   const [expires, setExpires] = useState(pkg.expires || '')
   const [remaining, setRemaining] = useState(pkg.remaining ?? '')
   const [saving, setSaving] = useState(false)
@@ -13850,6 +13875,21 @@ function EditPackageModal({ pkg, onClose, onDone }) {
       if (rem !== null && (!isFinite(rem) || rem < 0)) { alert('Vnesite veljavno število obiskov (0 ali več).'); setSaving(false); return }
       updates.remaining = rem
     }
+    // Zacetek veljavnosti (26.8.2026). Prazna vrednost pomeni "ne spreminjaj".
+    if (activated !== (pkg.activated_at ? String(pkg.activated_at).slice(0, 10) : '')) {
+      updates.activated_at = activated || null
+    }
+
+    // VAROVALKA (26.8.2026): zacetek ne sme biti za koncem - taka kartica ne bi
+    // veljala nikoli, aplikacija pa bi jo prikazovala kot aktivno.
+    const od = updates.activated_at ?? pkg.activated_at
+    const doDne = updates.expires ?? pkg.expires
+    if (od && doDne && String(od).slice(0, 10) > String(doDne).slice(0, 10)) {
+      alert('Začetek veljavnosti je za koncem — kartica tako ne bi veljala nikoli.')
+      setSaving(false)
+      return
+    }
+
     // POPRAVLJENO (16.8.2026): prej brez preverbe napake - uporabnik je videl,
     // da je shranjeno, tudi ce se v bazi ni nic spremenilo.
     const { error: editErr } = await createClient().from('customer_packages').update(updates).eq('id', pkg.id)
@@ -13861,6 +13901,9 @@ function EditPackageModal({ pkg, onClose, onDone }) {
     <Modal open onClose={onClose} width={400}>
       <ModalHeader title={`Popravi: ${pkg.name}`} onClose={onClose}/>
       <div style={{ padding:20, display:'flex', flexDirection:'column', gap:12 }}>
+        <Field label="Velja od">
+          <input type="date" value={activated} onChange={e=>setActivated(e.target.value)} style={inp}/>
+        </Field>
         <Field label="Velja do">
           <input type="date" value={expires} onChange={e=>setExpires(e.target.value)} style={inp}/>
         </Field>
