@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import { idZaDdv } from '@/lib/format'
 
 const QUARTERS = [
   { q: 1, label: 'Q1 (jan–mar)', from: '-01-01', to: '-03-31', due: 'april' },
@@ -97,7 +98,7 @@ export default function DDVEvidencaPage() {
 <DDV_O xmlns="http://edavki.durs.si/Documents/Schemas/DDV_O_4.xsd">
   <Podatki_o_zavezancu>
     <DavcnaStevilka>${org.tax_number}</DavcnaStevilka>
-    <ID_za_DDV>SI${org.tax_number}</ID_za_DDV>
+    <ID_za_DDV>${idZaDdv(org.tax_number)}</ID_za_DDV>
     <Naziv>${org.name}</Naziv>
     <Naslov>${org.address || ''}</Naslov>
     <PostnaStevilka>${org.post_code || ''}</PostnaStevilka>

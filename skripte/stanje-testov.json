@@ -1,9 +1,9 @@
 {
-  "skupaj": 393,
+  "skupaj": 398,
   "poDatotekah": {
     "baza.spec.ts": 13,
     "blagajna.spec.ts": 30,
-    "davki.spec.ts": 43,
+    "davki.spec.ts": 48,
     "integracije.spec.ts": 12,
     "kategorizacija.spec.ts": 13,
     "mobilno.spec.ts": 30,
@@ -12,5 +12,5 @@
     "skener.spec.ts": 14,
     "ujemanje.spec.ts": 231
   },
-  "datum": "2026-08-26"
+  "datum": "2026-08-27"
 }

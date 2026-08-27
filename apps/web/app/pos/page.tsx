@@ -1500,7 +1500,7 @@ async function autoPrint(data) {
         business_name: data.org?.name || 'Blagajna',
         business_address: [data.org?.address, [data.org?.post_code, data.org?.city].filter(Boolean).join(' ')].filter(Boolean).join(', '),
         business_tax: data.org?.vat_registered
-          ? `Davčna: ${data.org?.tax_number || ''} | ID za DDV: SI${data.org?.tax_number || ''}`
+          ? `Davčna: ${data.org?.tax_number || ''} | ID za DDV: ${idZaDdv(data.org?.tax_number)}`
           : `Davčna: ${data.org?.tax_number || ''}`,
         receipt_number: data.invoiceNumber || data.orderId?.slice(-6),
         cashier: data.cashierName || '',
@@ -7887,7 +7887,7 @@ function buildStornoReceiptHTML({ order, lines, payment, org, cashierName, voidE
   <div class="b" style="font-size:14px">${org?.name || 'Blagajna'}</div>
   ${addr ? `<div class="s">${addr}</div>` : ''}
   ${org?.tax_number ? `<div class="s">Davčna št.: ${org.tax_number}</div>` : ''}
-  ${org?.vat_registered ? `<div class="s">ID za DDV: SI${org.tax_number}</div>` : ''}
+  ${org?.vat_registered ? `<div class="s">ID za DDV: ${idZaDdv(org.tax_number)}</div>` : ''}
 </div>
 <div class="l"></div>
 <div class="c b" style="font-size:13px;color:#a83232">⚠️ STORNO RAČUN</div>
@@ -8257,7 +8257,7 @@ function OrdersScreen({ posData, auth }) {
           business_name: orgData?.name || 'Blagajna',
           business_address: [orgData?.address, [orgData?.post_code, orgData?.city].filter(Boolean).join(' ')].filter(Boolean).join(', '),
           tax_number: orgData?.tax_number || '',
-          vat_id: orgData?.vat_registered ? `SI${orgData.tax_number}` : '',
+          vat_id: orgData?.vat_registered ? idZaDdv(orgData.tax_number) : '',
           receipt_number: order.invoice_number || order.number || order.id.slice(-6),
           cashier: cashierName,
           date: order.closed_at ? new Date(order.closed_at).toLocaleString('sl-SI') : '—',

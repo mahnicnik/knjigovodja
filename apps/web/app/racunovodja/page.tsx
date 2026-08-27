@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import HowTo from '@/components/HowTo'
 import AppLayout from '@/components/AppLayout'
+import { idZaDdv } from '@/lib/format'
 
 interface ClientOrg {
   org_id: string
@@ -234,7 +235,7 @@ export default function RacunovodjaPortal() {
                       )}
                     </div>
                     <div style={{ fontSize: 12, color: '#888', fontFamily: 'monospace' }}>
-                      {client.tax_number ? `SI${client.tax_number}` : '—'}
+                      {client.tax_number ? `${idZaDdv(client.tax_number)}` : '—'}
                       {client.tax_system && ` · ${TAX_SYSTEM_LABELS[client.tax_system] ?? client.tax_system}`}
                     </div>
                   </div>

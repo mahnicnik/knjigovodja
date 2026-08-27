@@ -6,6 +6,7 @@ import { lokalniDatum } from '@/lib/tax-constants'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
+import { idZaDdv } from '@/lib/format'
 
 // POPRAVLJENO (17.8.2026): slovenski zapis zneska. Prej "€1234.56" - angleska
 // oblika z valuto spredaj in piko kot decimalnim locilom. V isti aplikaciji sta
@@ -220,7 +221,7 @@ export default function PosZakljucekPage() {
   <div class="center">
     <div class="bold" style="font-size:14px">${orgData?.name ?? 'Podjetje'}</div>
     ${orgData?.address ? `<div>${escapeHtml(orgData.address)}</div>` : ''}
-    ${orgData?.tax_number ? `<div>ID DDV: SI${orgData.tax_number}</div>` : ''}
+    ${orgData?.tax_number ? `<div>ID DDV: ${idZaDdv(orgData.tax_number)}</div>` : ''}
   </div>
 
   <div class="line"></div>

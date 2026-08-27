@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { SP_MIN_CONTRIBUTIONS_YEAR, EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS } from '@/lib/tax-constants'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
-import { formatEurNumber } from '@/lib/format'
+import { formatEurNumber, idZaDdv } from '@/lib/format'
 
 // POPRAVLJENO 30.7.2026 (audit): stari seznam razredov je imel MOCNO
 // zastarele vrednosti (razred 1 = 215 EUR/mes, privzeti razred 8 = 450
@@ -217,7 +217,7 @@ export default function LentniPregledPage() {
 <body>
 
 <h1>LETNI PREGLED ${selectedYear}</h1>
-<div class="sub">${escapeHtml(org.name)} · Davčna številka: ${org.tax_number} · ${org.vat_registered ? `ID za DDV: SI${org.tax_number}` : 'Ni DDV zavezanec'} · Pripravljeno: ${new Date().toLocaleDateString('sl-SI')}</div>
+<div class="sub">${escapeHtml(org.name)} · Davčna številka: ${org.tax_number} · ${org.vat_registered ? `ID za DDV: ${idZaDdv(org.tax_number)}` : 'Ni DDV zavezanec'} · Pripravljeno: ${new Date().toLocaleDateString('sl-SI')}</div>
 
 <div class="summary-grid">
   <div class="s-box"><div class="s-title">Letni prihodki</div><div class="s-val green">€${formatEurNumber(data.totalRevenue)}</div></div>

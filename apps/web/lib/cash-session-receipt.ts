@@ -10,6 +10,7 @@
  */
 
 import { type CashSession, type SessionStats } from './cash-session'
+import { idZaDdv } from '@/lib/format'
 
 // ===== TIPI =====
 
@@ -127,7 +128,7 @@ function orgHeader(org: ReceiptOrg): string {
       <div class="bold" style="font-size:14px">${escHtml(org.name)}</div>
       ${addr ? `<div class="small">${escHtml(addr)}</div>` : ''}
       ${org.tax_number ? `<div class="small">Davčna št.: ${escHtml(org.tax_number)}</div>` : ''}
-      ${org.vat_registered && org.tax_number ? `<div class="small">ID za DDV: SI${escHtml(org.tax_number)}</div>` : ''}
+      ${org.vat_registered && org.tax_number ? `<div class="small">ID za DDV: ${escHtml(idZaDdv(org.tax_number))}</div>` : ''}
     </div>`
 }
 

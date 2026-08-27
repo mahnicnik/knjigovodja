@@ -3,6 +3,7 @@
  */
 import QRCode from 'qrcode'
 import { getFursVerificationUrl } from './furs'
+import { idZaDdv } from '@/lib/format'
 
 export interface ReceiptOrg {
   name: string
@@ -258,7 +259,7 @@ export async function buildReceiptHTML(d: ReceiptData): Promise<string> {
     <div class="header-name">${escapeHtml(d.org.name)}</div>
     ${fullAddress ? `<div class="header-addr">${escapeHtml(fullAddress)}</div>` : ''}
     <div class="header-addr">Davčna št.: ${escapeHtml(d.org.tax_number)}</div>
-    ${d.org.vat_registered ? `<div class="header-addr">ID za DDV: SI${escapeHtml(d.org.tax_number)}</div>` : ''}
+    ${d.org.vat_registered ? `<div class="header-addr">ID za DDV: ${escapeHtml(idZaDdv(d.org.tax_number))}</div>` : ''}
   </div>
   ${d.premiseAddress ? `
   <div class="center header-pe">

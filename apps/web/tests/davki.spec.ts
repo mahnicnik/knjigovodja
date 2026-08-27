@@ -473,3 +473,41 @@ test('FURS: S001 dobi namig o davčni številki', () => {
 test('FURS: druge napake ostanejo nespremenjene', () => {
   expect(sporociloNapake('S002', 'Druga napaka')).toBe('Druga napaka')
 })
+
+// ─── ID za DDV: predpona SI ─────────────────────────────────────────────
+
+import { idZaDdv, davcnaBrezPredpone } from '../lib/format'
+
+/**
+ * NAPAKA (popravljeno 26.8.2026): davčna številka je v bazi lahko shranjena
+ * Z ali BREZ predpone „SI" — odvisno od tega, kako jo je uporabnik vnesel.
+ * Koda je predpono povsod dodajala brez preverbe, zato je pri vnosu
+ * „SI91390419" na računih pisalo „SISI91390419".
+ *
+ * Napaka je bila na DESETIH mestih: računi, Z-poročila, DDV evidenca, letni
+ * pregled, portal računovodje. FURS je to obravnaval pravilno, izpis ne.
+ */
+test('ID za DDV: predpona se ne podvoji', () => {
+  expect(idZaDdv('SI91390419')).toBe('SI91390419')
+  expect(idZaDdv('SI91390419')).not.toBe('SISI91390419')
+})
+
+test('ID za DDV: predpona se doda, kadar manjka', () => {
+  expect(idZaDdv('91390419')).toBe('SI91390419')
+})
+
+test('ID za DDV: male črke se poenotijo', () => {
+  expect(idZaDdv('si91390419')).toBe('SI91390419')
+})
+
+test('ID za DDV: prazna vrednost ostane prazna', () => {
+  // Brez tega bi na računu pisalo samo „SI".
+  expect(idZaDdv('')).toBe('')
+  expect(idZaDdv(null)).toBe('')
+  expect(idZaDdv(undefined)).toBe('')
+})
+
+test('davčna brez predpone: za FURS in uradne obrazce', () => {
+  expect(davcnaBrezPredpone('SI91390419')).toBe('91390419')
+  expect(davcnaBrezPredpone('91390419')).toBe('91390419')
+})

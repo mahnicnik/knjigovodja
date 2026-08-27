@@ -6,6 +6,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { odpriListino, povezavaDoListine } from '@/lib/listine'
 import Link from 'next/link'
+import { idZaDdv } from '@/lib/format'
 
 interface Invoice {
   id: string
@@ -293,7 +294,7 @@ export default function RacunovodjaClientPage() {
             <div>
               <div style={{ fontSize: 22, color: '#fff', fontWeight: 600 }}>{org?.name}</div>
               <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 3, fontFamily: 'monospace' }}>
-                {org?.tax_number ? `SI${org.tax_number}` : '—'}
+                {org?.tax_number ? `${idZaDdv(org.tax_number)}` : '—'}
                 {org?.tax_system ? ` · ${org.tax_system}` : ''}
                 {org?.vat_registered ? ' · DDV zavezanec' : ' · Ni DDV'}
               </div>

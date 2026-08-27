@@ -22,3 +22,23 @@ export function formatEurNumber(n: number | string | null | undefined): string {
   const num = Number(n) || 0
   return new Intl.NumberFormat('sl-SI', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num)
 }
+
+/**
+ * ID ZA DDV iz davcne stevilke (26.8.2026).
+ *
+ * Davcna stevilka je v bazi lahko shranjena Z ali BREZ predpone "SI" - odvisno
+ * od tega, kako jo je uporabnik vnesel. Koda je predpono povsod dodajala brez
+ * preverbe, zato je pri vnosu "SI91390419" na racunih pisalo "SISI91390419".
+ *
+ * FURS to obravnava pravilno (odstrani predpono), izpis pa ne.
+ */
+export function idZaDdv(davcna: string | null | undefined): string {
+  const d = String(davcna ?? '').trim()
+  if (!d) return ''
+  return d.toUpperCase().startsWith('SI') ? d.toUpperCase() : `SI${d}`
+}
+
+/** Davcna stevilka BREZ predpone - za FURS in uradne obrazce. */
+export function davcnaBrezPredpone(davcna: string | null | undefined): string {
+  return String(davcna ?? '').replace(/^SI/i, '').trim()
+}
