@@ -3016,3 +3016,51 @@ test('odjava: po njej čestitka ne odide', () => {
   expect(posljemoPoOdjavi(false)).toBe(false)    // stanje po odjavi
   expect(posljemoPoOdjavi(null)).toBe(false)     // privolitve še ni dal
 })
+
+// ─── Vrstni red kategorij ───────────────────────────────────────────────
+
+/**
+ * DODANO (26.8.2026): kategorije so imele `sort_order`, ki se je nastavil ob
+ * nastanku in se ni dal spremeniti — kategorijo, dodano pozneje, je bilo
+ * mogoče premakniti le z brisanjem in ponovnim vnosom.
+ *
+ * Isti vzorec kot pri levi orodni vrstici blagajne.
+ */
+function premakni(ids: string[], vlecem: string, cilj: string) {
+  if (!vlecem || vlecem === cilj) return ids
+  const novi = ids.filter(x => x !== vlecem)
+  const idx = novi.indexOf(cilj)
+  novi.splice(idx < 0 ? novi.length : idx, 0, vlecem)
+  return novi
+}
+
+test('kategorije: premik naprej', () => {
+  expect(premakni(['a', 'b', 'c'], 'c', 'a')).toEqual(['c', 'a', 'b'])
+})
+
+test('kategorije: premik nazaj', () => {
+  expect(premakni(['a', 'b', 'c'], 'a', 'c')).toEqual(['b', 'c', 'a'])
+})
+
+test('kategorije: spust nase ne spremeni ničesar', () => {
+  expect(premakni(['a', 'b', 'c'], 'b', 'b')).toEqual(['a', 'b', 'c'])
+})
+
+test('kategorije: nobena se ne izgubi ali podvoji', () => {
+  const zac = ['a', 'b', 'c', 'd', 'e']
+  const po = premakni(zac, 'd', 'b')
+  expect(po).toHaveLength(5)
+  expect(new Set(po).size).toBe(5)
+  expect([...po].sort()).toEqual([...zac].sort())
+})
+
+test('kategorije: nov vrstni red je zaporeden od 0', () => {
+  // Vsem zapišemo NOV sort_order — sicer bi se ob delnem neuspehu podvojil.
+  const po = premakni(['a', 'b', 'c'], 'c', 'a')
+  const zapisi = po.map((id, i) => ({ id, sort_order: i }))
+  expect(zapisi).toEqual([
+    { id: 'c', sort_order: 0 },
+    { id: 'a', sort_order: 1 },
+    { id: 'b', sort_order: 2 },
+  ])
+})

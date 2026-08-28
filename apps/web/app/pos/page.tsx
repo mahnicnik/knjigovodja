@@ -10172,6 +10172,37 @@ function CenikImportModal({ onClose, posData }) {
   )
 }
 function CatalogSection({ posData }) {
+  // VLECENJE KATEGORIJ (26.8.2026): vrstni red je dolocal `sort_order`, ki se
+  // je nastavil ob nastanku in se ni dal spremeniti - kategorijo, dodano
+  // pozneje, je bilo mogoce premakniti le z brisanjem in ponovnim vnosom.
+  //
+  // Isti vzorec kot pri levi orodni vrstici blagajne.
+  const [vlecemKat, setVlecemKat] = React.useState<string | null>(null)
+  const [nadKat, setNadKat] = React.useState<string | null>(null)
+
+  async function spustiKategorijo(ciljniId: string) {
+    if (!vlecemKat || vlecemKat === ciljniId) { setVlecemKat(null); setNadKat(null); return }
+
+    const trenutni = (posData.categories || []).filter((c: any) => c.id !== 'all')
+    const ids = trenutni.map((c: any) => c.id)
+    const novi = ids.filter((x: string) => x !== vlecemKat)
+    const idx = novi.indexOf(ciljniId)
+    novi.splice(idx < 0 ? novi.length : idx, 0, vlecemKat)
+
+    setVlecemKat(null); setNadKat(null)
+
+    // Zapisemo NOV vrstni red vsem hkrati - sicer bi se ob delnem neuspehu
+    // vrstni red podvojil ali pretrgal.
+    const db = createClient()
+    const napake: string[] = []
+    for (let i = 0; i < novi.length; i++) {
+      const { error } = await db.from('categories').update({ sort_order: i }).eq('id', novi[i])
+      if (error) napake.push(error.message)
+    }
+    if (napake.length > 0) alert('Vrstnega reda ni bilo mogoče shraniti: ' + napake[0])
+    posData.refresh()
+  }
+
   const [catModal, setCatModal] = useState(null)
   const [itemModal, setItemModal] = useState(null)
   const [normModal, setNormModal] = useState(null)
@@ -10302,7 +10333,18 @@ function CatalogSection({ posData }) {
             <button onClick={()=>setCatModal({color:'#1f6b3a',icon:'📦'})} style={btnP}>+ Dodaj kategorijo</button>
           </div>
           {realCategories.map(c => (
-            <div key={c.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', background:T.surface, borderRadius:10, marginBottom:6, border:'1px solid '+T.line }}>
+            <div key={c.id}
+              draggable
+              onDragStart={() => setVlecemKat(c.id)}
+              onDragOver={e => { e.preventDefault(); setNadKat(c.id) }}
+              onDragLeave={() => setNadKat(null)}
+              onDrop={e => { e.preventDefault(); spustiKategorijo(c.id) }}
+              onDragEnd={() => { setVlecemKat(null); setNadKat(null) }}
+              title="Povlecite za spremembo vrstnega reda"
+              style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', background:T.surface,
+                cursor:'grab',
+                opacity: vlecemKat === c.id ? 0.45 : 1,
+                outline: nadKat === c.id && vlecemKat !== c.id ? '2px solid ' + T.accent : 'none', borderRadius:10, marginBottom:6, border:'1px solid '+T.line }}>
               <div style={{ width:36, height:36, borderRadius:8, background:c.color||T.accent, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>{c.icon}</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontWeight:600, fontSize:14 }}>{c.name}</div>
