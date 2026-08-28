@@ -2952,3 +2952,67 @@ test('čestitka: drugič isto leto ne odide', () => {
   expect(posljemo({ vklopljeno: true }, { email: 'a@b.si', privolitev: true, letoZadnje: 2026 }, 2026)).toBe(false)
   expect(posljemo({ vklopljeno: true }, { email: 'a@b.si', privolitev: true, letoZadnje: 2025 }, 2026)).toBe(true)
 })
+
+// ─── Odjava od obveščanja ───────────────────────────────────────────────
+
+/**
+ * DODANO (26.8.2026): vsako trženjsko sporočilo mora vsebovati način odjave.
+ *
+ * Prej je čestitka pisala „sporočite nam" — kar pomeni, da mora nekdo prebrati
+ * e-pošto in ročno popraviti zapis. To ni odjava, ampak prošnja.
+ */
+function odjava(token: string | null, stranke: Array<{ token: string; ime: string }>) {
+  if (!token) return { uspelo: false, ime: null }
+  const s = stranke.find(x => x.token === token)
+  return s ? { uspelo: true, ime: s.ime } : { uspelo: false, ime: null }
+}
+
+const STRANKE = [{ token: 'a1b2c3', ime: 'Tina Dolenc' }]
+
+test('odjava: veljavna oznaka odjavi stranko', () => {
+  const r = odjava('a1b2c3', STRANKE)
+  expect(r.uspelo).toBe(true)
+  expect(r.ime).toBe('Tina Dolenc')
+})
+
+test('odjava: neveljavna oznaka ne razkrije ničesar', () => {
+  const r = odjava('napacna', STRANKE)
+  expect(r.uspelo).toBe(false)
+  expect(r.ime).toBeNull()          // ne pove, ali stranka obstaja
+})
+
+test('odjava: prazna oznaka ne stori nič', () => {
+  expect(odjava(null, STRANKE).uspelo).toBe(false)
+})
+
+/**
+ * Odjava velja za TRŽENJE, ne za sporočila o poslu. Računa in obvestila o
+ * izteku kartice ni mogoče odjaviti — to niso oglasna sporočila.
+ */
+function potrebujeOdjavo(vrsta: 'cestitka' | 'racun' | 'predracun' | 'opomnik-kartica') {
+  return vrsta === 'cestitka'
+}
+
+test('odjava: čestitka jo potrebuje', () => {
+  expect(potrebujeOdjavo('cestitka')).toBe(true)
+})
+
+test('odjava: računi in predračuni je ne potrebujejo', () => {
+  // Odjava od lastnega računa ni mogoča in tudi ne sme biti.
+  expect(potrebujeOdjavo('racun')).toBe(false)
+  expect(potrebujeOdjavo('predracun')).toBe(false)
+  expect(potrebujeOdjavo('opomnik-kartica')).toBe(false)
+})
+
+/**
+ * Po odjavi čestitka ne odide več.
+ */
+function posljemoPoOdjavi(privolitev: boolean | null) {
+  return privolitev === true
+}
+
+test('odjava: po njej čestitka ne odide', () => {
+  expect(posljemoPoOdjavi(true)).toBe(true)
+  expect(posljemoPoOdjavi(false)).toBe(false)    // stanje po odjavi
+  expect(posljemoPoOdjavi(null)).toBe(false)     // privolitve še ni dal
+})

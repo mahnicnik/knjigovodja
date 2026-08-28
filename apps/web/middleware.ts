@@ -51,6 +51,9 @@ const PUBLIC_PREFIXES = [
   // handlerja, se lahko poskodi SUROVO telo zahteve, kar pokvari Stripe
   // podpis ("Invalid signature") - webhooki morajo iti skozi NEDOTAKNJENI.
   '/api/webhooks',
+  // DODANO (26.8.2026): odjava od obvescanja. Stranka NI prijavljena in tudi
+  // ne more biti - odjava mora delovati z enim klikom iz e-poste.
+  '/odjava',
 ]
 
 /**
