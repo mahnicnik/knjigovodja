@@ -2145,6 +2145,38 @@ function WriteoffModal({ cart, auth, onClose, onDone }) {
 }
 
 function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart, addItem, adjustQty, setPaymentOpen, totals, setActiveCustomer, posData, happyHourActive, setHappyHourActive, cashSession, onNeedOpenCash, auth }) {
+  /**
+   * VLECENJE KATEGORIJ NA PRODAJNEM ZASLONU (26.8.2026).
+   *
+   * Prelet 144 je vlecenje dodal v Nastavitve -> Kategorije, kar je NAPACNO
+   * MESTO: vrstni red je pomemben tam, kjer se kategorije uporabljajo - pri
+   * prodaji, kjer mora biti najpogostejsa na vrhu.
+   *
+   * "Priljubljeno" (cat-fav) ostane pribito na vrhu in se ne premika.
+   */
+  const [vlecemKat, setVlecemKat] = React.useState<string | null>(null)
+  const [nadKat, setNadKat] = React.useState<string | null>(null)
+
+  async function spustiKategorijo(ciljniId: string) {
+    if (!vlecemKat || vlecemKat === ciljniId) { setVlecemKat(null); setNadKat(null); return }
+    if (vlecemKat === 'cat-fav' || ciljniId === 'cat-fav') { setVlecemKat(null); setNadKat(null); return }
+
+    const ids = (posData.categories || [])
+      .filter((c: any) => c.id !== 'cat-fav')
+      .map((c: any) => c.id)
+    const novi = ids.filter((x: string) => x !== vlecemKat)
+    const idx = novi.indexOf(ciljniId)
+    novi.splice(idx < 0 ? novi.length : idx, 0, vlecemKat)
+
+    setVlecemKat(null); setNadKat(null)
+
+    const db = createClient()
+    for (let i = 0; i < novi.length; i++) {
+      await db.from('categories').update({ sort_order: i }).eq('id', novi[i])
+    }
+    posData.refresh()
+  }
+
   // Podatki podjetja za izpise - prej trdo zapisani (SIRM, naslov, davcna).
   const pp = podatkiPodjetja(posData.org || { name: posData.businessName })
   const [showWriteoff, setShowWriteoff] = React.useState(false)
@@ -2180,8 +2212,22 @@ function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart
         <div style={{ overflowY:'auto', flex:1, padding:8 }}>
           {posData.categories.map(c => {
             const active = selectedCat === c.id
+            const jePriljubljeno = c.id === 'cat-fav'
             return (
-              <button key={c.id} onClick={() => { setSelectedCat(c.id); setSearch('') }} style={{ width:'100%', padding:'10px', borderRadius:9, marginBottom:2, background: active ? T.accentSoft : 'transparent', color: active ? T.accent : T.ink, border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:13, fontWeight: active ? 700 : 500, display:'flex', alignItems:'center', gap:10, textAlign:'left' }}>
+              <button key={c.id}
+                draggable={!jePriljubljeno}
+                onDragStart={() => !jePriljubljeno && setVlecemKat(c.id)}
+                onDragOver={e => { if (!jePriljubljeno) { e.preventDefault(); setNadKat(c.id) } }}
+                onDragLeave={() => setNadKat(null)}
+                onDrop={e => { e.preventDefault(); spustiKategorijo(c.id) }}
+                onDragEnd={() => { setVlecemKat(null); setNadKat(null) }}
+                onClick={() => { setSelectedCat(c.id); setSearch('') }} style={{
+                  // Vidni odziv med vlecenjem (26.8.2026) - brez njega ni jasno,
+                  // kaj se premika in kam bo pristalo.
+                  opacity: vlecemKat === c.id ? 0.4 : 1,
+                  outline: nadKat === c.id && vlecemKat && vlecemKat !== c.id ? '2px solid ' + T.accent : 'none',
+                  cursor: jePriljubljeno ? 'pointer' : 'grab',
+                  width:'100%', padding:'10px', borderRadius:9, marginBottom:2, background: active ? T.accentSoft : 'transparent', color: active ? T.accent : T.ink, border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:13, fontWeight: active ? 700 : 500, display:'flex', alignItems:'center', gap:10, textAlign:'left' }}>
                 <span style={{ width:30, height:30, borderRadius:8, background:c.color||T.accent, display:'flex', alignItems:'center', justifyContent:'center', fontSize:15 }}>{c.icon}</span>
                 <span style={{ flex:1 }}>{c.name}</span>
                 {active && <KI name="chev" size={14}/>}

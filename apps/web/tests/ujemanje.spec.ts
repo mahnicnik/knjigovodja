@@ -3064,3 +3064,46 @@ test('kategorije: nov vrstni red je zaporeden od 0', () => {
     { id: 'b', sort_order: 2 },
   ])
 })
+
+// ─── Vlečenje kategorij na PRODAJNEM zaslonu ────────────────────────────
+
+/**
+ * NAPAKA (popravljeno 26.8.2026): prelet 144 je vlečenje dodal v
+ * Nastavitve → Kategorije, kar je NAPAČNO MESTO. Vrstni red je pomemben tam,
+ * kjer se kategorije uporabljajo — pri prodaji, kjer mora biti najpogostejša
+ * na vrhu.
+ *
+ * Uporabnik je vlečenje poskusil na prodajnem zaslonu in ni delovalo.
+ */
+function premakniVProdaji(kategorije: string[], vlecem: string, cilj: string) {
+  // „Priljubljeno" je pribito na vrhu in se ne premika.
+  if (vlecem === 'cat-fav' || cilj === 'cat-fav') return kategorije
+  const brez = kategorije.filter(x => x !== 'cat-fav')
+  const novi = brez.filter(x => x !== vlecem)
+  const idx = novi.indexOf(cilj)
+  novi.splice(idx < 0 ? novi.length : idx, 0, vlecem)
+  return ['cat-fav', ...novi]
+}
+
+test('kategorije: premik na prodajnem zaslonu deluje', () => {
+  const r = premakniVProdaji(['cat-fav', 'pijaca', 'hrana', 'storitve'], 'storitve', 'pijaca')
+  expect(r).toEqual(['cat-fav', 'storitve', 'pijaca', 'hrana'])
+})
+
+test('kategorije: „Priljubljeno" ostane na vrhu', () => {
+  const r = premakniVProdaji(['cat-fav', 'pijaca', 'hrana'], 'hrana', 'pijaca')
+  expect(r[0]).toBe('cat-fav')
+})
+
+test('kategorije: „Priljubljenega" ni mogoče premakniti', () => {
+  const zac = ['cat-fav', 'pijaca', 'hrana']
+  expect(premakniVProdaji(zac, 'cat-fav', 'hrana')).toEqual(zac)
+  expect(premakniVProdaji(zac, 'hrana', 'cat-fav')).toEqual(zac)
+})
+
+test('kategorije: nobena se ne izgubi', () => {
+  const zac = ['cat-fav', 'a', 'b', 'c', 'd']
+  const po = premakniVProdaji(zac, 'd', 'a')
+  expect(po).toHaveLength(5)
+  expect(new Set(po).size).toBe(5)
+})
