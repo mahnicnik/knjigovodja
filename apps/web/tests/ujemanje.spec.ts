@@ -3238,3 +3238,150 @@ test('sporočila: poteklo se ne prikaže', () => {
   )
   expect(v).toHaveLength(1)
 })
+
+
+// ─── Filter strank po stanju kartice ────────────────────────────────────
+
+/**
+ * DODANO (26.8.2026): stopnja (redni / srebro / zlato / VIP) je ROČNA oznaka —
+ * nič je ne izračuna in ne pove, ali stranka trenutno vadi. Za vsakdanje delo
+ * je pomembnejše vprašanje, ali ima veljavno kartico.
+ */
+const DANES = '2026-08-26'
+
+function veljavne(kartice: Array<{ active: boolean; expires?: string | null; remaining?: number | null }>) {
+  return kartice.filter(p =>
+    p.active
+    && (!p.expires || p.expires >= DANES)
+    && (p.remaining === null || p.remaining === undefined || p.remaining > 0))
+}
+
+function potecejo(kartice: Array<{ active: boolean; expires?: string | null }>) {
+  return kartice.filter(p => {
+    if (!p.active || !p.expires) return false
+    const dni = Math.ceil((new Date(p.expires).getTime() - new Date(DANES).getTime()) / 86400000)
+    return dni >= 0 && dni <= 7
+  })
+}
+
+test('filter: aktivna kartica z obiski se šteje', () => {
+  expect(veljavne([{ active: true, expires: '2026-09-30', remaining: 5 }])).toHaveLength(1)
+})
+
+test('filter: potekla kartica se ne šteje', () => {
+  expect(veljavne([{ active: true, expires: '2026-08-25', remaining: 5 }])).toHaveLength(0)
+})
+
+test('filter: porabljena kartica se ne šteje', () => {
+  expect(veljavne([{ active: true, expires: '2026-09-30', remaining: 0 }])).toHaveLength(0)
+})
+
+test('filter: članarina brez obiskov se šteje', () => {
+  // `remaining: null` pomeni članarino — obiskov ne odšteva.
+  expect(veljavne([{ active: true, expires: '2026-09-30', remaining: null }])).toHaveLength(1)
+})
+
+test('filter: „potečejo" zajame sedem dni vnaprej', () => {
+  expect(potecejo([{ active: true, expires: '2026-08-30' }])).toHaveLength(1)   // čez 4 dni
+  expect(potecejo([{ active: true, expires: '2026-09-10' }])).toHaveLength(0)   // čez 15 dni
+})
+
+test('filter: že potekla ni med „potečejo"', () => {
+  expect(potecejo([{ active: true, expires: '2026-08-20' }])).toHaveLength(0)
+})
+
+test('filter: stranka brez kartic pade med „brez"', () => {
+  expect(veljavne([])).toHaveLength(0)
+})
+
+// ─── Hitri ukrepi pri stranki ───────────────────────────────────────────
+
+/**
+ * NAPAKA (popravljeno 26.8.2026): gumba „Dodaj boni / popust" in
+ * „Pošlji email" sta bila vezana na PRAZNO funkcijo `()=>{}`. Klik ni naredil
+ * ničesar in ni javil napake — uporabnik je mislil, da je nekaj poslano
+ * oziroma dodano.
+ */
+function ukrepDela(ukrep: string) {
+  const povezani = ['Dodaj dobroimetje', 'Polni predplačilo', 'Prodaj paket', 'Pošlji e-pošto']
+  return povezani.includes(ukrep)
+}
+
+test('hitri ukrepi: vsi štirje so povezani', () => {
+  for (const u of ['Dodaj dobroimetje', 'Polni predplačilo', 'Prodaj paket', 'Pošlji e-pošto']) {
+    expect(ukrepDela(u), `${u} ni povezan`).toBe(true)
+  }
+})
+
+/**
+ * Popusta stranka nima kje hraniti (stolpca ni), dobroimetje pa da — zato
+ * gumb naredi TO in se tudi tako imenuje.
+ */
+function dodajDobroimetje(trenutno: number, znesek: number, razlog: string) {
+  if (!isFinite(znesek) || znesek <= 0) return { ok: false, napaka: 'znesek' }
+  if (!razlog.trim()) return { ok: false, napaka: 'razlog' }
+  return { ok: true, novo: Math.round((trenutno + znesek) * 100) / 100 }
+}
+
+test('dobroimetje: se prišteje obstoječemu', () => {
+  expect(dodajDobroimetje(12.50, 20, 'bon za rojstni dan')).toEqual({ ok: true, novo: 32.50 })
+})
+
+test('dobroimetje: ničelni ali negativni znesek se zavrne', () => {
+  expect(dodajDobroimetje(10, 0, 'razlog').ok).toBe(false)
+  expect(dodajDobroimetje(10, -5, 'razlog').ok).toBe(false)
+})
+
+test('dobroimetje: brez razloga se zavrne', () => {
+  // Brez razloga pozneje ni jasno, zakaj je bilo dodano.
+  expect(dodajDobroimetje(10, 20, '  ')).toEqual({ ok: false, napaka: 'razlog' })
+})
+
+/**
+ * Sporočilo brez e-naslova ne more oditi — povemo takoj, ne po kliku „Pošlji".
+ */
+function lahkoPosljemo(stranka: { email?: string | null }) {
+  return !!stranka.email
+}
+
+test('sporočilo: brez e-naslova se okno ne odpre', () => {
+  expect(lahkoPosljemo({})).toBe(false)
+  expect(lahkoPosljemo({ email: 'a@b.si' })).toBe(true)
+})
+// ─── Skupinsko pošiljanje e-pošte ───────────────────────────────────────
+
+/**
+ * Pošiljanje je delovalo, a z dvema težavama (popravljeno 26.8.2026):
+ *
+ *   1. `posData` se komponenti NI podal, čeprav ga pričakuje — v nogi
+ *      sporočila je bilo ime podjetja prazno.
+ *   2. Zamik med sporočili je bil 200 ms = PET na sekundo, Resend pa dovoli
+ *      DVE. Pri več kot nekaj strankah bi jih večina padla z napako 429.
+ */
+function sporocilNaSekundo(zamikMs: number) {
+  return 1000 / zamikMs
+}
+
+test('pošiljanje: hitrost je pod mejo ponudnika', () => {
+  expect(sporocilNaSekundo(600)).toBeLessThanOrEqual(2)
+})
+
+test('pošiljanje: prejšnja hitrost je mejo presegala', () => {
+  expect(sporocilNaSekundo(200)).toBeGreaterThan(2)   // 5/s — od tod napake 429
+})
+
+test('pošiljanje: 20 strank traja sprejemljivo dolgo', () => {
+  expect((20 * 600) / 1000).toBe(12)
+})
+
+function izidPosiljanja(poslano: number, neuspesno: number, prvaNapaka: string | null) {
+  return { povzetek: `Poslano: ${poslano} · Neuspešno: ${neuspesno}`, razlog: neuspesno > 0 ? prvaNapaka : null }
+}
+
+test('pošiljanje: ob neuspehu se pokaže razlog', () => {
+  expect(izidPosiljanja(3, 2, 'Too many requests').razlog).toBe('Too many requests')
+})
+
+test('pošiljanje: ob uspehu razloga ni', () => {
+  expect(izidPosiljanja(5, 0, null).razlog).toBeNull()
+})

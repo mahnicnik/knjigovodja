@@ -3742,10 +3742,19 @@ function PackagesScreen({ posData, setSellPackageModal }) {
 function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackageModal }) {
   const [search, setSearch] = useState('')
   const [tierFilter, setTierFilter] = useState('vse')
+  // DODANO (26.8.2026): filter po STANJU kartice. Stopnja (redni/srebro/zlato)
+  // je rocna oznaka in ne pove nicesar o tem, ali stranka trenutno vadi.
+  // Za vsakdanje delo je to pomembnejse vprasanje.
+  const [stanjeFilter, setStanjeFilter] = useState('vse')
   const [selectedId, setSelectedId] = useState(null)
   const [addModal, setAddModal] = useState(false)
   const [bulkEmailModal, setBulkEmailModal] = useState(false)
   const [customerPackages, setCustomerPackages] = useState([])
+  // DODANO (26.8.2026): gumba "Dodaj boni / popust" in "Poslji email" sta bila
+  // vezana na PRAZNO funkcijo `()=>{}` - klik ni naredil nicesar in ni javil
+  // napake. Uporabnik je mislil, da je nekaj poslano oziroma dodano.
+  const [bonModal, setBonModal] = useState<any>(null)
+  const [mailModal, setMailModal] = useState<any>(null)
   const [customerDetailRefreshKey, setCustomerDetailRefreshKey] = useState(0)
   const [customerOrders, setCustomerOrders] = useState([])
   const [loadingDetail, setLoadingDetail] = useState(false)
@@ -3759,6 +3768,22 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
     !search || c.name.toLowerCase().includes(search.toLowerCase()) ||
     (c.phone||'').includes(search) || (c.email||'').toLowerCase().includes(search.toLowerCase()))
   if (tierFilter !== 'vse') filtered = filtered.filter(c => (c.tier||'regular') === tierFilter)
+
+  // Stanje kartice (26.8.2026). Kartica velja, ce je aktivna, ni potekla in
+  // ima obiske (ali je clanarina, ki obiskov ne steje).
+  const danesStr = lokalniDatum(new Date())
+  const kartice = (c: any) => (c.customer_packages || []).filter((p: any) =>
+    p.active && (!p.expires || String(p.expires).slice(0,10) >= danesStr))
+  const veljavne = (c: any) => kartice(c).filter((p: any) => p.remaining === null || p.remaining > 0)
+  const potecejo = (c: any) => kartice(c).filter((p: any) => {
+    if (!p.expires) return false
+    const dni = Math.ceil((new Date(String(p.expires).slice(0,10)).getTime() - new Date(danesStr).getTime()) / 86400000)
+    return dni >= 0 && dni <= 7
+  })
+
+  if (stanjeFilter === 'aktivne')   filtered = filtered.filter(c => veljavne(c).length > 0)
+  if (stanjeFilter === 'potecejo')  filtered = filtered.filter(c => potecejo(c).length > 0)
+  if (stanjeFilter === 'brez')      filtered = filtered.filter(c => veljavne(c).length === 0)
 
   const selected = posData.customers.find(c => c.id === selectedId)
 
@@ -3879,6 +3904,32 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
                 style={{ flex:1, padding:'4px 2px', borderRadius:6, border:'none', background:tierFilter===id?T.header:T.surface3, color:tierFilter===id?T.headerInk:T.muted, fontWeight:700, fontSize:9, cursor:'pointer', fontFamily:'inherit' }}>{lbl}</button>
             ))}
           </div>
+
+          {/* DODANO (26.8.2026): filter po STANJU kartice. Stopnja pove, kako
+              stranko obravnavamo, to pa, ali trenutno sploh vadi. */}
+          <div style={{ display:'flex', gap:3, marginTop:4 }}>
+            {[
+              ['vse','Vse'],
+              ['aktivne','✓ Aktivne'],
+              ['potecejo','⏳ Potečejo'],
+              ['brez','○ Brez'],
+            ].map(([id,lbl])=>{
+              const koliko = id === 'vse' ? null
+                : id === 'aktivne'  ? posData.customers.filter((c:any)=>veljavne(c).length>0).length
+                : id === 'potecejo' ? posData.customers.filter((c:any)=>potecejo(c).length>0).length
+                : posData.customers.filter((c:any)=>veljavne(c).length===0).length
+              return (
+                <button key={id} onClick={()=>setStanjeFilter(id)}
+                  title={id==='potecejo' ? 'Kartica poteče v 7 dneh' : undefined}
+                  style={{ flex:1, padding:'4px 2px', borderRadius:6, border:'none', cursor:'pointer',
+                    background: stanjeFilter===id ? T.accent : T.surface3,
+                    color: stanjeFilter===id ? '#fff' : T.muted,
+                    fontSize:9.5, fontWeight:700, fontFamily:'inherit' }}>
+                  {lbl}{koliko !== null && koliko > 0 ? ` ${koliko}` : ''}
+                </button>
+              )
+            })}
+          </div>
         </div>
         <div style={{ flex:1, overflowY:'auto', padding:5 }}>
           {filtered.length === 0 && (
@@ -3991,7 +4042,10 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
           {/* Tab vsebina */}
           <div style={{ flex:1, overflowY:'auto', padding:20 }}>
             {activeTab === 'pregled' && (
-              <CustomerOverviewTab customer={selected} orders={customerOrders} packages={customerPackages} loading={loadingDetail} setActiveTab={setActiveTab} setActiveCustomer={setActiveCustomer} setScreen={setScreen}/>
+              <CustomerOverviewTab customer={selected} orders={customerOrders} packages={customerPackages} loading={loadingDetail} setActiveTab={setActiveTab} setActiveCustomer={setActiveCustomer} setScreen={setScreen} onBon={(c)=>setBonModal({ customer:c })} onMail={(c)=>{
+                if (!c?.email) { alert('Stranka nima vpisanega e-naslova.'); return }
+                setMailModal({ customer:c })
+              }}/>
             )}
             {activeTab === 'kartice' && (
               <CustomerPackagesTab customer={selected} packages={customerPackages} posData={posData} loading={loadingDetail}
@@ -4014,13 +4068,17 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
       )}
 
       {addModal && <AddCustomerModal onClose={()=>setAddModal(false)} onSaved={(id)=>{posData.refresh();setSelectedId(id);setAddModal(false)}}/>}
-      {bulkEmailModal && <BulkEmailModal customers={posData.customers} onClose={()=>setBulkEmailModal(false)}/>}
+      {/* POPRAVLJENO (26.8.2026): `posData` se NI podal, cetudi ga komponenta
+          pricakuje - v nogi sporocila je bilo ime podjetja prazno. */}
+      {bulkEmailModal && <BulkEmailModal customers={posData.customers} posData={posData} onClose={()=>setBulkEmailModal(false)}/>}
+      {bonModal && <BonModal data={bonModal} onClose={()=>setBonModal(null)} onDone={()=>{ setBonModal(null); posData.refresh(); setCustomerDetailRefreshKey(k=>k+1) }}/>}
+      {mailModal && <PosljiMailModal data={mailModal} onClose={()=>setMailModal(null)}/>}
     </div>
   )
 }
 
 // ─── Overview Tab ─────────────────────────────────────────────
-function CustomerOverviewTab({ customer, orders, packages, loading, setActiveTab, setActiveCustomer, setScreen }) {
+function CustomerOverviewTab({ customer, orders, packages, loading, setActiveTab, setActiveCustomer, setScreen, onBon, onMail }) {
   const activePkgs = packages.filter(p=>p.active)
   const recentOrders = orders.slice(0,3)
 
@@ -4058,10 +4116,10 @@ function CustomerOverviewTab({ customer, orders, packages, loading, setActiveTab
         <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:16 }}>
           <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:12 }}>HITRI UKREPI</div>
           {[
-            ['🎁', 'Dodaj boni / popust', ()=>{}],
+            ['🎁', 'Dodaj dobroimetje', ()=>onBon?.(customer)],
             ['💰', 'Polni predplačilo', ()=>setActiveTab('kartice')],
             ['🎫', 'Prodaj paket', ()=>{setActiveCustomer(customer);setScreen('packages')}],
-            ['📧', 'Pošlji email', ()=>{}],
+            ['📧', 'Pošlji e-pošto', ()=>onMail?.(customer)],
           ].map(([icon,lbl,fn])=>(
             <button key={lbl} onClick={fn} style={{ width:'100%', padding:'10px 12px', borderRadius:9, border:'1px solid '+T.line, background:T.surface2, cursor:'pointer', fontFamily:'inherit', fontSize:13, textAlign:'left', display:'flex', alignItems:'center', gap:10, marginBottom:6, color:T.ink }}>
               <span>{icon}</span> {lbl}
@@ -4141,6 +4199,134 @@ function CustomerNotesTab({ customer, onSave }) {
 }
 
 // ─── Bulk Email Modal ─────────────────────────────────────────
+/**
+ * DODAJANJE DOBROIMETJA (26.8.2026).
+ *
+ * Gumb je pisal "Dodaj boni / popust" in bil vezan na prazno funkcijo. Popusta
+ * stranka nima kje hraniti (stolpca ni), dobroimetje pa da - zato gumb zdaj
+ * naredi TO in se tudi tako imenuje.
+ *
+ * Uporabimo obstojeci postopek `refund_prepaid`, ki dobroimetje pravilno
+ * pristeje in ne dovoli negativnega stanja.
+ */
+function BonModal({ data, onClose, onDone }) {
+  const [znesek, setZnesek] = useState('')
+  const [razlog, setRazlog] = useState('')
+  const [shranjujem, setShranjujem] = useState(false)
+  const c = data.customer
+
+  async function shrani() {
+    const z = Number(String(znesek).replace(',', '.'))
+    if (!isFinite(z) || z <= 0) { alert('Vnesite znesek, večji od nič.'); return }
+    if (!razlog.trim()) { alert('Vnesite razlog — brez njega pozneje ni jasno, zakaj je bilo dodano.'); return }
+    setShranjujem(true)
+    // `refund_prepaid` sprejme SAMO znesek (preverjeno 26.8.2026), zato razlog
+    // zabelezimo posebej v dnevnik - sicer bi bilo pozneje nemogoce ugotoviti,
+    // zakaj je bilo dobroimetje dodano.
+    const db = createClient()
+    const { error } = await db.rpc('refund_prepaid', {
+      p_customer_id: c.id,
+      p_amount: z,
+    })
+    if (!error) {
+      await db.from('audit_log').insert({
+        business_id: BUSINESS_ID,
+        staff_id: null,
+        action: 'prepaid_added',
+        details: { customer_id: c.id, customer_name: c.name, amount: z, reason: razlog.trim() },
+      }).then(() => {}, () => {})   // dnevnik ne sme ustaviti dodajanja
+    }
+    setShranjujem(false)
+    if (error) { alert('Dobroimetja ni bilo mogoče dodati: ' + error.message); return }
+    onDone()
+  }
+
+  return (
+    <Modal onClose={onClose} width={420}>
+      <ModalHeader title={`🎁 Dobroimetje — ${c.name}`} onClose={onClose}/>
+      <div style={{ padding:'0 20px 20px' }}>
+        <div style={{ fontSize:12, color:T.muted, marginBottom:14, lineHeight:1.6 }}>
+          Znesek se prišteje stranki in ga lahko porabi pri plačilu z izbiro
+          <strong> Predplačilo</strong>. Trenutno stanje: <strong>{eur(c.prepaid || 0)}</strong>
+        </div>
+        <Field label="Znesek (€)">
+          <input type="number" step="0.01" min="0" value={znesek} onFocus={e=>e.target.select()}
+            onChange={e=>setZnesek(e.target.value)} style={inp}/>
+        </Field>
+        <Field label="Razlog (obvezno)">
+          <input value={razlog} onChange={e=>setRazlog(e.target.value)}
+            placeholder="npr. bon za rojstni dan, poravnava reklamacije" style={inp}/>
+        </Field>
+        <button onClick={shrani} disabled={shranjujem} style={{ ...btnP, width:'100%', marginTop:6, justifyContent:'center', opacity: shranjujem?0.6:1 }}>
+          {shranjujem ? 'Dodajam…' : 'Dodaj dobroimetje'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+/**
+ * SPOROČILO POSAMEZNI STRANKI (26.8.2026).
+ *
+ * Gumb "Poslji email" je bil prav tako prazna funkcija. Uporabi isto pot kot
+ * skupinsko posiljanje (`/api/email/send`).
+ */
+function PosljiMailModal({ data, onClose }) {
+  const [zadeva, setZadeva] = useState('')
+  const [besedilo, setBesedilo] = useState('')
+  const [posiljam, setPosiljam] = useState(false)
+  const [izid, setIzid] = useState<string | null>(null)
+  const c = data.customer
+
+  async function poslji() {
+    if (!zadeva.trim() || !besedilo.trim()) { setIzid('Vnesite zadevo in besedilo.'); return }
+    setPosiljam(true); setIzid(null)
+    try {
+      const res = await fetch('/api/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: c.email,
+          subject: zadeva.trim(),
+          html: `<div style="font-family:Inter,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px">
+            <div style="font-size:14px;color:#0d2818;line-height:1.7;white-space:pre-wrap">${
+              besedilo.replace(/[<>&]/g, (ch) => ({ '<':'&lt;', '>':'&gt;', '&':'&amp;' }[ch]))
+            }</div>
+          </div>`,
+        }),
+      })
+      const d = await res.json().catch(() => ({}))
+      setPosiljam(false)
+      if (!res.ok) { setIzid('Sporočila ni bilo mogoče poslati: ' + (d?.error || res.status)); return }
+      setIzid('✓ Poslano na ' + c.email)
+      setTimeout(onClose, 1200)
+    } catch (e: any) {
+      setPosiljam(false)
+      setIzid('Napaka pri pošiljanju: ' + (e?.message || e))
+    }
+  }
+
+  return (
+    <Modal onClose={onClose} width={460}>
+      <ModalHeader title={`📧 Sporočilo — ${c.name}`} onClose={onClose}/>
+      <div style={{ padding:'0 20px 20px' }}>
+        <div style={{ fontSize:12, color:T.muted, marginBottom:12 }}>Prejemnik: <strong>{c.email}</strong></div>
+        <Field label="Zadeva">
+          <input value={zadeva} onChange={e=>setZadeva(e.target.value)} style={inp}/>
+        </Field>
+        <Field label="Besedilo">
+          <textarea value={besedilo} onChange={e=>setBesedilo(e.target.value)} rows={6}
+            style={{ ...inp, resize:'vertical', fontFamily:'inherit' }}/>
+        </Field>
+        <button onClick={poslji} disabled={posiljam} style={{ ...btnP, width:'100%', marginTop:6, justifyContent:'center', opacity: posiljam?0.6:1 }}>
+          {posiljam ? 'Pošiljam…' : 'Pošlji'}
+        </button>
+        {izid && <div style={{ marginTop:10, fontSize:12, color: izid.startsWith('✓') ? T.accent : T.danger }}>{izid}</div>}
+      </div>
+    </Modal>
+  )
+}
+
 function BulkEmailModal({ customers, onClose, posData }) {
   // Podatki podjetja za nogo e-poste - prej trdo zapisani (SIRM, naslov).
   const pp = podatkiPodjetja(posData?.org || { name: posData?.businessName })
@@ -4179,6 +4365,7 @@ function BulkEmailModal({ customers, onClose, posData }) {
     if (!confirm(`Pošlji email ${targets.length} strankam?`)) return
     setSending(true)
     let sent = 0, failed = 0
+    let prvaNapaka: string | null = null
     for (const c of targets) {
       try {
         const res = await fetch('/api/email/send', {
@@ -4195,12 +4382,25 @@ function BulkEmailModal({ customers, onClose, posData }) {
             </div>`,
           })
         })
-        if (res.ok) sent++; else failed++
-      } catch { failed++ }
-      await new Promise(r=>setTimeout(r,200))
+        if (res.ok) sent++
+        else {
+          failed++
+          if (!prvaNapaka) {
+            const d = await res.json().catch(() => null)
+            prvaNapaka = d?.error || `HTTP ${res.status}`
+          }
+        }
+      } catch (e: any) {
+        failed++
+        if (!prvaNapaka) prvaNapaka = e?.message || 'napaka pri povezavi'
+      }
+      // POPRAVLJENO (26.8.2026): zamik 200 ms pomeni PET sporocil na sekundo,
+      // Resend pa dovoli DVE. Pri vec kot nekaj strankah bi jih vecina padla
+      // z napako 429. 600 ms je varno pod mejo.
+      await new Promise(r=>setTimeout(r,600))
     }
     setSending(false)
-    setResult({ sent, failed })
+    setResult({ sent, failed, napaka: prvaNapaka })
   }
 
   return (
@@ -4266,6 +4466,11 @@ function BulkEmailModal({ customers, onClose, posData }) {
         {result && (
           <div style={{ padding:'12px 14px', borderRadius:9, background:result.failed>0?'rgba(168,50,50,0.1)':T.accentSoft, color:result.failed>0?T.danger:T.accent, fontSize:13, fontWeight:600 }}>
             ✓ Poslano: {result.sent} · Neuspešno: {result.failed}
+            {result.failed > 0 && result.napaka && (
+              <div style={{ fontSize:11, color:T.danger, marginTop:6, lineHeight:1.5 }}>
+                Prva napaka: {result.napaka}
+              </div>
+            )}
           </div>
         )}
 
