@@ -5737,7 +5737,14 @@ function InventoryScreen({ posData }) {
   const [saving, setSaving] = useState(false)
   const [invToast, setInvToast] = useState(null)
 
-  const allItems = posData.items.filter(i => i.item_type !== 'ingredient')
+  // POPRAVLJENO (prelet 164): STORITVE NE SODIJO MED ZALOGO. Naročljivi
+  // artikli (vadba, trenerstvo, terapija) nimajo kolicine, ki bi se lahko
+  // iztekla - zato so v seznamu zaloge sedeli z vecno prazno kolicino,
+  // sirili stevec "N artiklov" in kvarili filtra "Pod minimum" in
+  // "Razprodano". Zdaj imajo svoj zavihek, kjer je merilo prodaja, ne zaloga.
+  const vseNezaloge = posData.items.filter(i => i.item_type !== 'ingredient')
+  const allItems = vseNezaloge.filter(i => !i.bookable)
+  const allServices = vseNezaloge.filter(i => i.bookable)
   const allIngredients = posData.ingredients
 
   // Statistike za header
@@ -6147,6 +6154,11 @@ function InventoryScreen({ posData }) {
           <div>
             <div style={{ fontSize:11, color:T.muted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em' }}>ZALOGA</div>
             <div style={{ fontSize:20, fontWeight:800 }}>{allItems.length + allIngredients.length} artiklov</div>
+            {allServices.length > 0 && (
+              <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>
+                + {allServices.length} storitev (brez zaloge)
+              </div>
+            )}
           </div>
           {totalAlerts > 0 && (
             <div onClick={()=>setFilter('nizko')} style={{ padding:'8px 14px', borderRadius:9, background:'rgba(168,50,50,0.1)', border:'1px solid rgba(168,50,50,0.2)', cursor:'pointer' }}>
@@ -6174,7 +6186,7 @@ function InventoryScreen({ posData }) {
         {/* Tabi + filtri */}
         <div style={{ display:'flex', gap:10, alignItems:'center', flexWrap:'wrap' }}>
           <div style={{ display:'flex', gap:2, background:T.surface3, padding:3, borderRadius:9 }}>
-            {[['items','Artikli'],['ingredients','Surovine'],['deliveries','Dobavnice']].map(([id,lbl])=>(
+            {[['items','Artikli'],['ingredients','Surovine'],['services','Storitve'],['deliveries','Dobavnice']].map(([id,lbl])=>(
               <button key={id} onClick={()=>{setTab(id);setFilter('vse');if(id==='deliveries'&&!deliveriesLoaded){naloziDobavnice()}}} style={{ padding:'6px 14px', borderRadius:7, border:'none', background:tab===id?T.header:'transparent', color:tab===id?T.headerInk:T.ink, fontWeight:700, fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>{lbl}</button>
             ))}
           </div>
@@ -6274,6 +6286,41 @@ function InventoryScreen({ posData }) {
                 )
               })}
               {items.length===0 && <tr><td colSpan={8} style={{ padding:40, textAlign:'center', color:T.muted }}>Ni artiklov za izbran filter</td></tr>}
+            </tbody>
+          </table>
+        )}
+
+        {/* DODANO (prelet 164): STORITVE. Zaloge nimajo, zato tu ne kazemo
+            kolicin in minimumov, ampak ceno in prodajo - to je edino, kar je
+            pri storitvi mogoce spremljati. */}
+        {tab === 'services' && (
+          <table style={{ width:'100%', borderCollapse:'collapse', background:T.surface, borderRadius:12, overflow:'hidden', border:'1px solid '+T.line }}>
+            <thead>
+              <tr style={{ background:T.surface3 }}>
+                <th style={{ padding:'10px 12px', textAlign:'left', fontSize:11, fontWeight:700, color:T.muted }}>STORITEV</th>
+                <th style={{ padding:'10px 12px', textAlign:'left', fontSize:11, fontWeight:700, color:T.muted }}>TRAJANJE</th>
+                <th style={{ padding:'10px 12px', textAlign:'right', fontSize:11, fontWeight:700, color:T.muted }}>CENA</th>
+                <th style={{ padding:'10px 12px', textAlign:'right', fontSize:11, fontWeight:700, color:T.muted }}>PRODANO 30D</th>
+                <th style={{ padding:'10px 12px', textAlign:'right', fontSize:11, fontWeight:700, color:T.muted }}>PRIHODEK 30D</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allServices
+                .filter(sv => !search || sv.name.toLowerCase().includes(search.toLowerCase()))
+                .sort((a,b) => (salesData[b.id]||0)-(salesData[a.id]||0) || a.name.localeCompare(b.name))
+                .map((sv,idx) => {
+                  const prodano = salesData[sv.id] || 0
+                  return (
+                    <tr key={sv.id} style={{ background:idx%2?T.surface2:T.surface, borderBottom:'1px solid '+T.lineSoft }}>
+                      <td style={{ padding:'10px 12px', fontWeight:600, fontSize:13 }}>{sv.name}</td>
+                      <td style={{ padding:'10px 12px', fontSize:12, color:T.muted }}>{sv.duration_min ? sv.duration_min+' min' : '—'}</td>
+                      <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:600, fontSize:13, fontVariantNumeric:'tabular-nums' }}>{eur(sv.price)}</td>
+                      <td style={{ padding:'10px 12px', textAlign:'right', fontSize:13, fontVariantNumeric:'tabular-nums', color:prodano?T.ink:T.muted }}>{prodano || '—'}</td>
+                      <td style={{ padding:'10px 12px', textAlign:'right', fontSize:13, fontVariantNumeric:'tabular-nums', color:prodano?T.ink:T.muted }}>{prodano ? eur(prodano*Number(sv.price||0)) : '—'}</td>
+                    </tr>
+                  )
+                })}
+              {allServices.length===0 && <tr><td colSpan={5} style={{ padding:40, textAlign:'center', color:T.muted }}>Ni storitev. Artikel postane storitev, ko mu v Nastavitvah vklopite „naročljiv".</td></tr>}
             </tbody>
           </table>
         )}
