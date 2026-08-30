@@ -74,6 +74,10 @@ export default function OpravilaScreen({ posData, auth }: any) {
   const [nalagam, setNalagam] = useState(true)
   const [novo, setNovo] = useState('')
   const [novoSporocilo, setNovoSporocilo] = useState('')
+  // DODANO (26.8.2026): datum poteka in pripetost ze ob objavi. Polji v bazi
+  // sta obstajali, obrazec ju ni ponujal.
+  const [veljaDo, setVeljaDo] = useState('')
+  const [pomembno, setPomembno] = useState(false)
   const [prikaziPredloge, setPrikaziPredloge] = useState(false)
 
   const danes = lokalniDatum(new Date())
@@ -135,10 +139,12 @@ export default function OpravilaScreen({ posData, auth }: any) {
     if (!besedilo) return
     await createClient().from('pos_messages').insert({
       business_id: BUSINESS_ID, body: besedilo,
+      pinned: pomembno,
+      expires_on: veljaDo || null,
       author_id: auth?.user?.id ?? null,
       author_name: auth?.user?.name ?? null,
     })
-    setNovoSporocilo('')
+    setNovoSporocilo(''); setVeljaDo(''); setPomembno(false)
     nalozi()
   }
 
@@ -302,6 +308,17 @@ export default function OpravilaScreen({ posData, auth }: any) {
                   border: '1px solid ' + T?.line, fontFamily: 'inherit', boxSizing: 'border-box',
                   resize: 'vertical', background: T?.inputBg,
                 }}/>
+              <div style={{ display:'flex', alignItems:'center', gap:14, marginTop:10, flexWrap:'wrap' }}>
+                <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, cursor:'pointer', color:T?.ink }}>
+                  <input type="checkbox" checked={pomembno} onChange={e=>setPomembno(e.target.checked)}/>
+                  📌 Pomembno (na vrh)
+                </label>
+                <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:T?.muted }}>
+                  Velja do
+                  <input type="date" value={veljaDo} onChange={e=>setVeljaDo(e.target.value)}
+                    style={{ padding:'4px 8px', borderRadius:7, border:'1px solid '+T?.line, fontSize:12, fontFamily:'inherit' }}/>
+                </label>
+              </div>
               <button onClick={objavi} disabled={!novoSporocilo.trim()} style={{
                 marginTop: 8, padding: '9px 16px', borderRadius: 9, border: 0,
                 cursor: novoSporocilo.trim() ? 'pointer' : 'default',
@@ -313,16 +330,47 @@ export default function OpravilaScreen({ posData, auth }: any) {
 
           {sporocila.map(m => (
             <div key={m.id} style={{
-              padding: '14px 16px', borderRadius: 10, marginBottom: 8,
-              background: m.pinned ? 'rgba(184,140,40,0.08)' : T?.surface,
-              border: '1px solid ' + (m.pinned ? 'rgba(184,140,40,0.3)' : T?.line),
+              position: 'relative',
+              padding: '18px 20px 14px',
+              borderRadius: 14,
+              marginBottom: 12,
+              background: m.pinned ? '#FFF9EC' : T?.surface,
+              border: '1px solid ' + (m.pinned ? 'rgba(184,140,40,0.35)' : T?.line),
+              // Pripeto sporocilo dobi barvni rob na levi, da ga je mogoce
+              // opaziti z drugega konca sanka (26.8.2026).
+              borderLeft: m.pinned ? '4px solid #b88c28' : '1px solid ' + T?.line,
+              boxShadow: m.pinned ? '0 2px 10px rgba(184,140,40,0.12)' : '0 1px 3px rgba(0,0,0,0.04)',
             }}>
-              <div style={{ fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap', color: T?.ink }}>
-                {m.pinned && '📌 '}{m.body}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
-                <div style={{ fontSize: 11, color: T?.muted, flex: 1 }}>
-                  {m.author_name || 'Lastnik'} · {new Date(m.created_at).toLocaleDateString('sl-SI', { day: 'numeric', month: 'short' })}
+              {m.pinned && (
+                <div style={{
+                  position: 'absolute', top: -9, left: 16,
+                  background: '#b88c28', color: '#fff',
+                  fontSize: 9.5, fontWeight: 800, letterSpacing: '0.06em',
+                  padding: '3px 9px', borderRadius: 20, textTransform: 'uppercase',
+                }}>📌 Pomembno</div>
+              )}
+
+              <div style={{
+                fontSize: m.pinned ? 15.5 : 14.5,
+                fontWeight: m.pinned ? 600 : 400,
+                lineHeight: 1.65, whiteSpace: 'pre-wrap',
+                color: T?.ink,
+              }}>{m.body}</div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, paddingTop: 10, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+                <div style={{
+                  width: 24, height: 24, borderRadius: '50%',
+                  background: m.pinned ? '#b88c28' : T?.accent,
+                  color: '#fff', fontSize: 10, fontWeight: 800,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                  {(m.author_name || 'L').trim().split(/\s+/).map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
+                </div>
+                <div style={{ fontSize: 11.5, color: T?.muted, flex: 1 }}>
+                  <strong style={{ color: T?.ink }}>{m.author_name || 'Lastnik'}</strong>
+                  {' · '}
+                  {new Date(m.created_at).toLocaleDateString('sl-SI', { day: 'numeric', month: 'long' })}
+                  {m.expires_on && ` · velja do ${new Date(m.expires_on).toLocaleDateString('sl-SI', { day: 'numeric', month: 'short' })}`}
                 </div>
                 {jeLastnik && (
                   <>

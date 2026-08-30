@@ -22,6 +22,7 @@ import { buildOpeningReceipt, buildXReportReceipt, buildZReportReceipt } from '@
 // dodal. `@ts-nocheck` je napako skril; ujela jo je skripta preveri-stolpce.
 import { idZaDdv } from '@/lib/format'
 import OpravilaScreen from '@/components/pos/OpravilaScreen'
+import OpravilaVOknu from '@/components/pos/OpravilaVOknu'
 
 // ================================================================
 // TEMA
@@ -6664,6 +6665,12 @@ function OpenCashModal({ posData, auth, onClose, onOpened }) {
   return (
     <Modal open onClose={saving ? undefined : onClose} width={360}>
       <ModalHeader title="Otvoritev blagajne" onClose={onClose}/>
+      {/* DODANO (26.8.2026): seznam opravil ob odpiranju TU, kjer se delo
+          dejansko zgodi. Loceni zaslon je treba odpreti namenoma, in prav to
+          se v gneci ne zgodi - to okno pa blagajnik odpre tako ali tako. */}
+      <div style={{ padding:'0 20px' }}>
+        <OpravilaVOknu faza="open" T={T} auth={auth}/>
+      </div>
       <div style={{ padding:'24px 20px', display:'flex', flexDirection:'column', gap:16 }}>
         <div style={{ background:T.accentSoft, borderRadius:10, padding:'12px 14px' }}>
           <div style={{ fontSize:12, color:T.accent, fontWeight:700, marginBottom:2 }}>💰 Začetna gotovina</div>
@@ -7017,6 +7024,9 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
       {/* Naslov pove, da to okno naredi OBOJE (26.8.2026) - prej je bilo iz
           imena nemogoce lociti od "Z-poročilo (zaključi izmeno)" v Poročilih. */}
       <ModalHeader title="Zaključek blagajne — štetje in Z-poročilo" onClose={onClose}/>
+      <div style={{ padding:'0 20px' }}>
+        <OpravilaVOknu faza="close" T={T} auth={auth}/>
+      </div>
       <div style={{ padding:'20px', display:'flex', flexDirection:'column', gap:14 }}>
         {loading ? (
           <div style={{ textAlign:'center', padding:20, color:T.muted }}>Nalagam...</div>

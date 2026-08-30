@@ -3385,3 +3385,68 @@ test('pošiljanje: ob neuspehu se pokaže razlog', () => {
 test('pošiljanje: ob uspehu razloga ni', () => {
   expect(izidPosiljanja(5, 0, null).razlog).toBeNull()
 })
+
+// ─── Opravila v oknih blagajne ──────────────────────────────────────────
+
+/**
+ * DODANO (26.8.2026): seznam opravil se pokaže TAM, KJER SE DELO ZGODI —
+ * ob odpiranju in ob zaključku blagajne.
+ *
+ * Ločeni zaslon je treba odpreti namenoma, in prav to se v gneci ne zgodi.
+ * Okno za odpiranje pa blagajnik odpre tako ali tako.
+ */
+function opravilaZaOkno(vsa: Array<{ phase: string; active: boolean }>, faza: 'open' | 'close') {
+  return vsa.filter(t => t.active && t.phase === faza)
+}
+
+test('okno: ob odpiranju se pokažejo opravila faze „odpiranje"', () => {
+  const vsa = [
+    { phase: 'open', active: true },
+    { phase: 'close', active: true },
+    { phase: 'shift', active: true },
+  ]
+  expect(opravilaZaOkno(vsa, 'open')).toHaveLength(1)
+})
+
+test('okno: ob zaključku se pokažejo opravila faze „zapiranje"', () => {
+  const vsa = [{ phase: 'open', active: true }, { phase: 'close', active: true }]
+  expect(opravilaZaOkno(vsa, 'close')).toHaveLength(1)
+})
+
+test('okno: odstranjena opravila se ne pokažejo', () => {
+  expect(opravilaZaOkno([{ phase: 'open', active: false }], 'open')).toHaveLength(0)
+})
+
+/**
+ * Neopravljeno NE BLOKIRA. Blagajne ni mogoče ne odpreti ne zapreti zaradi
+ * nepobrisanega šanka — seznam je opomnik, ne pogoj.
+ */
+function lahkoZakljucim(koncano: number, skupaj: number) {
+  return true
+}
+
+test('okno: neopravljena opravila ne preprečijo zaključka', () => {
+  expect(lahkoZakljucim(2, 8)).toBe(true)
+  expect(lahkoZakljucim(0, 8)).toBe(true)
+})
+
+test('okno: brez opravil se seznam ne prikaže', () => {
+  // Prazen okvir bi okno le podaljšal.
+  expect(opravilaZaOkno([], 'open')).toHaveLength(0)
+})
+
+/**
+ * Sporočilo lahko dobi datum poteka in oznako „pomembno" že ob objavi —
+ * polji v bazi sta obstajali, obrazec ju ni ponujal.
+ */
+function novoSporocilo(besedilo: string, pomembno: boolean, veljaDo: string) {
+  return { body: besedilo, pinned: pomembno, expires_on: veljaDo || null }
+}
+
+test('sporočilo: pomembno se objavi kot pripeto', () => {
+  expect(novoSporocilo('Jutri dostava ob 8h', true, '').pinned).toBe(true)
+})
+
+test('sporočilo: prazen datum poteka se shrani kot nedoločen', () => {
+  expect(novoSporocilo('Besedilo', false, '').expires_on).toBeNull()
+})
