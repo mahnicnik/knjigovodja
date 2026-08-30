@@ -4243,7 +4243,7 @@ function BonModal({ data, onClose, onDone }) {
   }
 
   return (
-    <Modal onClose={onClose} width={420}>
+    <Modal open onClose={onClose} width={420}>
       <ModalHeader title={`🎁 Dobroimetje — ${c.name}`} onClose={onClose}/>
       <div style={{ padding:'0 20px 20px' }}>
         <div style={{ fontSize:12, color:T.muted, marginBottom:14, lineHeight:1.6 }}>
@@ -4308,7 +4308,7 @@ function PosljiMailModal({ data, onClose }) {
   }
 
   return (
-    <Modal onClose={onClose} width={460}>
+    <Modal open onClose={onClose} width={460}>
       <ModalHeader title={`📧 Sporočilo — ${c.name}`} onClose={onClose}/>
       <div style={{ padding:'0 20px 20px' }}>
         <div style={{ fontSize:12, color:T.muted, marginBottom:12 }}>Prejemnik: <strong>{c.email}</strong></div>

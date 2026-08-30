@@ -53,15 +53,18 @@ export default function OpravilaVOknu({
   useEffect(() => { nalozi() }, [faza])
 
   async function preklopi(t: any) {
+    // POPRAVLJENO (26.8.2026): napaka se je TIHO POZRLA - klik ni naredil nic
+    // in ni povedal, zakaj. Vzrok je bila manjkajoca povezava med `done_by`
+    // in `staff`, zaradi katere je padla poizvedba z `staff(name)`: vpis je
+    // uspel, branje pa ne, zato je kvadratek ostal prazen.
     const db = createClient()
-    if (opravljeno[t.id]) {
-      await db.from('pos_task_completions').delete().eq('task_id', t.id).eq('shift_date', danes)
-    } else {
-      await db.from('pos_task_completions').insert({
-        task_id: t.id, business_id: BUSINESS_ID, shift_date: danes,
-        done_by: auth?.user?.id ?? null,
-      })
-    }
+    const { error } = opravljeno[t.id]
+      ? await db.from('pos_task_completions').delete().eq('task_id', t.id).eq('shift_date', danes)
+      : await db.from('pos_task_completions').insert({
+          task_id: t.id, business_id: BUSINESS_ID, shift_date: danes,
+          done_by: auth?.user?.id ?? null,
+        })
+    if (error) { alert('Opravila ni bilo mogoče označiti: ' + error.message); return }
     nalozi()
   }
 

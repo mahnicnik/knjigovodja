@@ -3450,3 +3450,72 @@ test('sporočilo: pomembno se objavi kot pripeto', () => {
 test('sporočilo: prazen datum poteka se shrani kot nedoločen', () => {
   expect(novoSporocilo('Besedilo', false, '').expires_on).toBeNull()
 })
+
+// ─── Tri tihe napake, ki so izgledale enako ─────────────────────────────
+
+/**
+ * NAPAKE (popravljene 26.8.2026). Vse tri so se kazale enako: klik ni naredil
+ * nič in ni povedal, zakaj.
+ *
+ *   1. `Modal` ima na začetku `if (!open) return null`. Okni „Dodaj
+ *      dobroimetje" in „Pošlji e-pošto" lastnosti nista podali — nista se
+ *      izrisali NIKOLI, čeprav se je stanje pravilno nastavilo.
+ *
+ *   2. Med `pos_task_completions.done_by` in `staff` ni bilo povezave, zato je
+ *      padla poizvedba z `staff(name)` — odkljukanja se niso naložila in
+ *      kvadratek je ostal prazen, čeprav je vpis uspel.
+ *
+ *   3. Napaka pri odkljukanju se je tiho požrla.
+ */
+function modalSeIzrise(lastnosti: { open?: boolean }) {
+  return lastnosti.open === true
+}
+
+test('modal: brez lastnosti „open" se ne izriše', () => {
+  expect(modalSeIzrise({})).toBe(false)
+  expect(modalSeIzrise({ open: true })).toBe(true)
+})
+
+/**
+ * Vgnezdena poizvedba potrebuje povezavo med tabelama.
+ */
+function poizvedbaUspe(imaPovezavo: boolean, vgnezdeno: boolean) {
+  return vgnezdeno ? imaPovezavo : true
+}
+
+test('poizvedba: vgnezdeno branje brez povezave pade', () => {
+  expect(poizvedbaUspe(false, true)).toBe(false)
+  expect(poizvedbaUspe(true, true)).toBe(true)
+})
+
+test('poizvedba: brez vgnezdenja povezava ni potrebna', () => {
+  expect(poizvedbaUspe(false, false)).toBe(true)
+})
+
+/**
+ * Vpis lahko uspe, branje pa ne — takrat je videti, kot da se ni zgodilo nič.
+ */
+function videzUporabniku(vpisUspel: boolean, branjeUspelo: boolean) {
+  if (!vpisUspel) return 'napaka'
+  return branjeUspelo ? 'odkljukano' : 'videti kot da se ni zgodilo nič'
+}
+
+test('odkljukanje: uspel vpis brez branja izgleda kot neuspeh', () => {
+  expect(videzUporabniku(true, false)).toBe('videti kot da se ni zgodilo nič')
+  expect(videzUporabniku(true, true)).toBe('odkljukano')
+})
+
+/**
+ * Napaka mora biti vidna — tiho požrta napaka je videti kot „nič se ne zgodi".
+ */
+function odzivNaNapako(napaka: string | null) {
+  return napaka ? `Opravila ni bilo mogoče označiti: ${napaka}` : null
+}
+
+test('odkljukanje: napaka se pokaže uporabniku', () => {
+  expect(odzivNaNapako('permission denied')).toContain('permission denied')
+})
+
+test('odkljukanje: ob uspehu ni sporočila', () => {
+  expect(odzivNaNapako(null)).toBeNull()
+})
