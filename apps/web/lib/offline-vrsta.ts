@@ -9,8 +9,9 @@
  * ocitek pri vseh blagajnah te vrste.
  *
  * FURS to PREDVIDEVA: racun je mogoce izdati brez povezave in ga naknadno
- * prijaviti v DVEH DNEH, z oznako `SubsequentSubmit`. Racun mora takrat
- * namesto EOR nositi ZOI, ki ga izracunamo lokalno.
+ * prijaviti v dveh DELOVNIH dneh (9. clen ZDavPR), z oznako
+ * `SubsequentSubmit`. Racun mora takrat namesto EOR nositi ZOI, ki ga
+ * izracunamo lokalno.
  *
  * KAJ HRANIMO IN KAJ NE
  * ─────────────────────
@@ -131,13 +132,7 @@ export async function zabeleziNapako(lokalniId: string, napaka: string): Promise
   })
 }
 
-/**
- * Najstarejše čakajoče naročilo v urah.
- *
- * ZAKAJ TO ŠTEJEMO: gotovinski račun je treba prijaviti FURS v DVEH DNEH.
- * Če povezave ni dlje, mora uporabnik to vedeti in ukrepati — sicer bi
- * rok zamudil, ne da bi opazil.
- */
+/** Najstarejše čakajoče naročilo v urah. */
 export async function najstarejseUr(businessId?: string): Promise<number | null> {
   const v = await preberiVrsto(businessId)
   if (v.length === 0) return null
@@ -145,10 +140,62 @@ export async function najstarejseUr(businessId?: string): Promise<number | null>
   return Math.floor((Date.now() - najstarejse) / 3_600_000)
 }
 
-/** Ali smo blizu zakonskega roka (48 ur). */
-export function jeRokBlizu(ur: number | null): 'ni' | 'opozorilo' | 'nujno' {
-  if (ur === null) return 'ni'
-  if (ur >= 40) return 'nujno'      // manj kot 8 ur do roka
-  if (ur >= 24) return 'opozorilo'
+/**
+ * ROK ZA PRIJAVO — POPRAVLJENO (prelet 158, preverjeno pri viru).
+ *
+ * ZDavPR (9. člen) zahteva pošiljanje podatkov "v dveh DELOVNIH dneh od
+ * dneva prekinitve povezave" — NE v 48 urah, kot je računala prejšnja
+ * različica. Razlika ni akademska: izpad v petek zvečer pomeni rok v
+ * TOREK ob koncu dneva (48-urni odštevalnik bi lažno alarmiral v nedeljo),
+ * izpad v sredo pa rok v PETEK (48 ur bi pokazalo prevec časa).
+ *
+ * Upoštevamo sobote, nedelje in slovenske praznike s stalnim datumom.
+ * Premičnega velikonočnega ponedeljka NE računamo — s tem rok kvečjemu
+ * PODCENIMO (opozorimo prezgodaj), nikoli ga ne zamudimo.
+ */
+const SLOVENSKI_PRAZNIKI = [
+  '01-01', '01-02', // novo leto
+  '02-08',          // Prešernov dan
+  '04-27',          // dan upora proti okupatorju
+  '05-01', '05-02', // praznik dela
+  '06-25',          // dan državnosti
+  '08-15',          // Marijino vnebovzetje
+  '10-31',          // dan reformacije
+  '11-01',          // dan spomina na mrtve
+  '12-25', '12-26', // božič, dan samostojnosti in enotnosti
+]
+
+function jeDelovniDan(d: Date): boolean {
+  const dan = d.getDay()
+  if (dan === 0 || dan === 6) return false
+  const kljuc = String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+  return !SLOVENSKI_PRAZNIKI.includes(kljuc)
+}
+
+/** Konec drugega delovnega dne po dnevu nastanka — zakonski rok prijave. */
+export function rokZaPrijavo(ustvarjeno: string | Date): Date {
+  const d = new Date(ustvarjeno)
+  d.setHours(23, 59, 59, 0)
+  let delovnih = 0
+  while (delovnih < 2) {
+    d.setDate(d.getDate() + 1)
+    if (jeDelovniDan(d)) delovnih++
+  }
+  return d
+}
+
+/** Rok najstarejšega čakajočega računa in ure do izteka (negativno = zamujeno). */
+export async function stanjeRoka(businessId?: string): Promise<{ rok: Date; urDoRoka: number } | null> {
+  const v = await preberiVrsto(businessId)
+  if (v.length === 0) return null
+  const rok = rokZaPrijavo(v[0].ustvarjeno)
+  return { rok, urDoRoka: Math.floor((rok.getTime() - Date.now()) / 3_600_000) }
+}
+
+/** Nujnost glede na URE DO ROKA (ne več od nastanka — rok je odvisen od vikendov). */
+export function jeRokBlizu(urDoRoka: number | null): 'ni' | 'opozorilo' | 'nujno' {
+  if (urDoRoka === null) return 'ni'
+  if (urDoRoka <= 8) return 'nujno'
+  if (urDoRoka <= 24) return 'opozorilo'
   return 'ni'
 }

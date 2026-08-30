@@ -8,4 +8,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getPrinters: () => ipcRenderer.invoke('get-printers'),
   getSelectedPrinter: () => ipcRenderer.invoke('get-selected-printer'),
   selectPrinter: () => ipcRenderer.invoke('select-printer'),
+
+  // ── PRELET 158: delovanje brez povezave ──────────────────────────
+  // Spletna blagajna po tej zastavici ve, da namizna aplikacija zna
+  // izracunati ZOI lokalno (starejse verzije je nimajo).
+  offlinePodpora: true,
+  ponovnoPovezi: () => ipcRenderer.invoke('ponovno-povezi'),
+  fursPotrdiloStanje: () => ipcRenderer.invoke('furs-potrdilo-stanje'),
+  fursShraniPotrdilo: (paket) => ipcRenderer.invoke('furs-shrani-potrdilo', paket),
+  fursZoi: (podatki) => ipcRenderer.invoke('furs-zoi', podatki),
 })

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell, dialog, ipcMain } = require('electron')
+const { app, BrowserWindow, Menu, shell, dialog, ipcMain, net, safeStorage } = require('electron')
 const { autoUpdater } = require('electron-updater')
 const path = require('path')
 const fs = require('fs')
@@ -6,8 +6,113 @@ const os = require('os')
 const express = require('express')
 const cors = require('cors')
 const http = require('http')
+const crypto = require('crypto')
+
+// PRELET 158: node-forge za lokalni izracun ZOI (podpis z namenskim
+// potrdilom). `require` je ovit, da aplikacija DELUJE tudi, ce paket se ni
+// namescen (stara namestitev brez `npm install`) - takrat ZOI brez povezave
+// preprosto ni na voljo in blagajna to jasno pove.
+let forge = null
+try { forge = require('node-forge') } catch { console.warn('node-forge ni namescen - izracun ZOI brez povezave ne bo na voljo') }
 
 const POS_URL = 'https://računko.si/pos'
+
+// ── DELOVANJE BREZ POVEZAVE (prelet 158) ──────────────────────────
+//
+// SAMODEJNO PONOVNO POVEZOVANJE: ko se glavno okno ne nalozi (izpad
+// interneta ob zagonu), pokazemo assets/offline.html in vsakih 5 sekund
+// preverimo dosegljivost streznika. KAKRSENKOLI odgovor streznika (tudi
+// preusmeritev ali 4xx) pomeni, da povezava JE - takrat okno samo nalozi
+// blagajno nazaj. Osebju ni treba narediti nicesar.
+let casovnikPonovnegaPovezovanja = null
+
+function zazeniPonovnoPovezovanje() {
+  if (casovnikPonovnegaPovezovanja) return
+  console.log('Streznik ni dosegljiv - samodejno preverjanje vsakih 5 s')
+  casovnikPonovnegaPovezovanja = setInterval(poskusiPovezavo, 5000)
+}
+
+function ustaviPonovnoPovezovanje() {
+  if (casovnikPonovnegaPovezovanja) {
+    clearInterval(casovnikPonovnegaPovezovanja)
+    casovnikPonovnegaPovezovanja = null
+  }
+}
+
+function poskusiPovezavo() {
+  return new Promise((resolve) => {
+    try {
+      const zahteva = net.request({ method: 'HEAD', url: POS_URL })
+      zahteva.on('response', () => {
+        ustaviPonovnoPovezovanje()
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(POS_URL)
+        resolve(true)
+      })
+      zahteva.on('error', () => resolve(false))
+      zahteva.end()
+    } catch { resolve(false) }
+  })
+}
+
+// ── FURS POTRDILO NA NAPRAVI (prelet 158) ─────────────────────────
+//
+// ZAKAJ: FURS v pogostih vprasanjih izrecno pravi, da se ob potrdilu
+// "v oblaku" izpad interneta steje za NEDELOVANJE naprave - racun se sme
+// takrat izdati le iz vezane knjige racunov. Da blagajna brez povezave
+// izda VELJAVEN racun z ZOI (9. clen ZDavPR), mora biti namensko potrdilo
+// fizicno na napravi. Spletna blagajna ga ob zagonu (s povezavo, prijavljen
+// lastnik) prenese sem; shranimo ga sifrirano prek OS shrambe kljucev
+// (safeStorage), s cistim zapisom samo tam, kjer OS sifriranja ne ponuja.
+function potFursPotrdila() {
+  return path.join(app.getPath('userData'), 'furs-potrdilo.bin')
+}
+
+function shraniFursPotrdilo(paket) {
+  const besedilo = JSON.stringify(paket)
+  let vsebina
+  let sifrirano = false
+  try {
+    if (safeStorage.isEncryptionAvailable()) {
+      vsebina = Buffer.concat([Buffer.from('ENC1'), safeStorage.encryptString(besedilo)])
+      sifrirano = true
+    }
+  } catch {}
+  if (!vsebina) vsebina = Buffer.concat([Buffer.from('PLN1'), Buffer.from(besedilo, 'utf8')])
+  fs.writeFileSync(potFursPotrdila(), vsebina)
+  return sifrirano
+}
+
+function preberiFursPotrdilo() {
+  try {
+    const surovo = fs.readFileSync(potFursPotrdila())
+    const glava = surovo.subarray(0, 4).toString()
+    const telo = surovo.subarray(4)
+    const besedilo = glava === 'ENC1'
+      ? safeStorage.decryptString(telo)
+      : telo.toString('utf8')
+    return JSON.parse(besedilo)
+  } catch { return null }
+}
+
+// 60-mestna koda za QR po Pravilniku o izvajanju ZDavPR:
+// ZOI v desetiskem zapisu (39 mest) + davcna (8) + LLMMDDUUMMSS (12) +
+// kontrolni znak (vsota vseh stevilk po modulu 10).
+function zoi60(zoiHex, davcna, issueDatetimeIso) {
+  try {
+    const cist = String(zoiHex || '').toLowerCase().replace(/[^0-9a-f]/g, '')
+    const stevilka = String(davcna || '').replace(/\D/g, '')
+    if (cist.length !== 32 || stevilka.length !== 8) return null
+    const d = issueDatetimeIso ? new Date(issueDatetimeIso) : new Date()
+    if (isNaN(d.getTime())) return null
+    const p = (n) => String(n).padStart(2, '0')
+    const datum = p(d.getFullYear() % 100) + p(d.getMonth() + 1) + p(d.getDate())
+      + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds())
+    const osnova = BigInt('0x' + cist).toString(10).padStart(39, '0') + stevilka + datum
+    let vsota = 0
+    for (const znak of osnova) vsota += znak.charCodeAt(0) - 48
+    return osnova + String(vsota % 10)
+  } catch { return null }
+}
 
 // ── Printer config ────────────────────────────────────────────────
 function getPrinterConfigPath() {
@@ -136,14 +241,25 @@ function buildEscPos(data) {
   // FURS
   if (data.furs_zoi) { txt('ZOI: ' + data.furs_zoi); lf() }
   if (data.furs_eor) { txt('EOR: ' + data.furs_eor); lf() }
-  if (data.furs_eor) {
-    // QR koda — center + EOR kot QR code (GS ( k)
+  if (data.offline && data.furs_zoi && !data.furs_eor) {
+    // Racun, izdan BREZ POVEZAVE (9. clen ZDavPR): EOR se ni dodeljen,
+    // kupcu pa je posteno povedati, zakaj ga na racunu ni.
+    txt('Racun izdan brez povezave.'); lf()
+    txt('EOR bo pridobljen naknadno.'); lf()
+  }
+  // POPRAVLJENO (prelet 158): QR koda je prej vsebovala EOR. Pravilnik o
+  // izvajanju ZDavPR pa predpisuje 60-mestno kodo IZ ZOI (ZOI v desetiskem
+  // zapisu + davcna + datum/cas + kontrolni znak) - FURS-ova aplikacija
+  // "Preveri racun" zna prebrati SAMO to. EOR ostane v tekstovni obliki.
+  // Ista koda se izrise tudi na racunu BREZ povezave - ZOI takrat ze obstaja.
+  const zoiKoda = zoi60(data.furs_zoi, data.tax_number, data.issue_datetime)
+  if (zoiKoda) {
     b(ESC,0x61,0x01) // center
-    const qrData = Buffer.from(data.furs_eor, 'utf8')
+    const qrData = Buffer.from(zoiKoda, 'utf8')
     const qrLen = qrData.length + 3
     b(GS,0x28,0x6B, 4,0, 0x31,0x41,0x32,0x00)            // model 2
     b(GS,0x28,0x6B, 3,0, 0x31,0x43,0x06)                  // size 6 (vecja)
-    b(GS,0x28,0x6B, 3,0, 0x31,0x45,0x30)                  // error L
+    b(GS,0x28,0x6B, 3,0, 0x31,0x45,0x30)                  // error L (Pravilnik)
     b(GS,0x28,0x6B, qrLen&0xFF,(qrLen>>8)&0xFF, 0x31,0x50,0x30)
     for (let i = 0; i < qrData.length; i++) b(qrData[i])
     b(GS,0x28,0x6B, 3,0, 0x31,0x51,0x30)                  // print
@@ -413,6 +529,72 @@ function setupIpcHandlers() {
       return { ok: false }
     } catch (e) { return { ok: false, error: e.message } }
   })
+
+  // ── PRELET 158: delovanje brez povezave ─────────────────────────
+
+  ipcMain.handle('ponovno-povezi', async () => {
+    const uspeh = await poskusiPovezavo()
+    return { ok: !!uspeh }
+  })
+
+  ipcMain.handle('furs-potrdilo-stanje', async () => {
+    const p = preberiFursPotrdilo()
+    if (!p) return { nalozeno: false }
+    return { nalozeno: true, taxNumber: p.taxNumber || null, shranjeno: p.shranjeno || null }
+  })
+
+  ipcMain.handle('furs-shrani-potrdilo', async (event, paket) => {
+    try {
+      if (!paket?.p12Base64) return { ok: false, error: 'Manjka vsebina potrdila.' }
+      const sifrirano = shraniFursPotrdilo({
+        p12Base64: paket.p12Base64,
+        geslo: paket.geslo ?? '',
+        taxNumber: paket.taxNumber ?? null,
+        shranjeno: new Date().toISOString(),
+      })
+      return { ok: true, sifrirano }
+    } catch (e) { return { ok: false, error: e.message } }
+  })
+
+  // Izracun ZOI za racun brez povezave.
+  //
+  // POZOR - KONSISTENCA: postopek je NAMENOMA znak-za-znakom enak
+  // calculateZoi v apps/web/lib/furs.ts (vkljucno z MD5 nad SESTNAJSTISKIM
+  // NIZOM podpisa, ne nad surovimi bajti). Z natanko tem postopkom je FURS
+  // sprejel vse dosedanje racune - vsak odmik bi pomenil, da isti racun
+  // dobi drugacen ZOI na napravi in na strezniku.
+  ipcMain.handle('furs-zoi', async (event, podatki) => {
+    try {
+      if (!forge) return { ok: false, error: 'Knjiznica node-forge ni namescena - posodobite namizno aplikacijo.' }
+      const potrdilo = preberiFursPotrdilo()
+      if (!potrdilo) return { ok: false, error: 'FURS potrdilo se ni preneseno na to napravo (na njej se mora enkrat prijaviti lastnik).' }
+
+      const { taxNumber, issueDateTime, invoiceNumber, premiseId, deviceId, amount } = podatki || {}
+      if (!taxNumber || !issueDateTime || !invoiceNumber || !premiseId || !deviceId || !(Number(amount) >= 0)) {
+        return { ok: false, error: 'Manjkajo podatki za izracun ZOI.' }
+      }
+
+      const p12Der = forge.util.decode64(potrdilo.p12Base64)
+      const p12 = forge.pkcs12.pkcs12FromAsn1(forge.asn1.fromDer(p12Der), false, potrdilo.geslo || '')
+      const zasciteni = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag })[forge.pki.oids.pkcs8ShroudedKeyBag] || []
+      const navadni = p12.getBags({ bagType: forge.pki.oids.keyBag })[forge.pki.oids.keyBag] || []
+      const vreca = zasciteni[0] || navadni[0]
+      if (!vreca || !vreca.key) return { ok: false, error: 'V potrdilu ni zasebnega kljuca.' }
+
+      const dt = new Date(issueDateTime)
+      const p2 = (n) => String(n).padStart(2, '0')
+      const dateStr = [p2(dt.getDate()), p2(dt.getMonth() + 1), dt.getFullYear()].join('.')
+        + ' ' + [p2(dt.getHours()), p2(dt.getMinutes()), p2(dt.getSeconds())].join(':')
+      const content = String(taxNumber) + dateStr + String(invoiceNumber)
+        + String(premiseId) + String(deviceId) + Number(amount).toFixed(2)
+
+      const md = forge.md.sha256.create()
+      md.update(content, 'utf8')
+      const signature = forge.util.bytesToHex(vreca.key.sign(md))
+      const zoi = crypto.createHash('md5').update(signature).digest('hex')
+      return { ok: true, zoi }
+    } catch (e) { return { ok: false, error: e.message } }
+  })
 }
 
 // ── Print server ──────────────────────────────────────────────────
@@ -516,6 +698,20 @@ function createWindow() {
   })
 
   mainWindow.loadURL(POS_URL)
+
+  // PRELET 158: `did-fail-load` je bil doslej obravnavan SAMO pri skritem
+  // tiskalnem oknu. Ce je bil internet nedosegljiv ob ZAGONU, je glavno okno
+  // ostalo prazno belo - osebje je lahko samo ugibalo, kaj je narobe.
+  // Zdaj pokazemo zaslon "ni povezave" in se vsakih 5 s sami poskusamo
+  // povezati nazaj; ob uspehu se blagajna nalozi brez posredovanja.
+  mainWindow.webContents.on('did-fail-load', (event, code, opis, url, jeGlavniOkvir) => {
+    // -3 (ERR_ABORTED) sprozi vsaka prekinjena navigacija (preusmeritev,
+    // hiter klik) in NI izpad povezave; podokvirji nas ne zanimajo.
+    if (!jeGlavniOkvir || code === -3) return
+    console.warn('Glavno okno se ni nalozilo (' + code + ' ' + opis + ') - zaslon brez povezave')
+    mainWindow.loadFile(path.join(__dirname, 'assets', 'offline.html'))
+    zazeniPonovnoPovezovanje()
+  })
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('about:') || url.startsWith('data:')) {

@@ -36,6 +36,10 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const { order_id, total, premise_id: requestedPremiseId } = body
+    // PRELET 158: racun, izdan BREZ POVEZAVE, pride z ze dodeljeno stevilko,
+    // ZOI in DEJANSKIM casom izdaje — natisnjeni so na kupcevem racunu in
+    // FURS-u moramo prijaviti NATANKO to (SubsequentSubmit).
+    const offline = body.offline ?? null
 
     if (!order_id) {
       return NextResponse.json({ error: 'order_id je obvezen' }, { status: 400 })
@@ -128,18 +132,65 @@ export async function POST(req: NextRequest) {
 
     const deviceIdCode = device?.device_id ?? 'RACUNKO01'
 
-    // Atomarno stevilo preko DB sekvence (RPC get_next_pos_invoice_number).
-    // Prejsnja implementacija je stela vrstice "preberi-nato-povecaj", kar je
-    // povzrocalo kolizije stevilk pri hitro zaporednih/socasnih placilih.
-    // POPRAVLJENO (16.8.2026): stevilka se dodeli PO PODJETJU. Prej je bilo
-    // zaporedje globalno za vsa podjetja - novo podjetje bi dobilo stevilko 351
-    // in imelo nepojasnjeno vrzel od 1 do 350, kar FURS zahteva pojasniti.
-    const { data: seqData, error: seqError } = await supabase.rpc('get_next_pos_invoice_number', { p_business_id: order.business_id })
-    if (seqError) {
-      return NextResponse.json({ error: 'Napaka pri generiranju številke računa: ' + seqError.message }, { status: 500 })
+    let sequenceNumber: number
+    let invoiceNumberFull: string
+
+    if (offline) {
+      // ── NAKNADNA PRIJAVA RACUNA, IZDANEGA BREZ POVEZAVE (prelet 158) ──
+      // Stevilke NE dodelimo znova: kupec jo ze ima na papirju. Preverimo,
+      // da je paket smiseln, in centralni stevec dvignemo VSAJ na porabljeno
+      // stevilko, da naslednja spletna prodaja ne podeli iste se enkrat.
+      const zoiOk = typeof offline.zoi === 'string' && /^[0-9a-f]{32}$/.test(offline.zoi)
+      const seqOk = Number.isInteger(Number(offline.sequence_number)) && Number(offline.sequence_number) > 0
+      const datumOk = offline.issued_at && !isNaN(new Date(offline.issued_at).getTime())
+      if (!zoiOk || !seqOk || !datumOk) {
+        return NextResponse.json({ error: 'Neveljavni podatki računa, izdanega brez povezave (ZOI/številka/čas).' }, { status: 400 })
+      }
+      // Brez povezave sme napravi številčiti samo NJENO zaporedje — način
+      // "device" (prelet 157). Pri centralnem številčenju bi dve napravi brez
+      // povezave podelili isto številko, česar se naknadno ne da popraviti.
+      if ((org.numbering_mode || 'central') !== 'device') {
+        return NextResponse.json({ error: 'Naknadna prijava računov, izdanih brez povezave, je mogoča samo pri številčenju po napravi (numbering_mode = device).' }, { status: 400 })
+      }
+      sequenceNumber = Number(offline.sequence_number)
+      invoiceNumberFull = String(offline.invoice_number_full || `${premise.premise_id}-${deviceIdCode}-${sequenceNumber}`)
+      const letoOffline = Number(offline.leto) || new Date(offline.issued_at).getFullYear()
+      const { error: claimErr } = await supabase.rpc('claim_offline_invoice_number', {
+        p_business_id: order.business_id,
+        p_premise_id: premise.id,
+        p_device_id: device?.id ?? null,
+        p_leto: letoOffline,
+        p_seq: sequenceNumber,
+      })
+      if (claimErr) {
+        return NextResponse.json({ error: 'Uskladitev števca ni uspela: ' + claimErr.message }, { status: 500 })
+      }
+    } else {
+      // Atomarno stevilo preko DB funkcije.
+      // Prejsnja implementacija je stela vrstice "preberi-nato-povecaj", kar je
+      // povzrocalo kolizije stevilk pri hitro zaporednih/socasnih placilih.
+      // POPRAVLJENO (16.8.2026): stevilka se dodeli PO PODJETJU. Prej je bilo
+      // zaporedje globalno za vsa podjetja - novo podjetje bi dobilo stevilko 351
+      // in imelo nepojasnjeno vrzel od 1 do 350, kar FURS zahteva pojasniti.
+      // POPRAVLJENO (prelet 158): klicala se je get_next_pos_invoice_number
+      // NEPOSREDNO, zato je bilo stevilcenje VEDNO centralno — tudi ce je
+      // organizacija v nastavitvah (prelet 157) izbrala nacin "premise" ali
+      // "device". Interni akt bi navajal en nacin, racuni pa bi tekli po
+      // drugem. next_invoice_number upošteva organizations.numbering_mode
+      // (in za "central" še naprej delegira na staro funkcijo — obstoječih
+      // 329 računov to ne premakne).
+      const { data: seqData, error: seqError } = await supabase.rpc('next_invoice_number', {
+        p_business_id: order.business_id,
+        p_premise_id: premise.id,
+        p_device_id: device?.id ?? null,
+        p_leto: null,
+      })
+      if (seqError) {
+        return NextResponse.json({ error: 'Napaka pri generiranju številke računa: ' + seqError.message }, { status: 500 })
+      }
+      sequenceNumber = seqData as number
+      invoiceNumberFull = `${premise.premise_id}-${deviceIdCode}-${sequenceNumber}`
     }
-    const sequenceNumber = seqData as number
-    const invoiceNumberFull = `${premise.premise_id}-${deviceIdCode}-${sequenceNumber}`
 
     // DODANO (16.8.2026): TAKOJ zabelezimo porabljeno zaporedno stevilko.
     // Zaporedje (nextval) se ob neuspehu NE vrne nazaj, zato vsak neuspesen
@@ -153,7 +204,9 @@ export async function POST(req: NextRequest) {
       invoice_number: invoiceNumberFull,
       order_id: order.id,
       status: 'failed',
-      note: 'Stevilka rezervirana, cakanje na odgovor FURS',
+      note: offline
+        ? 'Izdan brez povezave ' + offline.issued_at + ', naknadna prijava'
+        : 'Stevilka rezervirana, cakanje na odgovor FURS',
     })
 
     const amountTotal = Number(total ?? order.total)
@@ -185,11 +238,20 @@ export async function POST(req: NextRequest) {
 
     const fursData: FursInvoiceData = {
       invoiceNumber: sequenceNumber,
-      issueDateTime: order.closed_at ? new Date(order.closed_at) : new Date(),
+      // PRELET 158: pri naknadni prijavi je cas izdaje DEJANSKI trenutek
+      // prodaje brez povezave — isti, s katerim je naprava izracunala ZOI
+      // in ki je natisnjen na kupcevem racunu. Karkoli drugega bi pomenilo,
+      // da prijavljeni racun ni tisti, ki ga ima kupec.
+      issueDateTime: offline?.issued_at
+        ? new Date(offline.issued_at)
+        : (order.closed_at ? new Date(order.closed_at) : new Date()),
       amountTotal,
       vatBreakdown,
       paymentType: 'cash',
       invoiceType: 'invoice',
+      // presetZoi: FURS-u posljemo natisnjeni ZOI; subsequentSubmit oznaci
+      // naknadno prijavo po 9. clenu ZDavPR.
+      ...(offline?.zoi ? { presetZoi: String(offline.zoi), subsequentSubmit: true } : {}),
     }
 
     // Razpakiraj .p12 v PEM (privateKey + cert)
@@ -257,10 +319,15 @@ export async function POST(req: NextRequest) {
       } catch {}
 
       // DODANO (16.8.2026): stevilka je bila USPESNO uporabljena - dopolni zapis.
+      // POPRAVLJENO (prelet 158): ujemanje tudi po POLNI stevilki. V nacinih
+      // "premise"/"device" se zaporedne stevilke med napravami ponavljajo —
+      // ujemanje samo po (business_id, sequence_number) bi posodobilo tudi
+      // tuje vrstice z isto zaporedno stevilko.
       await supabase.from('pos_invoice_numbers')
         .update({ status: 'issued', note: null })
         .eq('business_id', order.business_id)
         .eq('sequence_number', sequenceNumber)
+        .eq('invoice_number', invoiceNumberFull)
     } else {
       // Neuspeh: zabelezi razlog, da bo vrzel v stevilcenju pojasnjena.
       await supabase.from('pos_invoice_numbers')
@@ -270,6 +337,7 @@ export async function POST(req: NextRequest) {
         })
         .eq('business_id', order.business_id)
         .eq('sequence_number', sequenceNumber)
+        .eq('invoice_number', invoiceNumberFull)
     }
 
     if (result.success && result.zoi && result.eor) {
@@ -279,6 +347,9 @@ export async function POST(req: NextRequest) {
         zoi: result.zoi,
         eor: result.eor,
         invoiceNumber: invoiceNumberFull,
+        // PRELET 158: cas izdaje, s katerim je bil izracunan ZOI — blagajna
+        // ga vgradi v 60-mestno QR kodo, da se koda in ZOI ujemata na sekundo.
+        issuedAt: fursData.issueDateTime.toISOString(),
       })
     } else {
       return NextResponse.json({
@@ -286,6 +357,7 @@ export async function POST(req: NextRequest) {
         error: result.errorMessage,
         zoi: result.zoi,
         invoiceNumber: invoiceNumberFull,
+        issuedAt: fursData.issueDateTime.toISOString(),
       }, { status: 503 })
     }
 

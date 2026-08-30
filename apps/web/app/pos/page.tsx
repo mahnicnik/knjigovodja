@@ -24,6 +24,8 @@ import { idZaDdv } from '@/lib/format'
 import OpravilaScreen from '@/components/pos/OpravilaScreen'
 import OpravilaVOknu from '@/components/pos/OpravilaVOknu'
 import StanjePovezave from '@/components/pos/StanjePovezave'
+import { dodajVVrsto } from '@/lib/offline-vrsta'
+import { jeElektron, preberiKontekst, naslednjaLokalnaStevilka, zabeleziIzPolneStevilke, zaznanaPovezava } from '@/lib/offline-prodaja'
 
 // ================================================================
 // TEMA
@@ -854,6 +856,153 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
   const finalTotal = Math.max(0, (total - total * discount / 100 - discountEurVal)) + total * tipPct / 100
   const change = method === 'cash' && given ? Math.max(0, parseFloat(given) - finalTotal) : 0
 
+  // ═══ PRELET 158: PRODAJA BREZ POVEZAVE ═══════════════════════════
+  //
+  // Prelet 156 je zgradil vrsto (offline-vrsta.ts), a je NIHCE NI KLICAL —
+  // dodajVVrsto se ni pojavil nikjer izven definicije. Ob izpadu je placilo
+  // padlo na prvem omreznem klicu in blagajnik je obstal.
+  //
+  // POGOJI ZA DAVCNO VELJAVEN racun brez povezave (ZDavPR + FURS FAQ,
+  // preverjeno pri viru 30.8.2026):
+  //   1. namizna aplikacija (potrdilo mora biti NA napravi — FURS potrdilo
+  //      "v oblaku" ob izpadu pomeni nedelovanje naprave in vezano knjigo),
+  //   2. stevilcenje "device" (edino, pri katerem naprava brez povezave
+  //      varno nadaljuje SVOJE zaporedje — zato je nastal prelet 157),
+  //   3. seme stevca (vsaj ena uspesna spletna prodaja na tej napravi),
+  //   4. ZOI, izracunan lokalno z namenskim potrdilom.
+  // Ce pogoji niso izpolnjeni, prodaje NE izvedemo napol — jasna napaka
+  // pove, kaj manjka oziroma da je na vrsti vezana knjiga racunov.
+  async function izvediOfflineProdajo() {
+    if (!jeElektron()) {
+      throw new Error('Ni povezave s strežnikom. Prodaja brez povezave je mogoča samo v namizni aplikaciji Računko POS — v brskalniku počakajte, da se povezava vrne.')
+    }
+    const ctx = preberiKontekst()
+    if (!ctx) {
+      throw new Error('Ni povezave, naprava pa še ni pripravljena za delo brez nje — blagajna mora biti vsaj enkrat zagnana s povezavo.')
+    }
+    if (method === 'pkg' || method === 'prep') {
+      throw new Error('Brez povezave ni mogoče unovčiti kartice ali predplačila — stanje je zapisano v bazi. Izberite gotovino ali kartico.')
+    }
+
+    const zdaj = new Date()
+    const leto = zdaj.getFullYear()
+    let zoi: string | null = null
+    let seq: number | null = null
+
+    if (furs) {
+      if (ctx.numberingMode !== 'device') {
+        throw new Error('Davčno veljaven račun brez povezave zahteva številčenje PO NAPRAVI (Nastavitve → Davčna blagajna → Način številčenja). Trenutni način: "' + ctx.numberingMode + '". Do preklopa ob izpadu uporabite vezano knjigo računov.')
+      }
+      seq = naslednjaLokalnaStevilka(ctx.premiseCode, ctx.deviceCode, leto)
+      if (seq === null) {
+        throw new Error('Lokalni števec računov še nima izhodišča — na tej napravi je potrebna vsaj ena uspešna prodaja s povezavo. Do takrat uporabite vezano knjigo računov.')
+      }
+      const r = await (window as any).electronAPI.fursZoi({
+        taxNumber: ctx.taxNumber,
+        issueDateTime: zdaj.toISOString(),
+        invoiceNumber: seq,
+        premiseId: ctx.premiseCode,
+        deviceId: ctx.deviceCode,
+        amount: finalTotal,
+      })
+      if (!r?.ok || !r.zoi) {
+        throw new Error('ZOI ni bilo mogoče izračunati (' + (r?.error || 'neznana napaka') + '). Brez ZOI račun ni davčno veljaven — uporabite vezano knjigo računov.')
+      }
+      zoi = r.zoi
+    }
+
+    const stevilkaFull = furs && seq !== null ? ctx.premiseCode + '-' + ctx.deviceCode + '-' + seq : null
+    const napitnina = Math.round(total * tipPct / 100 * 100) / 100
+    const popust = Math.round((total * discount / 100 + discountEurVal) * 100) / 100
+    const klavzuleRacuna = Array.from(new Set(
+      (cart || [])
+        .filter((l: any) => Number(l.vat_rate ?? 22) === 0)
+        .map((l: any) => vatExemptionText(l.vat_exemption_code, l.vat_exemption_custom_text))
+        .filter(Boolean)
+    )) as string[]
+
+    await dodajVVrsto({
+      lokalniId: (typeof crypto !== 'undefined' && (crypto as any).randomUUID)
+        ? crypto.randomUUID()
+        : Date.now() + '-' + Math.random().toString(36).slice(2),
+      businessId: BUSINESS_ID,
+      ustvarjeno: zdaj.toISOString(),
+      narocilo: {
+        customerId: activeCustomer?.id ?? null,
+        tableId: activeTable?.id ?? null,
+        cashierId: auth?.user?.id ?? null,
+        cashierName: auth?.user?.name || '',
+        furs,
+        total: finalTotal,
+        subtotal: total,
+        tip: napitnina,
+        discount: popust,
+        klavzule: klavzuleRacuna,
+        seq,
+        stevilkaFull,
+        leto,
+        issuedAt: zdaj.toISOString(),
+        premiseUuid: ctx.premiseUuid,
+        deviceUuid: ctx.deviceUuid,
+        premiseCode: ctx.premiseCode,
+        deviceCode: ctx.deviceCode,
+      },
+      // Iste oblike kot replaceLines — sinhronizacija jih preda naprej 1:1.
+      postavke: cart.map(line => ({
+        itemId: line.id,
+        name: line.name,
+        qty: line.qty,
+        unitPrice: line.happyHourApplied ? line.price * (1 - Number(line.happyHourPct ?? 20) / 100) : line.price,
+        vatRate: line.vat_rate ?? 22,
+        mods: (line.mods || []).map((m: any) => ({
+          ...m,
+          delta: line.happyHourApplied ? Number(m.delta || 0) * (1 - Number(line.happyHourPct ?? 20) / 100) : Number(m.delta || 0),
+        })),
+        note: line.note || null,
+      })),
+      placilo: {
+        method: method === 'bon' ? 'bon' : method,
+        amount: finalTotal,
+        received: method === 'cash' && given ? parseFloat(given) : null,
+      },
+      zoi,
+    })
+
+    onComplete({
+      offline: true,
+      method,
+      total: finalTotal,
+      subtotal: total,
+      discount_amount: popust,
+      tip: napitnina,
+      furs,
+      eor: null,
+      zoi,
+      orderId: null,
+      invoiceNumber: stevilkaFull || 'BREZ-POVEZAVE-' + String(zdaj.getTime()).slice(-6),
+      issuedAt: zdaj.toISOString(),
+      org: {
+        name: ctx.orgName,
+        address: ctx.orgAddress,
+        post_code: ctx.orgPostCode,
+        city: ctx.orgCity,
+        tax_number: ctx.taxNumber,
+        vat_registered: ctx.vatRegistered,
+      },
+      premiseId: ctx.premiseCode,
+      premiseAddress: ctx.premiseAddress,
+      deviceId: ctx.deviceCode,
+      cashierName: auth?.user?.name || '',
+      lines: cart.map(l => ({
+        name: l.name,
+        qty: l.qty,
+        unitPrice: (() => { const bz = l.price + (l.mods || []).reduce((s, m) => s + (m.delta || 0), 0); return l.happyHourApplied ? bz * (1 - Number(l.happyHourPct ?? 20) / 100) : bz })(),
+        unit_price: (() => { const bz = l.price + (l.mods || []).reduce((s, m) => s + (m.delta || 0), 0); return l.happyHourApplied ? bz * (1 - Number(l.happyHourPct ?? 20) / 100) : bz })(),
+        vat_rate: l.vat_rate ?? 22,
+      })),
+    })
+  }
+
   async function submitPayment() {
     if (!auth?.user?.id && !auth?.user?.is_master) {
       setError('Ni prijavljenega blagajnika')
@@ -862,6 +1011,12 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
     setProcessing(true)
     setError(null)
     try {
+      // ── PRELET 158: če omrežja zanesljivo NI, gre prodaja v lokalno vrsto ──
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        await izvediOfflineProdajo()
+        return
+      }
+
       // PREVERBA PRED ODPRTJEM NAROCILA (22.8.2026).
       //
       // NAPAKA: preverba kartice je bila SELE po odprtju narocila, zato je vsak
@@ -881,7 +1036,25 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
       // JWT zeton lahko poteče. Preden zacnemo placilni tok, eksplicitno osvezimo
       // sejo - sicer openOrder/addLine/pay lahko tiho spodletijo sredi postopka,
       // medtem ko FURS (server-side) se vedno uspe in natisne racun.
-      const { data: sessionCheck, error: sessionError } = await createClient().auth.refreshSession()
+      // POPRAVLJENO (prelet 158): refreshSession je prvi OMREŽNI klic v
+      // plačilu in je ob izpadu interneta vrgel "Failed to fetch" — blagajnik
+      // je videl "Seja je potekla", čeprav je bila težava povezava. Omrežno
+      // napako zdaj ločimo od potekle seje: `navigator.onLine` zna namreč
+      // lagati, ko router deluje, internet za njim pa ne — zato ob sumu še
+      // preverimo dosegljivost lastnega strežnika in šele nato prodajo
+      // preusmerimo v lokalno vrsto.
+      let sessionCheck: any = null
+      let sessionError: any = null
+      try {
+        const seja = await createClient().auth.refreshSession()
+        sessionCheck = seja.data
+        sessionError = seja.error
+      } catch (e: any) { sessionError = e }
+      const omreznaNapaka = sessionError && /fetch|network|load failed|connection/i.test(String(sessionError?.message || sessionError))
+      if (omreznaNapaka && !(await zaznanaPovezava())) {
+        await izvediOfflineProdajo()
+        return
+      }
       if (sessionError || !sessionCheck?.session) {
         throw new Error('Seja je potekla. Prosimo, ponovno se prijavite in poskusite znova.')
       }
@@ -927,6 +1100,7 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
       let fursEor = null
       let fursZoi = null
       let fursInvoiceNumber = null
+      let fursIssuedAt = null
       // DODANO (17.8.2026): razlog neuspesne fiskalizacije, da ga POVEMO
       // blagajniku. Prej se je zapisal samo v konzolo - prodaja se je
       // zakljucila navidez normalno, racun pa je ostal brez davcne potrditve
@@ -956,6 +1130,11 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
           if (fursData.eor) fursEor = fursData.eor
           if (fursData.zoi) fursZoi = fursData.zoi
           if (fursData.invoiceNumber) fursInvoiceNumber = fursData.invoiceNumber
+          if (fursData.issuedAt) fursIssuedAt = fursData.issuedAt
+          // PRELET 158: zadnja podeljena številka je SEME za številčenje brez
+          // povezave — naslednji račun brez povezave = zadnja + 1. Beleži se ob
+          // VSAKI uspešni prodaji, da je izhodišče vedno sveže.
+          if (fursData.invoiceNumber) zabeleziIzPolneStevilke(String(fursData.invoiceNumber))
           if (!fursRes.ok && fursData.error) {
             console.warn('FURS:', fursData.error)
             fursNapaka = fursData.error
@@ -1209,6 +1388,9 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         furs,
         eor: fursEor,
         zoi: fursZoi,
+        // PRELET 158: čas izdaje, s katerim je bil izračunan ZOI — QR koda na
+        // računu mora vsebovati isti čas na sekundo natančno.
+        issuedAt: fursIssuedAt,
         orderId,
         invoiceNumber: fursInvoiceNumber || fallbackNumber,
         org: orgInfo ? {
@@ -1495,6 +1677,10 @@ async function autoPrint(data) {
         payment_method: data.method,
         furs_zoi: data.zoi,
         furs_eor: data.eor,
+        // PRELET 158: čas izdaje za 60-mestno FURS QR kodo (mora biti ISTI kot
+        // pri izračunu ZOI) in oznaka računa brez povezave za opombo na izpisu.
+        issue_datetime: data.issuedAt || new Date().toISOString(),
+        offline: !!data.offline,
         premise_id: data.premiseId || '',
         premise_address: data.premiseAddress || '',
         is_copy: false,
@@ -1532,6 +1718,11 @@ async function autoPrint(data) {
         payment_method: data.method,
         furs_zoi: data.zoi,
         furs_eor: data.eor,
+        // PRELET 158: isti podatki tudi za lokalni tiskalni strežnik —
+        // ESC/POS generator v namizni aplikaciji je skupen obema potema.
+        tax_number: data.org?.tax_number || '',
+        issue_datetime: data.issuedAt || new Date().toISOString(),
+        offline: !!data.offline,
       }
       const printRes = await fetch('http://localhost:6789/print/receipt', {
         // POPRAVLJENO (17.8.2026): casovna omejitev - brez nje zahteva ob
@@ -1563,7 +1754,9 @@ async function autoPrint(data) {
       premiseAddress: data.premiseAddress || '',
       deviceId: data.deviceId || '',
       invoiceNumber: data.invoiceNumber || (data.orderId?.slice(-6)) || '—',
-      issueDate: new Date(),
+      // PRELET 158: pri računu brez povezave (in vseh, kjer je čas znan) mora
+      // QR koda vsebovati čas, s katerim je bil izračunan ZOI — ne časa tiska.
+      issueDate: data.issuedAt ? new Date(data.issuedAt) : new Date(),
       cashierName: data.cashierName || '',
       payment: {
         method: data.method,
@@ -1609,7 +1802,11 @@ async function autoPrint(data) {
 
 function ReceiptToast({ data, onClose }) {
   const fursOk = data?.eor
-  const fursFailed = data?.furs && !data?.eor
+  // PRELET 158: račun, izdan brez povezave, NI spodletela fiskalizacija —
+  // ZOI ima, EOR pa po 9. členu ZDavPR dobi naknadno. Brez te ločitve bi
+  // blagajnik ob vsaki offline prodaji videl rdeče opozorilo o napaki.
+  const offlineIzdan = !!data?.offline
+  const fursFailed = data?.furs && !data?.eor && !offlineIzdan
 
   React.useEffect(() => {
     if (data) {
@@ -1633,6 +1830,14 @@ function ReceiptToast({ data, onClose }) {
         {fursOk && (
           <div style={{ fontSize:12, color:T.accent, marginTop:8, fontWeight:600 }}>
             FURS potrjen
+          </div>
+        )}
+        {offlineIzdan && data?.furs && (
+          <div style={{ fontSize:12, color:'#b88c28', marginTop:8, background:'rgba(184,140,40,0.10)', padding:'10px 12px', borderRadius:8, lineHeight:1.6, textAlign:'left' }}>
+            <b>Račun izdan brez povezave.</b><br/>
+            ZOI je dodeljen in natisnjen; EOR bo pridobljen ob vrnitvi povezave
+            (samodejno, zakonski rok sta 2 delovna dneva). Račun čaka v vrstici
+            na vrhu blagajne.
           </div>
         )}
         {fursFailed && (

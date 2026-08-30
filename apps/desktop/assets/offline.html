@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+<meta charset="UTF-8">
+<title>Računko POS — ni povezave</title>
+<style>
+  /* Brez zunanjih virov: ta stran se prikaže ravno takrat, ko interneta NI. */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: #0d2818;
+    color: #eef5f0;
+    display: flex; align-items: center; justify-content: center;
+    -webkit-user-select: none; user-select: none;
+  }
+  .okvir { max-width: 460px; padding: 40px 32px; text-align: center; }
+  .znak {
+    width: 74px; height: 74px; border-radius: 20px; margin: 0 auto 22px;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10);
+    display: flex; align-items: center; justify-content: center; font-size: 34px;
+  }
+  h1 { font-size: 21px; font-weight: 700; margin-bottom: 10px; letter-spacing: -0.01em; }
+  p  { font-size: 13.5px; line-height: 1.65; color: rgba(238,245,240,0.75); }
+  .opomba {
+    margin-top: 18px; padding: 12px 14px; border-radius: 10px;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+    font-size: 12.5px; line-height: 1.6; color: rgba(238,245,240,0.85); text-align: left;
+  }
+  .stanje { margin-top: 22px; font-size: 12.5px; color: rgba(238,245,240,0.55); min-height: 18px; }
+  .pika { display:inline-block; width:7px; height:7px; border-radius:99px; background:#e0b64a; margin-right:7px; animation: utrip 1.4s ease-in-out infinite; vertical-align: 1px; }
+  @keyframes utrip { 0%,100% { opacity: .35 } 50% { opacity: 1 } }
+  button {
+    margin-top: 16px; padding: 11px 26px; border: 0; border-radius: 10px;
+    background: #1D9E75; color: #fff; font-size: 14px; font-weight: 700;
+    font-family: inherit; cursor: pointer;
+  }
+  button:active { transform: translateY(1px); }
+  .nogica { margin-top: 26px; font-size: 11px; color: rgba(238,245,240,0.35); }
+</style>
+</head>
+<body>
+  <div class="okvir">
+    <div class="znak">⚡</div>
+    <h1>Ni povezave s strežnikom</h1>
+    <p>Blagajna se ne more povezati z računko.si. Preverite internetno
+       povezavo (router, kabel, Wi-Fi) — takoj ko bo strežnik dosegljiv,
+       se bo blagajna naložila <b>sama</b>.</p>
+
+    <div class="opomba">
+      <b>Računi, izdani brez povezave, niso izgubljeni.</b> Shranjeni so na
+      tej napravi in bodo ob vrnitvi povezave samodejno prijavljeni FURS.
+      Zakonski rok za prijavo sta dva delovna dneva.
+    </div>
+
+    <div class="stanje"><span class="pika"></span><span id="stanje">Samodejno preverjam povezavo …</span></div>
+    <button id="poskusi">Poskusi znova</button>
+    <div class="nogica">Računko POS</div>
+  </div>
+
+<script>
+  // Glavni proces vsakih 5 s preverja dosegljivost strežnika in ob uspehu
+  // sam naloži blagajno — ta gumb je za nestrpne prste.
+  var gumb = document.getElementById('poskusi')
+  var stanje = document.getElementById('stanje')
+  gumb.addEventListener('click', function () {
+    stanje.textContent = 'Preverjam …'
+    gumb.disabled = true
+    var api = window.electronAPI
+    var klic = (api && api.ponovnoPovezi) ? api.ponovnoPovezi() : Promise.resolve({ ok: false })
+    klic.then(function (r) {
+      if (!r || !r.ok) {
+        stanje.textContent = 'Strežnik še ni dosegljiv. Preverjam naprej …'
+        gumb.disabled = false
+      }
+      // Ob uspehu glavni proces okno preusmeri na blagajno — tu ni kaj storiti.
+    }).catch(function () {
+      stanje.textContent = 'Strežnik še ni dosegljiv. Preverjam naprej …'
+      gumb.disabled = false
+    })
+  })
+</script>
+</body>
+</html>

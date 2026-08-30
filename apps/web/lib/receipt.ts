@@ -2,7 +2,7 @@
  * RAČUNKO — POS Receipt HTML Generator
  */
 import QRCode from 'qrcode'
-import { getFursVerificationUrl } from './furs'
+import { zoi60 } from './furs-zoi-koda'
 import { idZaDdv } from '@/lib/format'
 
 export interface ReceiptOrg {
@@ -108,8 +108,13 @@ export async function buildReceiptHTML(d: ReceiptData): Promise<string> {
   let qrImg = ''
   if (d.payment.furs_zoi) {
     try {
-      const fursUrl = getFursVerificationUrl(d.payment.furs_zoi, d.issueDate)
-      const qrDataUrl = await QRCode.toDataURL(fursUrl, { width: 140, margin: 1, errorCorrectionLevel: 'M' })
+      // POPRAVLJENO (prelet 158): QR koda po Pravilniku o izvajanju ZDavPR
+      // vsebuje 60-mestno kodo iz ZOI (desetiski zapis + davcna + datum/cas +
+      // kontrolni znak) z ravnjo odprave napak "L". Prej je vsebovala spletno
+      // povezavo za rocno preverjanje, ki je FURS-ova aplikacija
+      // "Preveri racun" ne zna prebrati.
+      const koda = zoi60(d.payment.furs_zoi, d.org.tax_number, d.issueDate)
+      const qrDataUrl = await QRCode.toDataURL(koda, { width: 140, margin: 1, errorCorrectionLevel: 'L' })
       qrImg = `<div class="qr"><img src="${qrDataUrl}" alt="FURS QR" width="140" height="140"/></div>`
     } catch { qrImg = '' }
   }
