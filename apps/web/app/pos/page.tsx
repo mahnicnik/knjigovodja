@@ -3438,11 +3438,20 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
   async function markStatus(status) {
     // POPRAVLJENO (16.8.2026): brez te varovalke je dvojni klik na "Prišel"
     // odstel obisk DVAKRAT - stranki je izginil obisk s kartice po krivem.
-    const alreadyArrived = booking.status === 'arrived'
+    // POPRAVLJENO (26.8.2026): prej je bila varovalka proti dvojnemu odstevanju
+    // vezana na STATUS ("ce je ze prisel, obiska ne odstevaj vec"). To je
+    // blokiralo tudi primer, ko obisk sploh se ni bil odstet:
+    //
+    //   1. termin oznacen "Prisel" BREZ izbrane kartice -> obisk se ne odsteje
+    //   2. kartica izbrana pozneje
+    //   3. status je ze "arrived" -> obisk se NE odsteje NIKOLI
+    //
+    // Zdaj belezimo DEJSTVO (`visit_deducted_at`), ne sklepamo iz statusa.
+    const zeOdstet = !!booking.visit_deducted_at
     const { error: statusErr } = await createClient().from('bookings').update({ status }).eq('id', booking.id)
     if (statusErr) { showToast('Statusa ni bilo mogoče spremeniti: ' + statusErr.message, false); return }
     // Če "arrived" in ima paket → odštej obisk
-    if (status === 'arrived' && selectedPkg && !alreadyArrived) {
+    if (status === 'arrived' && selectedPkg && !zeOdstet) {
       const pkg = activePkgs.find(p => p.id === selectedPkg)
       // DODANO (16.8.2026): tudi tu (prihod na termin) se je obisk odstel z
       // ZAMRZNJENE kartice - enako kot pri rocni uporabi obiska.
@@ -3461,6 +3470,12 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
         }
         const { error: visitErr } = await createClient().from('customer_packages').update(updates).eq('id', selectedPkg)
         if (visitErr) { showToast('Obiska ni bilo mogoče odšteti: ' + visitErr.message, false); return }
+
+        // Zabelezimo, da je bil obisk za TA termin odstet, in s katere kartice.
+        await createClient().from('bookings')
+          .update({ visit_deducted_at: new Date().toISOString(), visit_deducted_from: selectedPkg })
+          .eq('id', booking.id)
+
         showToast('✓ Obisk zabeležen + odštet iz kartice')
       }
     } else if (status === 'arrived') {
@@ -3468,7 +3483,9 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
       // ima stranka kartico, ki bi jo bilo mogoce uporabiti - uporabnik je
       // mislil, da je obisk odstet. Zdaj to izrecno povemo.
       const naVoljo = (activePkgs || []).filter((p: any) => p.remaining > 0 && !p.frozen_at)
-      if (!selectedPkg && naVoljo.length > 0) {
+      if (zeOdstet) {
+        showToast('✓ Prihod zabeležen — obisk je bil za ta termin že odštet')
+      } else if (!selectedPkg && naVoljo.length > 0) {
         showToast('✓ Prihod zabeležen — obisk NI odštet, ker kartica ni izbrana', false)
       } else {
         showToast('✓ Prihod zabeležen')

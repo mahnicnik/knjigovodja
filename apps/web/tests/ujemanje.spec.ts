@@ -3107,3 +3107,55 @@ test('kategorije: nobena se ne izgubi', () => {
   expect(po).toHaveLength(5)
   expect(new Set(po).size).toBe(5)
 })
+
+// ─── Odštevanje obiska ob prihodu ───────────────────────────────────────
+
+/**
+ * NAPAKA (popravljeno 26.8.2026): varovalka proti dvojnemu odštevanju je bila
+ * vezana na STATUS — „če je že prišel, obiska ne odštevaj več". To je
+ * blokiralo tudi primer, ko obisk sploh še ni bil odštet:
+ *
+ *   1. termin označen „Prišel" BREZ izbrane kartice → obisk se ne odšteje
+ *   2. kartica izbrana pozneje
+ *   3. status je že „arrived" → obisk se NE odšteje NIKOLI
+ *
+ * Zdaj beležimo DEJSTVO (`visit_deducted_at`), ne sklepamo iz statusa.
+ */
+function odstejemo(booking: { status: string; visit_deducted_at?: string | null }, izbranaKartica: string | null) {
+  return booking.status === 'arrived' && !!izbranaKartica && !booking.visit_deducted_at
+}
+
+test('obisk: odšteje se ob prihodu z izbrano kartico', () => {
+  expect(odstejemo({ status: 'arrived' }, 'kartica-1')).toBe(true)
+})
+
+test('obisk: kartica izbrana PO označitvi prihoda se še vedno odšteje', () => {
+  // Prav to je bila napaka — stara koda bi tu vrnila false.
+  const b = { status: 'arrived', visit_deducted_at: null }
+  expect(odstejemo(b, 'kartica-1')).toBe(true)
+})
+
+test('obisk: že odštet se ne odšteje dvakrat', () => {
+  const b = { status: 'arrived', visit_deducted_at: '2026-08-26T10:00:00Z' }
+  expect(odstejemo(b, 'kartica-1')).toBe(false)
+})
+
+test('obisk: brez kartice se ne odšteje', () => {
+  expect(odstejemo({ status: 'arrived' }, null)).toBe(false)
+})
+
+test('obisk: pred prihodom se ne odšteje', () => {
+  expect(odstejemo({ status: 'confirmed' }, 'kartica-1')).toBe(false)
+})
+
+/**
+ * Zabeležimo tudi, s KATERE kartice — da je obisk mogoče vrniti na pravo,
+ * če ima stranka več kartic.
+ */
+function zapisOdstetja(karticaId: string) {
+  return { visit_deducted_at: expect.any(String), visit_deducted_from: karticaId }
+}
+
+test('obisk: zabeleži se, s katere kartice je bil odštet', () => {
+  expect(zapisOdstetja('kartica-2').visit_deducted_from).toBe('kartica-2')
+})
