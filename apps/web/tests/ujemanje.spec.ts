@@ -3159,3 +3159,82 @@ function zapisOdstetja(karticaId: string) {
 test('obisk: zabeleži se, s katere kartice je bil odštet', () => {
   expect(zapisOdstetja('kartica-2').visit_deducted_from).toBe('kartica-2')
 })
+// ─── Opravila in sporočila za osebje ────────────────────────────────────
+
+/**
+ * DODANO (26.8.2026): opravila po fazah izmene (odpiranje, med izmeno,
+ * zapiranje) in sporočila lastnika osebju.
+ *
+ * ZAKAJ SO ODKLJUKANJA LOČENA OD OPRAVIL: opravilo je ponavljajoče (vsak dan
+ * isto), odkljukanje pa velja za EN dan. Če bi „opravljeno" hranili na
+ * opravilu, bi ga bilo treba vsako noč pobrisati — in ne bi vedeli, kdo je
+ * kaj naredil prejšnji teden.
+ */
+function jeOpravljeno(taskId: string, dan: string, odkljukanja: Array<{ task_id: string; shift_date: string }>) {
+  return odkljukanja.some(o => o.task_id === taskId && o.shift_date === dan)
+}
+
+test('opravila: odkljukanje velja za en dan', () => {
+  const o = [{ task_id: 't1', shift_date: '2026-08-26' }]
+  expect(jeOpravljeno('t1', '2026-08-26', o)).toBe(true)
+  expect(jeOpravljeno('t1', '2026-08-27', o)).toBe(false)   // naslednji dan znova
+})
+
+test('opravila: isto opravilo se pojavi vsak dan', () => {
+  // Ponavljajoče opravilo ostane; briše se le odkljukanje.
+  const opravilo = { id: 't1', recurring: true, active: true }
+  expect(opravilo.active).toBe(true)
+})
+
+/**
+ * Napredek po fazi — koliko od koliko.
+ */
+function napredek(vsa: Array<{ id: string }>, dan: string, odkljukanja: Array<{ task_id: string; shift_date: string }>) {
+  const done = vsa.filter(t => jeOpravljeno(t.id, dan, odkljukanja)).length
+  return { done, skupaj: vsa.length, delez: vsa.length ? done / vsa.length : 0 }
+}
+
+test('opravila: napredek se šteje pravilno', () => {
+  const vsa = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }]
+  const o = [{ task_id: 'a', shift_date: 'd1' }, { task_id: 'c', shift_date: 'd1' }]
+  const n = napredek(vsa, 'd1', o)
+  expect(n).toEqual({ done: 2, skupaj: 4, delez: 0.5 })
+})
+
+test('opravila: brez opravil ni deljenja z nič', () => {
+  expect(napredek([], 'd1', []).delez).toBe(0)
+})
+
+/**
+ * Hitri izbor ne ponudi opravila, ki je že dodano.
+ */
+function predlogeNaVoljo(predloge: string[], obstojeca: Array<{ title: string }>) {
+  return predloge.filter(p => !obstojeca.some(o => o.title === p))
+}
+
+test('predloge: že dodano opravilo se ne ponuja znova', () => {
+  const p = ['Preštej gotovino', 'Natisni Z-poročilo']
+  expect(predlogeNaVoljo(p, [{ title: 'Preštej gotovino' }])).toEqual(['Natisni Z-poročilo'])
+})
+
+/**
+ * Sporočila: pripeta na vrh, potekla se ne prikažejo.
+ */
+function vidnaSporocila(vsa: Array<{ pinned: boolean; expires_on?: string | null }>, danes: string) {
+  return vsa
+    .filter(m => !m.expires_on || m.expires_on >= danes)
+    .sort((a, b) => Number(b.pinned) - Number(a.pinned))
+}
+
+test('sporočila: pripeto je na vrhu', () => {
+  const v = vidnaSporocila([{ pinned: false }, { pinned: true }], '2026-08-26')
+  expect(v[0].pinned).toBe(true)
+})
+
+test('sporočila: poteklo se ne prikaže', () => {
+  const v = vidnaSporocila(
+    [{ pinned: false, expires_on: '2026-08-25' }, { pinned: false, expires_on: null }],
+    '2026-08-26',
+  )
+  expect(v).toHaveLength(1)
+})

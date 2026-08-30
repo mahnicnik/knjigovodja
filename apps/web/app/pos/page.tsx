@@ -21,6 +21,7 @@ import { buildOpeningReceipt, buildXReportReceipt, buildZReportReceipt } from '@
 // POPRAVLJENO (26.8.2026): prelet 136 je uporabil `idZaDdv`, uvoza pa ni
 // dodal. `@ts-nocheck` je napako skril; ujela jo je skripta preveri-stolpce.
 import { idZaDdv } from '@/lib/format'
+import OpravilaScreen from '@/components/pos/OpravilaScreen'
 
 // ================================================================
 // TEMA
@@ -97,18 +98,18 @@ const CFG = {
     { id: 'never', label: 'Nikoli',    ms: 0      },
   ],
   profiles: [
-    { id: 'all',      name: 'Vse v enem',       icon: '🌐', nav: ['floor','sale','calendar','customers','packages','inventory','orders','reports','admin'] },
-    { id: 'rest',     name: 'Restavracija',      icon: '🍽', nav: ['floor','sale','calendar','customers','inventory','orders','reports','admin'] },
-    { id: 'bar',      name: 'Bar / Kavarna',     icon: '🍺', nav: ['floor','sale','customers','inventory','orders','reports','admin'] },
+    { id: 'all',      name: 'Vse v enem',       icon: '🌐', nav: ['floor','sale','calendar','customers','packages','inventory','orders','reports','opravila','admin'] },
+    { id: 'rest',     name: 'Restavracija',      icon: '🍽', nav: ['floor','sale','calendar','customers','inventory','orders','reports','opravila','admin'] },
+    { id: 'bar',      name: 'Bar / Kavarna',     icon: '🍺', nav: ['floor','sale','customers','inventory','orders','reports','opravila','admin'] },
     // POPRAVLJENO (16.8.2026): tudi profilu "Storitve" je manjkal zaslon
     // "orders". Tudi tu se izdajajo racuni in jih je treba znati stornirati.
-    { id: 'storitve', name: 'Storitve',           icon: '💆', nav: ['calendar','customers','packages','sale','orders','reports','admin'] },
+    { id: 'storitve', name: 'Storitve',           icon: '💆', nav: ['calendar','customers','packages','sale','orders','reports','opravila','admin'] },
     // POPRAVLJENO (16.8.2026): profilu "Tržnica" je manjkal zaslon "orders"
     // (Računi). Ker je to PRIVZETI profil za nova podjetja, nov uporabnik ni
     // imel nobene poti do izdanih računov - torej ne do storna, ne do vračila,
     // ne do spremembe načina plačila. Vse te funkcije obstajajo in delujejo,
     // le zaslona, kjer se do njih pride, ni bilo v meniju.
-    { id: 'trznica',  name: 'Tržnica / Stojnica', icon: '🥕', nav: ['sale','inventory','orders','reports','admin'] },
+    { id: 'trznica',  name: 'Tržnica / Stojnica', icon: '🥕', nav: ['sale','inventory','orders','reports','opravila','admin'] },
   ],
   permissionGroups: [
     { title: 'Blagajna & Prodaja', items: [['sale','Prodaja'],['openCash','Odpri blagajno'],['voidReceipt','Storno računa'],['refund','Vračilo'],['manualDiscount','Ročni popust'],['dailyClose','Dnevni zaključek']] },
@@ -1683,6 +1684,8 @@ const SCREENS = {
   inventory: { label:'Zaloga',          icon:'box'      },
   inventura: { label:'Inventura',       icon:'scale'    },
   orders:    { label:'Računi',          icon:'receipt'  },
+  // DODANO (26.8.2026): opravila po fazah izmene in sporocila lastnika osebju.
+  opravila:  { label:'Opravila',        icon:'check'    },
   reports:   { label:'Poročila',        icon:'chart'    },
   admin:     { label:'Nastavitve',      icon:'settings' },
 }
@@ -13700,6 +13703,7 @@ function KlasikApp() {
           {screen==='inventory' && <InventoryScreen posData={posData}/>}
           {screen==='inventura' && <InventuraScreen posData={posData} auth={auth}/>}
           {screen==='orders'    && <OrdersScreen posData={posData} auth={auth}/>}
+          {screen==='opravila'  && <OpravilaScreen posData={{ ...posData, T }} auth={auth}/>}
           {screen==='reports'   && <ReportsScreen posData={posData} auth={auth} setScreen={setScreen}/>}
           {screen==='admin'     && <AdminScreen auth={auth} posData={posData}/>}
         </div>
