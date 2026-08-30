@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 import ZalogaIzBlagajne from '@/components/ZalogaIzBlagajne'
+import UvozDobavniceModal from '@/components/zaloge/UvozDobavniceModal'
 
 interface Item {
   id: string
@@ -44,6 +45,9 @@ export default function ZalogePage() {
   const supabase = createClient()
 
   const [orgId, setOrgId] = useState<string | null>(null)
+  // DODANO (26.8.2026): uvoz dobavnice. Blagajna ga je imela, portal pa ne -
+  // stranka brez blagajne je morala vsak artikel vnesti rocno.
+  const [uvozModal, setUvozModal] = useState<any>(null)
   // DODANO (25.8.2026): portal in blagajna sta imela LOCENI zalogi - v portalu
   // 1 artikel, v blagajni 123. Ob koncu leta ni bilo od kod dobiti popisa za
   // racunovodkinjo. Zdaj portal bere zalogo NEPOSREDNO iz blagajne.
@@ -209,6 +213,7 @@ export default function ZalogePage() {
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <Link href="/dashboard" style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)', padding: '8px 16px', borderRadius: 8, fontSize: 13, textDecoration: 'none' }}>← Nazaj</Link>
+            <button onClick={() => setUvozModal({ korak: 'izbira' })} style={{ background: 'rgba(255,255,255,0.12)', color: '#fff', border: 0, padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>📄 Uvozi dobavnico</button>
             <button onClick={() => setItemModal({ unit: 'kos', vat_rate: 22, current_stock: 0, min_stock: 0 })} style={{ background: '#1D9E75', color: '#fff', border: 0, padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>+ Nov artikel</button>
           </div>
         </div>
@@ -411,6 +416,18 @@ export default function ZalogePage() {
       </div>
 
       {/* ARTIKEL MODAL */}
+      {uvozModal && orgId && (
+        <UvozDobavniceModal
+          orgId={orgId}
+          onClose={() => setUvozModal(null)}
+          onDone={(d: any) => {
+            setUvozModal(null)
+            load()
+            showToast(`Uvoženo: ${d.dodanih} novih, ${d.posodobljenih} posodobljenih`)
+          }}
+        />
+      )}
+
       {itemModal && (
         <div onClick={e => { if (e.target === e.currentTarget) setItemModal(null) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
           <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 520, padding: 28, maxHeight: '90vh', overflowY: 'auto' }}>

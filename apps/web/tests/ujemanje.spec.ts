@@ -3519,3 +3519,81 @@ test('odkljukanje: napaka se pokaže uporabniku', () => {
 test('odkljukanje: ob uspehu ni sporočila', () => {
   expect(odzivNaNapako(null)).toBeNull()
 })
+
+// ─── Uvoz dobavnice v zalogo portala ────────────────────────────────────
+
+/**
+ * DODANO (26.8.2026): blagajna je uvoz dobavnice že imela, portal pa ne —
+ * stranka brez blagajne (trgovina z oblačili, spletna prodaja) je morala vsak
+ * artikel vnesti ročno.
+ *
+ * DVA KORAKA, ne eden: dokument razčlenimo in pokažemo PREDLOG, ki ga
+ * uporabnik potrdi. Dobavnice se berejo napačno pogosteje, kot bi si človek
+ * mislil, tiho spreminjanje zaloge pa bi bilo težko opaziti — napačna zaloga
+ * se ob koncu leta prenese v knjige.
+ */
+function ujemanjeArtikla(
+  vrstica: { naziv: string; sku?: string | null },
+  zaloga: Array<{ name: string; sku?: string | null }>,
+) {
+  // Šifra je zanesljivejša od imena, zato jo preverimo najprej.
+  if (vrstica.sku) {
+    const posku = zaloga.find(z => z.sku && z.sku === vrstica.sku)
+    if (posku) return { najden: true, po: 'sku' }
+  }
+  const poimenu = zaloga.find(z => z.name.toLowerCase() === vrstica.naziv.toLowerCase())
+  return poimenu ? { najden: true, po: 'ime' } : { najden: false, po: null }
+}
+
+test('uvoz: artikel se najde po šifri', () => {
+  const r = ujemanjeArtikla({ naziv: 'Majica bela', sku: '4001' }, [{ name: 'Majica', sku: '4001' }])
+  expect(r).toEqual({ najden: true, po: 'sku' })
+})
+
+test('uvoz: brez šifre se ujema po imenu', () => {
+  const r = ujemanjeArtikla({ naziv: 'Majica bela' }, [{ name: 'majica bela' }])
+  expect(r.po).toBe('ime')
+})
+
+test('uvoz: nov artikel se ne ujame', () => {
+  expect(ujemanjeArtikla({ naziv: 'Kapa' }, [{ name: 'Majica' }]).najden).toBe(false)
+})
+
+/**
+ * Obstoječemu artiklu se količina PRIŠTEJE, ne nadomesti.
+ */
+function novaZaloga(trenutna: number, prispelo: number) {
+  return trenutna + prispelo
+}
+
+test('uvoz: količina se prišteje obstoječi zalogi', () => {
+  expect(novaZaloga(12, 24)).toBe(36)
+})
+
+/**
+ * Nabavna cena se posodobi le, kadar je na dobavnici — sicer bi jo prazna
+ * vrednost pobrisala.
+ */
+function posodobiCeno(stara: number | null, nova: number | null) {
+  return nova != null && nova > 0 ? nova : stara
+}
+
+test('uvoz: prazna cena ne pobriše obstoječe', () => {
+  expect(posodobiCeno(1.2983, null)).toBe(1.2983)
+  expect(posodobiCeno(1.2983, 0)).toBe(1.2983)
+})
+
+test('uvoz: nova cena zamenja staro', () => {
+  expect(posodobiCeno(1.2983, 1.35)).toBe(1.35)
+})
+
+/**
+ * Uvozijo se samo IZBRANI artikli — uporabnik lahko katerega odznači.
+ */
+function zaUvoz(artikli: string[], izbrani: Record<number, boolean>) {
+  return artikli.filter((_, i) => izbrani[i])
+}
+
+test('uvoz: odznačeni artikli se ne uvozijo', () => {
+  expect(zaUvoz(['a', 'b', 'c'], { 0: true, 1: false, 2: true })).toEqual(['a', 'c'])
+})
