@@ -12639,6 +12639,10 @@ function FursSection() {
   const [fursStatus, setFursStatus] = useState(null) // null=loading, true=ok, false=error
   const [lastSync, setLastSync] = useState(null)
   const [testMode, setTestMode] = useState(false)
+  // PRELET 160: razlog zadnje neuspesne potrditve in ali je certifikat
+  // sploh nalozen - da opozorilo pove, kaj se je zares zgodilo.
+  const [napakaFurs, setNapakaFurs] = useState<string | null>(null)
+  const [imaCertifikat, setImaCertifikat] = useState(true)
 
   useEffect(() => {
     async function load() {
@@ -12661,6 +12665,8 @@ function FursSection() {
           setFursStatus(d.connected)
           setLastSync(d.lastSync || null)
           setTestMode(d.testMode || false)
+          setNapakaFurs(d.lastError || null)
+          setImaCertifikat(!!d.hasCert)
         } else {
           setFursStatus(false)
         }
@@ -12722,7 +12728,10 @@ function FursSection() {
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
           <div>
             <div style={{ fontWeight:700, fontSize:15 }}>FURS davčna potrditev</div>
-            {lastSync && <div style={{ fontSize:12, color:T.muted, marginTop:3 }}>Zadnja sinhronizacija: {lastSync}</div>}
+            {/* PRELET 160: prej je pisalo "Zadnja sinhronizacija" in izpisalo
+                TRENUTNI cas ob vsakem odprtju zaslona - podatek ni povedal nic.
+                Zdaj je to cas zadnje POTRDITVE, ki jo je FURS resnicno vrnil. */}
+            {lastSync && <div style={{ fontSize:12, color:T.muted, marginTop:3 }}>Zadnja potrditev pri FURS: {lastSync}</div>}
           </div>
           <span style={{ fontSize:11, fontWeight:800, padding:'5px 12px', borderRadius:6, background:statusBg, color:statusColor, letterSpacing:'0.06em' }}>
             {statusLabel}
@@ -12736,13 +12745,27 @@ function FursSection() {
               <div style={{ color:T.ink, fontWeight:600, marginBottom:4 }}>
                 {testMode ? '🧪 TEST način (FURS Playground)' : '✅ Produkcijski način'}
               </div>
-              Certifikat je aktiven. Računi se davčno potrjujejo pri FURS.<br/>
+              Certifikat je naložen. {lastSync ? 'Zadnji račun je bil pri FURS uspešno potrjen.' : 'Računov še ni bilo v potrjevanje.'}<br/>
               Za zamenjavo certifikata ali spremembo poslovnih prostorov pojdi v <b>Računko → Nastavitve → FURS</b>
             </>
           ) : fursStatus === false ? (
             <>
-              <div style={{ color:T.danger, fontWeight:600, marginBottom:4 }}>⚠️ FURS ni dosegljiv</div>
-              Certifikat morda ni nastavljen ali je potekel. Preveri nastavitve v <b>Računko → Nastavitve → FURS</b>
+              {/* PRELET 160: locimo MANJKAJOC CERTIFIKAT od SPODLETELE POTRDITVE.
+                  Prej je oboje dobilo isto (ugibajoce) besedilo o certifikatu,
+                  ki je bil najpogosteje povsem v redu. */}
+              <div style={{ color:T.danger, fontWeight:600, marginBottom:4 }}>
+                {imaCertifikat ? '⚠️ Zadnja davčna potrditev ni uspela' : '⚠️ Certifikat ni naložen'}
+              </div>
+              {imaCertifikat ? (
+                <>
+                  {napakaFurs ? <>Razlog: <b>{napakaFurs}</b><br/></> : null}
+                  Računi se izdajajo naprej, potrdite jih prek <b>zvonca</b> v glavi
+                  blagajne. Po zakonu v dveh delovnih dneh.
+                </>
+              ) : (
+                <>Naloži ga v <b>Računko → Nastavitve → FURS</b>. Brez certifikata
+                  davčna potrditev ni mogoča.</>
+              )}
             </>
           ) : (
             'Preverjam FURS povezavo...'

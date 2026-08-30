@@ -51,44 +51,67 @@ export async function GET(req: NextRequest) {
   // Zdaj beremo IZ ISTEGA VIRA kot izdaja racuna. Vec-org varno prek
   // resolveActiveOrgId (ne "prvi clan po vrsti").
   let hasCert = !!(process.env.FURS_CERT_B64 || process.env.FURS_CERT_PATH)
+  let orgIdZaDnevnik: string | null = null
   if (user) {
     const { orgId } = await resolveActiveOrgId(authClient, user.id, getRequestedOrgId(req))
     if (orgId) {
+      orgIdZaDnevnik = orgId
       const { cert, isTest } = await getFursCertificate(authClient, orgId)
       hasCert = !!cert
       testMode = isTest
     }
   }
 
-  // Preveri ali FURS API odgovori
+  // ── STANJE POVEZAVE (prelet 160, temeljito predelano) ──────────────
+  //
+  // PREJ: koda je z Vercela klicala FURS NEPOSREDNO na vrata 9002 in iz
+  // odgovora sklepala o dosegljivosti. Ta preverba NI MOGLA uspeti nikoli -
+  // Vercel odhodni promet na 9002 blokira, zato gre dejanska izdaja racuna
+  // (lib/furs.ts) prek posredniskega streznika. Blagajna je torej trkala
+  // po poti, ki je zaprta prav zato, da posrednik obstaja: pisalo je
+  // "FURS ni dosegljiv", medtem ko so racuni normalno odhajali in je
+  // portal (ki poslje pravi testni racun prek posrednika) kazal uspeh.
+  //
+  // Povrhu je "Zadnja sinhronizacija" izpisovala `new Date()` - torej
+  // trenutni cas ob vsakem odprtju zaslona. Podatek ni povedal nicesar.
+  //
+  // ZDAJ: stanje beremo iz DEJANSKE zgodovine potrjevanja (furs_log).
+  // To ni ugibanje o omrezju, ampak dokaz: ali je FURS nase racune
+  // resnicno potrdil in kdaj nazadnje. RLS na tabeli je "org members
+  // only", zato uporabnikova seja vidi le svojo organizacijo.
   let connected = false
   let lastSync = null
+  let lastError = null
 
-  if (hasCert && zivaPreverba) {
-    try {
-      // Poskusi ping FURS endpoint
-      // POPRAVLJENO (prelet 159): produkcijski naslov je imel vrata 9003 in
-      // pot "cash_registers", dejanska izdaja racuna (lib/furs.ts) pa uporablja
-      // vrata 9002 in pot "cash_register". Preverba je torej trkala drugam kot
-      // izdaja - lahko bi javljala napako, ceprav bi racuni normalno odhajali,
-      // ali obratno. Zdaj preverjamo ISTI naslov, ki ga zares uporabljamo.
-      const fursUrl = testMode
-        ? 'https://blagajne-test.fu.gov.si:9002/v1/cash_register/invoices'
-        : 'https://blagajne.fu.gov.si:9002/v1/cash_register/invoices'
+  if (hasCert && zivaPreverba && orgIdZaDnevnik) {
+    const { data: zadnji } = await authClient
+      .from('furs_log')
+      .select('status, error_message, request_at, response_at')
+      .eq('org_id', orgIdZaDnevnik)
+      .order('request_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
-      // Ne pošiljamo pravega zahtevka, samo preverimo dosegljivost
-      const res = await fetch(fursUrl, {
-        method: 'OPTIONS',
-        signal: AbortSignal.timeout(3000),
-      }).catch(() => null)
+    const { data: zadnjaUspesna } = await authClient
+      .from('furs_log')
+      .select('response_at, request_at')
+      .eq('org_id', orgIdZaDnevnik)
+      .eq('status', 'success')
+      .order('request_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
-      // FURS vrne 405 za OPTIONS - to pomeni da je dosegljiv
-      connected = res !== null
-      lastSync = new Date().toLocaleString('sl-SI', {
+    // Certifikat je nalozen; sporocamo napako SAMO, ce je zadnji poskus
+    // dejansko spodletel. Ce potrjevanja se ni bilo, to ni napaka - je
+    // blagajna, ki se ni izdala racuna.
+    connected = !zadnji || zadnji.status !== 'error'
+    if (zadnji?.status === 'error') lastError = zadnji.error_message || null
+
+    const cas = zadnjaUspesna?.response_at || zadnjaUspesna?.request_at
+    if (cas) {
+      lastSync = new Date(cas).toLocaleString('sl-SI', {
         hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'numeric'
       })
-    } catch {
-      connected = false
     }
   }
 
@@ -98,6 +121,10 @@ export async function GET(req: NextRequest) {
     testMode,
     hasCert,
     lastSync,
+    // PRELET 160: ce je zadnje potrjevanje spodletelo, blagajniku povemo
+    // ZAKAJ. Prej je pisalo le "certifikat morda ni nastavljen ali je
+    // potekel" - domneva, ki je bila najpogosteje napacna.
+    lastError,
     environment: testMode ? 'test' : 'production',
   })
 }
