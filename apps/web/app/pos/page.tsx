@@ -4032,7 +4032,11 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
         createClient().from('orders')
           // POPRAVLJENO (19.8.2026): `created_at` na orders ne obstaja -
           // zgodovina narocil stranke se ni prikazala.
-          .select('id, opened_at, closed_at, payments(amount, method), order_lines(name, qty, unit_price)')
+          // POPRAVLJENO (prelet 163): dodani `service_id`, `customer_package_id`
+          // in povezava na `items(bookable)`. Brez njih iz naročila ni bilo
+          // mogoce lociti obiska od pijace pri sanku - v profilu stranke je
+          // "ZADNJI OBISKI" prikazoval kavo in pivo kot obisk.
+          .select('id, opened_at, closed_at, payments(amount, method), order_lines(name, qty, unit_price, service_id, customer_package_id, items(bookable))')
           .eq('customer_id', selectedId)
           .order('opened_at', { ascending: false })
           .limit(30),
@@ -4268,7 +4272,7 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
           {/* Tab vsebina */}
           <div style={{ flex:1, overflowY:'auto', padding:20 }}>
             {activeTab === 'pregled' && (
-              <CustomerOverviewTab customer={selected} orders={customerOrders} packages={customerPackages} loading={loadingDetail} setActiveTab={setActiveTab} setActiveCustomer={setActiveCustomer} setScreen={setScreen} onBon={(c)=>setBonModal({ customer:c })} onMail={(c)=>{
+              <CustomerOverviewTab customer={selected} orders={customerOrders} packages={customerPackages} loading={loadingDetail} posData={posData} setActiveTab={setActiveTab} setActiveCustomer={setActiveCustomer} setScreen={setScreen} onBon={(c)=>setBonModal({ customer:c })} onMail={(c)=>{
                 if (!c?.email) { alert('Stranka nima vpisanega e-naslova.'); return }
                 setMailModal({ customer:c })
               }}/>
@@ -4304,9 +4308,41 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
 }
 
 // ─── Overview Tab ─────────────────────────────────────────────
-function CustomerOverviewTab({ customer, orders, packages, loading, setActiveTab, setActiveCustomer, setScreen, onBon, onMail }) {
+/**
+ * ALI JE NAROCILO OBISK? (prelet 163)
+ *
+ * ZAKAJ TO LOCUJEMO: v fitnesu s sankom je vecina racunov pijaca. Ce v
+ * profilu stranke pod "ZADNJI OBISKI" nastejemo vsa narocila, kava zasede
+ * mesto vadbe in trener ne vidi, kdaj je clan zadnjic dejansko treniral.
+ *
+ * Za obisk steje narocilo, ki vsebuje vsaj eno storitev (naročljiv artikel
+ * ali termin) ali unovcenje kartice. Vse ostalo je nakup - ostane v zavihku
+ * Zgodovina, kjer mu je mesto.
+ */
+function jeObiskNarocilo(o, imenaNepijace) {
+  const vrstice = (o.order_lines || []).filter(l => !l.voided)
+  // Najzanesljiveje: vrstica je vezana na termin, naročljiv artikel ali kartico.
+  if (vrstice.some(l => l.service_id || l.items?.bookable || l.customer_package_id)) return true
+  // Unovcenje kartice: racun je 0 EUR, storitev pa je bila opravljena.
+  if ((o.payments || []).some(p => p.method === 'pkg')) return true
+  // PRODAJA PAKETA nima NOBENE povezave - ne artikla, ne storitve, ne kartice
+  // (preverjeno na obstojecih racunih). Prav tako nekatere starejse vrstice
+  // pijace nimajo `item_id`. Zato dodatno primerjamo po IMENU s sifrantom
+  // paketov in naročljivih artiklov.
+  return vrstice.some(l => imenaNepijace.has(String(l.name || '').trim().toLowerCase()))
+}
+
+function CustomerOverviewTab({ customer, orders, packages, loading, posData, setActiveTab, setActiveCustomer, setScreen, onBon, onMail }) {
   const activePkgs = packages.filter(p=>p.active)
-  const recentOrders = orders.slice(0,3)
+  // Imena, ki NISO pijaca: paketi iz sifranta in naročljivi artikli (Storitve).
+  const imenaNepijace = React.useMemo(() => {
+    const s = new Set()
+    for (const t of (posData?.packageTemplates || [])) if (t?.name) s.add(String(t.name).trim().toLowerCase())
+    for (const i of (posData?.items || [])) if (i?.bookable && i?.name) s.add(String(i.name).trim().toLowerCase())
+    return s
+  }, [posData?.packageTemplates, posData?.items])
+  const obiski = orders.filter(o => jeObiskNarocilo(o, imenaNepijace))
+  const recentOrders = obiski.slice(0,3)
 
   if (loading) return <div style={{ color:T.muted, fontSize:13 }}>Nalagam...</div>
 
@@ -4316,7 +4352,15 @@ function CustomerOverviewTab({ customer, orders, packages, loading, setActiveTab
       <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:18 }}>
         <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:14 }}>ZADNJI OBISKI</div>
         {recentOrders.length === 0 ? (
-          <div style={{ fontSize:13, color:T.muted }}>Ni še nobenih obiskov</div>
+          <div style={{ fontSize:13, color:T.muted, lineHeight:1.6 }}>
+            Ni še nobenih obiskov
+            {orders.length > 0 && (
+              <div style={{ fontSize:11.5, marginTop:4 }}>
+                Stranka ima {orders.length} {orders.length === 1 ? 'račun' : 'računov'},
+                a med njimi ni storitve ali unovčene kartice — sami nakupi pri šanku.
+              </div>
+            )}
+          </div>
         ) : recentOrders.map((o,i) => {
           const total = (o.payments||[]).reduce((s,p)=>s+Number(p.amount||0),0)
           const items = (o.order_lines||[]).map(l=>l.name).join(', ')
@@ -4330,10 +4374,17 @@ function CustomerOverviewTab({ customer, orders, packages, loading, setActiveTab
             </div>
           )
         })}
-        {orders.length > 3 && (
+        {orders.length > recentOrders.length && (
           <button onClick={()=>setActiveTab('zgodovina')} style={{ ...btnS, width:'100%', marginTop:10, fontSize:12 }}>
             Prikaži vso zgodovino ({orders.length})
           </button>
+        )}
+        {/* Da ne bo videti kot izgubljeni racuni: pijaca je v Zgodovini. */}
+        {obiski.length < orders.length && (
+          <div style={{ fontSize:11, color:T.muted, marginTop:8, lineHeight:1.5 }}>
+            Šteti so obiski s storitvijo ali unovčeno kartico.
+            Nakupi pri šanku ({orders.length - obiski.length}) so v zavihku Zgodovina.
+          </div>
         )}
       </div>
 
