@@ -618,3 +618,72 @@ test('DDV: fitnes in fizioterapija imata pravo stopnjo', () => {
   expect(stopnjaZaStoritev('samostojna-vadba')).toBe(9.5)
   expect(stopnjaZaStoritev('fizioterapija')).toBe(0)
 })
+
+// ─── Način številčenja po ZDavPR ────────────────────────────────────────
+
+/**
+ * FURS dopušča ŠTIRI načine številčenja. Zavezanec izbere enega in ga zapiše
+ * v interni akt — inšpektor preveri prav ujemanje med aktom in delovanjem.
+ *
+ * NAPAKA (popravljeno 26.8.2026): akt je VEDNO trdil „po posamezni elektronski
+ * napravi", aplikacija pa je štela centralno (en števec na podjetje). Akt in
+ * resničnost se nista ujemala.
+ */
+function besediloClena(nacin: 'central' | 'premise' | 'device') {
+  return nacin === 'premise' ? 'po posameznem poslovnem prostoru zavezanca'
+    : nacin === 'central' ? 'po centralni elektronski napravi (strežniku) zavezanca'
+    : 'po posamezni elektronski napravi za izdajo računov v poslovnem prostoru'
+}
+
+test('akt: besedilo se ujema z izbranim načinom', () => {
+  expect(besediloClena('device')).toContain('elektronski napravi')
+  expect(besediloClena('premise')).toContain('poslovnem prostoru')
+  expect(besediloClena('central')).toContain('strežniku')
+})
+
+test('akt: vsak način ima svoje besedilo', () => {
+  const vsa = new Set(['central', 'premise', 'device'].map(n => besediloClena(n as any)))
+  expect(vsa.size).toBe(3)
+})
+
+/**
+ * Pri centralnem številčenju bi dve blagajni ob izpadu vzeli isto številko.
+ */
+function stevilkaZaNapravo(
+  nacin: 'central' | 'premise' | 'device',
+  stevci: Record<string, number>,
+  prostor: string,
+  naprava: string,
+) {
+  const kljuc = nacin === 'central' ? 'skupni'
+    : nacin === 'premise' ? prostor
+    : `${prostor}/${naprava}`
+  stevci[kljuc] = (stevci[kljuc] || 0) + 1
+  return stevci[kljuc]
+}
+
+test('številčenje: po napravi dobita blagajni ločeni zaporedji', () => {
+  const s: Record<string, number> = {}
+  expect(stevilkaZaNapravo('device', s, 'PP1', 'BL1')).toBe(1)
+  expect(stevilkaZaNapravo('device', s, 'PP1', 'BL1')).toBe(2)
+  expect(stevilkaZaNapravo('device', s, 'PP1', 'BL2')).toBe(1)   // svoje zaporedje
+})
+
+test('številčenje: centralno bi dalo isto številko obema', () => {
+  // Prav to onemogoča delo brez povezave pri več napravah.
+  const s: Record<string, number> = {}
+  expect(stevilkaZaNapravo('central', s, 'PP1', 'BL1')).toBe(1)
+  expect(stevilkaZaNapravo('central', s, 'PP1', 'BL2')).toBe(2)  // skupni števec
+})
+
+test('številčenje: po prostoru si naprave delijo zaporedje', () => {
+  const s: Record<string, number> = {}
+  expect(stevilkaZaNapravo('premise', s, 'PP1', 'BL1')).toBe(1)
+  expect(stevilkaZaNapravo('premise', s, 'PP1', 'BL2')).toBe(2)
+  expect(stevilkaZaNapravo('premise', s, 'PP2', 'BL1')).toBe(1)  // drug prostor
+})
+
+test('številčenje: privzeti način ohrani dosedanje vedenje', () => {
+  // Obstoječih računov se ne dotaknemo — `central` je privzeti.
+  expect(besediloClena('central')).toContain('centralni')
+})

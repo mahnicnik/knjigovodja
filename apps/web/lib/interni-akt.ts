@@ -27,6 +27,21 @@ export interface PodatkiAkta {
     vrsta?: string | null
   }>
   naprave: Array<{ prostorOznaka: string; oznaka: string }>
+  /**
+   * NACIN STEVILCENJA po ZDavPR (dodano 26.8.2026).
+   *
+   * Zakon dopusca stiri nacine, zavezanec izbere enega in ga zapise TU.
+   * Insпektor preveri prav ujemanje med aktom in dejanskim delovanjem, zato
+   * mora biti to isto, kar je nastavljeno v `organizations.numbering_mode`:
+   *
+   *   'device'  — zaporedje po posamezni ELEKTRONSKI NAPRAVI v prostoru
+   *   'premise' — zaporedje po posameznem POSLOVNEM PROSTORU
+   *   'central' — zaporedje po CENTRALNI napravi (strezniku) zavezanca
+   *
+   * Prej je akt VEDNO trdil "po posamezni elektronski napravi", aplikacija
+   * pa je stela centralno - akt in resnicnost se nista ujemala.
+   */
+  nacinStevilcenja?: 'device' | 'premise' | 'central'
   /** Dodatne stevilcne vrste za negotovinske racune. */
   negotovinske?: Array<{ vzorec: string; opis: string; primer: string }>
   program?: string
@@ -118,8 +133,13 @@ export function sestaviInterniAkt(p: PodatkiAkta): string {
   <h3>4. člen</h3>
   <p>Zaporedne številke računov si vsako koledarsko leto, od 1. januarja do
   31. decembra, sledijo v neprekinjenem zaporedju, od zaporedne številke 1 do
-  »n«, po posamezni elektronski napravi za izdajo računov v poslovnem
-  prostoru.</p>
+  »n«, ${
+    p.nacinStevilcenja === 'premise'
+      ? 'po posameznem poslovnem prostoru zavezanca'
+      : p.nacinStevilcenja === 'central'
+        ? 'po centralni elektronski napravi (strežniku) zavezanca'
+        : 'po posamezni elektronski napravi za izdajo računov v poslovnem prostoru'
+  }.</p>
   <p>Številka računa je sestavljena iz treh delov, ločenih z vezajem, in sicer:
   oznaka poslovnega prostora – oznaka elektronske naprave – zaporedna številka
   računa.</p>

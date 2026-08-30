@@ -29,6 +29,10 @@ export default function InterniAkt({ orgId }: { orgId: string }) {
   // Akt je pravni dokument zavezanca — vsebino dolocа ON, ne aplikacija.
   const [zastopnik, setZastopnik] = useState('')
   const [program, setProgram] = useState('Računko (računko.si)')
+  // DODANO (26.8.2026): nacin stevilcenja. Prej je akt VEDNO trdil "po
+  // posamezni elektronski napravi", aplikacija pa je stela centralno - akt in
+  // dejansko delovanje se nista ujemala, insпektor pa preveri prav to.
+  const [nacin, setNacin] = useState<'central'|'premise'|'device'>('central')
   const [vrste, setVrste] = useState<Array<{ vzorec: string; opis: string; primer: string }>>([])
   const [delam, setDelam] = useState(false)
   const [napaka, setNapaka] = useState<string | null>(null)
@@ -44,7 +48,7 @@ export default function InterniAkt({ orgId }: { orgId: string }) {
     // razumne, ki jih uporabnik lahko popravi ali izbrise.
     const prej = (data?.snapshot ?? {}) as any
     const db2 = createClient()
-    const { data: org } = await db2.from('organizations').select('name').eq('id', orgId).maybeSingle()
+    const { data: org } = await db2.from('organizations').select('name, numbering_mode').eq('id', orgId).maybeSingle()
 
     // POPRAVLJENO (25.8.2026): polji sta bili PREDNAPOLNJENI. Zastopnik = naziv
     // podjetja je dal nesmiseln stavek „test s.p. …, ki jo zastopa test s.p."
@@ -130,6 +134,7 @@ export default function InterniAkt({ orgId }: { orgId: string }) {
       // Stevilcne vrste vnese uporabnik — vsak posluje drugace.
       negotovinske: vrste.filter(v => v.vzorec.trim()),
       program: program.trim() || undefined,
+      nacinStevilcenja: nacin,
       datumSprejetja: datum,
     }
   }
@@ -165,6 +170,12 @@ export default function InterniAkt({ orgId }: { orgId: string }) {
         .update({ superseded_at: datum }).eq('id', akt.id)
       if (error) { setNapaka('Prejšnje različice ni bilo mogoče zapreti: ' + error.message); setDelam(false); return }
     }
+
+    // Ob sprejetju akta nacin ZAPISEMO v organizacijo - sicer bi akt trdil
+    // eno, blagajna pa stevilcila po drugem (26.8.2026).
+    const { error: nacinErr } = await db.from('organizations')
+      .update({ numbering_mode: nacin }).eq('id', orgId)
+    if (nacinErr) { setNapaka('Načina številčenja ni bilo mogoče shraniti: ' + nacinErr.message); return }
 
     const { error: nErr } = await db.from('internal_acts').insert({
       org_id: orgId,
@@ -270,6 +281,27 @@ export default function InterniAkt({ orgId }: { orgId: string }) {
       {/* OBRAZEC (25.8.2026): vsebino akta dolocа ZAVEZANEC, ne aplikacija.
           Vrednosti so le PREDLAGANE — uporabnik jih popravi ali izbrise. */}
       <div style={{ display: 'grid', gap: 12, marginBottom: 16 }}>
+        {/* NAČIN ŠTEVILČENJA (26.8.2026). Zakon dopušča štiri načine; izbrani
+            mora biti isti kot v nastavitvah blagajne, sicer akt trdi eno,
+            blagajna pa dela drugo — inšpektor preveri prav to. */}
+        <div>
+          <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>
+            Način številčenja računov
+          </label>
+          <select value={nacin} onChange={e => setNacin(e.target.value as any)}
+            style={{ width: '100%', padding: '9px 11px', borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.15)', fontSize: 13, fontFamily: 'inherit', background: '#fff' }}>
+            <option value="central">Po centralni napravi (strežniku) — privzeto</option>
+            <option value="device">Po posamezni elektronski napravi</option>
+            <option value="premise">Po posameznem poslovnem prostoru</option>
+          </select>
+          <div style={{ fontSize: 11, color: '#aaa', marginTop: 3, lineHeight: 1.5 }}>
+            Mora se ujemati z nastavitvijo v blagajni. Če imate <strong>več naprav</strong> in
+            želite, da delujejo tudi <strong>brez povezave</strong>, izberite „po posamezni
+            elektronski napravi" — pri centralnem številčenju bi dve blagajni
+            ob izpadu izdali račun z isto številko.
+          </div>
+        </div>
+
         <div>
           <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>
             Zastopnik (kdor akt podpiše)
