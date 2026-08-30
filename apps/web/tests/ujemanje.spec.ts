@@ -3597,3 +3597,62 @@ function zaUvoz(artikli: string[], izbrani: Record<number, boolean>) {
 test('uvoz: odznačeni artikli se ne uvozijo', () => {
   expect(zaUvoz(['a', 'b', 'c'], { 0: true, 1: false, 2: true })).toEqual(['a', 'c'])
 })
+
+// ─── Kdo sme odstraniti opravilo ────────────────────────────────────────
+
+/**
+ * DODANO (26.8.2026): opravila, ki jih je postavil lastnik, so navodilo in
+ * ne smejo izginiti. Blagajnik lahko odstrani samo tisto, kar je dodal sam.
+ *
+ * POMEMBNA OMEJITEV, ki jo je vredno poznati: tega NI mogoče uveljaviti v
+ * bazi. Osebje se prijavi s PIN znotraj ENE Supabase seje, zato baza
+ * blagajnika in lastnika ne loči — `auth.uid()` je za oba enak.
+ *
+ * Pravilo torej velja v aplikaciji. Kdor bi se povezal mimo nje, ga lahko
+ * obide — to je posledica prijave s PIN, ne pomanjkljivost tega popravka.
+ */
+function smemOdstraniti(
+  opravilo: { created_by?: string | null },
+  uporabnik: { id: string; role: string },
+) {
+  const jeLastnik = ['owner', 'lastnik', 'admin', 'manager'].includes(uporabnik.role.toLowerCase())
+  if (jeLastnik) return true
+  return !!opravilo.created_by && opravilo.created_by === uporabnik.id
+}
+
+const LASTNIK = { id: 'u1', role: 'Lastnik' }
+const BLAGAJNIK = { id: 'u2', role: 'Blagajnik' }
+
+test('brisanje: lastnik lahko odstrani vsako opravilo', () => {
+  expect(smemOdstraniti({ created_by: 'u1' }, LASTNIK)).toBe(true)
+  expect(smemOdstraniti({ created_by: 'u2' }, LASTNIK)).toBe(true)
+})
+
+test('brisanje: blagajnik ne more odstraniti lastnikovega', () => {
+  expect(smemOdstraniti({ created_by: 'u1' }, BLAGAJNIK)).toBe(false)
+})
+
+test('brisanje: blagajnik lahko odstrani svoje', () => {
+  expect(smemOdstraniti({ created_by: 'u2' }, BLAGAJNIK)).toBe(true)
+})
+
+test('brisanje: opravilo brez avtorja je zaščiteno', () => {
+  // Starejši zapisi nimajo `created_by` — raje zadržimo kot izgubimo.
+  expect(smemOdstraniti({ created_by: null }, BLAGAJNIK)).toBe(false)
+  expect(smemOdstraniti({}, BLAGAJNIK)).toBe(false)
+})
+
+test('brisanje: vloge se prepoznajo ne glede na velike črke', () => {
+  // V bazi so zapisane po slovensko z veliko: „Lastnik", „Blagajnik".
+  expect(smemOdstraniti({ created_by: 'x' }, { id: 'u9', role: 'LASTNIK' })).toBe(true)
+})
+
+/**
+ * Ime zaslona je izpustilo polovico vsebine — nosi tudi sporočila.
+ */
+test('zaslon: ime pove obe vsebini', () => {
+  const ime = 'Opravila & sporočila'
+  expect(ime).toContain('sporočila')
+  // V ozki levi vrstici se pokaže samo prva beseda.
+  expect(ime.split(' ')[0]).toBe('Opravila')
+})

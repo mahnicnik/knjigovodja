@@ -1686,7 +1686,9 @@ const SCREENS = {
   inventura: { label:'Inventura',       icon:'scale'    },
   orders:    { label:'Računi',          icon:'receipt'  },
   // DODANO (26.8.2026): opravila po fazah izmene in sporocila lastnika osebju.
-  opravila:  { label:'Opravila',        icon:'check'    },
+  // POPRAVLJENO (26.8.2026): ime "Opravila" je izpustilo polovico vsebine -
+  // zaslon nosi tudi sporocila lastnika osebju.
+  opravila:  { label:'Opravila & sporočila', icon:'check' },
   reports:   { label:'Poročila',        icon:'chart'    },
   admin:     { label:'Nastavitve',      icon:'settings' },
 }

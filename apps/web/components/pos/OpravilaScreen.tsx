@@ -131,9 +131,30 @@ export default function OpravilaScreen({ posData, auth }: any) {
     nalozi()
   }
 
-  async function odstrani(id: string) {
-    if (!confirm('Odstranim to opravilo?')) return
-    await createClient().from('pos_tasks').update({ active: false }).eq('id', id)
+  /**
+   * Kdo sme odstraniti opravilo (26.8.2026).
+   *
+   * Lastnik lahko vse. Blagajnik samo TISTO, KI GA JE SAM DODAL - opravila,
+   * ki jih je postavil lastnik, so navodilo in ne smejo izginiti.
+   *
+   * POMEMBNA OMEJITEV: tega NI mogoce uveljaviti v bazi. Osebje se prijavi s
+   * PIN znotraj ENE Supabase seje, zato baza blagajnika in lastnika ne loci -
+   * `auth.uid()` je za oba enak. Pravilo torej velja v aplikaciji; kdor bi se
+   * povezal mimo nje, ga lahko obide.
+   */
+  function smemOdstraniti(t: any) {
+    if (jeLastnik) return true
+    return !!t.created_by && t.created_by === auth?.user?.id
+  }
+
+  async function odstrani(t: any) {
+    if (!smemOdstraniti(t)) {
+      alert('Tega opravila ne morete odstraniti — dodal ga je lastnik.')
+      return
+    }
+    if (!confirm(`Odstranim opravilo „${t.title}"?`)) return
+    const { error } = await createClient().from('pos_tasks').update({ active: false }).eq('id', t.id)
+    if (error) { alert('Opravila ni bilo mogoče odstraniti: ' + error.message); return }
     nalozi()
   }
 
@@ -170,6 +191,13 @@ export default function OpravilaScreen({ posData, auth }: any) {
 
   return (
     <div style={{ padding: '20px 24px', maxWidth: 760 }}>
+      <div style={{ fontSize: 20, fontWeight: 800, color: T?.ink, marginBottom: 4 }}>
+        Opravila &amp; sporočila
+      </div>
+      <div style={{ fontSize: 12.5, color: T?.muted, marginBottom: 16, lineHeight: 1.55 }}>
+        Kaj je treba danes narediti in kaj morate vedeti.
+      </div>
+
       <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
         {(['opravila', 'sporocila'] as const).map(z => (
           <button key={z} onClick={() => setZavihek(z)} style={{
@@ -244,10 +272,13 @@ export default function OpravilaScreen({ posData, auth }: any) {
                     </div>
                   )}
                 </div>
-                {jeLastnik && (
-                  <button onClick={e => { e.stopPropagation(); odstrani(t.id) }} style={{
-                    background: 'none', border: 0, color: T?.muted, cursor: 'pointer', fontSize: 16, padding: 4,
-                  }}>×</button>
+                {smemOdstraniti(t) ? (
+                  <button onClick={e => { e.stopPropagation(); odstrani(t) }}
+                    title="Odstrani opravilo" style={{
+                      background: 'none', border: 0, color: T?.muted, cursor: 'pointer', fontSize: 16, padding: 4,
+                    }}>×</button>
+                ) : (
+                  <span title="Opravilo je dodal lastnik" style={{ fontSize: 11, color: T?.muted, opacity: 0.6, padding: '0 4px' }}>🔒</span>
                 )}
               </div>
             )
