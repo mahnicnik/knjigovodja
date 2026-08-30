@@ -23,6 +23,7 @@ import { buildOpeningReceipt, buildXReportReceipt, buildZReportReceipt } from '@
 import { idZaDdv } from '@/lib/format'
 import OpravilaScreen from '@/components/pos/OpravilaScreen'
 import OpravilaVOknu from '@/components/pos/OpravilaVOknu'
+import StanjePovezave from '@/components/pos/StanjePovezave'
 
 // ================================================================
 // TEMA
@@ -13926,7 +13927,13 @@ function KlasikApp() {
           if (id !== 'sale' && activeTable) { switchToTable(null) }
           setScreen(id)
         }} nav={nav} staffId={auth?.user?.id}/>
-        <div style={{ flex:1, display:'flex', overflow:'hidden', minWidth:0 }}>
+        <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', minWidth:0 }}>
+          {/* DODANO (26.8.2026): stanje povezave. Osebje mora ob vsakem
+              trenutku vedeti, ali racun odhaja v bazo ali caka na napravi -
+              sicer bi ob izpadu delalo naprej v prepricanju, da je vse v redu,
+              in ob koncu izmene ugotovilo, da polovice racunov ni nikjer. */}
+          <StanjePovezave businessId={BUSINESS_ID} T={T}/>
+          <div style={{ flex:1, display:'flex', overflow:'hidden', minWidth:0 }}>
           {screen==='floor'     && <FloorScreen spaces={posData.spaces} switchToTable={switchToTable} setScreen={setScreen}/>}
           {screen==='sale'      && <SaleScreen activeTable={activeTable} setActiveTable={setActiveTable} activeCustomer={activeCustomer} cart={cart} setCart={setCart} addItem={addItem} adjustQty={adjustQty} setPaymentOpen={setPaymentOpen} totals={totals} setActiveCustomer={setActiveCustomer} posData={posData} happyHourActive={happyHourActive} setHappyHourActive={setHappyHourActive} cashSession={cashSession} onNeedOpenCash={()=>setShowOpenCash(true)} auth={auth}/>}
           {screen==='calendar'  && <CalendarScreen posData={posData}/>}
@@ -13936,6 +13943,7 @@ function KlasikApp() {
           {screen==='inventura' && <InventuraScreen posData={posData} auth={auth}/>}
           {screen==='orders'    && <OrdersScreen posData={posData} auth={auth}/>}
           {screen==='opravila'  && <OpravilaScreen posData={{ ...posData, T }} auth={auth}/>}
+          </div>
           {screen==='reports'   && <ReportsScreen posData={posData} auth={auth} setScreen={setScreen}/>}
           {screen==='admin'     && <AdminScreen auth={auth} posData={posData}/>}
         </div>

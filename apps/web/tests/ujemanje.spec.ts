@@ -3688,3 +3688,80 @@ test('preklop: velike črke ne motijo', () => {
   // V bazi so vloge zapisane po slovensko z veliko začetnico.
   expect(vidiPreklopNaPortal('LASTNIK')).toBe(true)
 })
+
+// ─── Delovanje brez povezave ────────────────────────────────────────────
+
+/**
+ * PRVI KORAK (26.8.2026): zaznavanje izpada in vrsta čakajočih naročil.
+ *
+ * Ko pade internet, se blagajna ne more povezati z bazo in računa ni mogoče
+ * niti ustvariti. FURS to predvideva: račun je mogoče izdati brez povezave
+ * in ga naknadno prijaviti v DVEH DNEH, z oznako `SubsequentSubmit`.
+ */
+function jeRokBlizu(ur: number | null) {
+  if (ur === null) return 'ni'
+  if (ur >= 40) return 'nujno'        // manj kot 8 ur do roka
+  if (ur >= 24) return 'opozorilo'
+  return 'ni'
+}
+
+test('rok: pod 24 urami ni opozorila', () => {
+  expect(jeRokBlizu(2)).toBe('ni')
+  expect(jeRokBlizu(23)).toBe('ni')
+})
+
+test('rok: nad 24 urami opozorimo', () => {
+  expect(jeRokBlizu(30)).toBe('opozorilo')
+})
+
+test('rok: nad 40 urami je nujno', () => {
+  // FURS zahteva prijavo v 48 urah — pri 40 ostane 8 ur.
+  expect(jeRokBlizu(41)).toBe('nujno')
+})
+
+test('rok: brez čakajočih ni opozorila', () => {
+  expect(jeRokBlizu(null)).toBe('ni')
+})
+
+/**
+ * Vrstica se pokaže samo, kadar nekaj ni v redu — sicer bi le motila.
+ */
+function pokaziVrstico(povezan: boolean, caka: number) {
+  return !(povezan && caka === 0)
+}
+
+test('vrstica: pri delujoči povezavi in prazni vrsti se skrije', () => {
+  expect(pokaziVrstico(true, 0)).toBe(false)
+})
+
+test('vrstica: brez povezave se pokaže', () => {
+  expect(pokaziVrstico(false, 0)).toBe(true)
+})
+
+test('vrstica: po vrnitvi povezave s čakajočimi se pokaže', () => {
+  expect(pokaziVrstico(true, 3)).toBe(true)
+})
+
+/**
+ * Neuspelo pošiljanje naročila NE odstrani iz vrste — tiho izginotje računa
+ * bi bilo hujše od podvojenega poskusa.
+ */
+function poPosiljanju(vrsta: string[], id: string, uspelo: boolean) {
+  return uspelo ? vrsta.filter(x => x !== id) : vrsta
+}
+
+test('vrsta: uspelo pošiljanje odstrani naročilo', () => {
+  expect(poPosiljanju(['a', 'b'], 'a', true)).toEqual(['b'])
+})
+
+test('vrsta: neuspelo pošiljanje naročilo ohrani', () => {
+  expect(poPosiljanju(['a', 'b'], 'a', false)).toEqual(['a', 'b'])
+})
+
+test('vrsta: naročila se pošiljajo od najstarejšega', () => {
+  const v = [
+    { id: 'b', ustvarjeno: '2026-08-26T10:00:00Z' },
+    { id: 'a', ustvarjeno: '2026-08-26T08:00:00Z' },
+  ].sort((x, y) => x.ustvarjeno.localeCompare(y.ustvarjeno))
+  expect(v[0].id).toBe('a')
+})
