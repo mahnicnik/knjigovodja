@@ -24,6 +24,8 @@ import { idZaDdv } from '@/lib/format'
 import OpravilaScreen from '@/components/pos/OpravilaScreen'
 import OpravilaVOknu from '@/components/pos/OpravilaVOknu'
 import StanjePovezave from '@/components/pos/StanjePovezave'
+import MnozicneCene from '@/components/pos/MnozicneCene'
+import ZgodovinaCen from '@/components/pos/ZgodovinaCen'
 import { dodajVVrsto } from '@/lib/offline-vrsta'
 import { jeElektron, preberiKontekst, naslednjaLokalnaStevilka, zabeleziIzPolneStevilke, zaznanaPovezava } from '@/lib/offline-prodaja'
 
@@ -5086,7 +5088,7 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
       )}
 
                 {manualAddModal && <ManualAddCardModal customer={customer} posData={posData} onClose={()=>setManualAddModal(null)} onDone={()=>{ setManualAddModal(null); onRefresh() }}/>}
-                {editPkgModal && <EditPackageModal pkg={editPkgModal} onClose={()=>setEditPkgModal(null)} onDone={()=>{ setEditPkgModal(null); onRefresh() }}/>}
+                {editPkgModal && <EditPackageModal pkg={editPkgModal} posData={posData} onClose={()=>setEditPkgModal(null)} onDone={()=>{ setEditPkgModal(null); onRefresh() }}/>}
                 {extendPkgModal && <ExtendPackageModal pkg={extendPkgModal} onClose={()=>setExtendPkgModal(null)} onDone={()=>{ setExtendPkgModal(null); onRefresh() }}/>}
                 {freezeModal && <FreezePackageModal pkg={freezeModal} onClose={()=>setFreezeModal(null)} onDone={()=>{ setFreezeModal(null); onRefresh() }}/>}
       {toast && <Toast msg={toast.msg} ok={toast.ok}/>}
@@ -10714,6 +10716,10 @@ function CatalogSection({ posData }) {
   const [toast, setToast] = useState(null)
   const [activeTab, setActiveTab] = useState('categories')
   const [cenikModal, setCenikModal] = useState(false)
+  // PRELET 161: mnozicna sprememba prodajnih cen. Ob podrazitvi dobavitelja
+  // je bilo treba odpreti vsak artikel posebej - pri stotih artiklih tam
+  // nastanejo tipkarske napake, ki se pokazejo sele na racunu.
+  const [cenModal, setCenModal] = useState(false)
   const [modifierGroups, setModifierGroups] = useState<any[]>([])
   const [itemModifierLinks, setItemModifierLinks] = useState<Record<string,string[]>>({})
   const [modGroupModal, setModGroupModal] = useState<any>(null)
@@ -10864,15 +10870,24 @@ function CatalogSection({ posData }) {
 
       {activeTab==='surovine' && <SestavineSection posData={posData}/>}
       {cenikModal && <CenikImportModal onClose={()=>setCenikModal(false)} posData={posData} />}
+      {cenModal && (
+        <Modal open={true} onClose={()=>setCenModal(false)} width={640}>
+          <ModalHeader title="Množična sprememba cen" onClose={()=>setCenModal(false)}/>
+          <MnozicneCene posData={posData} T={T} onClose={()=>setCenModal(false)}/>
+        </Modal>
+      )}
       {activeTab==='items' && (
         <div>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
             <div style={{ fontSize:18, fontWeight:700 }}>Artikli ({posData.items.length})</div>
             <div style={{ display:'flex', gap:8 }}>
+              <button onClick={()=>setCenModal(true)} style={{...btnP, background:T.surface2, color:T.ink, border:'1px solid '+T.line}}>💶 Spremeni cene</button>
               <button onClick={()=>setCenikModal(true)} style={{...btnP, background:T.surface2, color:T.ink, border:'1px solid '+T.line}}>📷 Uvozi iz cenika</button>
               <button onClick={()=>setItemModal({vat_rate:9.5,unit:'kos',fav:false,kitchen:false,bookable:false})} style={btnP}>+ Dodaj artikel</button>
             </div>
           </div>
+          <ZgodovinaCen posData={posData} T={T}/>
+          <div style={{ height:14 }}/>
           {posData.items.map(it => (
             <div key={it.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'11px 14px', background:T.surface, borderRadius:10, marginBottom:4, border:'1px solid '+T.line }}>
               <div style={{ flex:1 }}>
@@ -14535,7 +14550,7 @@ function ManualAddCardModal({ customer, posData, onClose, onDone }) {
 }
 
 // ─── Rocno urejanje kartice (Velja od/do, preostali obiski) ────
-function EditPackageModal({ pkg, onClose, onDone }) {
+function EditPackageModal({ pkg, posData, onClose, onDone }) {
   // DODANO (26.8.2026): ZACETEK veljavnosti. Prej je bilo mogoce urediti samo
   // "Velja do" - kartico, ki naj bi zacela veljati pozneje (npr. clan gre na
   // dopust in zeli zaceti prvega v mesecu), je bilo treba obdrzati kot je ali
@@ -14546,6 +14561,22 @@ function EditPackageModal({ pkg, onClose, onDone }) {
   const [expires, setExpires] = useState(pkg.expires || '')
   const [remaining, setRemaining] = useState(pkg.remaining ?? '')
   const [saving, setSaving] = useState(false)
+
+  // DODANO (prelet 162): ZAMENJAVA PAKETA na obstojeci kartici.
+  //
+  // ZAKAJ: doslej je bilo mogoce popraviti samo datume in obiske. Ce je bil ob
+  // vnosu izbran napacen paket (npr. mesecna karta namesto skupinske vadbe),
+  // je bila edina pot izbris kartice in vnos nove - s tem pa je izginila
+  // zgodovina, pri karticah, vezanih na racun, brisanje sploh ni bilo mogoce.
+  const predloge = (posData?.packageTemplates || []).filter((t) => !t.archived)
+  const [predlogaId, setPredlogaId] = useState(pkg.template_id || '')
+  const [prevzemiCeno, setPrevzemiCeno] = useState(false)
+  const [preracunajVeljavnost, setPreracunajVeljavnost] = useState(false)
+
+  const izbrana = predloge.find((t) => t.id === predlogaId) || null
+  const zamenjan = !!izbrana && izbrana.id !== pkg.template_id
+  // Obiskovna kartica ali clanarina - odloca NOVI paket, ne stari.
+  const jeObiskovna = izbrana ? izbrana.visits != null : pkg.remaining !== null
   async function save() {
     // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
     // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
@@ -14554,7 +14585,37 @@ function EditPackageModal({ pkg, onClose, onDone }) {
     if (saving) return
     setSaving(true)
     const updates = { expires: expires || null }
-    if (pkg.remaining !== null) {
+
+    // ZAMENJAVA PAKETA (prelet 162). Paket ni le ime - doloca tudi, ali se
+    // kartica odsteva po obiskih ali tece kot clanarina. Zato ob zamenjavi
+    // uskladimo VSE, kar iz njega sledi, sicer bi kartica ostala napol stara:
+    // ime novo, odstevanje pa po starem.
+    if (zamenjan) {
+      updates.template_id  = izbrana.id
+      updates.name         = izbrana.name
+      updates.template_type = izbrana.visits != null ? 'visits' : 'membership'
+      if (izbrana.visits != null) {
+        // Nov paket steje obiske: ce jih uporabnik ni vnesel sam, vzamemo
+        // polno kolicino iz sifranta.
+        const rocno = remaining === '' ? null : Number(remaining)
+        const stevilo = (rocno !== null && isFinite(rocno) && rocno >= 0) ? rocno : Number(izbrana.visits)
+        updates.remaining = stevilo
+        updates.total = Number(izbrana.visits)
+      } else {
+        // Clanarina se ne odsteva po obiskih - drugace bi jo blagajna
+        // ponujala za unovcenje obiska.
+        updates.remaining = null
+        updates.total = null
+      }
+      if (prevzemiCeno) updates.purchase_price = Number(izbrana.price ?? 0)
+      if (preracunajVeljavnost && izbrana.validity_days) {
+        const zac = new Date((updates.activated_at ?? activated) || pkg.activated_at || new Date())
+        const kon = new Date(zac)
+        kon.setDate(kon.getDate() + Number(izbrana.validity_days))
+        updates.expires = lokalniDatum(kon)
+        setExpires(updates.expires)
+      }
+    } else if (pkg.remaining !== null) {
       // POPRAVLJENO (16.8.2026): prej brez preverbe vnosa - vnos "abc" ali
       // negativno stevilo je zapisalo NaN oz. negativne obiske.
       const rem = remaining === '' ? null : Number(remaining)
@@ -14587,16 +14648,61 @@ function EditPackageModal({ pkg, onClose, onDone }) {
     <Modal open onClose={onClose} width={400}>
       <ModalHeader title={`Popravi: ${pkg.name}`} onClose={onClose}/>
       <div style={{ padding:20, display:'flex', flexDirection:'column', gap:12 }}>
+        {/* DODANO (prelet 162): zamenjava paketa. Napacno izbran paket je bilo
+            prej mogoce popraviti samo z brisanjem kartice in vnosom nove. */}
+        <Field label="Paket">
+          <select value={predlogaId} onChange={e=>setPredlogaId(e.target.value)} style={inp}>
+            {!pkg.template_id && <option value="">— brez paketa iz šifranta —</option>}
+            {predloge.map(t => (
+              <option key={t.id} value={t.id}>
+                {t.name}{t.visits != null ? ` · ${t.visits} obiskov` : ' · članarina'}
+                {t.validity_days ? ` · ${t.validity_days} dni` : ''}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        {zamenjan && (
+          <div style={{ padding:'10px 12px', background:'rgba(184,140,40,0.12)', borderRadius:8,
+            fontSize:11.5, color:'#8a6a1f', lineHeight:1.6 }}>
+            <b>Zamenjava paketa:</b> {pkg.name} → {izbrana.name}.<br/>
+            {izbrana.visits != null
+              ? `Kartica bo odslej štela obiske (${izbrana.visits}).`
+              : 'Kartica bo odslej tekla kot članarina — obiski se ne bodo odštevali.'}
+          </div>
+        )}
+
         <Field label="Velja od">
           <input type="date" value={activated} onChange={e=>setActivated(e.target.value)} style={inp}/>
         </Field>
         <Field label="Velja do">
           <input type="date" value={expires} onChange={e=>setExpires(e.target.value)} style={inp}/>
         </Field>
-        {pkg.remaining !== null && (
+        {jeObiskovna && (
           <Field label="Preostali obiski">
-            <input type="number" onFocus={e => e.target.select()} min={0} value={remaining} onChange={e=>setRemaining(e.target.value)} style={inp}/>
+            <input type="number" onFocus={e => e.target.select()} min={0}
+              value={remaining} placeholder={izbrana?.visits != null ? String(izbrana.visits) : ''}
+              onChange={e=>setRemaining(e.target.value)} style={inp}/>
           </Field>
+        )}
+
+        {zamenjan && (
+          <>
+            <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:12.5, cursor:'pointer' }}>
+              <input type="checkbox" checked={preracunajVeljavnost}
+                onChange={e=>setPreracunajVeljavnost(e.target.checked)}/>
+              Preračunaj „velja do" po novem paketu{izbrana?.validity_days ? ` (${izbrana.validity_days} dni)` : ''}
+            </label>
+            <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:12.5, cursor:'pointer' }}>
+              <input type="checkbox" checked={prevzemiCeno}
+                onChange={e=>setPrevzemiCeno(e.target.checked)}/>
+              Popravi tudi zapisano ceno na {Number(izbrana?.price ?? 0).toFixed(2).replace('.', ',')} €
+            </label>
+            <div style={{ fontSize:11, color:T.muted, lineHeight:1.5 }}>
+              Ta popravek ne spremeni že izdanih računov — ti ostanejo takšni,
+              kot so bili izdani.
+            </div>
+          </>
         )}
         <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
           <button onClick={onClose} style={btnS}>Prekliči</button>
