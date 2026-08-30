@@ -3656,3 +3656,35 @@ test('zaslon: ime pove obe vsebini', () => {
   // V ozki levi vrstici se pokaže samo prva beseda.
   expect(ime.split(' ')[0]).toBe('Opravila')
 })
+
+// ─── Preklop med blagajno in portalom ───────────────────────────────────
+
+/**
+ * DODANO (26.8.2026): iz blagajne ni bilo poti nazaj v portal — lastnik je
+ * moral naslov vpisati ročno ali odpreti drug zavihek.
+ *
+ * Obratna smer je obstajala že prej: portal ima „POS blagajna" v meniju.
+ */
+function vidiPreklopNaPortal(vloga: string) {
+  return ['owner', 'lastnik', 'admin', 'manager'].includes(String(vloga || '').toLowerCase())
+}
+
+test('preklop: lastnik ga vidi', () => {
+  expect(vidiPreklopNaPortal('Lastnik')).toBe(true)
+  expect(vidiPreklopNaPortal('owner')).toBe(true)
+})
+
+test('preklop: blagajnik ga ne vidi', () => {
+  // V portalu nima kaj početi in bi ga povezava le zmedla.
+  expect(vidiPreklopNaPortal('Blagajnik')).toBe(false)
+  expect(vidiPreklopNaPortal('Natakar')).toBe(false)
+})
+
+test('preklop: prazna vloga ga ne vidi', () => {
+  expect(vidiPreklopNaPortal('')).toBe(false)
+})
+
+test('preklop: velike črke ne motijo', () => {
+  // V bazi so vloge zapisane po slovensko z veliko začetnico.
+  expect(vidiPreklopNaPortal('LASTNIK')).toBe(true)
+})

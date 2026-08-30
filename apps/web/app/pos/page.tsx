@@ -1821,6 +1821,21 @@ function UserAvatar({ user, onLock }) {
               <div style={{ fontWeight:700, fontSize:13 }}>{user.name}</div>
               <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>{user.role}</div>
             </div>
+            {/* DODANO (26.8.2026): preklop na portal. Lastnik je moral doslej
+                naslov vpisati rocno ali odpreti drug zavihek - iz blagajne ni
+                bilo poti nazaj.
+
+                Vidno SAMO lastniku: blagajnik v portalu nima kaj poceti in
+                bi ga povezava le zmedla. */}
+            {['owner','lastnik','admin','manager'].includes(String(user.role || '').toLowerCase()) && (
+              <a href="/dashboard" style={{
+                display:'flex', alignItems:'center', gap:8, width:'100%', padding:'9px 12px',
+                borderRadius:8, fontSize:13, color:T.ink, textDecoration:'none',
+                boxSizing:'border-box',
+              }}>
+                <KI name="grid" size={14}/> Računko portal
+              </a>
+            )}
             <button onClick={() => { setOpen(false); onLock() }} style={{ width:'100%', padding:'9px 12px', borderRadius:8, background:'transparent', border:'none', cursor:'pointer', fontFamily:'inherit', color:T.ink, fontSize:13, fontWeight:500, display:'flex', alignItems:'center', gap:10, textAlign:'left' }}>
               <KI name="pin" size={14}/> Zakleni
             </button>
