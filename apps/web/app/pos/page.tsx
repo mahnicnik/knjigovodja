@@ -14148,9 +14148,15 @@ function KlasikApp() {
           {screen==='inventura' && <InventuraScreen posData={posData} auth={auth}/>}
           {screen==='orders'    && <OrdersScreen posData={posData} auth={auth}/>}
           {screen==='opravila'  && <OpravilaScreen posData={{ ...posData, T }} auth={auth}/>}
-          </div>
+          {/* POPRAVLJENO (prelet 159): Porocila in Nastavitve sta bila do zdaj
+              ZUNAJ tega vsebovalnika. Prelet 156 je zaradi traku stanja povezave
+              uvedel nov notranji `flex:1` div, a ga je zaprl PREZGODAJ - na teh
+              dveh zaslonih je prazen div pozrl vso visino, oba pa sta se izrisala
+              SPODAJ POD NJIM. Videti je bilo kot velik pas praznine, meni z
+              nastavitvami pa je bil potisnjen pod rob okna. */}
           {screen==='reports'   && <ReportsScreen posData={posData} auth={auth} setScreen={setScreen}/>}
           {screen==='admin'     && <AdminScreen auth={auth} posData={posData}/>}
+          </div>
         </div>
       </div>
 
