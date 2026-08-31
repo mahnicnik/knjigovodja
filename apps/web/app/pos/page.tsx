@@ -5782,6 +5782,28 @@ function InventoryScreen({ posData }) {
   let items = allItems.filter(i => !search || i.name.toLowerCase().includes(search.toLowerCase()))
   if (filter === 'nizko') items = items.filter(i => jePodMinimumom(i.stock, i.low_stock))
   if (filter === 'razprodano') items = items.filter(i => jeRazprodano(i.stock))
+
+  /**
+   * SUROVINE POD ISTIM FILTROM (prelet 169)
+   *
+   * NAPAKA, KI JO TO ODPRAVLJA: stevec v glavi je sestel opozorila za
+   * ARTIKLE IN SUROVINE (`totalAlerts`), gumb "Pod minimum" pa je filtriral
+   * samo artikle. Ko je bila edina taka postavka surovina - na primer kava
+   * z zalogo 0 in minimumom 0,5 - je v glavi pisalo "1 pod minimum",
+   * seznam pa je ostal prazen. Videti je bilo kot okvara, v resnici pa
+   * stevec in filter nista govorila o istem seznamu.
+   *
+   * Zdaj se ob izbranem filtru pod artikli izpisejo tudi surovine, ki mu
+   * ustrezajo. Brez filtra se ne prikazejo - te imajo svoj zavihek.
+   */
+  const surovineZaFilter = (filter === 'nizko' || filter === 'razprodano')
+    ? allIngredients.filter(g => {
+        if (search && !g.name.toLowerCase().includes(search.toLowerCase())) return false
+        return filter === 'nizko'
+          ? jePodMinimumom(g.stock_qty, g.min_stock)
+          : jeRazprodano(g.stock_qty)
+      })
+    : []
   if (sort === 'stock') items = [...items].sort((a,b) => (a.stock||0)-(b.stock||0))
   else if (sort === 'value') items = [...items].sort((a,b) => ((b.cost_price||0)*(b.stock||0))-((a.cost_price||0)*(a.stock||0)))
   else if (sort === 'sold') items = [...items].sort((a,b) => (salesData[b.id]||0)-(salesData[a.id]||0))
@@ -6282,9 +6304,46 @@ function InventoryScreen({ posData }) {
                   </tr>
                 )
               })}
-              {items.length===0 && <tr><td colSpan={8} style={{ padding:40, textAlign:'center', color:T.muted }}>Ni artiklov za izbran filter</td></tr>}
+              {items.length===0 && surovineZaFilter.length===0 && <tr><td colSpan={8} style={{ padding:40, textAlign:'center', color:T.muted }}>Ni artiklov za izbran filter</td></tr>}
+              {items.length===0 && surovineZaFilter.length>0 && <tr><td colSpan={8} style={{ padding:'20px 12px', textAlign:'center', color:T.muted, fontSize:12.5 }}>Med artikli ni zadetkov — spodaj so surovine.</td></tr>}
             </tbody>
           </table>
+        )}
+
+        {/* PRELET 169: surovine, ki ustrezajo istemu filtru. Prej jih je
+            stevec v glavi stel, filter pa ne pokazal. */}
+        {tab === 'items' && surovineZaFilter.length > 0 && (
+          <div style={{ marginTop:14 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6, padding:'0 2px' }}>
+              Surovine ({surovineZaFilter.length})
+            </div>
+            <table style={{ width:'100%', borderCollapse:'collapse', background:T.surface, borderRadius:12, overflow:'hidden', border:'1px solid '+T.line }}>
+              <thead>
+                <tr style={{ background:T.surface3 }}>
+                  <th style={{ padding:'10px 12px', textAlign:'left', fontSize:11, fontWeight:700, color:T.muted }}>SUROVINA</th>
+                  <th style={{ padding:'10px 12px', textAlign:'right', fontSize:11, fontWeight:700, color:T.muted }}>ZALOGA</th>
+                  <th style={{ padding:'10px 12px', textAlign:'right', fontSize:11, fontWeight:700, color:T.muted }}>MINIMUM</th>
+                  <th style={{ padding:'10px 12px', textAlign:'right', fontSize:11, fontWeight:700, color:T.muted }}>MANJKA</th>
+                </tr>
+              </thead>
+              <tbody>
+                {surovineZaFilter.map((g, idx) => {
+                  const z = Number(g.stock_qty ?? 0), m = Number(g.min_stock ?? 0)
+                  return (
+                    <tr key={g.id} style={{ background:idx%2?T.surface2:T.surface, borderBottom:'1px solid '+T.lineSoft }}>
+                      <td style={{ padding:'10px 12px', fontWeight:600, fontSize:13 }}>{g.name}</td>
+                      <td style={{ padding:'10px 12px', textAlign:'right', fontSize:13, fontWeight:700, color:T.danger, fontVariantNumeric:'tabular-nums' }}>{z} {g.unit}</td>
+                      <td style={{ padding:'10px 12px', textAlign:'right', fontSize:12, color:T.muted, fontVariantNumeric:'tabular-nums' }}>{m || '—'} {m ? g.unit : ''}</td>
+                      <td style={{ padding:'10px 12px', textAlign:'right', fontSize:13, fontWeight:700, color:T.danger, fontVariantNumeric:'tabular-nums' }}>{m > z ? `${Math.round((m - z) * 1000) / 1000} ${g.unit}` : '—'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            <div style={{ fontSize:11, color:T.muted, marginTop:6, padding:'0 2px' }}>
+              Surovine urejate v zavihku Surovine.
+            </div>
+          </div>
         )}
 
         {/* DODANO (prelet 164): STORITVE. Zaloge nimajo, zato tu ne kazemo
@@ -6518,7 +6577,7 @@ function InventoryScreen({ posData }) {
                   </select>
                 </Field>
                 <Field label="Najnižja zaloga">
-                  <input type="number" onFocus={e=>e.target.select()} value={ingEditModal.min_stock??''} onChange={e=>setIngEditModal(p=>({...p,min_stock:e.target.value}))} style={vnosStil}/>
+                  <input type="number" step="any" min="0" onFocus={e=>e.target.select()} value={ingEditModal.min_stock??''} onChange={e=>setIngEditModal(p=>({...p,min_stock:e.target.value}))} style={vnosStil}/>
                 </Field>
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
@@ -7998,7 +8057,7 @@ function TableActionsModal({ activeTable, posData, auth, onClose, onDone }) {
       if (err) throw err
       await db.from('tables').update({ status: 'free' }).eq('id', activeTable.id)
       await db.from('tables').update({ status: 'occupied' }).eq('id', targetTableId)
-      onDone()
+      onDone('move')
       onClose()
     } catch (e: any) { setError(e.message || 'Napaka') }
     setSaving(false)
@@ -8018,7 +8077,7 @@ function TableActionsModal({ activeTable, posData, auth, onClose, onDone }) {
       if (!existing) throw new Error('Na tej mizi ni odprtega naročila')
       const { error: err } = await createClient().from('orders').update({ cashier_id: targetStaffId }).eq('id', existing.id)
       if (err) throw err
-      onDone()
+      onDone('staff')
       onClose()
     } catch (e: any) { setError(e.message || 'Napaka') }
     setSaving(false)
@@ -8047,7 +8106,7 @@ function TableActionsModal({ activeTable, posData, auth, onClose, onDone }) {
       if (srcErr) throw new Error('Izvornega računa ni bilo mogoče zapreti: ' + srcErr.message)
       const { error: tblErr } = await db.from('tables').update({ status: 'free' }).eq('id', sourceTableId)
       if (tblErr) console.warn('Mize ni bilo mogoce sprostiti:', tblErr)
-      onDone()
+      onDone('merge')
       onClose()
     } catch (e: any) { setError(e.message || 'Napaka') }
     setSaving(false)
@@ -11121,7 +11180,17 @@ function CatalogSection({ posData }) {
                     <option value="">— izberi surovino —</option>
                     {posData.ingredients.map(ig=><option key={ig.id} value={ig.id}>{ig.name} ({ig.unit})</option>)}
                   </select>
-                  <input type="number" onFocus={e => e.target.select()} step="0.01" min="0" value={n.qty_used||''} onChange={e=>{const nv=[...(itemModal.normativ||[])];nv[i]={...nv[i],qty_used:e.target.value};setItemModal(p=>({...p,normativ:nv}))}} placeholder="Qty" style={{ ...inp, width:80, flex:0 }}/>
+                  {/* POPRAVLJENO (prelet 168): `step="0.01"` je brskalniku
+                      povedal, da sta dovoljeni najvec dve decimalki - vnos
+                      0,004 je bil zavrnjen in najmanjse, kar je bilo mogoce
+                      vpisati, je bilo 0,01.
+                      To je udarilo prav tam, kjer je najbolj pomembno: kava se
+                      vodi v KILOGRAMIH, poraba na skodelico pa je 7 gramov,
+                      torej 0,007 kg. Zaokrozitev na 0,01 kg pomeni 10 gramov -
+                      za 43 % previsoka poraba in prav toliko napacna zaloga.
+                      `step="any"` odpravi omejitev; baza je numeric in
+                      decimalk ne omejuje. */}
+                  <input type="number" onFocus={e => e.target.select()} step="any" min="0" value={n.qty_used||''} onChange={e=>{const nv=[...(itemModal.normativ||[])];nv[i]={...nv[i],qty_used:e.target.value};setItemModal(p=>({...p,normativ:nv}))}} placeholder="Qty" style={{ ...inp, width:80, flex:0 }}/>
                   <span style={{ fontSize:11, color:T.muted, minWidth:24 }}>
                     {posData.ingredients.find(ig=>ig.id===n.ingredient_id)?.unit||''}
                   </span>
@@ -11970,7 +12039,10 @@ function SestavineSection({ posData }) {
               </select>
             </Field>
             <Field label="Trenutna zaloga">
-              <input type="number" onFocus={e => e.target.select()} min="0" step="0.01" value={modal?.stock_qty||0} onChange={e=>setModal(p=>({...p,stock_qty:e.target.value}))} style={inp}/>
+              {/* PRELET 168: enaka omejitev kot pri normativu - zaloga surovine
+                  v kilogramih ali litrih pogosto pade pod dve decimalki
+                  (ostanek 0,005 kg kave), zato tudi tu `step="any"`. */}
+              <input type="number" onFocus={e => e.target.select()} min="0" step="any" value={modal?.stock_qty||0} onChange={e=>setModal(p=>({...p,stock_qty:e.target.value}))} style={inp}/>
             </Field>
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
@@ -14018,6 +14090,60 @@ function KlasikApp() {
   const [cart, setCart] = useState([])
   const [tableSwitching, setTableSwitching] = useState(false)
 
+  /**
+   * OSVEŽITEV PO POSEGU V NAROČILO (prelet 165)
+   * ═══════════════════════════════════════════
+   *
+   * NAPAKA, KI JO TO ODPRAVLJA — združevanje miz je artikle UNIČILO.
+   *
+   * Okno "Upravljaj mizo" (združi / prenesi) spremeni naročilo NEPOSREDNO
+   * V BAZI. Po koncu je klicalo `switchToTable(null)`, ta pa najprej
+   * SHRANI košarico iz Reacta na trenutno mizo — in tam je bila škoda:
+   *
+   *   · košarica NI bila prazna → `replaceLines` pobriše vse vrstice
+   *     naročila in vpiše nazaj samo tiste iz Reacta. Pravkar združene
+   *     vrstice z druge mize v Reactu ne obstajajo, zato so izginile.
+   *
+   *   · košarica JE bila prazna (združitev na prazno mizo) → izvede se
+   *     `closeOrderEmpty`, ki IZBRIŠE celotno naročilo z vsemi vrsticami.
+   *     Obe mizi ostaneta prazni, artikli pa nepovratno izgubljeni.
+   *
+   * Ista past je veljala za PRENOS na drugo mizo: naročilo je odšlo na
+   * ciljno mizo, `switchToTable(null)` pa je iz zastarele košarice na
+   * izvorni mizi ustvaril NOVO naročilo — isti artikli na dveh mizah.
+   *
+   * Zato se po takem posegu košarica NE shranjuje, ampak PREBERE iz baze.
+   */
+  async function osveziPoPosegu(nacin) {
+    // Kosarica v Reactu je po posegu zastarela - najprej jo razveljavimo,
+    // da je nobena pot ne more zapisati nazaj cez svezo stanje v bazi.
+    setCart([])
+    try {
+      if (nacin === 'move') {
+        // Narocilo je odslo na drugo mizo - tu ni vec nicesar.
+        setActiveTable(null)
+      } else if (activeTable) {
+        // Zdruzitev ali prenos na drugega zaposlenega: narocilo ostane
+        // na tej mizi, le vsebina je drugacna. Preberemo jo na novo.
+        const obstojece = await pos.orders.getOpenOnTable(activeTable.id)
+        if (obstojece && obstojece.order_lines) {
+          setCart(obstojece.order_lines.map((l) => {
+            const kat = posData.items.find(x => x.id === l.item_id)
+            return {
+              lineId: Math.random().toString(36).slice(2),
+              id: l.item_id, name: l.name, qty: l.qty, price: Number(l.unit_price),
+              vat_rate: l.vat_rate, mods: l.mods || [], note: l.note || null,
+              item_type: kat?.item_type || 'simple', stock: kat?.stock,
+            }
+          }))
+        }
+      }
+    } catch (e) {
+      console.error('Osvezitev mize po posegu ni uspela:', e)
+    }
+    posData.refresh()
+  }
+
   async function switchToTable(newTable) {
     if (tableSwitching) return
     setTableSwitching(true)
@@ -14502,7 +14628,7 @@ function KlasikApp() {
       )}
       {showOpenCash && <OpenCashModal posData={posData} auth={auth} onClose={()=>setShowOpenCash(false)} onOpened={(s)=>{ setCashSession(s); setShowOpenCash(false) }}/>}
       {showVmesnoStanje && cashSession && <VmesnoStanjeModal session={cashSession} posData={posData} auth={auth} onClose={()=>setShowVmesnoStanje(false)}/>}
-      {showTableActions && activeTable && <TableActionsModal activeTable={activeTable} posData={posData} auth={auth} onClose={()=>setShowTableActions(false)} onDone={()=>{ switchToTable(null); posData.refresh() }}/>}
+      {showTableActions && activeTable && <TableActionsModal activeTable={activeTable} posData={posData} auth={auth} onClose={()=>setShowTableActions(false)} onDone={(nacin)=>{ osveziPoPosegu(nacin) }}/>}
       {showCloseCash && cashSession && <CloseCashModal session={cashSession} posData={posData} auth={auth} onClose={()=>setShowCloseCash(false)} onClosed={()=>{ setCashSession(null); refreshSession() }}/>}
       
       {/* DODANO (16.8.2026): dokler blagajna nima nobenega uporabnika s PIN-om,

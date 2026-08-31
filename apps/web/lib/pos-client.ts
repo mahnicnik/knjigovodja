@@ -578,7 +578,17 @@ export const pos = {
     },
     async closeOrderEmpty(orderId: string) {
       // Izbriše prazno naročilo (brez vrstic) - uporabljeno ko uporabnik zapusti mizo brez artiklov
-      await sb().from('order_lines').delete().eq('order_id', orderId)
+      //
+      // VAROVALKA (prelet 165): preverimo, da je narocilo RES prazno.
+      // Prej je funkcija brisala vrstice brez vprasanja - ce je bila
+      // kosarica v Reactu prazna, narocilo v bazi pa ne (npr. tik po
+      // zdruzitvi miz), so artikli izginili. Kosarica v brskalniku ni
+      // dokaz o stanju v bazi.
+      const { data: vrstice } = await sb().from('order_lines').select('id').eq('order_id', orderId).limit(1)
+      if (vrstice && vrstice.length > 0) {
+        console.warn('closeOrderEmpty: narocilo ' + orderId + ' ni prazno - brisanje preklicano')
+        return
+      }
       const { error } = await sb().from('orders').delete().eq('id', orderId)
       if (error) throw error
     },
