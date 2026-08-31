@@ -3967,7 +3967,6 @@ function PackagesScreen({ posData, setSellPackageModal }) {
 
 function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackageModal }) {
   const [search, setSearch] = useState('')
-  const [tierFilter, setTierFilter] = useState('vse')
   // DODANO (26.8.2026): filter po STANJU kartice. Stopnja (redni/srebro/zlato)
   // je rocna oznaka in ne pove nicesar o tem, ali stranka trenutno vadi.
   // Za vsakdanje delo je to pomembnejse vprasanje.
@@ -3993,7 +3992,6 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
   let filtered = posData.customers.filter(c =>
     !search || c.name.toLowerCase().includes(search.toLowerCase()) ||
     (c.phone||'').includes(search) || (c.email||'').toLowerCase().includes(search.toLowerCase()))
-  if (tierFilter !== 'vse') filtered = filtered.filter(c => (c.tier||'regular') === tierFilter)
 
   // Stanje kartice (26.8.2026). Kartica velja, ce je aktivna, ni potekla in
   // ima obiske (ali je clanarina, ki obiskov ne steje).
@@ -4128,16 +4126,15 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Ime, telefon, email…"
               style={{ width:'100%', padding:'7px 10px 7px 28px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:12, background:T.inputBg, outline:'none', boxSizing:'border-box' }}/>
           </div>
+          {/* ODSTRANJENO (prelet 166): filter po stopnji (Redni / Srebro /
+              Zlato / VIP). Stopnje se ne uporabljajo - vse stranke so bile
+              enake, zato so gumbi zavzemali vrstico in nikoli nicesar niso
+              zozili. Ostane filter po STANJU KARTICE, ki je pri neomejenih
+              obiskih edino vprasanje, ki v resnici zanima: kdo vadi, komu
+              poteka in kdo je brez.
+              Podatek `tier` ostaja pri stranki in ga je mogoce urejati v
+              njenem profilu - odstranjen je le filter. */}
           <div style={{ display:'flex', gap:3 }}>
-            {[['vse','Vse'],['regular','Redni'],['silver','Srebro'],['gold','Zlato'],['vip','VIP']].map(([id,lbl])=>(
-              <button key={id} onClick={()=>setTierFilter(id)}
-                style={{ flex:1, padding:'4px 2px', borderRadius:6, border:'none', background:tierFilter===id?T.header:T.surface3, color:tierFilter===id?T.headerInk:T.muted, fontWeight:700, fontSize:9, cursor:'pointer', fontFamily:'inherit' }}>{lbl}</button>
-            ))}
-          </div>
-
-          {/* DODANO (26.8.2026): filter po STANJU kartice. Stopnja pove, kako
-              stranko obravnavamo, to pa, ali trenutno sploh vadi. */}
-          <div style={{ display:'flex', gap:3, marginTop:4 }}>
             {[
               ['vse','Vse'],
               ['aktivne','✓ Aktivne'],
