@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { to, subject, html, customerName, packageName, expiresAt, validFrom, remaining, severity, orgPhone, orgEmail, obnovaUrl } = await req.json()
+    const { to, subject, html, customerName, packageName, expiresAt, validFrom, remaining, severity, orgPhone, orgEmail, obnovaUrl, unsubscribeToken } = await req.json()
 
     if (!to || !subject) {
       return NextResponse.json({ error: 'Manjka prejemnik ali zadeva' }, { status: 400 })
@@ -81,6 +81,35 @@ export async function POST(req: NextRequest) {
         to: [to],
         subject,
         html: emailHtml,
+        // ── DOSTAVLJIVOST (prelet 167) ────────────────────────────────
+        //
+        // 1. BESEDILNA RAZLICICA. Sporocilo samo v HTML je klasicen znak
+        //    vsiljene poste - pravi posiljatelji skoraj vedno prilozijo tudi
+        //    golo besedilo. Resend ga sam ne naredi, zato ga sestavimo iz
+        //    HTML: odstranimo oznake, povezave pustimo kot naslov v oklepaju.
+        text: emailHtml
+          .replace(/<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, '$2 ($1)')
+          .replace(/<br\s*\/?>/gi, '\n')
+          .replace(/<\/(p|div|tr|h1|h2|h3)>/gi, '\n')
+          .replace(/<[^>]+>/g, '')
+          .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+          .replace(/\n{3,}/g, '\n\n')
+          .split('\n').map((v: string) => v.trim()).join('\n').trim(),
+        // 2. ODGOVOR NA PRAVI NASLOV. Posiljatelj, na katerega ni mogoce
+        //    odgovoriti, dobi slabso oceno - in odgovori strank se izgubijo.
+        ...(orgEmail ? { reply_to: orgEmail } : {}),
+        // 3. ODJAVA Z ENIM KLIKOM. Gmail in Yahoo od februarja 2024 za
+        //    mnozicno posto zahtevata glavo `List-Unsubscribe`; brez nje
+        //    sporocila pogosteje koncajo med vsiljenimi. Mehanizem ze
+        //    obstaja (customers.unsubscribe_token in stran /odjava/),
+        //    uporabljale pa so ga doslej samo rojstnodnevne cestitke.
+        ...(unsubscribeToken ? {
+          headers: {
+            'List-Unsubscribe': `<${process.env.NEXT_PUBLIC_APP_URL || 'https://xn--raunko-j2a.si'}/odjava/${unsubscribeToken}>`,
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+          },
+        } : {}),
       }),
     })
 

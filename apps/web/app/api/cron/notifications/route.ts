@@ -70,7 +70,7 @@ export async function GET(req: NextRequest) {
         .from('pos_notifications')
         .select(`
           id, message, severity, type, customer_id, package_id,
-          customers (id, name, email, notification_email),
+          customers (id, name, email, notification_email, unsubscribe_token),
           customer_packages (id, expires, name, template_type, activated_at, purchased_at, remaining, template_id)
         `)
         .eq('business_id', biz.id)
@@ -274,6 +274,10 @@ export async function GET(req: NextRequest) {
             to: cust.email,
             subject: `Predračun za podaljšanje: ${pkg.name}`,
             customerName: cust.name,
+            // PRELET 167: brez tega ni glave `List-Unsubscribe` in Gmail
+            // sporocilo obravnava kot mnozicno posto brez odjave.
+            unsubscribeToken: (cust as any).unsubscribe_token || null,
+            orgEmail: orgForBiz?.email || null,
             html: `<div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#fff">
               <div style="text-align:center;margin-bottom:28px">
                 <div style="font-size:22px;font-weight:800;color:#0d2818">${escapeHtml(biz.name)}</div>
@@ -306,6 +310,7 @@ export async function GET(req: NextRequest) {
               <div style="border-top:1px solid #e5e1d8;margin-top:28px;padding-top:16px;text-align:center;font-size:12px;color:#999">
                 ${orgForBiz?.name || biz.name}${orgForBiz?.tax_number ? ` · Davčna: ${orgForBiz.tax_number}` : ''}<br/>
                 Izdano s sistemom RAČUNKO · www.racunko.si
+                ${(cust as any).unsubscribe_token ? `<br/><a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://xn--raunko-j2a.si'}/odjava/${(cust as any).unsubscribe_token}" style="color:#999;text-decoration:underline">Odjava od obveščanja</a>` : ''}
               </div>
             </div>`,
           }),
