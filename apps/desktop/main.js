@@ -158,11 +158,28 @@ function buildEscPos(data) {
     const p = ' '.repeat(Math.max(0, n - t.length))
     return right ? p + t : t + p
   }
-  const line = (l, r, width=42) => {
+  /**
+   * SIRINA RACUNA (prelet 170)
+   * ═════════════════════════
+   *
+   * NAPAKA, KI JO TO ODPRAVLJA: generator je racunal s 42 znaki na vrstico,
+   * 80 mm trak pa jih pri osnovni pisavi (Font A, 12 pik na znak, 576 pik
+   * tiskalne sirine) sprejme 48. Vse levo poravnano je bilo zato stisnjeno
+   * v levih 87 % traku, crtkane locilne vrstice so se koncale sest znakov
+   * pred robom, desno poravnani zneski pa niso sedeli ob desnem robu.
+   * Glava in "SKUPAJ" sta bila videti sredinsko poravnana, ker ju tiskalnik
+   * centrira sam (ESC a 1) cez CELO sirino - od tod vtis, da je racun
+   * zamaknjen v levo.
+   *
+   * Podpiramo tudi 58 mm trakove (32 znakov), ce jih kdaj prikljucite -
+   * takrat naj klic tiskanja poslje `paper_width: 58`.
+   */
+  const SIRINA = Number(data.paper_width) === 58 ? 32 : 48
+  const line = (l, r, width=SIRINA) => {
     const lp = sl(l).slice(0, width - sl(r).length - 1)
     txtRaw(lp + ' '.repeat(width - lp.length - sl(r).length) + sl(r)); lf()
   }
-  const sep = (ch='-', w=42) => { txt(ch.repeat(w)); lf() }
+  const sep = (ch='-', w=SIRINA) => { txt(ch.repeat(w)); lf() }
   const eur = (n) => {
     // V CP1252 je euro znak byte 0x80 — dodamo ga direktno v buffer
     const s = Number(n||0).toFixed(2).replace('.', ',')
@@ -206,7 +223,7 @@ function buildEscPos(data) {
   sep()
   // Artikli
   for (const item of (data.items||[])) {
-    const name = sl(item.name||'').slice(0,42)
+    const name = sl(item.name||'').slice(0,SIRINA)
     txt(name); lf()
     const qty = Number(item.qty||1)
     const up  = Number(item.unit_price||0)
@@ -230,12 +247,15 @@ function buildEscPos(data) {
   sep('=')
   // DDV tabela
   txt('OBRACUN DDV'); lf()
-  txt(pad('##',3) + pad('DDV%',7) + pad('NETO',8,true) + pad('DDV',8,true) + pad('BRUTO',8,true)); lf()
+  // PRELET 170: zadnji stolpec poravnamo na desni rob traku, sicer tabela
+  // na 48-znakovnem traku "visi" v levi polovici.
+  const stolpec = Math.max(8, Math.floor((SIRINA - 10) / 3))
+  txt(pad('##',3) + pad('DDV%',7) + pad('NETO',stolpec,true) + pad('DDV',stolpec,true) + pad('BRUTO',stolpec,true)); lf()
   const total = Number(data.total||0)
   const vatR  = 22
   const neto  = total / (1 + vatR/100)
   const ddv   = total - neto
-  txt(pad('C',3) + pad(vatR+'%',7) + pad(neto.toFixed(2),8,true) + pad(ddv.toFixed(2),8,true) + pad(total.toFixed(2),8,true)); lf()
+  txt(pad('C',3) + pad(vatR+'%',7) + pad(neto.toFixed(2),stolpec,true) + pad(ddv.toFixed(2),stolpec,true) + pad(total.toFixed(2),stolpec,true)); lf()
   txt('C: DDV ' + vatR + '% stopnja'); lf()
   sep()
   // FURS
