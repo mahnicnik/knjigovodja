@@ -4,6 +4,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   version: process.versions.electron,
   printReceipt: (html) => ipcRenderer.invoke('print-receipt', html),
   printRaw: (data) => ipcRenderer.invoke('print-raw', data),
+  // PRELET 174: otvoritev/X/Z po isti poti kot racuni.
+  printText: (podatki) => ipcRenderer.invoke('print-text', podatki),
   printTest: () => ipcRenderer.invoke('print-test'),
   getPrinters: () => ipcRenderer.invoke('get-printers'),
   getSelectedPrinter: () => ipcRenderer.invoke('get-selected-printer'),

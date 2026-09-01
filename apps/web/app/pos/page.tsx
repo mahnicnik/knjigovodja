@@ -6946,13 +6946,64 @@ function InventoryScreen({ posData }) {
 // CASH SESSION HELPERS
 // ─────────────────────────────────────────────────────────────────
 
+/**
+ * HTML → vrstice za termalni tiskalnik (prelet 174)
+ *
+ * Izpisi otvoritve, X- in Z-obracuna so pisani v HTML. Namesto da bi jih
+ * pisali dvakrat, iz njih izlusimo besedilo: pari levo/desno iz `row` in
+ * `total-row`, locilne crte iz `line`, naslovi iz `title` in `section`.
+ */
+function htmlVBlagajniskeVrstice(html: string): any[] {
+  const vrstice: any[] = []
+  const telo = html.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '')
+  const ocisti = (s: string) => s.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&#39;/g, "'").replace(/&quot;/g, '"')
+    .replace(/&euro;|&#8364;/g, '\u20AC')
+    .replace(/\s+/g, ' ').trim()
+
+  const bloki = telo.match(/<div[^>]*>[\s\S]*?<\/div>|<div[^>]*\/>/gi) || []
+  for (const blok of bloki) {
+    const razred = (blok.match(/class="([^"]*)"/) || [])[1] || ''
+    if (/\bline\b|sign-line/.test(razred)) { vrstice.push({ crta: true }); continue }
+    const paroma = blok.match(/<span[^>]*>([\s\S]*?)<\/span>/gi) || []
+    if (/\brow\b|total-row/.test(razred) && paroma.length >= 2) {
+      vrstice.push({
+        t: ocisti(paroma[0]),
+        desno: ocisti(paroma[paroma.length - 1]),
+        krepko: /total-row/.test(razred),
+      })
+      continue
+    }
+    const besedilo = ocisti(blok)
+    if (!besedilo) continue
+    if (/\btitle\b/.test(razred)) vrstice.push({ t: besedilo, sredina: true, veliko: true })
+    else if (/\bsection\b/.test(razred)) vrstice.push({ t: besedilo, krepko: true })
+    else if (/\bcenter\b/.test(razred)) vrstice.push({ t: besedilo, sredina: true })
+    else vrstice.push({ t: besedilo })
+  }
+  return vrstice
+}
+
 async function printCashReceipt(html: string) {
+  // PRELET 174: NAJPREJ ESC/POS - ista pot kot racuni, ki dokazano deluje.
+  // Prej je sla otvoritev samo prek `printReceipt` (HTML skozi Windows
+  // tiskalni sistem); termalni gonilnik HTML ne upodobi, Windows pa posel
+  // sprejme in tiho zavrze - listka ni bilo in opozorila tudi ne.
+  if (typeof window !== 'undefined' && (window as any).electronAPI?.printText) {
+    try {
+      const r = await (window as any).electronAPI.printText({ vrstice: htmlVBlagajniskeVrstice(html) })
+      if (r?.ok) return
+      console.warn('ESC/POS izpis ni uspel, poskusim po stari poti:', r?.error)
+    } catch (e) { console.warn('ESC/POS izpis:', e) }
+  }
   // Electron IPC (desktop app) — direktno, brez HTTP
   if (typeof window !== 'undefined' && (window as any).electronAPI?.printReceipt) {
     const result = await (window as any).electronAPI.printReceipt(html)
     if (result?.ok) return
-    if (result?.error) alert('Napaka tiskalnika: ' + result.error)
-    return
+    // PRELET 174: brez `return` - ce tudi ta pot pade, poskusimo se prek
+    // tiskalnega streznika in nazadnje v brskalniku, kot pri racunih.
+    if (result?.error) console.warn('Napaka tiskalnika (HTML):', result.error)
   }
   // Fallback: localhost print server
   try {

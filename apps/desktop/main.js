@@ -471,6 +471,88 @@ function setupIpcHandlers() {
     })
   })
 
+  /**
+   * TISKANJE BESEDILA PREK ESC/POS (prelet 174)
+   * ═══════════════════════════════════════════
+   *
+   * NAPAKA, KI JO TO ODPRAVLJA: otvoritev blagajne, X- in Z-obracun so se
+   * tiskali prek `print-receipt` - skrito okno nalozi HTML in ga natisne
+   * prek WINDOWS tiskalnega sistema. Termalni tiskalnik je namescen z
+   * gonilnikom za surovo besedilo in HTML strani ne zna upodobiti: Windows
+   * posel sprejme, javi uspeh in ga tiho zavrze. Blagajna se je odprla,
+   * listka pa ni bilo - in ker ta pot nima nadomestne, tudi opozorila ne.
+   *
+   * Racuni te tezave nimajo, ker gredo prek `print-raw` kot surovi ESC/POS
+   * ukazi. Zdaj po isti poti tecejo tudi ti trije izpisi.
+   */
+  ipcMain.handle('print-text', async (event, podatki) => {
+    try {
+      const config = loadPrinterConfig()
+      const printerName = config.printerName || ''
+      if (!printerName) return { ok: false, error: 'Tiskalnik ni nastavljen. Pojdi na Orodja > Nastavitve tiskalnika.' }
+
+      const vrstice = Array.isArray(podatki?.vrstice) ? podatki.vrstice : []
+      const SIRINA = Number(podatki?.paper_width) === 58 ? 32 : 48
+      const ESC = 0x1B, GS = 0x1D
+      const out = []
+      const b = (...x) => out.push(...x)
+      // Isti nabor znakov kot pri racunih (Windows-1252), da sumniki ne razpadejo.
+      const sl = (s) => String(s == null ? '' : s)
+        .replace(/[čć]/g,'c').replace(/[ČĆ]/g,'C')
+        .replace(/š/g,'s').replace(/Š/g,'S')
+        .replace(/ž/g,'z').replace(/Ž/g,'Z')
+        .replace(/đ/g,'d').replace(/Đ/g,'D')
+      // Evro je v Windows-1252 bajt 0x80 - brez tega bi se izpisal kot vprasaj.
+      const txt = (s) => {
+        const t = sl(s)
+        for (let i = 0; i < t.length; i++) {
+          const c = t.charCodeAt(i)
+          b(c === 0x20AC ? 0x80 : (c > 0xFF ? 0x3F : c))
+        }
+      }
+      const lf = () => b(0x0A)
+
+      b(ESC, 0x40)          // init
+      b(ESC, 0x74, 0x10)    // kodna stran Windows-1252
+
+      for (const v of vrstice) {
+        const besedilo = typeof v === 'string' ? v : (v?.t ?? '')
+        const slog = typeof v === 'string' ? {} : (v || {})
+        // Poravnava: 0 levo, 1 sredina, 2 desno
+        b(ESC, 0x61, slog.sredina ? 0x01 : 0x00)
+        // Dvojna visina/sirina za naslove in skupne zneske
+        if (slog.veliko) b(GS, 0x21, 0x11)
+        if (slog.krepko) b(ESC, 0x45, 0x01)
+        if (slog.crta) { txt('-'.repeat(SIRINA)) }
+        else if (slog.desno != null) {
+          // Par levo/desno v eni vrstici, z zapolnitvijo vmes.
+          const l = sl(besedilo), r = sl(slog.desno)
+          const lp = l.slice(0, Math.max(0, SIRINA - r.length - 1))
+          txt(lp + ' '.repeat(Math.max(1, SIRINA - lp.length - r.length)) + r)
+        } else txt(besedilo)
+        lf()
+        if (slog.krepko) b(ESC, 0x45, 0x00)
+        if (slog.veliko) b(GS, 0x21, 0x00)
+      }
+
+      b(ESC, 0x61, 0x00)
+      lf(); lf(); lf(); lf()
+      b(GS, 0x56, 0x42, 0x00)   // rez
+
+      const buf = Buffer.from(out)
+      if (process.platform === 'win32') return await rawPrintWindows(printerName, buf)
+      const { exec } = require('child_process')
+      const tmpBin = require('path').join(require('os').tmpdir(), `racunko-txt-${Date.now()}.bin`)
+      require('fs').writeFileSync(tmpBin, buf)
+      return await new Promise((resolve) => {
+        exec(`lp -d "${printerName}" -o raw "${tmpBin}"`, (err) => {
+          try { require('fs').unlinkSync(tmpBin) } catch {}
+          resolve(err ? { ok: false, error: err.message } : { ok: true })
+        })
+      })
+    } catch (e) { return { ok: false, error: e.message } }
+  })
+
   ipcMain.handle('print-test', async () => {
     const { app } = require('electron')
     const testHtml = `<!DOCTYPE html><html><body style="font-family:monospace;font-size:12px;max-width:80mm;margin:0;padding:8mm 4mm">
