@@ -254,8 +254,23 @@ function buildEscPos(data) {
   }
   sep()
   // Popust
+  //
+  // POPRAVLJENO (prelet 179): na racunu je pisalo samo "Popust: -0,80",
+  // iz cesar kupec ni videl, ali gre za odstotek ali za fiksni znesek.
+  // Zdaj se odstotek izpise v oznaki: "Popust 5%:". Ce sta uporabljena
+  // oba, se izpiseta v dveh vrsticah, da je razvidno, od kod znesek.
   if (Number(data.discount_amount||0) > 0) {
-    line('Popust:', '-' + eur(data.discount_amount))
+    const odstotek = Number(data.discount_pct||0)
+    const fiksni   = Number(data.discount_fixed||0)
+    if (odstotek > 0 && fiksni > 0) {
+      const izOdstotka = Math.round((Number(data.subtotal||0) * odstotek / 100) * 100) / 100
+      line('Popust ' + odstotek + '%:', '-' + eur(izOdstotka))
+      line('Popust:', '-' + eur(fiksni))
+    } else if (odstotek > 0) {
+      line('Popust ' + odstotek + '%:', '-' + eur(data.discount_amount))
+    } else {
+      line('Popust:', '-' + eur(data.discount_amount))
+    }
   }
   // Napitnina
   if (Number(data.tip||0) > 0) {

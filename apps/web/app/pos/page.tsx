@@ -1276,9 +1276,15 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
       const napitnina = Math.round(total * tipPct / 100 * 100) / 100
       const popust = Math.round((total * discount / 100 + discountEurVal) * 100) / 100
       if (napitnina > 0 || popust > 0) {
+        // POPRAVLJENO (prelet 179): popust se je pisal v `discount_amount`,
+        // ki pa ga sprozilec v bazi SAM IZRACUNA iz odstotka in fiksnega
+        // zneska. Vpisana vrednost je bila zato ob vsaki naslednji spremembi
+        // vrstic prepisana - evrski popust bi izginil. Zdaj pisemo v izvorna
+        // stolpca, `discount_amount` in `total` pa izracuna baza.
         const { error: tipErr } = await createClient().from('orders').update({
           tip_amount: napitnina,
-          discount_amount: popust,
+          discount_pct: discount || 0,
+          discount_fixed: discountEurVal || 0,
         }).eq('id', orderId)
         // POPRAVLJENO (17.8.2026): napitnina in popust vplivata na ZNESEK racuna.
         // Prej se je napaka zapisala samo v konzolo - racun je bil natisnjen z
@@ -1633,14 +1639,18 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
             </div>
             <div style={{ flex:1 }}>
               <div style={{ fontWeight:600, fontSize:12, color:T.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.06em' }}>Popust</div>
+              {/* POPRAVLJENO (prelet 179): klik na odstotek je prej IZBRISAL
+                  evrski popust in obratno - uporabiti se je dalo le enega.
+                  Baza od preleta 178 zna sesteti oba, zato praznjenja ni vec.
+                  Ponoven klik na isti odstotek ga odstrani. */}
               <div style={{ display:'flex', gap:4, marginBottom:4 }}>
                 {[0,5,10,20].map(p => (
-                  <button key={p} onClick={() => { setDiscount(p); setDiscountEur('') }} style={{ flex:1, padding:'7px 0', borderRadius:7, cursor:'pointer', fontFamily:'inherit', border:'none', fontWeight:600, fontSize:12, background: discount===p && !discountEur ? T.accentSoft : T.chipBg, color: discount===p && !discountEur ? T.accent : 'inherit' }}>
+                  <button key={p} onClick={() => setDiscount(discount === p ? 0 : p)} style={{ flex:1, padding:'7px 0', borderRadius:7, cursor:'pointer', fontFamily:'inherit', border:'none', fontWeight:600, fontSize:12, background: discount===p ? T.accentSoft : T.chipBg, color: discount===p ? T.accent : 'inherit' }}>
                     {p===0 ? '—' : `${p}%`}
                   </button>
                 ))}
               </div>
-              <input value={discountEur} onChange={e=>{ setDiscountEur(e.target.value); setDiscount(0) }} placeholder="Popust €" style={{ width:'100%', padding:'6px 8px', borderRadius:7, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:12, background:T.inputBg, outline:'none', boxSizing:'border-box' }}/>
+              <input value={discountEur} onChange={e=>setDiscountEur(e.target.value)} placeholder="Popust €" style={{ width:'100%', padding:'6px 8px', borderRadius:7, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:12, background:T.inputBg, outline:'none', boxSizing:'border-box' }}/>
             </div>
           </div>
           {error && <div style={{ padding:'10px 12px', borderRadius:8, background:'rgba(168,50,50,0.10)', color:T.danger, fontSize:12, fontWeight:600 }}>✕ {error}</div>}
@@ -1775,6 +1785,10 @@ async function autoPrint(data) {
         subtotal: Number(data.subtotal||data.total||0),
         discount_pct: data.discount_pct || 0,
         discount_amount: Number(data.discount_amount||0),
+        // PRELET 179: brez teh dveh tiskalnik ne ve, ali je bil popust
+        // odstoten ali v evrih - na racunu je pisalo le "-0,80".
+        discount_pct: Number(data.discount_pct||0),
+        discount_fixed: Number(data.discount_fixed||0),
         tip: Number(data.tip||0),
         total: Number(data.total||0),
         payment_method: data.method,
