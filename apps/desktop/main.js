@@ -599,6 +599,88 @@ function setupIpcHandlers() {
     } catch (e) { return { ok: false, error: e.message } }
   })
 
+  /**
+   * PREIZKUS KODNIH STRANI ZA SUMNIKE (prelet 182)
+   * ══════════════════════════════════════════════
+   *
+   * ZAKAJ: racun ima v nogi "www.racunko.si" - naslov, ki pripada DRUGEMU
+   * podjetju (racunovodski servis RACUNKO d.o.o. iz Kamnika). Prava domena
+   * je racunko.si s sumnikom, torej "racunko.si" s streho na c.
+   *
+   * Tiskalnik dela na kodni strani Windows-1252 (`ESC t 16`), ki sumnikov
+   * NIMA - zato jih koda cisti v c/s/z. Za sumnike je potrebna druga kodna
+   * stran, njena STEVILKA pa se med tiskalniki razlikuje:
+   *
+   *   45 = Windows-1250 (srednjeevropska) - ima sumnike IN evro znak
+   *   18 = CP852 (Latin-2, DOS)           - ima sumnike, evra NE
+   *   16 = Windows-1252                   - trenutna, brez sumnikov
+   *
+   * Ta preizkus natisne isto vrstico pod vsemi tremi. Tista, ki se izpise
+   * pravilno, pove, katero stran naj uporabimo. Ugibati ne gre: napacna
+   * stran bi na racunih dala nakljucne znake namesto besedila.
+   */
+  // Funkcija je zunaj IPC, ker jo klice tudi meni.
+  async function preizkusSumnikov() {
+    try {
+      const config = loadPrinterConfig()
+      const printerName = config.printerName || ''
+      if (!printerName) return { ok: false, error: 'Tiskalnik ni nastavljen.' }
+
+      const ESC = 0x1B, GS = 0x1D
+      const out = []
+      const b = (...x) => out.push(...x)
+      const asc = (s) => { for (let i=0;i<s.length;i++) b(s.charCodeAt(i)) }
+      const lf = () => b(0x0A)
+
+      // Bajti za "racunko.si" in "cszCSZ EUR" po posamezni kodni strani.
+      const razlicice = [
+        { stran: 45, ime: 'WPC1250',
+          url: [0x72,0x61,0xE8,0x75,0x6E,0x6B,0x6F,0x2E,0x73,0x69],           // ra c^ unko.si
+          crke:[0xE8,0x9A,0x9E,0x20,0xC8,0x8A,0x8E,0x20,0x80] },              // c s z C S Z EUR
+        { stran: 18, ime: 'PC852',
+          url: [0x72,0x61,0x9F,0x75,0x6E,0x6B,0x6F,0x2E,0x73,0x69],
+          crke:[0x9F,0xE7,0xA7,0x20,0xAC,0xE6,0xA6,0x20,0x3F] },
+        { stran: 16, ime: 'WPC1252 (zdaj)',
+          url: [0x72,0x61,0x63,0x75,0x6E,0x6B,0x6F,0x2E,0x73,0x69],
+          crke:[0x3F,0x3F,0x3F,0x20,0x3F,0x3F,0x3F,0x20,0x80] },
+      ]
+
+      b(ESC, 0x40)
+      b(ESC, 0x61, 0x01); asc('PREIZKUS SUMNIKOV'); lf()
+      b(ESC, 0x61, 0x00); lf()
+      asc('Katera vrstica se izpise PRAVILNO?'); lf()
+      asc('Pravilno = racunko.si s streho na c'); lf()
+      asc('-'.repeat(48)); lf()
+
+      for (const r of razlicice) {
+        b(ESC, 0x74, r.stran)
+        asc('[' + r.stran + '] ' + r.ime); lf()
+        asc('   '); for (const x of r.url) b(x); lf()
+        asc('   '); for (const x of r.crke) b(x); lf()
+        lf()
+      }
+
+      b(ESC, 0x74, 0x10)   // nazaj na trenutno stran
+      asc('-'.repeat(48)); lf()
+      asc('Javite stevilko vrstice, ki je pravilna.'); lf()
+      lf(); lf(); lf()
+      b(GS, 0x56, 0x42, 0x00)
+
+      const buf = Buffer.from(out)
+      if (process.platform === 'win32') return await rawPrintWindows(printerName, buf)
+      const { exec } = require('child_process')
+      const tmpBin = require('path').join(require('os').tmpdir(), `racunko-cp-${Date.now()}.bin`)
+      require('fs').writeFileSync(tmpBin, buf)
+      return await new Promise((resolve) => {
+        exec(`lp -d "${printerName}" -o raw "${tmpBin}"`, (err) => {
+          try { require('fs').unlinkSync(tmpBin) } catch {}
+          resolve(err ? { ok: false, error: err.message } : { ok: true })
+        })
+      })
+    } catch (e) { return { ok: false, error: e.message } }
+  }
+  ipcMain.handle('print-sumniki', preizkusSumnikov)
+
   ipcMain.handle('print-test', async () => {
     const { app } = require('electron')
     const testHtml = `<!DOCTYPE html><html><body style="font-family:monospace;font-size:12px;max-width:80mm;margin:0;padding:8mm 4mm">
@@ -915,6 +997,17 @@ function createMenu() {
             try {
               await fetch(`http://localhost:${PRINT_PORT}/print/test`, { method: 'POST' })
             } catch (e) { console.error(e) }
+          }
+        },
+        {
+          // PRELET 182: natisne isto vrstico pod vsemi kodnimi stranmi,
+          // da se vidi, katero tiskalnik razume za sumnike.
+          label: 'Preizkus sumnikov',
+          click: async () => {
+            try {
+              const r = await preizkusSumnikov()
+              if (r && !r.ok) dialog.showErrorBox('Tiskalnik', r.error || 'Napaka pri tiskanju.')
+            } catch (e) { dialog.showErrorBox('Tiskalnik', String(e?.message || e)) }
           }
         },
         {
