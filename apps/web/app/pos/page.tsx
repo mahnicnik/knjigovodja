@@ -9388,9 +9388,29 @@ function OrdersScreen({ posData, auth }) {
                       // POPRAVLJENO (16.8.2026): maybeSingle() bi vrgel napako pri
                       // uporabniku, ki je clan vec organizacij - omejimo na aktivno.
                       // POPRAVLJENO (24.8.2026): `org_members.display_name` ne obstaja.
-                      const { data: me } = await db.from('staff').select('name')
-                        .eq('user_id', user.id).eq('active', true).limit(1).maybeSingle()
-                      cashierName = me?.name || ''   // e-naslova NE na davcni dokument
+                      //
+                      // POPRAVLJENO (prelet 180): brali smo TRENUTNO PRIJAVLJENEGA
+                      // uporabnika, torej tistega, ki kopijo TISKA - ne tistega, ki
+                      // je racun IZDAL. Na kopiji bi zato pisalo napacno ime, ob
+                      // nadzoru pa je to podatek na davcnem dokumentu.
+                      //
+                      // Pri racunu 330 je polje ostalo celo prazno: blagajnik
+                      // "Nik Mahnic" je v tabeli osebja vpisan s PIN in nima
+                      // povezave na uporabniski racun (`user_id` je prazen), zato
+                      // iskanje po seji ni naslo nicesar.
+                      //
+                      // Zdaj beremo z NAROCILA. Sejo uporabimo le, ce naroclio
+                      // blagajnika nima zapisanega (starejsi racuni).
+                      if (selectedOrder?.cashier_id) {
+                        const { data: izdal } = await db.from('staff').select('name')
+                          .eq('id', selectedOrder.cashier_id).maybeSingle()
+                        cashierName = izdal?.name || ''
+                      }
+                      if (!cashierName) {
+                        const { data: me } = await db.from('staff').select('name')
+                          .eq('user_id', user.id).eq('active', true).limit(1).maybeSingle()
+                        cashierName = me?.name || ''   // e-naslova NE na davcni dokument
+                      }
                     }
                   } catch {}
                   const pd = {
@@ -9463,7 +9483,15 @@ function OrdersScreen({ posData, auth }) {
                   if (member) {
                     const { data: org } = await db.from('organizations').select('*').eq('id', member.org_id).single()
                     orgData = org
-                    if (user) {
+                    // POPRAVLJENO (prelet 180): enako kot pri izpisu prek
+                    // tiskalnika - blagajnik mora biti tisti, ki je racun IZDAL,
+                    // ne tisti, ki kopijo tiska.
+                    if (selectedOrder?.cashier_id) {
+                      const { data: izdal } = await db.from('staff').select('name')
+                        .eq('id', selectedOrder.cashier_id).maybeSingle()
+                      cashierName = izdal?.name || ''
+                    }
+                    if (!cashierName && user) {
                       // POPRAVLJENO (24.8.2026): `org_members.display_name` ne obstaja.
                       const { data: me } = await db.from('staff').select('name')
                         .eq('user_id', user.id).eq('active', true).limit(1).maybeSingle()
