@@ -175,9 +175,31 @@ function buildEscPos(data) {
    * takrat naj klic tiskanja poslje `paper_width: 58`.
    */
   const SIRINA = Number(data.paper_width) === 58 ? 32 : 48
+  /**
+   * POPRAVLJENO (prelet 177): na racunu je pri popustu pisalo "-?0,80"
+   * namesto "-\u20AC0,80".
+   *
+   * VZROK: `sl()` na koncu izvede `.replace(/[^\x20-\x7E]/g,'?')`, kar vse
+   * izven osnovnega ASCII zamenja z vprasajem. Evro je v kodni strani
+   * Windows-1252 bajt 0x80 in pade v to past.
+   *
+   * Vrstice artiklov in SKUPAJ so bile pravilne, ker gredo naravnost skozi
+   * `txtRaw()`, ki bajt 0x80 prepozna in ga zapise nespremenjenega. Skozi
+   * `line()` pa je sel vsak del NAJPREJ skozi `sl()` - in tam je evro izginil.
+   * Prizadeti sta bili vrstici Popust in Napitnina, torej edini dve, ki
+   * uporabljata `line()` skupaj z `eur()`.
+   *
+   * Resitev: besedilo razdelimo NA evro znaku, vsak del posebej ocistimo
+   * in zlepimo nazaj z evrom vmes - ta tako sploh ne gre skozi ciscenje.
+   * (Prvi poskus z nadomestnim znakom \u0001 ni deloval: tudi ta je izven
+   * ASCII in ga je `sl()` zamenjal z vprasajem.)
+   */
+  const slBrezEvra = (s) =>
+    String(s == null ? '' : s).split('\x80').map(del => sl(del)).join('\x80')
   const line = (l, r, width=SIRINA) => {
-    const lp = sl(l).slice(0, width - sl(r).length - 1)
-    txtRaw(lp + ' '.repeat(width - lp.length - sl(r).length) + sl(r)); lf()
+    const li = slBrezEvra(l), ri = slBrezEvra(r)
+    const lp = li.slice(0, width - ri.length - 1)
+    txtRaw(lp + ' '.repeat(Math.max(1, width - lp.length - ri.length)) + ri); lf()
   }
   const sep = (ch='-', w=SIRINA) => { txt(ch.repeat(w)); lf() }
   const eur = (n) => {
