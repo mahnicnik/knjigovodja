@@ -438,6 +438,8 @@ const PRINT_PORT = 6789
 
 let mainWindow = null
 let printServer = null
+// PRELET 183: nastavi jo `setupIpcHandlers()`; uporablja jo meni Orodja.
+let preizkusSumnikov = async () => ({ ok: false, error: 'Tiskanje se ni pripravljeno.' })
 
 // ── Auto-updater ──────────────────────────────────────────────────
 function setupAutoUpdater() {
@@ -619,8 +621,11 @@ function setupIpcHandlers() {
    * pravilno, pove, katero stran naj uporabimo. Ugibati ne gre: napacna
    * stran bi na racunih dala nakljucne znake namesto besedila.
    */
-  // Funkcija je zunaj IPC, ker jo klice tudi meni.
-  async function preizkusSumnikov() {
+  // POPRAVLJENO (prelet 183): funkcija je bila definirana ZNOTRAJ
+  // `setupIpcHandlers()`, meni pa je zunaj nje - klik je zato javil
+  // "preizkusSumnikov is not defined". Zdaj se ob zagonu pripne na
+  // spremenljivko na ravni modula, do katere meni ima dostop.
+  preizkusSumnikov = async function () {
     try {
       const config = loadPrinterConfig()
       const printerName = config.printerName || ''
@@ -679,7 +684,7 @@ function setupIpcHandlers() {
       })
     } catch (e) { return { ok: false, error: e.message } }
   }
-  ipcMain.handle('print-sumniki', preizkusSumnikov)
+  ipcMain.handle('print-sumniki', () => preizkusSumnikov())
 
   ipcMain.handle('print-test', async () => {
     const { app } = require('electron')
