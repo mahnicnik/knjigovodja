@@ -12722,6 +12722,8 @@ function AutolockSection({ auth }) {
  */
 function RojstniDneviSection({ posData }) {
   const [vklopljeno, setVklopljeno] = React.useState(false)
+  // PRELET 171: nacin posiljanja opomnikov o poteku kartic.
+  const [samodejnoPosiljanje, setSamodejnoPosiljanje] = React.useState(true)
   const [besedilo, setBesedilo] = React.useState('')
   const [stanje, setStanje] = React.useState({ zRojstnimDnem: 0, sPrivolitvijo: 0, biPrejeli: 0 })
   const [shranjujem, setShranjujem] = React.useState(false)
@@ -12733,9 +12735,10 @@ function RojstniDneviSection({ posData }) {
       const orgId = posData?.org?.id
       if (orgId) {
         const { data } = await db.from('organizations')
-          .select('birthday_emails_enabled, birthday_email_text').eq('id', orgId).maybeSingle()
+          .select('birthday_emails_enabled, birthday_email_text, notify_auto_send').eq('id', orgId).maybeSingle()
         setVklopljeno(!!data?.birthday_emails_enabled)
         setBesedilo(data?.birthday_email_text || '')
+        setSamodejnoPosiljanje((data as any)?.notify_auto_send !== false)
       }
       const { data: str } = await db.from('customers')
         .select('birth_date, email, marketing_consent')
@@ -12754,7 +12757,8 @@ function RojstniDneviSection({ posData }) {
     if (!orgId) { setSporocilo('Organizacije ni bilo mogoče določiti.'); return }
     setShranjujem(true); setSporocilo('')
     const { error } = await createClient().from('organizations')
-      .update({ birthday_emails_enabled: vklopljeno, birthday_email_text: besedilo || null })
+      .update({ birthday_emails_enabled: vklopljeno, birthday_email_text: besedilo || null,
+                notify_auto_send: samodejnoPosiljanje })
       .eq('id', orgId)
     setShranjujem(false)
     setSporocilo(error ? `Napaka: ${error.message}` : 'Shranjeno.')
@@ -12762,7 +12766,47 @@ function RojstniDneviSection({ posData }) {
 
   return (
     <div style={{ maxWidth:640 }}>
-      <div style={{ fontSize:22, fontWeight:800, marginBottom:6 }}>Rojstnodnevne čestitke</div>
+      {/* DODANO (prelet 171): nacin posiljanja opomnikov o poteku kartic.
+          Doslej je opomnik odsel SAMODEJNO, lastnik pa je hkrati dobil
+          obvestilo v zvoncu - kar je dajalo vtis, da mora posiljanje se
+          potrditi, ceprav je sporocilo ze odslo. */}
+      <div style={{ fontSize:22, fontWeight:800, marginBottom:6 }}>Obveščanje strank</div>
+
+      <div style={{ fontSize:15, fontWeight:700, marginTop:4, marginBottom:6 }}>Opomniki o poteku kartice</div>
+      <div style={{ fontSize:13, color:T.muted, marginBottom:12, lineHeight:1.6 }}>
+        Nočno opravilo vsak dan preveri, katere kartice potekajo. Tu določite,
+        ali sporočilo odide samo ali počaka na vašo potrditev.
+      </div>
+
+      <label style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'12px 14px', borderRadius:10, border:'1px solid '+T.line, cursor:'pointer', marginBottom:8 }}>
+        <input type="radio" name="nacinObvescanja" checked={samodejnoPosiljanje} onChange={()=>setSamodejnoPosiljanje(true)} style={{ marginTop:2 }}/>
+        <span>
+          <span style={{ fontWeight:600, fontSize:14 }}>Pošlji samodejno</span>
+          <div style={{ fontSize:11.5, color:T.muted, marginTop:2, lineHeight:1.5 }}>
+            Prvi opomnik odide sam, brez vašega posredovanja. Nadaljnja sporočila
+            za isto kartico pošljete ročno prek zvonca.
+          </div>
+        </span>
+      </label>
+
+      <label style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'12px 14px', borderRadius:10, border:'1px solid '+T.line, cursor:'pointer', marginBottom:16 }}>
+        <input type="radio" name="nacinObvescanja" checked={!samodejnoPosiljanje} onChange={()=>setSamodejnoPosiljanje(false)} style={{ marginTop:2 }}/>
+        <span>
+          <span style={{ fontWeight:600, fontSize:14 }}>Potrdim sam</span>
+          <div style={{ fontSize:11.5, color:T.muted, marginTop:2, lineHeight:1.5 }}>
+            Obvestilo se pojavi v zvoncu, sporočilo pa odide šele na vaš klik.
+            Nič ne odide brez potrditve.
+          </div>
+        </span>
+      </label>
+
+      <div style={{ padding:'10px 12px', borderRadius:8, background:T.surface2, fontSize:11.5, color:T.muted, lineHeight:1.6, marginBottom:24 }}>
+        Opomnik se <b>ne</b> pošlje, če stranko pokriva druga kartica, ki velja dlje.
+      </div>
+
+      <div style={{ height:1, background:T.line, margin:'0 0 20px' }}/>
+
+      <div style={{ fontSize:15, fontWeight:700, marginBottom:6 }}>Rojstnodnevne čestitke</div>
       <div style={{ fontSize:13, color:T.muted, marginBottom:20, lineHeight:1.6 }}>
         Stranka prejme čestitko na dan svojega rojstnega dne. Pošlje jo nočno opravilo.
       </div>

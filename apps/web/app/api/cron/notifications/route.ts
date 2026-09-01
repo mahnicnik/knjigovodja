@@ -53,7 +53,9 @@ export async function GET(req: NextRequest) {
             // POPRAVLJENO (26.8.2026): izbor ni imel `phone`, zato je SAMODEJNI
             // opomnik pisal "Oglasite se pri nas" brez stevilke - pri rocnem
             // posiljanju iz blagajne je bilo pravilno, tu pa ne.
-            .select('name, tax_number, iban, bic, email, phone')
+            // PRELET 171: `notify_auto_send` odloca, ali cron opomnik poslje
+            // sam ali ga pusti cakati na rocno potrditev v blagajni.
+            .select('name, tax_number, iban, bic, email, phone, notify_auto_send')
             .eq('id', mem.org_id)
             .maybeSingle()
           orgForBiz = o
@@ -95,6 +97,60 @@ export async function GET(req: NextRequest) {
         // sporocil zapored (potece cez 3 dni, potece danes, potekla 1 dan
         // nazaj...), ker je vsako svoje obvestilo. Vsa nadaljnja sporocila se
         // posljejo LE ROCNO iz POS terminala, s potrditvijo.
+        /**
+         * POKRITOST Z DRUGO KARTICO (prelet 171)
+         * ══════════════════════════════════════
+         *
+         * NAPAKA, KI JO TO ODPRAVLJA: vsaka kartica je bila obravnavana
+         * zase. Stranka, ki je clanarino ze podaljsala z NOVO kartico, je
+         * se naprej dobivala opomnike za staro, dokler ta ni potekla.
+         *
+         * Primer iz prakse: clanica je imela mesecno karto do 4. 9. in
+         * nosecnisko vadbo do 30. 9., vpisano dan prej. Prejela je opomnik
+         * za mesecno, ceprav je bila v resnici pokrita se ves mesec.
+         *
+         * Pravilo: ce ima stranka DRUGO aktivno kartico, ki velja DLJE od
+         * te, opomnika ne posljemo. Obvestilo v zvoncu ostane - lastnik naj
+         * vidi, da stara kartica potece - stranke pa ne vznemirjamo.
+         */
+        if (notif.package_id && pkg?.expires) {
+          const { data: pokritost } = await supabase
+            .from('customer_packages')
+            .select('id, name, expires')
+            .eq('customer_id', notif.customer_id)
+            .eq('active', true)
+            .neq('id', notif.package_id)
+            .gt('expires', pkg.expires)
+            .limit(1)
+          if (pokritost?.length) {
+            results.push({
+              customer: customer.name,
+              package: pkg?.name,
+              status: 'skipped',
+              reason: `Stranko pokriva druga kartica (${pokritost[0].name} do ${pokritost[0].expires}) — opomnik ni potreben.`,
+            })
+            continue
+          }
+        }
+
+        /**
+         * NACIN POSILJANJA (prelet 171)
+         *
+         * Doslej je cron opomnik poslal SAM, lastnik pa je hkrati dobil
+         * obvestilo v zvoncu - kar je dajalo vtis, da mora posiljanje se
+         * potrditi, ceprav je sporocilo ze odslo. Zdaj o tem odloca
+         * nastavitev `organizations.notify_auto_send`.
+         */
+        if (orgForBiz && (orgForBiz as any).notify_auto_send === false) {
+          results.push({
+            customer: customer.name,
+            package: pkg?.name,
+            status: 'skipped',
+            reason: 'Ročno potrjevanje je vklopljeno — sporočilo čaka na potrditev v blagajni.',
+          })
+          continue
+        }
+
         const { data: zeObvescena } = await supabase
           .from('pos_notifications')
           .select('id')
