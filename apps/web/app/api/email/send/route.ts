@@ -177,7 +177,17 @@ function buildEmailTemplate({ customerName, packageName, expiresAt, validFrom, r
         <tr>
           <td style="background:#0d2818;border-radius:12px 12px 0 0;padding:24px 32px;text-align:center;">
             <div style="display:inline-flex;align-items:center;gap:10px;">
-              <div style="width:36px;height:36px;background:#e9b949;border-radius:8px;display:inline-block;line-height:36px;text-align:center;font-weight:800;font-size:18px;color:#0d2818;">R</div>
+              <!-- PRELET 172: pravi znak namesto crke R. V e-posti je vrisan
+                   kot SVG neposredno v sporocilo - brez zunanje slike, ki bi
+                   jo postni odjemalci blokirali. Gmail in Apple Mail vgrajen
+                   SVG prikazeta; kjer ga odjemalec ne podpira, ostane prazen
+                   prostor namesto pokvarjene ikone. -->
+              <svg width="36" height="36" viewBox="0 0 100 100" style="display:inline-block;vertical-align:middle">
+                <path d="M82 50 C 82 28, 66 14, 46 14 C 26 14, 14 30, 14 50 C 14 70, 28 84, 46 84 C 50 84, 54 83, 58 82 L 64 92 L 64 78 C 76 72, 82 62, 82 50 Z" fill="#0E5E3B"/>
+                <circle cx="36" cy="46" r="5" fill="#FFFFFF"/>
+                <circle cx="56" cy="46" r="5" fill="#E8B547"/>
+                <path d="M30 60 Q 46 72, 62 60" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+              </svg>
               <span style="color:#f6f1e8;font-size:18px;font-weight:700;vertical-align:middle;">Računko</span>
             </div>
           </td>

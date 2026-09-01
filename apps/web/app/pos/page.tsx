@@ -32,6 +32,30 @@ import { jeElektron, preberiKontekst, naslednjaLokalnaStevilka, zabeleziIzPolneS
 // ================================================================
 // TEMA
 // ================================================================
+/**
+ * ZNAK RAČUNKO (prelet 172)
+ * ═════════════════════════
+ *
+ * Blagajna je na štirih mestih risala rumen kvadratek s črko R — znak, ki
+ * se je uporabljal pred sedanjim logotipom. Pravi znak je pogovorni oblaček
+ * in je že v uporabi na javni strani (`app/page.tsx`, komponenta
+ * `BrandMark`) ter v `favicon.svg`.
+ *
+ * Oblika je vrisana neposredno v kodo, ne naložena kot datoteka: tako se
+ * izriše tudi brez povezave (namizna aplikacija ob izpadu) in se ne
+ * zamegli na zaslonih z visoko ločljivostjo.
+ */
+function ZnakRacunko({ size = 36 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" style={{ display:'block' }}>
+      <path d="M82 50 C 82 28, 66 14, 46 14 C 26 14, 14 30, 14 50 C 14 70, 28 84, 46 84 C 50 84, 54 83, 58 82 L 64 92 L 64 78 C 76 72, 82 62, 82 50 Z" fill="#0E5E3B"/>
+      <circle cx="36" cy="46" r="5" fill="#FFFFFF"/>
+      <circle cx="56" cy="46" r="5" fill="#E8B547"/>
+      <path d="M30 60 Q 46 72, 62 60" stroke="#FFFFFF" strokeWidth="3.5" strokeLinecap="round" fill="none"/>
+    </svg>
+  )
+}
+
 const T = {
   bg: '#f4efe5', surface: '#ffffff', surface2: '#faf5e9', surface3: '#efeadf',
   ink: '#1a1f1a', inkSoft: '#3a3f3a', muted: '#6b6962', mutedSoft: '#9a9890',
@@ -591,7 +615,7 @@ function PrvaNastavitev({ imePodjetja, onKoncano }) {
     <div style={{ position:'absolute', inset:0, zIndex:1000, background:'radial-gradient(circle at center, #1a3520 0%, #0d2818 60%, #06140d 100%)', color:T.headerInk, display:'flex', alignItems:'center', justifyContent:'center', padding:24, fontFamily:'"Inter", system-ui, sans-serif' }}>
       <div style={{ width:'100%', maxWidth:380 }}>
         <div style={{ textAlign:'center', marginBottom:26 }}>
-          <div style={{ width:44, height:44, borderRadius:11, background:T.brand, color:T.header, fontWeight:800, fontSize:21, display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 14px' }}>R</div>
+          <div style={{ margin:'0 auto 14px', display:'flex', justifyContent:'center' }}><ZnakRacunko size={44}/></div>
           <div style={{ fontSize:17, fontWeight:700 }}>{imePodjetja || 'Blagajna'}</div>
           <div style={{ fontSize:13, opacity:0.7, marginTop:8, lineHeight:1.6 }}>
             Blagajna še ni nastavljena.<br/>Določite svoje ime in PIN za vstop.
@@ -712,7 +736,7 @@ function LockScreen({ auth, imePodjetja }) {
     <div style={{ position:'absolute', inset:0, zIndex:1000, background:'radial-gradient(circle at center, #1a3520 0%, #0d2818 60%, #06140d 100%)', color:T.headerInk, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', fontFamily:'"Inter", system-ui, sans-serif' }}>
       <div style={{ position:'absolute', top:32, left:0, right:0, display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <div style={{ width:36, height:36, borderRadius:9, background:T.brand, color:T.header, fontWeight:800, fontSize:18, display:'flex', alignItems:'center', justifyContent:'center' }}>R</div>
+          <ZnakRacunko size={36}/>
           <div style={{ fontSize:18, fontWeight:700 }}>{imePodjetja || 'Blagajna'}</div>
         </div>
       </div>
@@ -2129,7 +2153,7 @@ function PremiseSelectScreen({ auth, onSelected }) {
       <div style={{ width:'100%', maxWidth:480 }}>
         {/* Logo */}
         <div style={{ textAlign:'center', marginBottom:32 }}>
-          <div style={{ width:48, height:48, borderRadius:12, background:T.brand, display:'inline-flex', alignItems:'center', justifyContent:'center', fontWeight:900, fontSize:22, color:T.header, marginBottom:12 }}>R</div>
+          <div style={{ display:'inline-flex', marginBottom:12 }}><ZnakRacunko size={48}/></div>
           <div style={{ color:T.headerInk, fontWeight:800, fontSize:20 }}>Izberi blagajno</div>
           <div style={{ color:'rgba(246,241,232,0.5)', fontSize:13, marginTop:4 }}>
             Prijavljen: {auth.name} · {auth.role}
@@ -14327,7 +14351,7 @@ function KlasikApp() {
       {/* HEADER */}
       <div style={{ background:T.header, color:T.headerInk, padding:'8px 16px', display:'flex', alignItems:'center', gap:14, flexShrink:0, borderBottom:'1px solid '+T.headerLine, minHeight:56 }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <div style={{ width:32, height:32, borderRadius:8, background:T.brand, color:T.header, fontWeight:800, fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>R</div>
+          <ZnakRacunko size={32}/>
           <div style={{ lineHeight:1.1 }}>
             <div style={{ fontWeight:700, fontSize:14 }}>{posData.businessName || 'Blagajna'}</div>
             <div style={{ fontSize:11, opacity:0.65, marginTop:2 }}>{profile.name}</div>
