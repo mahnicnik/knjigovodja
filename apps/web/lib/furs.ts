@@ -173,6 +173,100 @@ export function calculateZoi(
  * Zgradi XML zahtevo za FURS API.
  * Format: SOAP/XML po FURS specifikaciji ZDavPR.
  */
+/**
+ * PREIZKUS POVEZAVE Z FURS — SPOROČILO »echo« (prelet 173)
+ * ═══════════════════════════════════════════════════════
+ *
+ * ZAKAJ: razširjeni preizkus pošlje TRI račune in je v produkciji upravičeno
+ * zavrnjen — tam bi to pomenilo tri lažne prijave v uradni davčni evidenci.
+ * Zato pa uradna tehnična dokumentacija FURS (poglavje o izmenjavi sporočil)
+ * predvideva ločeno sporočilo tipa »echo«, namenjeno prav preverjanju
+ * delovanja povezave. Ne ustvari nobenega zapisa in ga je zato varno
+ * uporabiti tudi v produkciji.
+ *
+ * KAJ DEJANSKO POTRDI:
+ *   · da je posredniški strežnik dosegljiv,
+ *   · da FURS sprejme naše namensko digitalno potrdilo (obojestranski TLS),
+ *   · da strežnik odgovori v pričakovani obliki.
+ *
+ * ČESAR NE POTRDI: da je poslovni prostor prijavljen in da bo shema računa
+ * sprejeta — za to je potreben razširjeni preizkus v testnem okolju.
+ *
+ * Sporočilo »echo« se po dokumentaciji NE podpisuje digitalno; potrdilo se
+ * uporabi le za vzpostavitev povezave.
+ */
+export async function preveriPovezavoFurs(config: FursConfig): Promise<{
+  success: boolean
+  message: string
+  detail?: string
+}> {
+  const vsebina = 'racunko-' + Date.now().toString().slice(-6)
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:fu="http://www.fu.gov.si/">
+  <soapenv:Body>
+    <fu:EchoRequest>${vsebina}</fu:EchoRequest>
+  </soapenv:Body>
+</soapenv:Envelope>`
+
+  try {
+    const odgovor = await fetch('http://152.89.232.145:8787', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': 'racunko-furs-2026' },
+      body: JSON.stringify({
+        soapBody: xml,
+        isTest: config.isTest,
+        clientCert: config.certificatePem,
+        clientKey: config.privateKeyPem,
+        soapAction: '/echo',
+      }),
+      signal: AbortSignal.timeout(15000),
+    })
+
+    const surovo = await odgovor.text()
+    let podatki: any = {}
+    try { podatki = JSON.parse(surovo) } catch { podatki = { error: surovo } }
+
+    if (podatki.error) {
+      const napaka = String(podatki.error)
+      if (/SSL|ssl|decryption|record mac|certificate/i.test(napaka)) {
+        return {
+          success: false,
+          message: 'FURS ni sprejel digitalnega potrdila.',
+          detail: 'Preverite, ali je naloženo namensko potrdilo za ' +
+            (config.isTest ? 'TESTNO' : 'PRODUKCIJSKO') + ' okolje in ali je blagajna pri FURS registrirana. (' + napaka.slice(0, 160) + ')',
+        }
+      }
+      return { success: false, message: 'Posredniški strežnik ni odgovoril.', detail: napaka.slice(0, 200) }
+    }
+
+    const telo = String(podatki.body ?? '')
+    const status = Number(podatki.status ?? 0)
+
+    // FURS vrne isto vsebino, ki smo jo poslali — to je dokaz, da je
+    // sporocilo prislo do njega in se vrnilo po isti, overjeni poti.
+    if (status >= 200 && status < 300 && telo.includes(vsebina)) {
+      return {
+        success: true,
+        message: 'Povezava s FURS deluje (' + (config.isTest ? 'testno okolje' : 'PRODUKCIJA') + ').',
+        detail: 'Strežnik je vrnil poslano vsebino. Potrdilo je bilo sprejeto. Noben račun ni bil prijavljen.',
+      }
+    }
+
+    return {
+      success: false,
+      message: 'FURS je odgovoril, a ne pričakovano (HTTP ' + status + ').',
+      detail: telo.slice(0, 300) || 'Prazen odgovor.',
+    }
+  } catch (e: any) {
+    const s = String(e?.message || e)
+    return {
+      success: false,
+      message: /timeout|abort/i.test(s) ? 'Povezava je potekla (15 s).' : 'Povezave ni bilo mogoče vzpostaviti.',
+      detail: s.slice(0, 200),
+    }
+  }
+}
+
 function buildFursRequest(
   config: FursConfig,
   data: FursInvoiceData,

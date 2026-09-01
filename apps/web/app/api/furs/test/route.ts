@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { confirmWithFurs, extractFromP12, type FursConfig, type FursInvoiceData } from '@/lib/furs'
+import { confirmWithFurs, extractFromP12, preveriPovezavoFurs, type FursConfig, type FursInvoiceData } from '@/lib/furs'
 import { getFursCertificate } from '@/lib/furs-cert'
 import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 
@@ -100,7 +100,28 @@ export async function POST(req: NextRequest) {
     // okolju je to neskodljivo - gre na locen streznik (blagajne-test.fu.gov.si)
     // in NE v uradno davcno evidenco. V produkciji pa bi pomenil tri lazne
     // prijave na pravi streznik, zato ga tam zavrnemo.
+    /**
+     * PRODUKCIJA (prelet 173): namesto same zavrnitve izvedemo preizkus
+     * povezave s sporocilom »echo«. To je uradna pot iz tehnicne
+     * dokumentacije FURS in ne ustvari nobenega zapisa v evidenci -
+     * za razliko od razsirjenega preizkusa, ki poslje tri racune.
+     */
     if (!config.isTest) {
+      const izid = await preveriPovezavoFurs(config)
+      return NextResponse.json({
+        success: izid.success,
+        mode: 'echo',
+        environment: 'production',
+        message: izid.message,
+        detail: izid.detail,
+        note: 'V produkciji se izvede preizkus povezave (sporočilo »echo«). ' +
+          'Razširjeni preizkus, ki pošlje vzorčne račune, je na voljo samo v testnem načinu, ' +
+          'ker bi v produkciji ustvaril lažne prijave v uradni davčni evidenci.',
+        ...(izid.success ? {} : { error: izid.message + (izid.detail ? ' — ' + izid.detail : '') }),
+      }, { status: izid.success ? 200 : 502 })
+    }
+
+    if (false) {
       return NextResponse.json({
         success: false,
         error: 'Razširjeni preizkus je dovoljen SAMO v testnem načinu FURS. ' +
