@@ -10212,8 +10212,10 @@ function ReportsScreen({ posData, auth, setScreen }) {
     //
     // KOLICINO vseeno stejemo: za vprasanje "kaj se najbolj prodaja" je
     // unovcen obisk enako pomemben kot placan.
+    // POPRAVLJENO (prelet 181): dodana `subtotal` in `discount_amount`.
+    // Brez njiju iz vrstice ni bilo mogoce vedeti, ali je bil na racunu popust.
     const linesRes = await db.from('order_lines')
-      .select('name, qty, unit_price, orders!inner(closed_at, status, business_id, payments(method))')
+      .select('name, qty, unit_price, orders!inner(closed_at, status, business_id, subtotal, discount_amount, payments(method))')
       .eq('orders.business_id', BUSINESS_ID)
       .eq('orders.status', 'paid')
       .gte('orders.closed_at', fromStr)
@@ -10225,7 +10227,27 @@ function ReportsScreen({ posData, auth, setScreen }) {
       const sKartico = ((l as any).orders?.payments || []).some((p: any) => p.method === 'pkg')
       if (!itemMap[k]) itemMap[k] = { name:k, qty:0, total:0 }
       itemMap[k].qty += Number(l.qty || 1)
-      if (!sKartico) itemMap[k].total += Number(l.unit_price || 0) * Number(l.qty || 1)
+      if (!sKartico) {
+        /**
+         * POPRAVLJENO (prelet 181): prihodek se je sestel iz CENE POSTAVKE,
+         * popust pa je zapisan na NAROCILU, ne na vrstici - zato ga ta
+         * sestevek ni poznal.
+         *
+         * Pri racunu SIRBFB01-RACUNKO01-330 je bila Dolga kava prikazana
+         * s prihodkom 1,60 EUR, promet zgoraj pa 0,80 EUR - dve stevilki na
+         * istem zaslonu, ki si nasprotujeta. Prava je 0,80: toliko je gost
+         * placal in toliko je prijavljeno pri FURS.
+         *
+         * Popust razdelimo med vrstice SORAZMERNO z njihovo vrednostjo -
+         * enako, kot to pocne baza pri izracunu DDV. Napitnina v ta racun
+         * ne gre, ker ni prihodek od artikla.
+         */
+        const nar = (l as any).orders || {}
+        const osnova = Number(nar.subtotal || 0)
+        const popust = Number(nar.discount_amount || 0)
+        const faktor = osnova > 0 ? Math.max(0, (osnova - popust) / osnova) : 1
+        itemMap[k].total += Number(l.unit_price || 0) * Number(l.qty || 1) * faktor
+      }
     })
     const topItems = Object.values(itemMap).sort((a:any,b:any) => b.total - a.total).slice(0,5)
 
@@ -12726,8 +12748,12 @@ function KuhinjaSection({ posData }) {
 
   // Skupni znesek za customer display (zadnje odprto naročilo)
   const lastOrder = kdsOrders[kdsOrders.length - 1]
+  // POPRAVLJENO (prelet 181): zaslon za stranko je sestel cene postavk in s
+  // tem prikazal znesek PRED popustom - gost bi videl vec, kot bo placal.
+  // `orders.total` popust in napitnino ze vsebuje (prelet 178).
   const customerTotal = lastOrder
-    ? (lastOrder.order_lines || []).reduce((s, l) => s + Number(l.unit_price || 0) * Number(l.qty || 1), 0)
+    ? (Number((lastOrder as any).total) ||
+       (lastOrder.order_lines || []).reduce((s, l) => s + Number(l.unit_price || 0) * Number(l.qty || 1), 0))
     : 0
 
   return (
