@@ -77,6 +77,13 @@ export interface FursInvoiceData {
   presetZoi?: string
   /** Naknadna fiskalizacija: doda <fu:SubsequentSubmit>true</fu:SubsequentSubmit> */
   subsequentSubmit?: boolean
+  /**
+   * Davcna stevilka kupca (prelet 175). Po tehnicni specifikaciji polje
+   * R_3.5 `CustomerVATNumber`: vpise se, kadar je na racunu naveden kupec.
+   * Ce jo natisnemo na listek, FURS-u pa je ne posljemo, se natisnjeni in
+   * prijavljeni racun razlikujeta.
+   */
+  customerVatNumber?: string | null
   /** Zaporedna številka računa pri napravi (integer, narašča) */
   invoiceNumber: number
   /** Datum in čas izdaje računa */
@@ -311,7 +318,8 @@ function buildFursRequest(
         <fu:BusinessPremiseID>${premiseId}</fu:BusinessPremiseID>
         <fu:ElectronicDeviceID>${deviceId}</fu:ElectronicDeviceID>
         <fu:InvoiceNumber>${data.invoiceNumber}</fu:InvoiceNumber>
-      </fu:InvoiceIdentifier>
+      </fu:InvoiceIdentifier>${data.customerVatNumber ? `
+      <fu:CustomerVATNumber>${String(data.customerVatNumber).replace(/[^0-9A-Za-z]/g, '')}</fu:CustomerVATNumber>` : ''}
       <fu:InvoiceAmount>${data.amountTotal.toFixed(2)}</fu:InvoiceAmount>
       <fu:PaymentAmount>${data.amountTotal.toFixed(2)}</fu:PaymentAmount>
       <fu:TaxesPerSeller>

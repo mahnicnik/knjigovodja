@@ -258,6 +258,15 @@ function buildEscPos(data) {
   txt(pad('C',3) + pad(vatR+'%',7) + pad(neto.toFixed(2),stolpec,true) + pad(ddv.toFixed(2),stolpec,true) + pad(total.toFixed(2),stolpec,true)); lf()
   txt('C: DDV ' + vatR + '% stopnja'); lf()
   sep()
+  // PRELET 175: kupec na racunu, kadar je izdan na podjetje.
+  if (data.buyer_name) {
+    sep()
+    txt('KUPEC:'); lf()
+    txt(sl(data.buyer_name)); lf()
+    if (data.buyer_address) { txt(sl(data.buyer_address)); lf() }
+    if (data.buyer_tax_number) { txt('Davcna: SI' + sl(data.buyer_tax_number)); lf() }
+  }
+
   // FURS
   if (data.furs_zoi) { txt('ZOI: ' + data.furs_zoi); lf() }
   if (data.furs_eor) { txt('EOR: ' + data.furs_eor); lf() }

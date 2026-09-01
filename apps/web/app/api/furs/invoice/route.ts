@@ -249,6 +249,9 @@ export async function POST(req: NextRequest) {
       vatBreakdown,
       paymentType: 'cash',
       invoiceType: 'invoice',
+      // PRELET 175: racun na podjetje - davcna kupca mora v prijavo, ne le
+      // na listek, sicer se dokumenta razlikujeta.
+      customerVatNumber: (order as any).buyer_tax_number || null,
       // presetZoi: FURS-u posljemo natisnjeni ZOI; subsequentSubmit oznaci
       // naknadno prijavo po 9. clenu ZDavPR.
       ...(offline?.zoi ? { presetZoi: String(offline.zoi), subsequentSubmit: true } : {}),

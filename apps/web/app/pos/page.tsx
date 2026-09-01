@@ -24,6 +24,7 @@ import { idZaDdv } from '@/lib/format'
 import OpravilaScreen from '@/components/pos/OpravilaScreen'
 import OpravilaVOknu from '@/components/pos/OpravilaVOknu'
 import StanjePovezave from '@/components/pos/StanjePovezave'
+import { veljavnaDavcnaStevilka } from '@/lib/pos-calc'
 import MnozicneCene from '@/components/pos/MnozicneCene'
 import ZgodovinaCen from '@/components/pos/ZgodovinaCen'
 import { dodajVVrsto } from '@/lib/offline-vrsta'
@@ -832,13 +833,17 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState(null)
   const [cardConfirmed, setCardConfirmed] = useState(false)
+  // PRELET 175: racun na podjetje. Podatki so lahko ENKRATNI (vpisani samo
+  // za ta racun) ali prevzeti od stranke iz sifranta, ce ima davcno shranjeno.
+  const [naPodjetje, setNaPodjetje] = useState(false)
+  const [kupec, setKupec] = useState({ name: '', address: '', tax: '' })
   // DODANO (21.8.2026): aktivne kartice izbrane stranke, za unovcenje obiska.
   const [strankineKartice, setStrankineKartice] = useState<any[]>([])
   const [izbranaKartica, setIzbranaKartica] = useState('')
   const [stanjePredplacila, setStanjePredplacila] = useState<number | null>(null)
 
   useEffect(() => {
-    if (!open) { setMethod('cash'); setTipPct(0); setGiven(''); setDiscount(0); setDiscountEur(''); setFurs(true); setError(null); setProcessing(false) }
+    if (!open) { setMethod('cash'); setTipPct(0); setGiven(''); setDiscount(0); setDiscountEur(''); setFurs(true); setError(null); setProcessing(false); setNaPodjetje(false); setKupec({ name:'', address:'', tax:'' }) }
     if (open && typeof open === 'object') { if(open.discount) setDiscount(open.discount) }
     if (!open) setCardConfirmed(false)
     if (!open) { setStrankineKartice([]); setIzbranaKartica(''); setStanjePredplacila(null) }
@@ -1029,10 +1034,36 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
     })
   }
 
+  /**
+   * PREVZEM PODATKOV OD IZBRANE STRANKE (prelet 175)
+   * Ce ima stranka v sifrantu shranjeno davcno, jo ob vklopu prevzamemo -
+   * pri stalnih poslovnih partnerjih je ni treba vnasati ob vsakem nakupu.
+   */
+  React.useEffect(() => {
+    if (!naPodjetje) return
+    if (kupec.name || kupec.tax) return
+    const s: any = activeCustomer
+    if (s?.tax_number || s?.is_company) {
+      setKupec({ name: s.name || '', address: s.address || '', tax: s.tax_number || '' })
+    } else if (s?.name) {
+      setKupec(k => ({ ...k, name: s.name, address: s.address || '' }))
+    }
+  }, [naPodjetje, activeCustomer])
+
   async function submitPayment() {
     if (!auth?.user?.id && !auth?.user?.is_master) {
       setError('Ni prijavljenega blagajnika')
       return
+    }
+    // PRELET 175: racun na podjetje mora imeti naziv in VELJAVNO davcno.
+    // Napacna stevilka pomeni razhajanje med listkom in prijavo FURS, zato
+    // vnos raje zavrnemo, kot da izdamo racun, ki ga bo treba stornirati.
+    if (naPodjetje) {
+      if (!kupec.name.trim()) { setError('Vnesite naziv podjetja.'); return }
+      if (!veljavnaDavcnaStevilka(kupec.tax)) {
+        setError('Davčna številka ni veljavna. Vnesite 8 števk brez predpone SI.')
+        return
+      }
     }
     setProcessing(true)
     setError(null)
@@ -1098,6 +1129,17 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         customerId: (typeof open === 'object' && (open as any)?.customerId) || activeCustomer?.id,
         cashierId,
       })
+
+      // PRELET 175: podatki kupca se hranijo PRI NAROCILU, ne le pri stranki -
+      // so del izdanega dokumenta in se ne smejo spremeniti, ce stranko
+      // pozneje preimenujemo ali izbrisemo.
+      if (naPodjetje) {
+        await createClient().from('orders').update({
+          buyer_name: kupec.name.trim(),
+          buyer_address: kupec.address.trim() || null,
+          buyer_tax_number: kupec.tax.replace(/[^0-9]/g, ''),
+        }).eq('id', orderId)
+      }
 
       // 2. Nadomesti vrstice (NE dodajaj!) - narocilo je lahko ze imelo
       // shranjene vrstice iz prejsnjega switchToTable() klica (ko je uporabnik
@@ -1412,6 +1454,12 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         discount_amount: popust,
         tip: napitnina,
         furs,
+        // PRELET 175: kupec na izpis racuna.
+        buyer: naPodjetje ? {
+          name: kupec.name.trim(),
+          address: kupec.address.trim(),
+          tax_number: kupec.tax.replace(/[^0-9]/g, ''),
+        } : null,
         eor: fursEor,
         zoi: fursZoi,
         // PRELET 158: čas izdaje, s katerim je bil izračunan ZOI — QR koda na
@@ -1634,12 +1682,41 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
               <div style={{ fontWeight:800, fontSize:26, fontVariantNumeric:'tabular-nums' }}>{eur(finalTotal)}</div>
             </div>
           </div>
+
+          {/* PRELET 175: vnos kupca. Podatki so lahko enkratni ali prevzeti
+              od stranke, ce ima davcno shranjeno v sifrantu. */}
+          {naPodjetje && (
+            <div style={{ marginTop:14, padding:'14px 16px', background:T.surface2, borderRadius:12, border:'1px solid '+T.line }}>
+              <div style={{ fontSize:12, fontWeight:700, marginBottom:10 }}>Podatki kupca</div>
+              <input value={kupec.name} onChange={e=>setKupec(k=>({...k, name:e.target.value}))}
+                placeholder="Naziv podjetja *" disabled={processing}
+                style={{ width:'100%', padding:'9px 11px', borderRadius:8, border:'0.5px solid rgba(0,0,0,0.15)', fontSize:13, fontFamily:'inherit', marginBottom:8 }}/>
+              <input value={kupec.address} onChange={e=>setKupec(k=>({...k, address:e.target.value}))}
+                placeholder="Naslov" disabled={processing}
+                style={{ width:'100%', padding:'9px 11px', borderRadius:8, border:'0.5px solid rgba(0,0,0,0.15)', fontSize:13, fontFamily:'inherit', marginBottom:8 }}/>
+              <input value={kupec.tax} onChange={e=>setKupec(k=>({...k, tax:e.target.value}))}
+                placeholder="Davčna številka (8 števk) *" inputMode="numeric" maxLength={10} disabled={processing}
+                style={{ width:'100%', padding:'9px 11px', borderRadius:8, fontSize:13, fontFamily:'inherit',
+                  border:'0.5px solid ' + (kupec.tax && !veljavnaDavcnaStevilka(kupec.tax) ? '#A83232' : 'rgba(0,0,0,0.15)') }}/>
+              <div style={{ fontSize:11, color: kupec.tax && !veljavnaDavcnaStevilka(kupec.tax) ? '#A83232' : T.muted, marginTop:6, lineHeight:1.5 }}>
+                {kupec.tax && !veljavnaDavcnaStevilka(kupec.tax)
+                  ? 'Ta davčna številka ni veljavna — preverite vnos.'
+                  : 'Brez predpone SI. Številka bo natisnjena na računu in poslana FURS.'}
+              </div>
+            </div>
+          )}
         </div>
       </div>
       <div style={{ padding:'12px 22px 20px', borderTop:'1px solid rgba(0,0,0,0.06)', display:'flex', alignItems:'center', gap:10 }}>
         <label style={{ display:'flex', alignItems:'center', gap:7, fontSize:12, fontWeight:500, color:T.muted, cursor:'pointer' }}>
           <input type="checkbox" checked={furs} onChange={e => setFurs(e.target.checked)} disabled={processing} style={{ accentColor:T.accent, width:15, height:15 }}/>
           Davčno potrdi (FURS)
+        </label>
+        {/* PRELET 175: racun na podjetje. Davcna gre na listek IN v prijavo
+            FURS (polje CustomerVATNumber) - sicer se dokumenta razlikujeta. */}
+        <label style={{ display:'flex', alignItems:'center', gap:7, fontSize:12, fontWeight:500, color:T.muted, cursor:'pointer' }}>
+          <input type="checkbox" checked={naPodjetje} onChange={e => setNaPodjetje(e.target.checked)} disabled={processing} style={{ accentColor:T.accent, width:15, height:15 }}/>
+          Račun na podjetje
         </label>
         <div style={{ marginLeft:'auto', display:'flex', gap:8 }}>
           <button onClick={onCancel} disabled={processing} style={{ padding:'10px 14px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'1px solid rgba(0,0,0,0.12)', background:'transparent', fontWeight:600, fontSize:13, opacity: processing ? 0.4 : 1 }}>Prekliči</button>
@@ -1707,6 +1784,10 @@ async function autoPrint(data) {
         // pri izračunu ZOI) in oznaka računa brez povezave za opombo na izpisu.
         issue_datetime: data.issuedAt || new Date().toISOString(),
         offline: !!data.offline,
+        // PRELET 175: kupec, kadar je racun izdan na podjetje.
+        buyer_name: data.buyer?.name || '',
+        buyer_address: data.buyer?.address || '',
+        buyer_tax_number: data.buyer?.tax_number || '',
         premise_id: data.premiseId || '',
         premise_address: data.premiseAddress || '',
         is_copy: false,

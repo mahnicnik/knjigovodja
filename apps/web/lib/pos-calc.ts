@@ -127,6 +127,30 @@ export function pricakovanaGotovina(params: {
  * "prodaja izdelkov" (popravljeno 19.8.2026). Artikel, ki je nastal iz
  * storitve, ima zastavico `bookable`.
  */
+/**
+ * PREVERBA SLOVENSKE DAVČNE ŠTEVILKE (prelet 175)
+ * ═══════════════════════════════════════════════
+ *
+ * Davčna številka ima 8 števk; zadnja je kontrolna in se izračuna po
+ * pravilu mod-11 z utežmi 8, 7, 6, 5, 4, 3, 2. Če ostanek da 10, je
+ * kontrolna števka 0; ostanek 11 se ne pojavi pri veljavnih številkah.
+ *
+ * ZAKAJ TO PREVERJAMO: napačna davčna številka na računu pomeni, da se
+ * natisnjeni dokument in prijava FURS razlikujeta od resničnega kupca.
+ * Bolje je vnos zavrniti takoj kot izdati račun, ki ga bo treba stornirati.
+ */
+export function veljavnaDavcnaStevilka(vnos: string): boolean {
+  const s = String(vnos || '').replace(/[^0-9]/g, '')
+  if (s.length !== 8) return false
+  const utezi = [8, 7, 6, 5, 4, 3, 2]
+  let vsota = 0
+  for (let i = 0; i < 7; i++) vsota += Number(s[i]) * utezi[i]
+  let kontrolna = 11 - (vsota % 11)
+  if (kontrolna === 10) kontrolna = 0
+  if (kontrolna === 11) return false
+  return kontrolna === Number(s[7])
+}
+
 export function jeStoritevVrstica(vrstica: {
   service_id?: string | null
   items?: { bookable?: boolean | null } | null
