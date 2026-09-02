@@ -170,6 +170,47 @@ export function fursDatum(d: Date): string {
   return `${c.year}-${c.month}-${c.day}T${c.hour}:${c.minute}:${c.second}`
 }
 
+/**
+ * POSREDNIŠKI STREŽNIK ZA FURS (prelet 191)
+ * ═════════════════════════════════════════
+ *
+ * Vercel blokira odhodni promet na vrata 9002, zato racuni do FURS potujejo
+ * prek lastnega posrednika. Ta je EDINA pot: ce pade, fiskalizacija tiho
+ * preneha delovati - blagajna javi napako sele ob prvem racunu, kar se
+ * praviloma zgodi sredi konice.
+ *
+ * Naslov je bil doslej zapisan na dveh mestih posebej; zdaj je en sam, da
+ * ga je mogoce spremeniti na enem mestu in nadzorovati.
+ */
+export const FURS_PROXY_URL = process.env.FURS_PROXY_URL || 'http://152.89.232.145:8787'
+
+/**
+ * Ali posrednik odgovarja? Karkoli, kar prispe nazaj, steje za zivo - tudi
+ * napaka 404 pomeni, da streznik tece in posluša. Zanima nas izpad, ne
+ * pravilnost odgovora.
+ */
+export async function preveriPosrednika(timeoutMs = 5000): Promise<{
+  ziv: boolean; odzivMs: number | null; napaka?: string
+}> {
+  const zacetek = Date.now()
+  try {
+    const r = await fetch(FURS_PROXY_URL, {
+      method: 'HEAD',
+      signal: AbortSignal.timeout(timeoutMs),
+    }).catch(async () => {
+      // Nekateri strezniki HEAD ne podpirajo - poskusimo se GET.
+      return await fetch(FURS_PROXY_URL, { method: 'GET', signal: AbortSignal.timeout(timeoutMs) })
+    })
+    return { ziv: !!r, odzivMs: Date.now() - zacetek }
+  } catch (e: any) {
+    return {
+      ziv: false,
+      odzivMs: Date.now() - zacetek,
+      napaka: /timeout|abort/i.test(String(e?.message)) ? 'Ni odgovoril v ' + (timeoutMs / 1000) + ' s' : String(e?.message || e).slice(0, 120),
+    }
+  }
+}
+
 export function calculateZoi(
   config: FursConfig,
   data: FursInvoiceData,
@@ -426,9 +467,8 @@ export async function confirmWithFurs(
     console.log('FURS outgoing XML request:', xmlRequest)
 
     // 3. FURS endpoint — prek Supabase Edge Function proxy (Vercel blokira port 9002)
-    const VPS_URL = 'http://152.89.232.145:8787'
-    
-    const endpoint = VPS_URL
+    // PRELET 191: naslov je odslej na enem mestu (FURS_PROXY_URL).
+    const endpoint = FURS_PROXY_URL
 
     // 4. Pošlji prek Supabase proxy
     const proxyResp = await fetch(endpoint, {

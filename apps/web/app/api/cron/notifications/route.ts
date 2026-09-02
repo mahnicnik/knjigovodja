@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { preveriPosrednika } from '@/lib/furs'
 import { escapeHtml } from '@/lib/html-escape'
 import { createClient } from '@supabase/supabase-js'
 
@@ -18,6 +19,44 @@ export async function GET(req: NextRequest) {
 
   const supabase = getServiceClient()
   const results: any[] = []
+
+  /**
+   * NADZOR POSREDNIKA (prelet 191)
+   * ══════════════════════════════
+   *
+   * Posrednik je edina pot racunov do FURS. Ce pade, blagajna tega ne ve -
+   * napaka se pokaze sele ob prvem racunu, praviloma sredi konice.
+   *
+   * Nocno opravilo ga zato vsak dan povpraša in ob izpadu ustvari obvestilo
+   * v zvoncu. Obvestilo nastane najvec ENKRAT NA DAN, da se ob dolgotrajnem
+   * izpadu ne nabira po eno na vsak zagon.
+   */
+  try {
+    const posrednik = await preveriPosrednika(6000)
+    if (!posrednik.ziv) {
+      const { data: podjetja } = await supabase.from('businesses').select('id')
+      for (const b of (podjetja || [])) {
+        const { data: ze } = await supabase.from('pos_notifications')
+          .select('id').eq('business_id', b.id).eq('type', 'furs_proxy_down')
+          .gte('created_at', new Date(Date.now() - 20 * 3600 * 1000).toISOString())
+          .limit(1)
+        if (ze?.length) continue
+        await supabase.from('pos_notifications').insert({
+          business_id: b.id,
+          type: 'furs_proxy_down',
+          severity: 'high',
+          message: 'Povezava s FURS ne deluje: posredniški strežnik se ne odziva ('
+            + (posrednik.napaka || 'brez odgovora') + '). Računi se ne bodo davčno potrdili. '
+            + 'Do odprave uporabite vezano knjigo računov.',
+        })
+      }
+      results.push({ preverba: 'posrednik', status: 'NE DELUJE', detail: posrednik.napaka })
+    } else {
+      results.push({ preverba: 'posrednik', status: 'deluje', odzivMs: posrednik.odzivMs })
+    }
+  } catch (e: any) {
+    results.push({ preverba: 'posrednik', status: 'napaka', detail: String(e?.message || e) })
+  }
 
   try {
     // 1. Pridobi vse aktivne businessse

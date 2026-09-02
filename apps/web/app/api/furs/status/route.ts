@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { getFursCertificate } from '@/lib/furs-cert'
+import { preveriPosrednika } from '@/lib/furs'
 import { resolveActiveOrgId, getRequestedOrgId } from '@/lib/active-org-server'
 
 export async function GET(req: NextRequest) {
@@ -125,6 +126,10 @@ export async function GET(req: NextRequest) {
     // ZAKAJ. Prej je pisalo le "certifikat morda ni nastavljen ali je
     // potekel" - domneva, ki je bila najpogosteje napacna.
     lastError,
+    // PRELET 191: posrednik je edina pot racunov do FURS. Ce pade, tega
+    // doslej ni bilo mogoce videti nikjer - napaka se je pokazala sele ob
+    // prvem neuspelem racunu.
+    proxy: zivaPreverba ? await preveriPosrednika(4000) : null,
     environment: testMode ? 'test' : 'production',
   })
 }
