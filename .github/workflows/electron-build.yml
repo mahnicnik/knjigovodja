@@ -36,28 +36,23 @@ jobs:
           name: Racunko-POS-Windows
           path: apps/desktop/dist/*.exe
 
-  build-mac:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        working-directory: apps/desktop
-        run: npm install --legacy-peer-deps --no-workspaces
-
-      - name: Build Mac
-        working-directory: apps/desktop
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --mac --publish always
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Racunko-POS-Mac
-          path: apps/desktop/dist/*.zip
+# ODSTRANJENO (prelet 188): posel `build-mac`.
+#
+# Blagajne tecejo na Windows in Mac razlicice nihce ne uporablja, posel pa
+# je delal dvojno skodo:
+#
+#   1. VZPOREDNO OBJAVLJANJE. Oba posla sta objavljala v ISTO izdajo z
+#      `--publish always`. Kdor je bil hitrejsi, je izdajo ustvaril, drugi
+#      pa je nasel ze objavljeno izdajo in svojih datotek NI dodal. Pri
+#      v1.0.28 je bil hitrejsi Mac, zato sta v izdaji ostali samo dve Mac
+#      datoteki - brez `racunko-pos-setup-1.0.28.exe` in brez `latest.yml`.
+#      Posodobitelj na blagajnah bere prav `latest.yml`, zato posodobitve
+#      ni nasel. Da je pri prejsnjih izdajah uspelo, je bila sreca vrstnega
+#      reda, ne pravilo.
+#
+#   2. LAZNO RDECI ZAGONI. Gradnja za Mac je padala tedne (nepodpisana
+#      aplikacija), zato je bil vsak zagon oznacen kot neuspesen, ceprav je
+#      Windows uspel. Napake torej ni bilo mogoce lociti od suma.
+#
+# Ce bo Mac razlicica kdaj potrebna, jo je treba dodati kot posel, ki se
+# izvede SELE PO Windows poslu (`needs: build-windows`), ne vzporedno.
