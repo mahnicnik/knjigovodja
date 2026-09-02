@@ -607,16 +607,25 @@ export default function NewInvoicePage() {
                     <span className="text-sm text-gray-900 tabular-nums">
                       €{formatEurNumber(Number(item.quantity || 0) * Number(item.unit_price || 0) * (1 - Number(item.discount_pct || 0) / 100))}
                     </span>
-                    {/* PRELET 186: preracun cene z DDV v ceno brez DDV. */}
+                    {/* POPRAVLJENO (prelet 187): gumb je bil le majhen siv znak
+                        "%" ob krizcu in ga ni bilo mogoce opaziti. Gumb, ki ga
+                        je treba iskati, je enako uporaben kot noben. */}
                     <button onClick={() => { setKalkulator({ vrstica: i }); setKalkStopnja(Number(item.vat_rate) || 22); setKalkSmer('bruto'); setKalkZnesek('') }}
-                      title="Kalkulator DDV"
-                      className="text-gray-300 hover:text-gray-900 text-sm leading-none pl-1">%</button>
+                      title="Preracunaj iz cene z DDV"
+                      className="shrink-0 border border-gray-200 rounded-lg px-2 py-1 text-[11px] font-medium text-gray-500 hover:text-gray-900 hover:border-gray-400 transition-colors">DDV</button>
                     {items.length > 1 && <button onClick={() => removeItem(i)} className="text-gray-300 hover:text-red-500 text-lg leading-none pl-1">×</button>}
                   </div>
                 </div>
               ))}
             </div>
-            <button onClick={addItem} className="text-sm text-gray-500 hover:text-gray-900 border border-dashed border-gray-200 rounded-xl px-4 py-2 w-full hover:border-gray-400 transition-colors">+ Dodaj postavko</button>
+            {/* PRELET 187: kalkulator dosegljiv tudi tu, ne le pri vrstici -
+                cene se v praksi dogovorijo Z DDV, na racun pa gre cena BREZ. */}
+            <div className="flex gap-2">
+              <button onClick={addItem} className="flex-1 text-sm text-gray-500 hover:text-gray-900 border border-dashed border-gray-200 rounded-xl px-4 py-2 hover:border-gray-400 transition-colors">+ Dodaj postavko</button>
+              <button onClick={() => { const i = items.length - 1; setKalkulator({ vrstica: i }); setKalkStopnja(Number(items[i]?.vat_rate) || 22); setKalkSmer('bruto'); setKalkZnesek('') }}
+                title="Iz cene z DDV izracunaj ceno brez DDV"
+                className="text-sm text-gray-500 hover:text-gray-900 border border-gray-200 rounded-xl px-4 py-2 hover:border-gray-400 transition-colors whitespace-nowrap">Kalkulator DDV</button>
+            </div>
           </div>
 
           {/* KLAVZULA O NEOBRACUNANEM DDV — DODANO 19.8.2026.
