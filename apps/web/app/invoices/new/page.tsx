@@ -222,6 +222,33 @@ export default function NewInvoicePage() {
     router.push('/invoices')
   }
 
+  /**
+   * KALKULATOR DDV (prelet 186)
+   *
+   * Cene se v praksi pogosto dogovorijo Z DDV ("za 480 evrov"), na racun pa
+   * je treba vpisati ceno BREZ DDV. Preracunavanje na roko je vir napak za
+   * cent ali dva, ki jih potem lovi racunovodkinja.
+   *
+   * Kalkulator racuna v obe smeri in zna izracunano ceno brez DDV vpisati
+   * naravnost v vrstico racuna - da je ni treba prepisovati.
+   */
+  const [kalkulator, setKalkulator] = useState<{ vrstica: number } | null>(null)
+  const [kalkZnesek, setKalkZnesek] = useState('')
+  const [kalkStopnja, setKalkStopnja] = useState(22)
+  const [kalkSmer, setKalkSmer] = useState<'bruto' | 'neto'>('bruto')
+
+  const kalkIzracun = (() => {
+    const v = parseFloat(String(kalkZnesek).replace(',', '.'))
+    if (!isFinite(v) || v <= 0) return null
+    const s = Number(kalkStopnja) / 100
+    // Ceno brez DDV zaokrozimo NAJPREJ, DDV pa izracunamo iz zaokrozene -
+    // natanko tako, kot bo pozneje racunal sam racun, saj se vanj vpise
+    // zaokrozena cena. Sicer bi kalkulator kazal cent drugace od racuna.
+    const neto = Math.round((kalkSmer === 'bruto' ? v / (1 + s) : v) * 100) / 100
+    const ddv = Math.round(neto * s * 100) / 100
+    return { neto, ddv, bruto: Math.round((neto + ddv) * 100) / 100 }
+  })()
+
   const inp = "w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
 
   // Partner sekcija — skupna za mobile in desktop
@@ -491,18 +518,84 @@ export default function NewInvoicePage() {
                 so kratka), DDV pa siroka dovolj za besedilo. Dodan je tudi
                 znesek vrstice, da je vidno, koliko posamezna postavka nanese. */}
             <div className="grid grid-cols-12 gap-2 mb-2 px-1">
-              <div className="col-span-4 text-xs font-medium text-gray-400">Storitev</div>
-              <div className="col-span-1 text-xs font-medium text-gray-400 text-center">Kol.</div>
+              {/* POPRAVLJENO (prelet 186): stolpec za kolicino je bil sirok
+                  1/12 in v njem se ni videlo, kaj je vpisano - puscici
+                  stevilskega polja sta pozrli vecino prostora. Zdaj je sirok
+                  2/12, puscici pa sta skriti, enako kot pri popustu. Sirino
+                  vzamemo opisu storitve, ki ima je se vedno dovolj. */}
+              <div className="col-span-3 text-xs font-medium text-gray-400">Storitev</div>
+              <div className="col-span-2 text-xs font-medium text-gray-400 text-center">Kol.</div>
               <div className="col-span-2 text-xs font-medium text-gray-400 text-right">Cena (€)</div>
               <div className="col-span-2 text-xs font-medium text-gray-400 text-center">DDV</div>
               <div className="col-span-1 text-xs font-medium text-gray-400 text-center">Pop. %</div>
               <div className="col-span-2 text-xs font-medium text-gray-400 text-right">Skupaj</div>
             </div>
+            {kalkulator && (
+              <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setKalkulator(null)}>
+                <div className="bg-white rounded-2xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="font-semibold">Kalkulator DDV</div>
+                    <button onClick={() => setKalkulator(null)} className="text-gray-400 hover:text-gray-900 text-xl leading-none">×</button>
+                  </div>
+
+                  <div className="flex gap-2 mb-4">
+                    <button onClick={() => setKalkSmer('bruto')}
+                      className={`flex-1 py-2 rounded-xl text-sm font-medium ${kalkSmer==='bruto' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                      Iz cene z DDV
+                    </button>
+                    <button onClick={() => setKalkSmer('neto')}
+                      className={`flex-1 py-2 rounded-xl text-sm font-medium ${kalkSmer==='neto' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                      Iz cene brez DDV
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 mb-4">
+                    <div className="col-span-2">
+                      <label className="text-xs text-gray-400">Znesek (€)</label>
+                      <input value={kalkZnesek} onChange={e => setKalkZnesek(e.target.value)} inputMode="decimal"
+                        autoFocus placeholder={kalkSmer==='bruto' ? '479,99' : '393,43'} className={inp} />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400">DDV</label>
+                      <select value={kalkStopnja} onChange={e => setKalkStopnja(+e.target.value)}
+                        className="w-full border border-gray-200 rounded-xl px-2 py-3 text-sm bg-white focus:outline-none">
+                        <option value={22}>22 %</option><option value={9.5}>9,5 %</option><option value={5}>5 %</option><option value={0}>0 %</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {kalkIzracun && (
+                    <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm mb-4">
+                      <div className="flex justify-between"><span className="text-gray-500">Cena brez DDV</span><span className="tabular-nums font-medium">€{formatEurNumber(kalkIzracun.neto)}</span></div>
+                      <div className="flex justify-between"><span className="text-gray-500">DDV {String(kalkStopnja).replace('.', ',')} %</span><span className="tabular-nums">€{formatEurNumber(kalkIzracun.ddv)}</span></div>
+                      <div className="flex justify-between border-t border-gray-200 pt-2"><span className="font-medium">Cena z DDV</span><span className="tabular-nums font-semibold">€{formatEurNumber(kalkIzracun.bruto)}</span></div>
+                    </div>
+                  )}
+
+                  <button disabled={!kalkIzracun}
+                    onClick={() => {
+                      if (!kalkIzracun) return
+                      // Na racun gre VEDNO cena brez DDV - DDV izracuna racun sam.
+                      updateItem(kalkulator.vrstica, 'unit_price', kalkIzracun.neto)
+                      updateItem(kalkulator.vrstica, 'vat_rate', Number(kalkStopnja))
+                      setKalkulator(null)
+                    }}
+                    className={`w-full py-3 rounded-xl text-sm font-semibold ${kalkIzracun ? 'bg-gray-900 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                    Vstavi ceno brez DDV v vrstico
+                  </button>
+                  <div className="text-xs text-gray-400 mt-3 leading-relaxed">
+                    Na racun se vpisuje cena brez DDV; DDV se izracuna iz nje.
+                    Zaradi zaokrozevanja na cent lahko koncni znesek odstopa za cent.
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2 mb-4">
               {items.map((item, i) => (
                 <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                  <div className="col-span-4"><input value={item.description} onChange={e => updateItem(i, 'description', e.target.value)} placeholder="Opis storitve" className={inp} /></div>
-                  <div className="col-span-1"><input type="number" onFocus={e => e.target.select()} value={item.quantity} onChange={e => updateItem(i, 'quantity', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-2 py-2 text-sm focus:outline-none text-center" /></div>
+                  <div className="col-span-3"><input value={item.description} onChange={e => updateItem(i, 'description', e.target.value)} placeholder="Opis storitve" className={inp} /></div>
+                  <div className="col-span-2"><input type="number" onFocus={e => e.target.select()} step="any" value={item.quantity} onChange={e => updateItem(i, 'quantity', +e.target.value)} style={{ MozAppearance: 'textfield' as any }} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none text-center [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></div>
                   <div className="col-span-2"><input type="number" onFocus={e => e.target.select()} value={item.unit_price} onChange={e => updateItem(i, 'unit_price', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none text-right" /></div>
                   <div className="col-span-2">
                     <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-2 py-2 text-sm focus:outline-none bg-white">
@@ -514,6 +607,10 @@ export default function NewInvoicePage() {
                     <span className="text-sm text-gray-900 tabular-nums">
                       €{formatEurNumber(Number(item.quantity || 0) * Number(item.unit_price || 0) * (1 - Number(item.discount_pct || 0) / 100))}
                     </span>
+                    {/* PRELET 186: preracun cene z DDV v ceno brez DDV. */}
+                    <button onClick={() => { setKalkulator({ vrstica: i }); setKalkStopnja(Number(item.vat_rate) || 22); setKalkSmer('bruto'); setKalkZnesek('') }}
+                      title="Kalkulator DDV"
+                      className="text-gray-300 hover:text-gray-900 text-sm leading-none pl-1">%</button>
                     {items.length > 1 && <button onClick={() => removeItem(i)} className="text-gray-300 hover:text-red-500 text-lg leading-none pl-1">×</button>}
                   </div>
                 </div>
