@@ -131,28 +131,51 @@ function buildEscPos(data) {
   const b = (...v) => buf.push(...v)
   const lf = () => b(LF)
 
-  // Pretvori slovenscino v ASCII (code page 850)
-  const sl = (s) => (String(s||''))
-    .replace(/\u0161/g,'s').replace(/\u0160/g,'S')
-    .replace(/\u010d/g,'c').replace(/\u010c/g,'C')
-    .replace(/\u017e/g,'z').replace(/\u017d/g,'Z')
-    .replace(/\u00e9/g,'e').replace(/\u00e8/g,'e')
-    .replace(/[^\x20-\x7E]/g,'?')
+  /**
+   * ŠUMNIKI NA RAČUNU (prelet 189)
+   * ══════════════════════════════
+   *
+   * PREJ: vsi sumniki so bili zamenjani z ASCII (c, s, z), ker je tiskalnik
+   * delal na kodni strani Windows-1252, ki jih nima. Zato je v nogi pisalo
+   * "www.racunko.si" - naslov, ki pripada DRUGEMU podjetju (racunovodski
+   * servis RACUNKO d.o.o. iz Kamnika). Enako so bila popacena imena
+   * artiklov, blagajnikov in klavzule DDV.
+   *
+   * PREIZKUS NA TISKALNIKU je pokazal, da razume KODNO STRAN 18 (CP852,
+   * Latin-2). Vrednosti niso ugibane - vzete so iz kodne tabele:
+   *   c 0x9F   C 0xAC   s 0xE7   S 0xE6   z 0xA7   Z 0xA6
+   *   c 0x86   C 0x8F   d 0xD0   D 0xD1        (c/C s streho, d/D s crtico)
+   *
+   * ZAPLET: CP852 NIMA evro znaka, CP1252 pa nima crke c s streho. Ker je
+   * ASCII v obeh straneh IDENTICEN, med njima preklapljamo sproti: pred
+   * sumnikom na 18, pred evrom na 16. Preklop se izvede samo ob dejanski
+   * spremembi, zato je dodatnih bajtov malo.
+   */
+  const CP852 = { '\u010d':0x9F, '\u010c':0xAC, '\u0161':0xE7, '\u0160':0xE6,
+                  '\u017e':0xA7, '\u017d':0xA6, '\u0107':0x86, '\u0106':0x8F,
+                  '\u0111':0xD0, '\u0110':0xD1 }
+  let stranZdaj = 0x10                       // init nastavi Windows-1252
+  const nastaviStran = (n) => { if (stranZdaj !== n) { b(ESC, 0x74, n); stranZdaj = n } }
 
-  const txt = (s) => {
-    for (const c of sl(s)) {
-      const code = c.charCodeAt(0)
-      b(code > 0xFF ? 0x3F : code)  // >255 -> '?'
+  // Ohrani znake, ki jih ZNAMO natisniti; ostalo v vprasaj. Dolzina niza
+  // ostane enaka stevilu natisnjenih mest, zato poravnave ostanejo pravilne.
+  const sl = (s) => (String(s||''))
+    .replace(/\u00e9/g,'e').replace(/\u00e8/g,'e')
+    .replace(/[^\x20-\x7E\u010d\u010c\u0161\u0160\u017e\u017d\u0107\u0106\u0111\u0110\u20AC\u0080]/g,'?')
+
+  const zapisi = (s) => {
+    for (const c of String(s == null ? '' : s)) {
+      const k = c.charCodeAt(0)
+      if (k >= 0x20 && k <= 0x7E) { b(k); continue }        // ASCII: obe strani enaki
+      if (c === '\u20AC' || k === 0x80) { nastaviStran(0x10); b(0x80); continue }
+      const cp = CP852[c]
+      if (cp !== undefined) { nastaviStran(0x12); b(cp); continue }
+      b(0x3F)
     }
   }
-  // Posebej za euro byte ki pride iz eur()
-  const txtRaw = (s) => {
-    for (let i = 0; i < s.length; i++) {
-      const code = s.charCodeAt(i)
-      if (code === 0x80) { b(0x80) }  // euro direktno
-      else b(code > 0xFF ? 0x3F : code)
-    }
-  }
+
+  const txt = (s) => zapisi(sl(s))
+  const txtRaw = (s) => zapisi(s)
   const pad = (s, n, right) => {
     const t = sl(s).slice(0, n)
     const p = ' '.repeat(Math.max(0, n - t.length))
@@ -194,10 +217,10 @@ function buildEscPos(data) {
    * (Prvi poskus z nadomestnim znakom \u0001 ni deloval: tudi ta je izven
    * ASCII in ga je `sl()` zamenjal z vprasajem.)
    */
-  const slBrezEvra = (s) =>
-    String(s == null ? '' : s).split('\x80').map(del => sl(del)).join('\x80')
+  // PRELET 189: zascita evra iz preleta 177 ni vec potrebna - `sl()` evra
+  // in sumnikov ne odstranjuje vec, `zapisi()` pa oboje zna natisniti.
   const line = (l, r, width=SIRINA) => {
-    const li = slBrezEvra(l), ri = slBrezEvra(r)
+    const li = sl(l), ri = sl(r)
     const lp = li.slice(0, width - ri.length - 1)
     txtRaw(lp + ' '.repeat(Math.max(1, width - lp.length - ri.length)) + ri); lf()
   }
@@ -337,7 +360,10 @@ function buildEscPos(data) {
   b(ESC,0x61,0x01)
   txt('Hvala za obisk!'); lf()
   txt('Izdano s sistemom RACUNKO'); lf()
-  txt('www.racunko.si'); lf()
+  // PRELET 189: prava domena s sumnikom. Prej je pisalo "www.racunko.si",
+  // kar je naslov drugega podjetja - gost, ki bi ga prepisal v brskalnik,
+  // bi pristal pri racunovodskem servisu iz Kamnika.
+  txt('ra\u010dunko.si'); lf()
   lf(); lf(); lf()
   // Cut
   b(GS,0x56,0x42,0x00)
