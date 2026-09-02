@@ -35,8 +35,23 @@ export default function LoginPage() {
 
       const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
 
+      /**
+       * VRNITEV NA IZHODISCNO STRAN (prelet 190)
+       *
+       * Prijava je uporabnika VEDNO poslala na `/dashboard`. V namizni
+       * aplikaciji, ki odpre naravnost blagajno, je to pomenilo, da se je
+       * osebje po vsaki prijavi znaslo v portalu in moralo blagajno poiskati
+       * rocno - namesto da bi vnesli samo PIN.
+       *
+       * `?next=` pove, kam se je treba vrniti. Sprejmemo samo poti znotraj
+       * aplikacije (zacetek s posamicno posevnico), da parameter ne more
+       * postati preusmeritev na tujo stran.
+       */
+      const kam = new URLSearchParams(window.location.search).get('next')
+      const varnaPot = kam && /^\/(?!\/)/.test(kam) ? kam : null
+
       if (member) {
-        router.push('/dashboard')
+        router.push(varnaPot || '/dashboard')
       } else {
         router.push('/onboarding')
       }

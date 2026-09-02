@@ -365,7 +365,7 @@ export async function GET(req: NextRequest) {
               ${orgForBiz?.email ? `<p style="color:#444;font-size:14px">Za vprašanja nas kontaktirajte na <a href="mailto:${orgForBiz.email}" style="color:#1f6b3a">${orgForBiz.email}</a>.</p>` : ''}
               <div style="border-top:1px solid #e5e1d8;margin-top:28px;padding-top:16px;text-align:center;font-size:12px;color:#999">
                 ${orgForBiz?.name || biz.name}${orgForBiz?.tax_number ? ` · Davčna: ${orgForBiz.tax_number}` : ''}<br/>
-                Izdano s sistemom RAČUNKO · www.racunko.si
+                Izdano s sistemom RAČUNKO · računko.si
                 ${(cust as any).unsubscribe_token ? `<br/><a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://xn--raunko-j2a.si'}/odjava/${(cust as any).unsubscribe_token}" style="color:#999;text-decoration:underline">Odjava od obveščanja</a>` : ''}
               </div>
             </div>`,

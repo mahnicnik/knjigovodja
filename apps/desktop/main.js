@@ -974,6 +974,42 @@ function createWindow() {
     zazeniPonovnoPovezovanje()
   })
 
+  /**
+   * NAMIZNA APLIKACIJA JE SAMO BLAGAJNA (prelet 190)
+   * ════════════════════════════════════════════════
+   *
+   * Doslej je aplikacija odprla `/pos`, ob poteku seje pa jo je streznik
+   * preusmeril na prijavo - ta pa je po vpisu poslala uporabnika na portal.
+   * Osebje se je tako znaslo v knjigovodstvu in moralo blagajno poiskati
+   * rocno, namesto da bi vneslo samo PIN.
+   *
+   * Zdaj ob prijavi pripnemo `?next=/pos`, da se vrne na blagajno, in po
+   * vsaki navigaciji preverimo, kje smo koncali. Ce nas je karkoli odneslo
+   * na drugo stran nase domene, se vrnemo na blagajno.
+   *
+   * Prijavne in registracijske poti pustimo pri miru - te se morajo
+   * dokoncati, sicer bi se vrteli v krogu.
+   */
+  const DOVOLJENE_POTI = ['/pos', '/login', '/auth', '/signup', '/register',
+                          '/onboarding', '/invite', '/forgot-password', '/odjava']
+
+  mainWindow.webContents.on('did-navigate', (event, url) => {
+    try {
+      const u = new URL(url)
+      if (u.protocol === 'file:') return                       // zaslon brez povezave
+      if (u.host !== new URL(POS_URL).host) return             // tuja stran
+      if (DOVOLJENE_POTI.some(p => u.pathname === p || u.pathname.startsWith(p + '/'))) {
+        // Na prijavi poskrbimo, da se po vpisu vrne na blagajno.
+        if (u.pathname === '/login' && !u.searchParams.get('next')) {
+          mainWindow.loadURL(POS_URL.replace(/\/pos$/, '/login?next=/pos'))
+        }
+        return
+      }
+      console.log('Namizna aplikacija: preusmeritev z', u.pathname, 'nazaj na blagajno')
+      mainWindow.loadURL(POS_URL)
+    } catch (e) { console.warn('did-navigate:', e.message) }
+  })
+
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('about:') || url.startsWith('data:')) {
       return { action: 'deny' }

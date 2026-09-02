@@ -299,7 +299,10 @@ export async function buildReceiptHTML(d: ReceiptData): Promise<string> {
     <div>Izdano s sistemom</div>
     <div class="brand">RACUNKO</div>
     <div>AI knjigovodstvo za s.p.</div>
-    <div class="url">www.racunko.si</div>
+    <!-- POPRAVLJENO (prelet 190): prej "www.racunko.si" - naslov, ki pripada
+         DRUGEMU podjetju (racunovodski servis RACUNKO d.o.o. iz Kamnika).
+         Nasa domena je racunko.si s sumnikom. -->
+    <div class="url">računko.si</div>
   </div>
   <!-- SPREMENJENO (21.8.2026): samodejni window.print() je odprl MODALNO okno
        operacijskega sistema, ki blokira cel brskalnik. Pri vsakem racunu je
