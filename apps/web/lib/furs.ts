@@ -125,6 +125,51 @@ export interface FursResult {
  *
  * Opomba: FURS specifikacija zahteva specifičen format datuma in zneska.
  */
+/**
+ * ČAS V SLOVENSKEM PASU (prelet 185)
+ * ══════════════════════════════════
+ *
+ * NAPAKA, KI JO TO ODPRAVLJA: cas se je oblikoval z `dt.getHours()` in
+ * sorodnimi, ti pa vrnejo cas v pasu STREZNIKA. Vercel tece v UTC, zato je
+ * bil racun, izdan ob 8:58 po nasem, FURS prijavljen kot 6:58.
+ *
+ * Zakaj to ni malenkost:
+ *   · tehnicna specifikacija FURS zahteva `YYYY-MM-DDTHH:MM:SS` BREZ oznake
+ *     pasu, torej lokalni slovenski cas - prijavljeni cas je bil napacen;
+ *   · isti cas je vgrajen v ZOI, QR koda na listku pa uporablja cas z
+ *     racuna, zato se koda in ZOI razideta in aplikacija "Preveri racun"
+ *     racuna ne najde;
+ *   · pozimi bo razlika ena ura, poleti dve - napaka torej niha z letnim
+ *     casom in je ni mogoce nadomestiti s fiksnim zamikom.
+ *
+ * `Intl.DateTimeFormat` s pasom `Europe/Ljubljana` poletni cas upostava sam.
+ */
+function delciCasaVSloveniji(d: Date): Record<string, string> {
+  const f = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Ljubljana',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  })
+  const o: Record<string, string> = {}
+  for (const del of f.formatToParts(d)) if (del.type !== 'literal') o[del.type] = del.value
+  // Polnoc vrne nekateri sistemi kot "24" - popravimo na "00".
+  if (o.hour === '24') o.hour = '00'
+  return o
+}
+
+/** DD.MM.YYYY HH:MM:SS po slovenskem casu — vsebina za izracun ZOI. */
+export function zoiDatum(d: Date): string {
+  const c = delciCasaVSloveniji(d)
+  return `${c.day}.${c.month}.${c.year} ${c.hour}:${c.minute}:${c.second}`
+}
+
+/** YYYY-MM-DDTHH:MM:SS po slovenskem casu — oblika, ki jo zahteva FURS. */
+export function fursDatum(d: Date): string {
+  const c = delciCasaVSloveniji(d)
+  return `${c.year}-${c.month}-${c.day}T${c.hour}:${c.minute}:${c.second}`
+}
+
 export function calculateZoi(
   config: FursConfig,
   data: FursInvoiceData,
@@ -132,16 +177,9 @@ export function calculateZoi(
   const { taxNumber, premiseId, deviceId, privateKeyPem } = config
 
   // Format datuma: DD.MM.YYYY HH:MM:SS
-  const dt = data.issueDateTime
-  const dateStr = [
-    String(dt.getDate()).padStart(2, '0'),
-    String(dt.getMonth() + 1).padStart(2, '0'),
-    dt.getFullYear(),
-  ].join('.') + ' ' + [
-    String(dt.getHours()).padStart(2, '0'),
-    String(dt.getMinutes()).padStart(2, '0'),
-    String(dt.getSeconds()).padStart(2, '0'),
-  ].join(':')
+  // POPRAVLJENO (prelet 185): `getHours()` je vracal cas STREZNIKA (UTC).
+  // ZOI se odslej racuna po slovenskem casu, enako kot ga vidi kupec.
+  const dateStr = zoiDatum(data.issueDateTime)
 
   // Format zneska: 2 decimalni mesti, pika kot decimalni ločnik
   const amountStr = data.amountTotal.toFixed(2)
@@ -280,10 +318,11 @@ function buildFursRequest(
   zoi: string,
 ): string {
   const { taxNumber, premiseId, deviceId, privateKeyPem, certificatePem } = config
-  const dt = data.issueDateTime
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const isoDate = `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}`
-  const sendIso = new Date().toISOString().split('.')[0]
+  // POPRAVLJENO (prelet 185): oboje po slovenskem casu. Specifikacija
+  // zahteva `YYYY-MM-DDTHH:MM:SS` brez oznake pasu, torej lokalni cas;
+  // `toISOString()` pa vrne UTC in je bil zato napacen.
+  const isoDate = fursDatum(data.issueDateTime)
+  const sendIso = fursDatum(new Date())
 
   // KLJUCNO (popravljeno 15.7.2026 po FURS kontroli, ErrorCode S001 "Sporocilo ni
   // v skladu s shemo XML"): elementi morajo biti tocno PascalCase (InvoiceRequest,

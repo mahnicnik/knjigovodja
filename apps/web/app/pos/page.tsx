@@ -1775,7 +1775,19 @@ async function autoPrint(data) {
         vat_id: data.org?.vat_registered ? 'SI' + (data.org?.tax_number||'') : '',
         receipt_number: data.invoiceNumber || (data.orderId?.slice(-6)) || '—',
         cashier: data.cashierName || '',
-        date: new Date().toLocaleString('sl-SI'),
+        /**
+         * POPRAVLJENO (prelet 184): na racunu je bil izpisan `new Date()`,
+         * torej CAS TISKANJA, ne cas izdaje racuna.
+         *
+         * Zakaj to ni malenkost: s casom izdaje je izracunan ZOI in isti cas
+         * je vgrajen v 60-mestno QR kodo. Ce se natisnjeni cas razlikuje od
+         * tistega v kodi, aplikacija FURS "Preveri racun" racuna ne najde.
+         * Pri kopiji, natisnjeni pozneje, bi pisal celo datum ponatisa.
+         *
+         * `data.issuedAt` vrne strezniku ob potrditvi in je isti, s katerim
+         * je bil izracunan ZOI.
+         */
+        date: (data.issuedAt ? new Date(data.issuedAt) : new Date()).toLocaleString('sl-SI'),
         items: (data.lines||[]).map(l => ({
           name: l.name,
           qty: Number(l.qty),
@@ -1824,7 +1836,9 @@ async function autoPrint(data) {
           : `Davčna: ${data.org?.tax_number || ''}`,
         receipt_number: data.invoiceNumber || data.orderId?.slice(-6),
         cashier: data.cashierName || '',
-        date: new Date().toLocaleString('sl-SI'),
+        // PRELET 184: enako kot pri izpisu prek tiskalnika - cas izdaje, ne
+        // cas tiskanja. Sicer se listek in QR koda razideta.
+        date: (data.issuedAt ? new Date(data.issuedAt) : new Date()).toLocaleString('sl-SI'),
         items: (data.lines||[]).map(l => ({
           name: l.name,
           qty: Number(l.qty),
