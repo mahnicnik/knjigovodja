@@ -318,6 +318,23 @@ function buildEscPos(data) {
   txt(pad('C',3) + pad(vatR+'%',7) + pad(neto.toFixed(2),stolpec,true) + pad(ddv.toFixed(2),stolpec,true) + pad(total.toFixed(2),stolpec,true)); lf()
   txt('C: DDV ' + vatR + '% stopnja'); lf()
   sep()
+  /**
+   * DNEVNA ŠTEVILKA ZA POSTREŽBO (prelet 192)
+   *
+   * Izpisana je veliko in loceno, da jo gost in natakar takoj vidita.
+   * Pojavi se SAMO pri narocilih s kuhinjskim artiklom.
+   */
+  if (data.kitchen_number) {
+    sep('=')
+    b(ESC,0x61,0x01)            // sredinsko
+    b(GS,0x21,0x11)             // dvojna visina in sirina
+    txt('NAROCILO ' + data.kitchen_number); lf()
+    b(GS,0x21,0x00)
+    txt('Pocakajte na klic'); lf()
+    b(ESC,0x61,0x00)
+    sep('=')
+  }
+
   // PRELET 175: kupec na racunu, kadar je izdan na podjetje.
   if (data.buyer_name) {
     sep()

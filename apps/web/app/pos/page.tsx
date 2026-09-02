@@ -1165,6 +1165,25 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
       })))
 
       // 3. Plačaj + FURS
+      /**
+       * DNEVNA ŠTEVILKA ZA KUHINJO (prelet 192)
+       *
+       * Gost naroci burger, dobi stevilko, natakar pa ob prevzemu ve, cigavo
+       * je narocilo.
+       *
+       * NI del zaporedne stevilke racuna: ta mora biti po ZDavPR neprekinjena
+       * in vsak poseg vanjo bi bilo treba pojasnjevati FURS. Ta stevilka se
+       * vsako jutro vrne na 1 in se dodeli SAMO narocilom s kuhinjskim
+       * artiklom - racun za kavo je ne dobi.
+       *
+       * Odloca baza, ne blagajna: kosarica oznake "kuhinja" ne nosi.
+       */
+      let kuhinjskaStevilka = null
+      try {
+        const { data: kh } = await createClient().rpc('dodeli_kuhinjsko_stevilko', { p_order_id: orderId })
+        kuhinjskaStevilka = kh ?? null
+      } catch (e) { console.warn('Kuhinjska stevilka:', e) }
+
       let fursEor = null
       let fursZoi = null
       let fursInvoiceNumber = null
@@ -1460,6 +1479,8 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         discount_amount: popust,
         tip: napitnina,
         furs,
+        // PRELET 192: dnevna stevilka za postrezbo (samo pri kuhinji).
+        kitchenNumber: kuhinjskaStevilka,
         // PRELET 175: kupec na izpis racuna.
         buyer: naPodjetje ? {
           name: kupec.name.trim(),
@@ -1810,6 +1831,8 @@ async function autoPrint(data) {
         // pri izračunu ZOI) in oznaka računa brez povezave za opombo na izpisu.
         issue_datetime: data.issuedAt || new Date().toISOString(),
         offline: !!data.offline,
+        // PRELET 192: dnevna stevilka za postrezbo.
+        kitchen_number: data.kitchenNumber ?? null,
         // PRELET 175: kupec, kadar je racun izdan na podjetje.
         buyer_name: data.buyer?.name || '',
         buyer_address: data.buyer?.address || '',
