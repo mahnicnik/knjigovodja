@@ -1033,7 +1033,17 @@ function createWindow() {
   const DOVOLJENE_POTI = ['/pos', '/login', '/auth', '/signup', '/register',
                           '/onboarding', '/invite', '/forgot-password', '/odjava']
 
-  mainWindow.webContents.on('did-navigate', (event, url) => {
+  /**
+   * POPRAVLJENO (prelet 199): po prijavi se je znova odprl portal.
+   *
+   * VZROK: prijavna stran uporablja `router.push('/dashboard')`, kar je
+   * premik ZNOTRAJ ze nalozene strani. Electron tega ne javi kot
+   * `did-navigate`, ampak kot `did-navigate-in-page` - in tega dogodka nisem
+   * poslusal, zato preusmeritev nazaj na blagajno po prijavi sploh ni stekla.
+   *
+   * Zdaj isto pravilo velja za obe vrsti premikov.
+   */
+  const preveriPot = (url, vir) => {
     try {
       const u = new URL(url)
       if (u.protocol === 'file:') return                       // zaslon brez povezave
@@ -1045,9 +1055,17 @@ function createWindow() {
         }
         return
       }
-      console.log('Namizna aplikacija: preusmeritev z', u.pathname, 'nazaj na blagajno')
+      console.log('[' + vir + '] preusmeritev z', u.pathname, 'nazaj na blagajno')
       mainWindow.loadURL(POS_URL)
-    } catch (e) { console.warn('did-navigate:', e.message) }
+    } catch (e) { console.warn(vir + ':', e.message) }
+  }
+
+  mainWindow.webContents.on('did-navigate', (event, url) => preveriPot(url, 'did-navigate'))
+  // Premiki znotraj strani (Next.js `router.push`) - brez tega prijava
+  // konca na portalu.
+  mainWindow.webContents.on('did-navigate-in-page', (event, url, jeGlavniOkvir) => {
+    if (!jeGlavniOkvir) return
+    preveriPot(url, 'did-navigate-in-page')
   })
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
