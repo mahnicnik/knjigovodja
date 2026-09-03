@@ -1153,16 +1153,51 @@ function createMenu() {
               })
               if (odgovor.response !== 0) return
 
+              /**
+               * POPRAVLJENO (prelet 194): odjava ni delovala - blagajna se je
+               * samo osvezila in ostala prijavljena.
+               *
+               * VZROK: aplikacija uporablja `createBrowserClient` iz
+               * `@supabase/ssr`, ta pa sejo hrani v PISKOTKIH, ne v
+               * `localStorage`. Ciscenje `localStorage` je torej brisalo
+               * kljuce, ki jih tam sploh ni. Poleg tega sejo bere tudi
+               * streznik (middleware) - in ta vidi izkljucno piskotke.
+               *
+               * Zdaj piskotke seje odstranimo prek Electrona in stran
+               * nalozimo na PRIJAVO, ne na blagajno - sicer bi nas streznik
+               * poslal nazaj in videti bi bilo, kot da se ni zgodilo nic.
+               *
+               * `localStorage` NE ciscimo v celoti: v njem so izbrana
+               * naprava in seme stevca za delo brez povezave.
+               */
+              // Zanesljiva pot: piskotke odstranimo prek Electrona. Middleware
+              // in odjemalec bereta izkljucno te, zato je seja s tem koncana.
+              const ses = mainWindow.webContents.session
+              const gostitelj = new URL(POS_URL).hostname
+              const piskotki = await ses.cookies.get({})
+              let odstranjenih = 0
+              for (const p of piskotki) {
+                const dom = (p.domain || '').replace(/^\./, '')
+                if (!gostitelj.endsWith(dom) && !dom.endsWith(gostitelj)) continue
+                if (!/^sb-|supabase|auth/i.test(p.name)) continue
+                const url = (p.secure ? 'https://' : 'http://') + dom + (p.path || '/')
+                try { await ses.cookies.remove(url, p.name); odstranjenih++ } catch {}
+              }
+              console.log('Odjava: odstranjenih piskotkov =', odstranjenih)
+
+              // Se kljuci v localStorage, ce jih je kaj (starejse razlicice).
               await mainWindow.webContents.executeJavaScript(`
                 (function () {
-                  // Samo kljuci seje - cakajoci racuni in nastavitve ostanejo.
                   for (const k of Object.keys(localStorage)) {
                     if (k.startsWith('sb-') && k.includes('auth')) localStorage.removeItem(k)
                   }
                   return true
                 })()
-              `)
-              mainWindow.loadURL(POS_URL)
+              `).catch(() => {})
+
+              // Na prijavo, ne na blagajno - sicer bi nas streznik poslal nazaj
+              // in videti bi bilo, kot da se ni zgodilo nic.
+              mainWindow.loadURL(POS_URL.replace(/\/pos$/, '/login?next=/pos'))
             } catch (e) {
               dialog.showErrorBox('Odjava', String(e?.message || e))
             }
