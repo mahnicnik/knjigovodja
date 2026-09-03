@@ -617,6 +617,10 @@ export const pos = {
           mods: line.mods ?? [],
           note: line.note ?? null,
           total: (line.unitPrice + modAdd) * line.qty,
+          // PRELET 201: popust na postavko. `unit_price` je ZE znizan, to
+          // polje pa ohrani, KOLIKSEN popust je bil dan - potrebno za
+          // ponatis racuna in za porocila.
+          discount_pct: Number((line as any).discountPct ?? 0) || 0,
         }
       })
       const { error } = await sb().from('order_lines').insert(rows)

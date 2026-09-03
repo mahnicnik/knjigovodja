@@ -40,9 +40,25 @@ export function zesekVrstice(l: VrsticaKosarice): number {
   const doplacila = (l.mods || []).reduce((s, m) => s + (Number(m.delta) || 0), 0)
   const osnova = Math.max(0, (cena + doplacila) * kolicina)
 
-  if (!l.happyHourApplied) return osnova
-  const pct = Math.min(100, Math.max(0, Number(l.happyHourPct ?? 20) || 0))
-  return osnova * (1 - pct / 100)
+  /**
+   * POPUST NA POSAMEZNO VRSTICO (prelet 201)
+   *
+   * Popust je bil doslej mogoc samo za celoten nakup. V gostinstvu pa je
+   * pogost popust na ENO postavko: napaka v narocilu, pijaca za hisni racun,
+   * clanska cena za en artikel.
+   *
+   * Vrstni red: najprej Happy hour, nato popust blagajnika. Popusta se
+   * MNOZITA, ne sestevata - pri 20 % in 10 % je konec 28 %, ne 30 %. Tako
+   * skupni popust nikoli ne more preseci 100 % in znesek ne more pasti pod nic.
+   */
+  let znesek = osnova
+  if (l.happyHourApplied) {
+    const pct = Math.min(100, Math.max(0, Number(l.happyHourPct ?? 20) || 0))
+    znesek = znesek * (1 - pct / 100)
+  }
+  const popust = Math.min(100, Math.max(0, Number((l as any).discountPct ?? 0) || 0))
+  if (popust > 0) znesek = znesek * (1 - popust / 100)
+  return znesek
 }
 
 /**

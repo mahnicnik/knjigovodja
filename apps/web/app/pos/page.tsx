@@ -1016,7 +1016,11 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         itemId: line.id,
         name: line.name,
         qty: line.qty,
-        unitPrice: line.happyHourApplied ? line.price * (1 - Number(line.happyHourPct ?? 20) / 100) : line.price,
+        // PRELET 201: oba popusta se zmnozita - Happy hour, nato popust
+        // blagajnika. Cena gre naprej ZE znizana, `discountPct` pa loceno.
+        unitPrice: (line.happyHourApplied ? line.price * (1 - Number(line.happyHourPct ?? 20) / 100) : line.price)
+          * (1 - (Number((line as any).discountPct ?? 0) || 0) / 100),
+        discountPct: Number((line as any).discountPct ?? 0) || 0,
         vatRate: line.vat_rate ?? 22,
         mods: (line.mods || []).map((m: any) => ({
           ...m,
@@ -1186,13 +1190,18 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         qty: line.qty,
         unitPrice: line.happyHourApplied ? line.price * (1 - Number(line.happyHourPct ?? 20) / 100) : line.price,
         vatRate: line.vat_rate ?? 22,
+        // PRELET 201: popust na posamezno postavko - zmnozen s Happy hour.
+        discountPct: Number((line as any).discountPct ?? 0) || 0,
         // POPRAVLJENO (16.8.2026, OBRACUN): popust se je prej obracunal SAMO na
         // osnovno ceno, doplacila modifikatorjev pa so ostala nepopustena -
         // znesek narocila v bazi se ni ujemal s tistim v kosarici in na racunu
         // (npr. 3,80 EUR namesto 3,50 EUR). Zdaj popust velja za oboje.
         mods: (line.mods || []).map((m:any) => ({
           ...m,
-          delta: line.happyHourApplied ? Number(m.delta || 0) * (1 - Number(line.happyHourPct ?? 20) / 100) : Number(m.delta || 0),
+          // PRELET 201: popust velja tudi za doplacila modifikatorjev, sicer
+          // se znesek v kosarici ne bi ujemal z zneskom v bazi.
+          delta: (line.happyHourApplied ? Number(m.delta || 0) * (1 - Number(line.happyHourPct ?? 20) / 100) : Number(m.delta || 0))
+            * (1 - (Number((line as any).discountPct ?? 0) || 0) / 100),
         })),
         note: line.note || null,
       })))
@@ -2605,6 +2614,9 @@ function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart
   const pp = podatkiPodjetja(posData.org || { name: posData.businessName })
   const [showWriteoff, setShowWriteoff] = React.useState(false)
   const [cartDiscount, setCartDiscount] = useState(0)
+  // PRELET 201: popust na posamezno postavko. Hranimo `lineId` vrstice, ki
+  // se ureja - vrednost je na vrstici sami (`discountPct`).
+  const [popustVrstice, setPopustVrstice] = useState<string | null>(null)
   const [proformaModal, setProformaModal] = useState(false)
   const [proformaRecipient, setProformaRecipient] = useState({ name:'', address:'', tax_number:'', vat_id:'' })
   const [selectedCat, setSelectedCat] = useState('cat-fav')
@@ -2943,6 +2955,44 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
         )}
       </div>
 
+      {/* PRELET 201: vnos popusta za eno postavko. Hitri gumbi pokrijejo
+          obicajne primere, polje pa vse ostalo. */}
+      {popustVrstice && (() => {
+        const vrstica = cart.find(x => x.lineId === popustVrstice)
+        if (!vrstica) return null
+        const nastavi = (p) => {
+          setCart(c => c.map(x => x.lineId === popustVrstice ? { ...x, discountPct: p } : x))
+          setPopustVrstice(null)
+        }
+        return (
+          <div onClick={() => setPopustVrstice(null)}
+            style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:900, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+            <div onClick={e => e.stopPropagation()}
+              style={{ background:T.surface, borderRadius:14, padding:18, width:'100%', maxWidth:340 }}>
+              <div style={{ fontWeight:700, fontSize:14, marginBottom:2 }}>Popust na postavko</div>
+              <div style={{ fontSize:12, color:T.muted, marginBottom:14 }}>{vrstica.name} · {eur(H.lineTotal(vrstica))}</div>
+              <div style={{ display:'flex', gap:6, marginBottom:10 }}>
+                {[10, 20, 50, 100].map(p => (
+                  <button key={p} onClick={() => nastavi(p)}
+                    style={{ flex:1, padding:'10px 0', borderRadius:8, border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:13,
+                      background: Number(vrstica.discountPct||0) === p ? T.accent : T.chipBg,
+                      color: Number(vrstica.discountPct||0) === p ? '#fff' : 'inherit' }}>{p}%</button>
+                ))}
+              </div>
+              <input type="number" min={0} max={100} step="any" autoFocus
+                defaultValue={Number(vrstica.discountPct||0) || ''}
+                onKeyDown={e => { if (e.key === 'Enter') nastavi(Math.min(100, Math.max(0, Number((e.target as any).value) || 0))) }}
+                placeholder="Svoj odstotek"
+                style={{ width:'100%', padding:'10px 12px', borderRadius:8, border:'1px solid '+T.line, fontSize:14, fontFamily:'inherit', marginBottom:12 }}/>
+              <div style={{ display:'flex', gap:8 }}>
+                <button onClick={() => nastavi(0)} style={{ flex:1, padding:'11px 0', borderRadius:9, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontFamily:'inherit', fontSize:13 }}>Brez popusta</button>
+                <button onClick={() => setPopustVrstice(null)} style={{ flex:1, padding:'11px 0', borderRadius:9, border:'none', background:T.accent, color:'#fff', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:13 }}>Zapri</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       <div style={{ flex:1, overflowY:'auto' }}>
         {cart.length === 0 && (
           <div style={{ padding:40, textAlign:'center', color:T.muted, fontSize:12 }}>
@@ -2956,6 +3006,7 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
               <div style={{ fontSize:13, fontWeight:600 }}>
                 {l.name}
                 {l.happyHourApplied && <span style={{ fontSize:9, fontWeight:800, color:T.warn, background:'rgba(184,140,40,0.15)', padding:'1px 5px', borderRadius:4, marginLeft:5 }}>−{Number(l.happyHourPct ?? 20)}%</span>}
+                {Number(l.discountPct||0) > 0 && <span style={{ fontSize:9, fontWeight:800, color:T.accent, background:T.accentSoft, padding:'1px 5px', borderRadius:4, marginLeft:5 }}>−{fmtPct(Number(l.discountPct))}%</span>}
               </div>
             </div>
             <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:5 }}>
@@ -2968,6 +3019,14 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
                 <button onClick={() => adjustQty(l.lineId, 1)} style={{ width:24, height:24, borderRadius:6, border:'none', background:T.accentSoft, color:T.accent, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
                   <KI name="plus" size={12}/>
                 </button>
+                {/* PRELET 201: popust SAMO na to postavko. Popust na celoten
+                    nakup ostaja spodaj; oba se lahko uporabita hkrati. */}
+                <button onClick={() => setPopustVrstice(l.lineId)}
+                  title="Popust na to postavko"
+                  style={{ width:24, height:24, borderRadius:6, marginLeft:2, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700,
+                    border: '1px solid ' + (Number(l.discountPct||0) > 0 ? T.accent : T.line),
+                    background: Number(l.discountPct||0) > 0 ? T.accentSoft : T.surface,
+                    color: Number(l.discountPct||0) > 0 ? T.accent : T.muted }}>%</button>
               </div>
             </div>
           </div>
