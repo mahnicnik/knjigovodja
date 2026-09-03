@@ -3014,9 +3014,23 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
             <span>Popust {fmtPct(cartDiscount)}%</span><span>-{eur(totals.total*cartDiscount/100)}</span>
           </div>
         )}
+        {/* POPRAVLJENO (prelet 200): "Skupaj" je izpisal `totals.total`, torej
+            znesek PRED popustom - 2,20 EUR, medtem ko je gumb pravilno kazal
+            1,20 EUR. Dve stevilki na istem zaslonu, ki si nasprotujeta, in
+            tista vecja je bila napacna.
+
+            Zdaj je pri "Skupaj" znesek ZA PLACILO, prvotni pa ostane viden
+            precrtan - da blagajnik in gost vidita, od kod popust. */}
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline' }}>
           <div style={{ fontWeight:700, fontSize:14 }}>Skupaj</div>
-          <div style={{ fontWeight:800, fontSize:26, fontVariantNumeric:'tabular-nums', letterSpacing:'-0.02em' }}>{eur(totals.total)}</div>
+          <div style={{ display:'flex', alignItems:'baseline', gap:8 }}>
+            {cartDiscount > 0 && (
+              <span style={{ fontSize:14, color:T.muted, textDecoration:'line-through' }}>{eur(totals.total)}</span>
+            )}
+            <span style={{ fontWeight:800, fontSize:26, fontVariantNumeric:'tabular-nums', letterSpacing:'-0.02em' }}>
+              {eur(cartDiscount > 0 ? totals.total * (1 - cartDiscount / 100) : totals.total)}
+            </span>
+          </div>
         </div>
         {cart.length > 0 && (
           <div style={{ display:'flex', gap:6, marginTop:8 }}>
