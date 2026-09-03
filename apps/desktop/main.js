@@ -975,7 +975,32 @@ function createWindow() {
     backgroundColor: '#0d2818',
   })
 
-  mainWindow.loadURL(POS_URL)
+  /**
+   * SVEZA STRAN OB VSAKEM ZAGONU (prelet 205)
+   * ═════════════════════════════════════════
+   *
+   * NAPAKA, KI JO TO ODPRAVLJA: po vsaki objavi je blagajna lahko obtičala
+   * na STARI razlicici strani. Electron predpomnilnik hrani agresivno, zato
+   * se je zgodilo, da se je stara koda pomesala z novo - stran je bila
+   * videti pravilna, del vmesnika pa se ni odzival. Klik v polje ni postavil
+   * kazalke in tipkanje ni delalo.
+   *
+   * Zgodilo se je dvakrat, oba dni sredi dela, in navadna osvezitev (Ctrl+R)
+   * tega NE odpravi - ta postrezi isto shranjeno razlicico. Pomagal je sele
+   * Ctrl+Shift+R, ki predpomnilnik obide.
+   *
+   * Zato ga ob vsakem zagonu pocistimo. Blagajna se zazene enkrat na dan in
+   * tece cel dan, zato je cena ena sama - nekaj sto kilobajtov ob zagonu -
+   * korist pa je, da ta razred napak izgine.
+   *
+   * POZOR: ciscenje NE briše piškotkov ne lokalne shrambe. Seja ostane,
+   * cakajoci racuni brez povezave ostanejo, nastavitve ostanejo. Odstrani se
+   * samo shranjena koda strani.
+   */
+  mainWindow.webContents.session.clearCache()
+    .then(() => console.log('[zagon] predpomnilnik strani pocisen'))
+    .catch(e => console.warn('[zagon] ciscenja predpomnilnika ni bilo mogoce izvesti:', e.message))
+    .finally(() => mainWindow.loadURL(POS_URL))
 
   // PRELET 158: `did-fail-load` je bil doslej obravnavan SAMO pri skritem
   // tiskalnem oknu. Ce je bil internet nedosegljiv ob ZAGONU, je glavno okno
