@@ -982,6 +982,29 @@ function createWindow() {
   // ostalo prazno belo - osebje je lahko samo ugibalo, kaj je narobe.
   // Zdaj pokazemo zaslon "ni povezave" in se vsakih 5 s sami poskusamo
   // povezati nazaj; ob uspehu se blagajna nalozi brez posredovanja.
+  /**
+   * BELEZENJE NALAGANJ (prelet 197)
+   * ═══════════════════════════════
+   *
+   * Iscemo vzrok, zakaj v nekaterih poljih ni mogoce tipkati: klik ne
+   * postavi kazalke, v brskalniku na isti napravi pa vse deluje.
+   *
+   * Ena od moznosti je, da se stran med delom TIHO ZNOVA NALAGA - vsako
+   * nalaganje namrec pobrise fokus in vpisano besedilo, uporabnik pa vidi
+   * le, da "tipkanje ne dela". Zato vsako nalaganje zabelezimo s casom;
+   * ce se v konzoli vrstice ponavljajo, je vzrok najden.
+   *
+   * VAROVALKA: ob uspesno nalozeni strani ustavimo ponovno povezovanje.
+   * Ce je casovnik iz preleta 158 zaradi kratkega izpada ostal tekoc, bi
+   * stran nalagal vsakih 5 sekund - in prav to bi bilo videti kot
+   * nedelujoce tipkanje.
+   */
+  mainWindow.webContents.on('did-finish-load', () => {
+    const u = mainWindow.webContents.getURL()
+    console.log('[nalaganje]', new Date().toISOString(), u)
+    ustaviPonovnoPovezovanje()
+  })
+
   mainWindow.webContents.on('did-fail-load', (event, code, opis, url, jeGlavniOkvir) => {
     // -3 (ERR_ABORTED) sprozi vsaka prekinjena navigacija (preusmeritev,
     // hiter klik) in NI izpad povezave; podokvirji nas ne zanimajo.

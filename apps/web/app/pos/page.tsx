@@ -282,6 +282,39 @@ function usePosData() {
 
   const refresh = useCallback(() => setReloadKey(k => k + 1), [])
 
+  /**
+   * OSVEŽITEV OB VRNITVI V OKNO (prelet 197)
+   * ════════════════════════════════════════
+   *
+   * NAPAKA, KI JO TO ODPRAVLJA: blagajna je podatke prebrala ENKRAT ob
+   * zagonu in nato nikoli vec. Sproti se je osvezeval samo kuhinjski zaslon.
+   * Ce si stranko popravil v brskalniku, namizna aplikacija tega ni izvedela
+   * nikoli - podatki so ostali takrsni, kot so bili ob zagonu.
+   *
+   * Zdaj se ob vrnitvi v okno podatki tiho preberejo znova. To pokrije
+   * najpogostejsi primer: popravis drugje, klikneš nazaj v blagajno, podatki
+   * so svezi.
+   *
+   * OMEJITEV NA 15 SEKUND: brez nje bi vsak preklop med okni sprozil branje
+   * celotnega sifranta - pri hitrem klikanju bi to pomenilo desetine
+   * poizvedb na minuto.
+   */
+  const zadnjaOsvezitev = useRef(Date.now())
+  useEffect(() => {
+    const osveziCeJeCas = () => {
+      if (document.visibilityState === 'hidden') return
+      if (Date.now() - zadnjaOsvezitev.current < 15000) return
+      zadnjaOsvezitev.current = Date.now()
+      refresh()
+    }
+    window.addEventListener('focus', osveziCeJeCas)
+    document.addEventListener('visibilitychange', osveziCeJeCas)
+    return () => {
+      window.removeEventListener('focus', osveziCeJeCas)
+      document.removeEventListener('visibilitychange', osveziCeJeCas)
+    }
+  }, [refresh])
+
   useEffect(() => {
     async function initBusiness() {
       try {
