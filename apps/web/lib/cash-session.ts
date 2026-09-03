@@ -99,9 +99,23 @@ export async function getCurrentSession(staffId?: string): Promise<CashSession |
     .select('*')
     .eq('business_id', BUSINESS_ID)
     .eq('status', 'open')
-  if (staffId) {
-    query = query.eq('staff_id', staffId)
-  }
+  /**
+   * POPRAVLJENO (prelet 196): IZMENA JE SKUPNA, NE OSEBNA.
+   *
+   * Filtriranje po `staff_id` je bilo uvedeno 13.8.2026 za primer, ko ima
+   * vsak blagajnik SVOJ predal. V lokalu z enim samim predalom je ucinek
+   * nasproten: blagajno zjutraj odpre en clovek, vsakemu naslednjemu, ki se
+   * prijavi s PIN-om, pa sistem javi, da je blagajna zaprta, in ne more
+   * izdati racuna.
+   *
+   * Blagajna se odpre enkrat na dan in velja za celotno podjetje. Kdo je
+   * izdal posamezen racun, je zabelezeno pri racunu (`cashier_id`), zato se
+   * promet po blagajnikih vidi tudi brez locenih izmen.
+   *
+   * `staffId` ostaja v podpisu, ker ga klici se posiljajo - le filtriranja
+   * po njem ne izvajamo vec.
+   */
+  void staffId
   const { data, error } = await query
     .order('opened_at', { ascending: false })
     .limit(1)
@@ -138,9 +152,11 @@ export async function openSession(params: {
 }): Promise<{ session: CashSession | null; error: string | null }> {
   const db = createClient()
 
-  // POPRAVLJENO (13.8.2026, KRITICNO): preveri "ze odprto" SAMO za TO osebo
-  // (staffId), ne za celo podjetje - vec ljudi lahko ima odprto svojo sejo.
-  const existing = await getCurrentSession(params.staffId)
+  // POPRAVLJENO (prelet 196): preverimo, ali je blagajna ze odprta za
+  // PODJETJE. Prej se je preverjalo po osebi, zato je vsak nov blagajnik
+  // odprl SVOJO izmeno in ob koncu dneva je bilo Z-obracunov toliko, kolikor
+  // je bilo ljudi - namesto enega za en predal.
+  const existing = await getCurrentSession()
   if (existing && existing.status === 'open') {
     return {
       session: null,

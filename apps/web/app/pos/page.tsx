@@ -1793,7 +1793,11 @@ async function autoPrint(data) {
         business_name: data.org?.name || 'Blagajna',
         business_address: [data.org?.address, [data.org?.post_code, data.org?.city].filter(Boolean).join(' ')].filter(Boolean).join(', '),
         tax_number: data.org?.tax_number || '',
-        vat_id: data.org?.vat_registered ? 'SI' + (data.org?.tax_number||'') : '',
+        // POPRAVLJENO (prelet 196): na racunu je pisalo "ID DDV: SISI91390419".
+        // Davcna je v bazi shranjena ZE s predpono ("SI91390419"), koda pa je
+        // predenj dodala se eno "SI". Funkcija `idZaDdv` predpono doda samo,
+        // ce je se ni - in je bila ze v uporabi drugod, le tu ne.
+        vat_id: data.org?.vat_registered ? idZaDdv(data.org?.tax_number) : '',
         receipt_number: data.invoiceNumber || (data.orderId?.slice(-6)) || '—',
         cashier: data.cashierName || '',
         /**

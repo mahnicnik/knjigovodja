@@ -1205,6 +1205,38 @@ function createMenu() {
         },
         { type: 'separator' },
         {
+          /**
+           * RAZVIJALSKA KONZOLA (prelet 196)
+           *
+           * Brez nje napake v blagajni ni mogoce videti: v brskalniku se
+           * odpre s Cmd+Alt+I, v namizni aplikaciji pa je meni po meri in
+           * te bliznjice nima. Ob tezavi je bilo zato mogoce le ugibati.
+           */
+          label: 'Razvijalska konzola',
+          accelerator: process.platform === 'darwin' ? 'Alt+Cmd+I' : 'Ctrl+Shift+I',
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.toggleDevTools()
+            }
+          }
+        },
+        {
+          /**
+           * PONOVNO NALAGANJE BREZ PREDPOMNILNIKA (prelet 196)
+           *
+           * Navadna osvezitev lahko postrezi staro razlicico strani iz
+           * predpomnilnika. Ta jo obide in naloži zares svezo.
+           */
+          label: 'Osveži brez predpomnilnika',
+          accelerator: 'CmdOrCtrl+Shift+R',
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.reloadIgnoringCache()
+            }
+          }
+        },
+        { type: 'separator' },
+        {
           label: 'Preveri posodobitve',
           click: () => autoUpdater.checkForUpdates().catch(console.error)
         },
