@@ -1949,6 +1949,8 @@ async function autoPrint(data) {
       premiseAddress: data.premiseAddress || '',
       deviceId: data.deviceId || '',
       invoiceNumber: data.invoiceNumber || (data.orderId?.slice(-6)) || '—',
+      // PRELET 198: brez tega spletna blagajna stevilke ne pokaze.
+      kitchenNumber: data.kitchenNumber ?? null,
       // PRELET 158: pri računu brez povezave (in vseh, kjer je čas znan) mora
       // QR koda vsebovati čas, s katerim je bil izračunan ZOI — ne časa tiska.
       issueDate: data.issuedAt ? new Date(data.issuedAt) : new Date(),

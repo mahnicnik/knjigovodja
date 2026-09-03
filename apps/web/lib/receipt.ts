@@ -49,6 +49,17 @@ export interface ReceiptData {
    * racunu vec razlicnih oproscenih postavk, se izpisejo VSE klavzule.
    */
   vatExemptions?: string[]
+  /**
+   * DODANO (prelet 198): dnevna stevilka za postrezbo (kuhinja).
+   *
+   * Prelet 192 jo je dodal SAMO na natisnjeni listek (ESC/POS), spletna
+   * blagajna pa je uporabljala isto kodo za izpis in stevilke ni pokazala.
+   * Gost, ki narocilo prevzame pri pultu, jo potrebuje ne glede na to, iz
+   * katere blagajne je bil racun izdan.
+   *
+   * NI del zaporedne stevilke racuna - ta ostane neprekinjena za FURS.
+   */
+  kitchenNumber?: number | null
 }
 
 const METHOD_LABELS: Record<string, string> = {
@@ -291,13 +302,22 @@ export async function buildReceiptHTML(d: ReceiptData): Promise<string> {
     <span>${eur(d.total)}</span>
   </div>
   <div class="doubleline"></div>
+  ${d.kitchenNumber ? `
+  <div class="doubleline"></div>
+  <div class="center" style="font-size:20px;font-weight:800;letter-spacing:1px;margin:6px 0 2px">NAROČILO ${d.kitchenNumber}</div>
+  <div class="center small" style="margin-bottom:6px">Počakajte na klic</div>
+  <div class="doubleline"></div>` : ''}
   ${fursHtml}
   <div class="line"></div>
   <div class="center small" style="margin-top:6px">Hvala za obisk!</div>
   <div class="line"></div>
   <div class="footer">
     <div>Izdano s sistemom</div>
-    <div class="brand">RACUNKO</div>
+    <!-- POPRAVLJENO (prelet 198): v HTML izpisu je pisalo "RACUNKO" brez
+         sumnika. Na natisnjenem listku je bilo popravljeno ze v preletu 195,
+         tu pa ne - HTML sumnike prikaze brez tezav, saj ni odvisen od kodne
+         strani tiskalnika. -->
+    <div class="brand">RAČUNKO</div>
     <div>AI knjigovodstvo za s.p.</div>
     <!-- POPRAVLJENO (prelet 190): prej "www.racunko.si" - naslov, ki pripada
          DRUGEMU podjetju (racunovodski servis RACUNKO d.o.o. iz Kamnika).
