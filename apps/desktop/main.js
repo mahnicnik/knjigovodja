@@ -240,7 +240,7 @@ function buildEscPos(data) {
   txt(data.business_name || 'SIRM fitness&bar'); lf()
   b(ESC,0x45,0x00)
   if (data.business_address) { txt(data.business_address); lf() }
-  if (data.tax_number) { txt('Davcna: ' + data.tax_number); lf() }
+  if (data.tax_number) { txt('Dav\u010dna: ' + data.tax_number); lf() }
   if (data.vat_id) { txt('ID DDV: ' + data.vat_id); lf() }
   // PE - poslovna enota (center)
   if (data.premise_id || data.premise_address) {
@@ -261,10 +261,10 @@ function buildEscPos(data) {
   // Left align
   b(ESC,0x61,0x00)
   sep()
-  line('Racun st.:', data.receipt_number || '')
+  line('Ra\u010dun \u0161t.:', data.receipt_number || '')
   line('Datum:', data.date || '')
   line('Blagajnik:', data.cashier || '')
-  line('Placilo:', data.payment_method === 'card' ? 'Kartica' : data.payment_method === 'bon' ? 'Bon' : 'Gotovina')
+  line('Pla\u010dilo:', data.payment_method === 'card' ? 'Kartica' : data.payment_method === 'bon' ? 'Bon' : 'Gotovina')
   sep()
   // Artikli
   for (const item of (data.items||[])) {
@@ -306,7 +306,7 @@ function buildEscPos(data) {
   b(GS,0x21,0x00, ESC,0x61,0x00) // reset
   sep('=')
   // DDV tabela
-  txt('OBRACUN DDV'); lf()
+  txt('OBRA\u010cUN DDV'); lf()
   // PRELET 170: zadnji stolpec poravnamo na desni rob traku, sicer tabela
   // na 48-znakovnem traku "visi" v levi polovici.
   const stolpec = Math.max(8, Math.floor((SIRINA - 10) / 3))
@@ -328,9 +328,9 @@ function buildEscPos(data) {
     sep('=')
     b(ESC,0x61,0x01)            // sredinsko
     b(GS,0x21,0x11)             // dvojna visina in sirina
-    txt('NAROCILO ' + data.kitchen_number); lf()
+    txt('NARO\u010cILO ' + data.kitchen_number); lf()
     b(GS,0x21,0x00)
-    txt('Pocakajte na klic'); lf()
+    txt('Po\u010dakajte na klic'); lf()
     b(ESC,0x61,0x00)
     sep('=')
   }
@@ -341,7 +341,7 @@ function buildEscPos(data) {
     txt('KUPEC:'); lf()
     txt(sl(data.buyer_name)); lf()
     if (data.buyer_address) { txt(sl(data.buyer_address)); lf() }
-    if (data.buyer_tax_number) { txt('Davcna: SI' + sl(data.buyer_tax_number)); lf() }
+    if (data.buyer_tax_number) { txt('Dav\u010dna: SI' + sl(data.buyer_tax_number)); lf() }
   }
 
   // FURS
@@ -350,7 +350,7 @@ function buildEscPos(data) {
   if (data.offline && data.furs_zoi && !data.furs_eor) {
     // Racun, izdan BREZ POVEZAVE (9. clen ZDavPR): EOR se ni dodeljen,
     // kupcu pa je posteno povedati, zakaj ga na racunu ni.
-    txt('Racun izdan brez povezave.'); lf()
+    txt('Ra\u010dun izdan brez povezave.'); lf()
     txt('EOR bo pridobljen naknadno.'); lf()
   }
   // POPRAVLJENO (prelet 158): QR koda je prej vsebovala EOR. Pravilnik o
@@ -376,7 +376,7 @@ function buildEscPos(data) {
   // Footer
   b(ESC,0x61,0x01)
   txt('Hvala za obisk!'); lf()
-  txt('Izdano s sistemom RACUNKO'); lf()
+  txt('Izdano s sistemom RA\u010cUNKO'); lf()
   // PRELET 189: prava domena s sumnikom. Prej je pisalo "www.racunko.si",
   // kar je naslov drugega podjetja - gost, ki bi ga prepisal v brskalnik,
   // bi pristal pri racunovodskem servisu iz Kamnika.
