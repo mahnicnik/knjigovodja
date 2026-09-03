@@ -1021,6 +1021,7 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         unitPrice: (line.happyHourApplied ? line.price * (1 - Number(line.happyHourPct ?? 20) / 100) : line.price)
           * (1 - (Number((line as any).discountPct ?? 0) || 0) / 100),
         discountPct: Number((line as any).discountPct ?? 0) || 0,
+        discountEur: Number((line as any).discountEur ?? 0) || 0,
         vatRate: line.vat_rate ?? 22,
         mods: (line.mods || []).map((m: any) => ({
           ...m,
@@ -1192,6 +1193,9 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         vatRate: line.vat_rate ?? 22,
         // PRELET 201: popust na posamezno postavko - zmnozen s Happy hour.
         discountPct: Number((line as any).discountPct ?? 0) || 0,
+        // PRELET 203: znesek popusta se v ceno postavke porazdeli na kos
+        // (`/ qty`), da zmnozek s kolicino spet da pravi znesek vrstice.
+        discountEur: Number((line as any).discountEur ?? 0) || 0,
         // POPRAVLJENO (16.8.2026, OBRACUN): popust se je prej obracunal SAMO na
         // osnovno ceno, doplacila modifikatorjev pa so ostala nepopustena -
         // znesek narocila v bazi se ni ujemal s tistim v kosarici in na racunu
@@ -2975,7 +2979,13 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
         const vrstica = cart.find(x => x.lineId === popustVrstice)
         if (!vrstica) return null
         const nastavi = (p) => {
-          setCart(c => c.map(x => x.lineId === popustVrstice ? { ...x, discountPct: p } : x))
+          setCart(c => c.map(x => x.lineId === popustVrstice ? { ...x, discountPct: p, discountEur: 0 } : x))
+          setPopustVrstice(null)
+        }
+        // PRELET 203: znesek in odstotek se izkljucujeta - dvojni popust na
+        // isti postavki je skoraj vedno pomota, ne namera.
+        const nastaviEur = (z) => {
+          setCart(c => c.map(x => x.lineId === popustVrstice ? { ...x, discountEur: z, discountPct: 0 } : x))
           setPopustVrstice(null)
         }
         return (
@@ -2985,6 +2995,9 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
               style={{ background:T.surface, borderRadius:14, padding:18, width:'100%', maxWidth:340 }}>
               <div style={{ fontWeight:700, fontSize:14, marginBottom:2 }}>Popust na postavko</div>
               <div style={{ fontSize:12, color:T.muted, marginBottom:14 }}>{vrstica.name} · {eur(H.lineTotal(vrstica))}</div>
+              {/* PRELET 203: odstotek ALI znesek. Odstotek je pravilo
+                  ("clanom -20 %"), znesek pa enkraten poseg ("evro dol") -
+                  blagajnik pogosteje potrebuje drugo. */}
               <div style={{ display:'flex', gap:6, marginBottom:10 }}>
                 {[10, 20, 50, 100].map(p => (
                   <button key={p} onClick={() => nastavi(p)}
@@ -2993,13 +3006,29 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
                       color: Number(vrstica.discountPct||0) === p ? '#fff' : 'inherit' }}>{p}%</button>
                 ))}
               </div>
-              <input type="number" min={0} max={100} step="any" autoFocus
-                defaultValue={Number(vrstica.discountPct||0) || ''}
-                onKeyDown={e => { if (e.key === 'Enter') nastavi(Math.min(100, Math.max(0, Number((e.target as any).value) || 0))) }}
-                placeholder="Svoj odstotek"
-                style={{ width:'100%', padding:'10px 12px', borderRadius:8, border:'1px solid '+T.line, fontSize:14, fontFamily:'inherit', marginBottom:12 }}/>
+              <div style={{ display:'flex', gap:8, marginBottom:12 }}>
+                <div style={{ flex:1 }}>
+                  <label style={{ fontSize:10, color:T.muted, display:'block', marginBottom:3 }}>Odstotek</label>
+                  <input type="number" min={0} max={100} step="any" autoFocus
+                    defaultValue={Number(vrstica.discountPct||0) || ''}
+                    onKeyDown={e => { if (e.key === 'Enter') nastavi(Math.min(100, Math.max(0, Number((e.target as any).value) || 0))) }}
+                    placeholder="%"
+                    style={{ width:'100%', padding:'10px 12px', borderRadius:8, border:'1px solid '+T.line, fontSize:14, fontFamily:'inherit' }}/>
+                </div>
+                <div style={{ flex:1 }}>
+                  <label style={{ fontSize:10, color:T.muted, display:'block', marginBottom:3 }}>Znesek (€)</label>
+                  <input type="number" min={0} step="any"
+                    defaultValue={Number(vrstica.discountEur||0) || ''}
+                    onKeyDown={e => { if (e.key === 'Enter') nastaviEur(Math.max(0, Number((e.target as any).value) || 0)) }}
+                    placeholder="€"
+                    style={{ width:'100%', padding:'10px 12px', borderRadius:8, border:'1px solid '+T.line, fontSize:14, fontFamily:'inherit' }}/>
+                </div>
+              </div>
+              <div style={{ fontSize:10.5, color:T.muted, marginBottom:12, lineHeight:1.5 }}>
+                Znesek se odsteje za celo postavko, ne na kos. Vnos potrdite s tipko Enter.
+              </div>
               <div style={{ display:'flex', gap:8 }}>
-                <button onClick={() => nastavi(0)} style={{ flex:1, padding:'11px 0', borderRadius:9, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontFamily:'inherit', fontSize:13 }}>Brez popusta</button>
+                <button onClick={() => { setCart(c => c.map(x => x.lineId === popustVrstice ? { ...x, discountPct: 0, discountEur: 0 } : x)); setPopustVrstice(null) }} style={{ flex:1, padding:'11px 0', borderRadius:9, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontFamily:'inherit', fontSize:13 }}>Brez popusta</button>
                 <button onClick={() => setPopustVrstice(null)} style={{ flex:1, padding:'11px 0', borderRadius:9, border:'none', background:T.accent, color:'#fff', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:13 }}>Zapri</button>
               </div>
             </div>
@@ -3021,6 +3050,7 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
                 {l.name}
                 {l.happyHourApplied && <span style={{ fontSize:9, fontWeight:800, color:T.warn, background:'rgba(184,140,40,0.15)', padding:'1px 5px', borderRadius:4, marginLeft:5 }}>−{Number(l.happyHourPct ?? 20)}%</span>}
                 {Number(l.discountPct||0) > 0 && <span style={{ fontSize:9, fontWeight:800, color:T.accent, background:T.accentSoft, padding:'1px 5px', borderRadius:4, marginLeft:5 }}>−{fmtPct(Number(l.discountPct))}%</span>}
+                {Number(l.discountEur||0) > 0 && <span style={{ fontSize:9, fontWeight:800, color:T.accent, background:T.accentSoft, padding:'1px 5px', borderRadius:4, marginLeft:5 }}>−{eur(Number(l.discountEur))}</span>}
               </div>
             </div>
             <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:5 }}>
@@ -3038,9 +3068,9 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
                 <button onClick={() => setPopustVrstice(l.lineId)}
                   title="Popust na to postavko"
                   style={{ width:24, height:24, borderRadius:6, marginLeft:2, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700,
-                    border: '1px solid ' + (Number(l.discountPct||0) > 0 ? T.accent : T.line),
-                    background: Number(l.discountPct||0) > 0 ? T.accentSoft : T.surface,
-                    color: Number(l.discountPct||0) > 0 ? T.accent : T.muted }}>%</button>
+                    border: '1px solid ' + (Number(l.discountPct||0) > 0 || Number(l.discountEur||0) > 0 ? T.accent : T.line),
+                    background: Number(l.discountPct||0) > 0 || Number(l.discountEur||0) > 0 ? T.accentSoft : T.surface,
+                    color: Number(l.discountPct||0) > 0 || Number(l.discountEur||0) > 0 ? T.accent : T.muted }}>%</button>
               </div>
             </div>
           </div>

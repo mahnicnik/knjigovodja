@@ -58,6 +58,21 @@ export function zesekVrstice(l: VrsticaKosarice): number {
   }
   const popust = Math.min(100, Math.max(0, Number((l as any).discountPct ?? 0) || 0))
   if (popust > 0) znesek = znesek * (1 - popust / 100)
+
+  /**
+   * POPUST V EVRIH (prelet 203)
+   *
+   * Odstotek je pravilo ("clanom -20 %"), znesek pa enkraten poseg
+   * ("evro popusta"). Blagajnik pogosteje potrebuje drugo, zato ju
+   * podpiramo oba.
+   *
+   * Znesek se odsteje ZA CELO VRSTICO, ne na kos - kdor rece "evro dol",
+   * misli evro na racunu, ne evro na vsako pijaco.
+   *
+   * Nikoli pod nic: popust, visji od vrednosti postavke, jo znica na 0.
+   */
+  const popustEur = Math.max(0, Number((l as any).discountEur ?? 0) || 0)
+  if (popustEur > 0) znesek = Math.max(0, znesek - popustEur)
   return znesek
 }
 

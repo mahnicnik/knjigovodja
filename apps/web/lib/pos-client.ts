@@ -612,15 +612,27 @@ export const pos = {
           service_id: line.serviceId ?? null,
           name: line.name,
           qty: line.qty,
-          unit_price: line.unitPrice,
-          vat_rate: line.vatRate,
-          mods: line.mods ?? [],
-          note: line.note ?? null,
-          total: (line.unitPrice + modAdd) * line.qty,
-          // PRELET 201: popust na postavko. `unit_price` je ZE znizan, to
+          /**
+           * PRELET 203: popust v EVRIH velja za CELO vrstico, `unit_price`
+             * pa je cena NA KOS - zato ga porazdelimo (`/ qty`). Zmnozek s
+             * kolicino tako spet da znesek, ki ga vidi gost.
+             *
+             * Nikoli pod nic: popust, visji od vrednosti postavke, jo znica
+             * na 0, ne v negativno ceno.
+             */
+            unit_price: line.qty > 0
+              ? Math.max(0, line.unitPrice - (Number((line as any).discountEur ?? 0) || 0) / line.qty)
+              : line.unitPrice,
+            vat_rate: line.vatRate,
+            mods: line.mods ?? [],
+            note: line.note ?? null,
+            total: Math.max(0, (line.unitPrice + modAdd) * line.qty - (Number((line as any).discountEur ?? 0) || 0)),
+            // PRELET 201: popust na postavko. `unit_price` je ZE znizan, to
           // polje pa ohrani, KOLIKSEN popust je bil dan - potrebno za
           // ponatis racuna in za porocila.
           discount_pct: Number((line as any).discountPct ?? 0) || 0,
+          // PRELET 203: znesek popusta na postavko, loceno od odstotka.
+          discount_eur: Number((line as any).discountEur ?? 0) || 0,
         }
       })
       const { error } = await sb().from('order_lines').insert(rows)
