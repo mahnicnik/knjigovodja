@@ -2614,9 +2614,9 @@ function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart
   const pp = podatkiPodjetja(posData.org || { name: posData.businessName })
   const [showWriteoff, setShowWriteoff] = React.useState(false)
   const [cartDiscount, setCartDiscount] = useState(0)
-  // PRELET 201: popust na posamezno postavko. Hranimo `lineId` vrstice, ki
-  // se ureja - vrednost je na vrstici sami (`discountPct`).
-  const [popustVrstice, setPopustVrstice] = useState<string | null>(null)
+  // PRELET 202: stanje za popust na postavko je bilo tu po nesreci - gumb in
+  // okence sta v komponenti SaleCart, zato je bila spremenljivka tam
+  // nedosegljiva in stran se je sesula. Preselil sem ga v SaleCart.
   const [proformaModal, setProformaModal] = useState(false)
   const [proformaRecipient, setProformaRecipient] = useState({ name:'', address:'', tax_number:'', vat_id:'' })
   const [selectedCat, setSelectedCat] = useState('cat-fav')
@@ -2925,6 +2925,20 @@ ${recipientHtml}
 }
 
 function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPaymentOpen, totals, setActiveCustomer, customers, cartDiscount, setCartDiscount, cashSession, onNeedOpenCash, onHoldOrder, onProforma, onWriteoff, auth }) {
+  /**
+   * POPRAVLJENO (prelet 202): blagajna se je sesula ob kliku na mizo z
+   * "Application error: a client-side exception".
+   *
+   * VZROK: v preletu 201 sem stanje `popustVrstice` dodal v komponento
+   * `SaleScreen`, gumb in okence pa sta v `SaleCart` - to sta DVE RAZLICNI
+   * komponenti. Spremenljivka v `SaleCart` zato ni obstajala in React je ob
+   * izrisu kosarice vrgel `ReferenceError`, kar je podrlo celo stran.
+   *
+   * Stanje sodi tja, kjer se uporablja: gre za povsem lokalno stanje
+   * vmesnika (katera vrstica se ureja), ki ga starsevska komponenta ne
+   * potrebuje. Zato ga ne podajam kot lastnost, ampak ga premikam sem.
+   */
+  const [popustVrstice, setPopustVrstice] = React.useState(null)
   const [discountOpen, setDiscountOpen] = useState(false)
   const [discountInput, setDiscountInput] = useState('')
   // DODANO (19.8.2026): nacin vnosa popusta - odstotek ali znesek v evrih.
