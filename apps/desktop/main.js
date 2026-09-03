@@ -1094,6 +1094,81 @@ function createMenu() {
             } catch (e) { dialog.showErrorBox('Tiskalnik', String(e?.message || e)) }
           }
         },
+        { type: 'separator' },
+        {
+          /**
+           * ODJAVA (prelet 193)
+           * ═══════════════════
+           *
+           * Blagajna odjave ni imela nikoli - do nje se je prislo prek
+           * portala. Prelet 190 je to pot zaprl (aplikacija se vraca na
+           * blagajno), zato menjava racuna ni bila vec mogoca. Ta vnos je
+           * torej posledica tistega popravka.
+           *
+           * ZAKAJ NE POCISTIMO CELOTNE SHRAMBE: v njej so tudi cakajoci
+           * racuni brez povezave, seme stevca in izbrana naprava. Brisanje
+           * vsega bi lahko unicilo se neprijavljene racune, zato odstranimo
+           * IZKLJUCNO Supabasove kljuce seje (`sb-...-auth-token`).
+           */
+          label: 'Odjava (menjava računa)',
+          click: async () => {
+            try {
+              if (!mainWindow || mainWindow.isDestroyed()) return
+
+              // Ce cakajo neprijavljeni racuni, odjava pomeni, da jih trenutni
+              // uporabnik ne bo mogel poslati - na to je treba opozoriti.
+              const cakajocih = await mainWindow.webContents.executeJavaScript(`
+                (async () => {
+                  try {
+                    const zahteva = indexedDB.open('racunko-blagajna', 1)
+                    return await new Promise((res) => {
+                      zahteva.onsuccess = () => {
+                        try {
+                          const db = zahteva.result
+                          if (!db.objectStoreNames.contains('cakajoca-narocila')) return res(0)
+                          const t = db.transaction('cakajoca-narocila', 'readonly').objectStore('cakajoca-narocila').count()
+                          t.onsuccess = () => res(t.result || 0)
+                          t.onerror = () => res(0)
+                        } catch { res(0) }
+                      }
+                      zahteva.onerror = () => res(0)
+                      setTimeout(() => res(0), 2000)
+                    })
+                  } catch { return 0 }
+                })()
+              `).catch(() => 0)
+
+              const opozorilo = cakajocih > 0
+                ? `\n\nPOZOR: ${cakajocih} računov še čaka na prijavo pri FURS. Pred odjavo vzpostavite povezavo, da se pošljejo.`
+                : ''
+
+              const odgovor = await dialog.showMessageBox(mainWindow, {
+                type: cakajocih > 0 ? 'warning' : 'question',
+                buttons: ['Odjavi se', 'Prekliči'],
+                defaultId: 1,
+                cancelId: 1,
+                title: 'Odjava',
+                message: 'Se želite odjaviti in se prijaviti z drugim računom?',
+                detail: 'Blagajna se bo vrnila na prijavno stran.' + opozorilo,
+              })
+              if (odgovor.response !== 0) return
+
+              await mainWindow.webContents.executeJavaScript(`
+                (function () {
+                  // Samo kljuci seje - cakajoci racuni in nastavitve ostanejo.
+                  for (const k of Object.keys(localStorage)) {
+                    if (k.startsWith('sb-') && k.includes('auth')) localStorage.removeItem(k)
+                  }
+                  return true
+                })()
+              `)
+              mainWindow.loadURL(POS_URL)
+            } catch (e) {
+              dialog.showErrorBox('Odjava', String(e?.message || e))
+            }
+          }
+        },
+        { type: 'separator' },
         {
           label: 'Preveri posodobitve',
           click: () => autoUpdater.checkForUpdates().catch(console.error)
