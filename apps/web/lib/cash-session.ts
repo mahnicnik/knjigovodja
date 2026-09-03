@@ -213,10 +213,23 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
     .gte('closed_at', from)
     .lte('closed_at', to)
 
-  // Filter po blagajniku te seje.
-  if (session.staff_id) {
-    ordersQuery = ordersQuery.eq('cashier_id', session.staff_id)
-  }
+  /**
+   * POPRAVLJENO (prelet 204): PROMET CELOTNE IZMENE, NE SAMO ENE OSEBE.
+   *
+   * NAPAKA: promet se je filtriral po `cashier_id = session.staff_id`, torej
+   * po osebi, ki je izmeno ODPRLA. Ker je izmena od preleta 196 SKUPNA za
+   * celotno podjetje, so v vmesnem stanju in v zakljucku izpadli vsi racuni,
+   * ki jih je izdal kdorkoli drug.
+   *
+   * V praksi: v izmeni je bilo 24 racunov, vmesno stanje jih je stelo 13.
+   * Blagajnik bi ob zakljucku videl manjko, ki ga ni bilo - denar v predalu
+   * bi bil visji od pricakovanega, razlika pa nepojasnjena.
+   *
+   * Filter po osebi je bil uveden 16.8.2026, ko je imel vsak blagajnik svojo
+   * sejo in svoj predal. Pri enem predalu je ucinek nasproten, zato ga
+   * odstranjujem. Kdo je izdal posamezen racun, ostaja zabelezeno pri racunu
+   * (`cashier_id`), zato je promet po blagajnikih se vedno mogoce porocati.
+   */
 
   const { data: orders, error: ordersError } = await ordersQuery
   if (ordersError) {
@@ -237,9 +250,9 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
     // ceprav je bila gotovina pravilna.
     .gte('refunded_at', from)
     .lte('refunded_at', to)
-  if (session.staff_id) {
-    refundsQuery = refundsQuery.eq('cashier_id', session.staff_id)
-  }
+  // PRELET 204: enako kot pri prometu - vracila celotne izmene. Sicer bi se
+  // vracilo, ki ga je opravil drug blagajnik, ne odstelo od pricakovane
+  // gotovine in bi zakljucek javil presezek.
   const { data: refunds } = await refundsQuery
 
   // Akumulacija
