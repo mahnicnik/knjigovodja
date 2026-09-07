@@ -19,9 +19,16 @@ export async function POST(request: NextRequest) {
     )
     const body2 = await request.json().catch(() => ({}))
     const targetPlan = body2.plan === 'pro_pos' ? 'pro_pos' : 'pro'
+    // PRELET 212: izbira med mesecno in letno narocnino. Privzeto mesecno,
+    // ker je manj tvegana odlocitev za stranko, ki se odloca prvic.
+    const letno = body2.period === 'yearly'
     const priceId = targetPlan === 'pro_pos'
-      ? process.env.STRIPE_PRO_POS_PRICE_ID!
-      : process.env.STRIPE_PRO_PRICE_ID!
+      ? (letno ? process.env.STRIPE_PRO_POS_YEARLY_PRICE_ID! : process.env.STRIPE_PRO_POS_PRICE_ID!)
+      : (letno ? process.env.STRIPE_PRO_YEARLY_PRICE_ID! : process.env.STRIPE_PRO_PRICE_ID!)
+    if (!priceId) {
+      console.error(`Manjka cena za ${targetPlan}/${letno ? 'letno' : 'mesecno'}`)
+      return NextResponse.json({ error: 'Ta paket trenutno ni na voljo. Poskusite pozneje.' }, { status: 500 })
+    }
 
     const { data: { user } } = await supabase.auth.getUser()
 
