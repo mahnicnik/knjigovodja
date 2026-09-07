@@ -4,6 +4,12 @@ import { useState } from 'react'
 export default function ManageSubscriptionButton() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /**
+   * PRELET 215: ce narocnina ni bila sklenjena prek Stripa, gumba ni smisla
+   * kazati - upravljati ni cesa. Namesto surove napake ga skrijemo in
+   * pojasnimo, kako je paket urejen.
+   */
+  const [brezNarocnine, setBrezNarocnine] = useState(false)
 
   async function handlePortal() {
     setLoading(true)
@@ -11,12 +17,27 @@ export default function ManageSubscriptionButton() {
     try {
       const res = await fetch('/api/stripe/portal', { method: 'POST' })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Napaka')
+      if (!res.ok) {
+        if (data.brezNarocnine) { setBrezNarocnine(true); setLoading(false); return }
+        throw new Error(data.error || 'Napaka')
+      }
       if (data.url) window.location.href = data.url
     } catch (err: any) {
       setError(err.message)
       setLoading(false)
     }
+  }
+
+  if (brezNarocnine) {
+    return (
+      <div style={{ marginTop: 12, padding: '12px 14px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10 }}>
+        <p style={{ fontSize: 13, margin: 0, fontWeight: 600 }}>Naročnina ni sklenjena prek Stripa</p>
+        <p style={{ fontSize: 12, color: '#666', margin: '6px 0 0', lineHeight: 1.5 }}>
+          Vaš paket je bil dodeljen ročno, zato ga tu ni mogoče upravljati.
+          Za spremembo se obrnite na podporo.
+        </p>
+      </div>
+    )
   }
 
   return (
