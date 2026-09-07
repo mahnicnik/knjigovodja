@@ -15056,7 +15056,23 @@ function KlasikApp() {
           setPaymentOpen(false)
           setReceipt(data)
           if(typeof po==='object' && po.splitLines && po.onSplitPaid) {
-            po.onSplitPaid(po.splitLines.map(l=>l.lineId))
+            /**
+             * POPRAVLJENO (prelet 206): pri razdelitvi racuna se placani del
+             * NI odstel od celote - gost je placal svoje pijace, v kosarici
+             * pa je ostal celoten znesek.
+             *
+             * VZROK: tu smo poslali SEZNAM NIZOV (`map(l => l.lineId)`),
+             * prejemnik pa pricakuje predmete s kolicino:
+             *
+             *     const paid = paidItems.find(p => p.lineId === l.lineId)
+             *
+             * Niz lastnosti `lineId` nima, zato `find` ni nasel nicesar,
+             * `paid` je ostal prazen in nobena kolicina se ni odstela.
+             *
+             * Posiljamo torej `lineId` IN `qty` - kolicina je nujna, ker se
+             * lahko placa le del postavke (2 od 5 piv).
+             */
+            po.onSplitPaid(po.splitLines.map(l => ({ lineId: l.lineId, qty: l.qty })))
           } else {
             setCart([])
             setActiveTable(null)
