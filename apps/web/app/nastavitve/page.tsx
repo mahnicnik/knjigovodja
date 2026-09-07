@@ -618,7 +618,15 @@ export default function NastavitevPage() {
                 ))}
                 {!isPro && (
                   <div style={{ marginTop: 16 }}>
-                    <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} targetPlan="pro" />
+                    {/* PRELET 213: mesecno in letno. Letno je oznaceno s
+                        prihrankom, ker sicer nihce ne racuna sam. */}
+                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                      <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} targetPlan="pro" period="monthly" />
+                      <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} targetPlan="pro" period="yearly" variant="inline" />
+                      {(org?.subscription_status || 'free') === 'free' && (
+                        <p style={{ fontSize:11, color:'#888', margin:0 }}>Letno = 2 meseca brezplačno (prihranite 25,98 €).</p>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -634,7 +642,13 @@ export default function NastavitevPage() {
                 ))}
                 {!isProPos && (
                   <div style={{ marginTop: 16 }}>
-                    <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} targetPlan="pro_pos" />
+                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                      <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} targetPlan="pro_pos" period="monthly" />
+                      <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} targetPlan="pro_pos" period="yearly" variant="inline" />
+                      {(org?.subscription_status || 'free') !== 'pro_pos' && (
+                        <p style={{ fontSize:11, color:'#888', margin:0 }}>Letno = 2 meseca brezplačno (prihranite 59,98 €).</p>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

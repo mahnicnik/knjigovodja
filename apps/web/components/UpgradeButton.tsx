@@ -6,13 +6,33 @@ interface UpgradeButtonProps {
   targetPlan?: 'pro' | 'pro_pos'
   className?: string
   variant?: 'primary' | 'inline'
+  /** PRELET 213: mesecno ali letno. Privzeto mesecno. */
+  period?: 'monthly' | 'yearly'
 }
+
+/**
+ * CENE (prelet 213)
+ * ═════════════════
+ *
+ * Zapisane na ENEM mestu, da se napis na gumbu ne more razhajati s tem, kar
+ * stranka dejansko placa. Prej je bila cena vpisana v besedilu gumba, kjer
+ * jo je ob spremembi cenika zlahka spregledati - gumb je se vedno obljubljal
+ * 9,99 EUR, Stripe pa zaracunal drugace.
+ *
+ * ZNESKI SO SAMO ZA PRIKAZ. Kaj se zaracuna, doloca cena v Stripu; ta koda
+ * je ne more spremeniti.
+ */
+const CENE = {
+  pro:     { monthly: '12,99 \u20ac/mes', yearly: '129,90 \u20ac/leto' },
+  pro_pos: { monthly: '29,99 \u20ac/mes', yearly: '299,90 \u20ac/leto' },
+} as const
 
 export default function UpgradeButton({
   subscriptionStatus = 'free',
   targetPlan = 'pro',
   className = '',
-  variant = 'primary'
+  variant = 'primary',
+  period = 'monthly',
 }: UpgradeButtonProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -24,7 +44,8 @@ export default function UpgradeButton({
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: targetPlan }),
+        // PRELET 213: brez `period` bi letni gumb kupil mesecno narocnino.
+        body: JSON.stringify({ plan: targetPlan, period }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Napaka pri ustvarjanju plačila')
@@ -43,9 +64,11 @@ export default function UpgradeButton({
   if (subscriptionStatus === 'pro_pos') return null
   if (subscriptionStatus === 'pro' && targetPlan === 'pro') return null
 
+  // PRELET 213: cena se bere iz CENE, ne iz zapisanega besedila.
+  const cena = CENE[targetPlan][period]
   const label = targetPlan === 'pro_pos'
-    ? subscriptionStatus === 'pro' ? 'Dodaj POS blagajno — €25/mes' : 'Nadgradi na Pro + POS — €25/mes'
-    : 'Nadgradi na Pro — €9.99/mes'
+    ? (subscriptionStatus === 'pro' ? `Dodaj POS blagajno — ${cena}` : `Nadgradi na Pro + POS — ${cena}`)
+    : `Nadgradi na Pro — ${cena}`
 
   const buttonClass = variant === 'inline'
     ? 'inline-flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-800 disabled:opacity-40 transition-colors'
