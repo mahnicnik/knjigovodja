@@ -600,7 +600,11 @@ export default function NastavitevPage() {
               <div style={{ background: '#fff', borderRadius: 16, border: '2px solid ' + (!isPro ? '#0D1F12' : '#f0f0f0'), padding: 20 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>🆓 Free</div>
                 <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 12 }}>€0</div>
-                {['Do 5 računov/mesec', 'PDF download', 'Prispevki / UPN QR'].map(f => (
+                {/* PRELET 214: brezplacni paket je imel pet racunov na mesec,
+                    konkurent pa daje neomejeno zastonj - kdor primerja, nas
+                    zavrne, preden pogleda karkoli drugega. Omejitev je odslej
+                    stevilo strank, ne stevilo racunov. */}
+                {['Neomejeni računi', 'FURS fiskalizacija', 'PDF download', 'Prispevki / UPN QR'].map(f => (
                   <div key={f} style={{ fontSize: 12, color: '#555', marginBottom: 6, display: 'flex', gap: 6 }}>
                     <span style={{ color: '#16a34a' }}>✓</span> {f}
                   </div>
@@ -610,7 +614,12 @@ export default function NastavitevPage() {
               {/* Pro */}
               <div style={{ background: '#fff', borderRadius: 16, border: '2px solid ' + (isPro && !isProPos ? '#1D9E75' : '#f0f0f0'), padding: 20 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>💼 Pro</div>
-                <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 12 }}>€9.99<span style={{ fontSize: 13, fontWeight: 400, color: '#888' }}>/mes</span></div>
+                {/* POPRAVLJENO (prelet 214): cena je bila zapisana v strani in
+                    se ni ujemala s ceno v Stripu. Kartica je obljubljala 9,99 EUR,
+                    gumb pa je vodil na drugo ceno - stranka bi videla eno in
+                    placala drugo. */}
+                <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 2 }}>12,99 €<span style={{ fontSize: 13, fontWeight: 400, color: '#888' }}>/mes</span></div>
+                <div style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>ali 129,90 €/leto — 2 meseca brezplačno</div>
                 {['Neomejeni računi', 'Email pošiljanje', 'FURS fiskalizacija', 'Dobavnice', 'Prispevki / UPN QR'].map(f => (
                   <div key={f} style={{ fontSize: 12, color: '#555', marginBottom: 6, display: 'flex', gap: 6 }}>
                     <span style={{ color: '#16a34a' }}>✓</span> {f}
@@ -634,7 +643,8 @@ export default function NastavitevPage() {
               {/* Pro + POS */}
               <div style={{ background: '#fff', borderRadius: 16, border: '2px solid ' + (isProPos ? '#1D9E75' : '#f0f0f0'), padding: 20 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>🖥️ Pro + POS</div>
-                <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 12 }}>€24.99<span style={{ fontSize: 13, fontWeight: 400, color: '#888' }}>/mes</span></div>
+                <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 2 }}>29,99 €<span style={{ fontSize: 13, fontWeight: 400, color: '#888' }}>/mes</span></div>
+                <div style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>ali 299,90 €/leto — 2 meseca brezplačno</div>
                 {['Vse iz Pro paketa', 'POS blagajna', 'Koledar & termini', 'Člani & paketi', 'Inventar', 'Upravljanje ekipe'].map(f => (
                   <div key={f} style={{ fontSize: 12, color: '#555', marginBottom: 6, display: 'flex', gap: 6 }}>
                     <span style={{ color: '#16a34a' }}>✓</span> {f}
