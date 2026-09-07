@@ -323,6 +323,45 @@ export async function generateUpnQr(invoice: any, org: any): Promise<string> {
   
   const checksum = upnFields.reduce((s, f) => s + f.length + 1, 0)
   const upnData = upnFields.join('\n') + '\n' + String(checksum).padStart(3, '0')
-  
-  return await QRCode.toDataURL(upnData, { width: 200, margin: 2, errorCorrectionLevel: 'M' })
+
+  /**
+   * KODNA TABELA QR KODE UPN (prelet 209)
+   * ═════════════════════════════════════
+   *
+   * NAPAKA: po skeniranju je v bancni aplikaciji pisalo "PlaAilo raAuna"
+   * namesto "Placilo racuna" s sumniki.
+   *
+   * VZROK: knjiznica kodo zapise v UTF-8, kjer je crka "c" s streho dva
+   * bajta (0xC4 0x8D). Standard UPN QR pa predpisuje kodno tabelo
+   * ISO 8859-2 (Latin-2), zato bancna aplikacija tista dva bajta prebere
+   * kot dva LOCENA znaka - od tod "A" in nevidni znak za njim.
+   *
+   * Do 22.8.2026 je bil namen placila brez sumnikov in tezave ni bilo;
+   * takrat so bili dodani, kar je napako sprozilo.
+   *
+   * POPRAVEK: besedilo pretvorimo v bajte po ISO 8859-2 in jih zapisemo
+   * neposredno (nacin "byte").
+   *
+   * KONTROLNA VSOTA se ne spremeni: standard steje ZNAKE, ne bajtov.
+   */
+  const LATIN2: Record<string, number> = {
+    '\u0107':0xE6, '\u0106':0xC6, '\u010d':0xE8, '\u010c':0xC8,
+    '\u0111':0xF0, '\u0110':0xD0, '\u0161':0xB9, '\u0160':0xA9,
+    '\u017e':0xBE, '\u017d':0xAE, '\u20ac':0x3F,
+  }
+  const vLatin2 = (s: string): Uint8Array => {
+    const out: number[] = []
+    for (const c of s) {
+      const k = c.charCodeAt(0)
+      if (k <= 0xFF && !(k >= 0x80 && k <= 0x9F)) { out.push(k); continue }
+      const l2 = LATIN2[c]
+      out.push(l2 !== undefined ? l2 : 0x3F)
+    }
+    return Uint8Array.from(out)
+  }
+
+  return await QRCode.toDataURL(
+    [{ data: vLatin2(upnData), mode: 'byte' as const }],
+    { width: 200, margin: 2, errorCorrectionLevel: 'M' },
+  )
 }

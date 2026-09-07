@@ -45,6 +45,8 @@ export default function NewInvoicePage() {
   // razloga na racunu brez DDV; prej se je dalo izbrati 0 %, razloga pa ni bilo.
   const [vatExemptionCode, setVatExemptionCode] = useState('')
   const [vatExemptionCustom, setVatExemptionCustom] = useState('')
+  // PRELET 211: ali naj izbrana klavzula postane privzeta za to podjetje.
+  const [shraniKlavzulo, setShraniKlavzulo] = useState(false)
   const [serviceDate, setServiceDate] = useState('')
   const [serviceDateTo, setServiceDateTo] = useState('')
   const [headerText, setHeaderText] = useState('')
@@ -217,6 +219,23 @@ export default function NewInvoicePage() {
       }
       setLoading(false)
       return
+    }
+    /**
+     * PRELET 211: klavzula postane privzeta za to podjetje.
+     *
+     * Shranimo SELE PO uspesni izdaji - ce bi shranili prej in bi izdaja
+     * padla, bi imelo podjetje privzeto klavzulo z racuna, ki ne obstaja.
+     *
+     * Napake pri shranjevanju ne prikazujemo: racun je izdan in to je
+     * pomembnejse od udobne nastavitve, ki jo je mogoce ponoviti.
+     */
+    if (shraniKlavzulo && vatExemptionCode) {
+      try {
+        await supabase.from('organizations').update({
+          vat_exemption_code: vatExemptionCode,
+          vat_exemption_custom_text: vatExemptionCode === 'custom' ? (vatExemptionCustom || null) : null,
+        }).eq('id', org.id)
+      } catch (e) { console.warn('Privzete klavzule ni bilo mogoce shraniti:', e) }
     }
     posthog.capture(status === 'sent' ? 'invoice_created' : 'invoice_drafted', { invoice_number: numberToUse, amount_total: total })
     router.push('/invoices')
@@ -418,6 +437,18 @@ export default function NewInvoicePage() {
                   </optgroup>
                 ))}
               </select>
+              {/* PRELET 211: shranjevanje privzete klavzule.
+                  Mehanizem za privzeto vrednost je obstajal (organizations
+                  .vat_exemption_code), a je ni bilo mogoce nikjer nastaviti -
+                  nezavezanec za DDV jo je moral izbirati pri VSAKEM racunu. */}
+              {vatExemptionCode && (
+                <label style={{ display:'flex', alignItems:'center', gap:8, marginTop:10, fontSize:12, cursor:'pointer' }}>
+                  <input type="checkbox" checked={shraniKlavzulo}
+                    onChange={e => setShraniKlavzulo(e.target.checked)}
+                    style={{ width:15, height:15 }}/>
+                  <span>Zapomni si to izbiro za vse prihodnje račune</span>
+                </label>
+              )}
               {vatExemptionCode && vatExemptionCode !== 'custom' && (
                 <div style={{ marginTop:'10px', padding:'10px', background:'#F7F6F2', borderRadius:'8px', fontSize:'12px', color:'#444', lineHeight:1.5 }}>
                   <div style={{ marginBottom:'6px' }}>{findVatExemption(vatExemptionCode)?.text}</div>

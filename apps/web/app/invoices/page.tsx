@@ -263,17 +263,48 @@ export default function InvoicesPage() {
   // lahko posledica izbrisanega osnutka ali neuspesne izdaje. Vrzel sama po
   // sebi ni prekrsek, a jo je treba znati pojasniti - zato naj bo vidna
   // TAKOJ, ne sele ob davcnem pregledu.
+  /**
+   * POPRAVLJENO (prelet 210): preverba je poznala SAMO obliko "2026-001".
+   *
+   * Podjetje, ki racune stevilci kot "26-0001", ni imelo nobene ujemajoce
+   * se stevilke - vzorec jih je vse zavrgel, seznam je ostal prazen in
+   * preverba je razglasila, da MANJKAJO PRAV VSE. Uporabnik s 118 pravilno
+   * oznacenimi racuni je dobil opozorilo o sto manjkajocih, ki ga ni bilo
+   * mogoce odpraviti ne odkljukati.
+   *
+   * Zdaj obliko UGOTOVIMO iz obstojecih racunov: vzamemo predpono, ki je
+   * najpogostejsa, in preverjamo samo znotraj nje. Tako preverba deluje pri
+   * "2026-001", "26-0001" in vsaki drugi dosledni obliki - primerja pa
+   * vedno le stevilke iste vrste, saj bi sicer mesala dve zaporedji.
+   */
   const vrzeli = (() => {
-    const leto = new Date().getFullYear()
-    const stevilke = invoices
-      .map(i => String(i.invoice_number || ''))
-      .filter(s => new RegExp(`^${leto}-[0-9]+$`).test(s))
-      .map(s => parseInt(s.split('-')[1], 10))
-      .sort((a, b) => a - b)
-    if (stevilke.length < 2) return []
-    const manjka: number[] = []
+    const razclenjeni = invoices
+      .map(i => String(i.invoice_number || '').trim())
+      .map(s => {
+        const m = s.match(/^(.*?)([0-9]+)$/)
+        if (!m) return null
+        return { predpona: m[1], stevilka: parseInt(m[2], 10), dolzina: m[2].length }
+      })
+      .filter((x): x is { predpona: string; stevilka: number; dolzina: number } => x !== null)
+
+    if (razclenjeni.length < 2) return []
+
+    // Najpogostejsa predpona je tekoce zaporedje; ostalo so izjeme.
+    const steviloPoPredponi = new Map<string, number>()
+    for (const r of razclenjeni) steviloPoPredponi.set(r.predpona, (steviloPoPredponi.get(r.predpona) || 0) + 1)
+    let glavna = ''
+    let najvec = 0
+    for (const [p, n] of steviloPoPredponi) if (n > najvec) { najvec = n; glavna = p }
+
+    const izbrani = razclenjeni.filter(r => r.predpona === glavna)
+    if (izbrani.length < 2) return []
+
+    const stevilke = izbrani.map(r => r.stevilka).sort((a, b) => a - b)
+    const dolzina = izbrani[0].dolzina
+    const obstaja = new Set(stevilke)
+    const manjka: string[] = []
     for (let x = stevilke[0]; x <= stevilke[stevilke.length - 1]; x++) {
-      if (!stevilke.includes(x)) manjka.push(x)
+      if (!obstaja.has(x)) manjka.push(glavna + String(x).padStart(dolzina, '0'))
     }
     return manjka
   })()
@@ -286,7 +317,9 @@ export default function InvoicesPage() {
           <h1 className="font-semibold text-gray-900 mt-0.5">Izdani računi</h1>
           {vrzeli.length > 0 && (
             <div style={{ fontSize: 12, color: '#8a6d1f', background: '#FDF6E3', border: '0.5px solid #E8D9A8', borderRadius: 8, padding: '6px 10px', marginTop: 6, lineHeight: 1.5 }}>
-              V zaporedju številk manjka {vrzeli.length === 1 ? 'številka' : 'jih'}: <b>{vrzeli.map(v => `${new Date().getFullYear()}-${String(v).padStart(3, '0')}`).join(', ')}</b>
+              {/* PRELET 210: `vrzeli` zdaj vsebuje ze cele stevilke v pravi
+                  obliki - sestavljanje iz letnice je odpadlo. */}
+              V zaporedju številk manjka {vrzeli.length === 1 ? 'številka' : 'jih'}: <b>{vrzeli.join(', ')}</b>
               {' · '}Vrzel je običajno posledica izbrisanega osnutka. Za davčni pregled jo je dobro znati pojasniti.
             </div>
           )}
