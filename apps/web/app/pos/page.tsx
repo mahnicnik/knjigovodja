@@ -92,6 +92,26 @@ function vatBreakdownForCart(cart, scale = 1) {
 // ================================================================
 // STATIČNA KONFIGURACIJA (ne gre v DB)
 // ================================================================
+/**
+ * RAZLIKE OD VLOGE (prelet 208)
+ *
+ * V bazo shranimo SAMO tisto, kar odstopa od vloge. Ce bi shranili vseh
+ * sedemnajst pravic, bi bil zapis videti popoln - a bi se poznejsa sprememba
+ * vloge pri tem cloveku ne poznala nikoli.
+ *
+ * Vrne `null`, kadar ni nobenega odstopanja. Tako je v bazi jasno razvidno,
+ * kdo ima izjeme in kdo sledi vlogi.
+ */
+function razlikeOdVloge(vloga, izbrane) {
+  const osnova = (CFG.rolePresets && CFG.rolePresets[vloga]) || {}
+  const izbrano = (izbrane && typeof izbrane === 'object') ? izbrane : {}
+  const razlike = {}
+  for (const kljuc of Object.keys(osnova)) {
+    if (kljuc in izbrano && !!izbrano[kljuc] !== !!osnova[kljuc]) razlike[kljuc] = !!izbrano[kljuc]
+  }
+  return Object.keys(razlike).length ? razlike : null
+}
+
 const CFG = {
   // POPRAVLJENO (16.8.2026): tu je bilo TRDO ZAPISANO ime "ŠIRM fitness&bar".
   // Vsak nov uporabnik je na svoji blagajni videl tuje ime podjetja - v glavi
@@ -487,7 +507,23 @@ function useAuthState(autoLockMs = 60000) {
   const permissions = useMemo(() => {
     if (!user) return {}
     if (user.is_master) return Object.fromEntries(Object.keys(CFG.rolePresets.Lastnik).map(k => [k, true]))
-    return user.permissions || CFG.rolePresets[user.role] || {}
+    /**
+     * VLOGA JE OSNOVA, KLJUKICE SO DODATEK (prelet 208)
+     *
+     * PREJ: `user.permissions || rolePresets[role]` - shranjena dovoljenja so
+     * vlogo NADOMESTILA v celoti. Kdor bi hotel blagajniku dodati eno samo
+     * pravico, bi mu moral prepisati vseh sedemnajst; ob spremembi vloge pa
+     * bi se to ne poznalo nikjer.
+     *
+     * ZDAJ: zdruzimo. Vloga da osnovo, shranjena dovoljenja jo popravijo -
+     * hranimo torej samo RAZLIKE. Ce blagajnik dobi dnevni zakljucek, je v
+     * bazi zapisano `{"dailyClose": true}` in nic drugega; vse ostalo se
+     * naprej sledi vlogi. Ce se pravice vloge kdaj spremenijo, se to pozna
+     * pri vseh, razen tam, kjer je bila izrecno postavljena izjema.
+     */
+    const osnova = CFG.rolePresets[user.role] || {}
+    const dodatki = (user.permissions && typeof user.permissions === 'object') ? user.permissions : {}
+    return { ...osnova, ...dodatki }
   }, [user])
 
   // Obnovitev odklepa po ponovnem nalaganju (26.8.2026).
@@ -10903,10 +10939,20 @@ function StaffSection({ posData }) {
     setSaving(true)
     try {
       if (modal.id) {
-        const { error } = await createClient().from('staff').update({ name:modal.name, role:modal.role, pin:modal.pin, color:modal.color }).eq('id', modal.id)
+        // PRELET 208: shranimo SAMO razlike od vloge - prazen predmet pomeni
+        // "tocno kot vloga". Tako se poznejse spremembe vloge poznajo tudi
+        // pri tem cloveku.
+        const { error } = await createClient().from('staff').update({
+          name:modal.name, role:modal.role, pin:modal.pin, color:modal.color,
+          permissions: razlikeOdVloge(modal.role, modal.permissions),
+        }).eq('id', modal.id)
         if (error) throw error
       } else {
-        const { error } = await createClient().from('staff').insert({ business_id:BUSINESS_ID, name:modal.name, role:modal.role, pin:modal.pin, color:modal.color||'#3a6e8f', active:true })
+        const { error } = await createClient().from('staff').insert({
+          business_id:BUSINESS_ID, name:modal.name, role:modal.role, pin:modal.pin,
+          color:modal.color||'#3a6e8f', active:true,
+          permissions: razlikeOdVloge(modal.role, modal.permissions),
+        })
         if (error) throw error
       }
       setModal(null)
@@ -10957,9 +11003,50 @@ function StaffSection({ posData }) {
             <input value={modal?.name||''} onChange={e=>setModal(p=>({...p,name:e.target.value}))} placeholder="Ana Novak" style={inp} autoFocus/>
           </Field>
           <Field label="Vloga *">
-            <select value={modal?.role||'Blagajnik'} onChange={e=>setModal(p=>({...p,role:e.target.value}))} style={inp}>
+            {/* PRELET 208: ob menjavi vloge pobrisemo izjeme - sicer bi se
+                skrite izjeme prejsnje vloge tiho prenesle na novo. */}
+            <select value={modal?.role||'Blagajnik'} onChange={e=>setModal(p=>({...p,role:e.target.value,permissions:null}))} style={inp}>
               {Object.keys(CFG.rolePresets).map(r => <option key={r} value={r}>{r}</option>)}
             </select>
+          </Field>
+
+          {/* PRELET 208: dovoljenja povrh vloge.
+              Vloga doloci osnovo, tu pa se posamezniku doda ali odvzame.
+              Kljukica, ki odstopa od vloge, je oznacena - tako je na prvi
+              pogled vidno, kje je izjema. */}
+          <Field label="Dovoljenja">
+            <div style={{ fontSize:11, color:T.muted, marginBottom:8, lineHeight:1.5 }}>
+              Vloga <b>{modal?.role||'Blagajnik'}</b> doloci osnovo. Spodaj lahko za to osebo dodate ali odvzamete posamezno pravico.
+            </div>
+            {CFG.permissionGroups.map(skupina => (
+              <div key={skupina.title} style={{ marginBottom:10 }}>
+                <div style={{ fontSize:10, fontWeight:800, color:T.muted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:5 }}>{skupina.title}</div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:5 }}>
+                  {skupina.items.map(([kljuc, oznaka]) => {
+                    const osnova = !!(CFG.rolePresets[modal?.role||'Blagajnik'] || {})[kljuc]
+                    const izjeme = (modal?.permissions && typeof modal.permissions === 'object') ? modal.permissions : {}
+                    const vklopljeno = kljuc in izjeme ? !!izjeme[kljuc] : osnova
+                    const jeIzjema = vklopljeno !== osnova
+                    return (
+                      <label key={kljuc} title={jeIzjema ? 'Odstopa od vloge' : ''}
+                        style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, cursor:'pointer',
+                          padding:'5px 7px', borderRadius:6,
+                          background: jeIzjema ? T.accentSoft : 'transparent',
+                          border: '1px solid ' + (jeIzjema ? T.accent : 'transparent') }}>
+                        <input type="checkbox" checked={vklopljeno}
+                          onChange={e => setModal(p => {
+                            const trenutne = { ...((p?.permissions && typeof p.permissions === 'object') ? p.permissions : {}) }
+                            trenutne[kljuc] = e.target.checked
+                            return { ...p, permissions: trenutne }
+                          })}
+                          style={{ accentColor:T.accent, width:14, height:14 }}/>
+                        <span>{oznaka}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
           </Field>
           <Field label="PIN koda (1-4 mesta) *">
             <input value={modal?.pin||''} onChange={e=>setModal(p=>({...p,pin:e.target.value.replace(/\D/g,'').substring(0,4)}))} placeholder="1234" style={{ ...inp, fontFamily:'monospace', letterSpacing:8, fontSize:20 }} maxLength={4}/>
