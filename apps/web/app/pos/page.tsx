@@ -2943,6 +2943,9 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
    * potrebuje. Zato ga ne podajam kot lastnost, ampak ga premikam sem.
    */
   const [popustVrstice, setPopustVrstice] = React.useState(null)
+  // PRELET 207: vpisani vrednosti, dokler ju blagajnik ne potrdi.
+  const [vnosOdstotek, setVnosOdstotek] = React.useState('')
+  const [vnosZnesek, setVnosZnesek] = React.useState('')
   const [discountOpen, setDiscountOpen] = useState(false)
   const [discountInput, setDiscountInput] = useState('')
   // DODANO (19.8.2026): nacin vnosa popusta - odstotek ali znesek v evrih.
@@ -2988,6 +2991,14 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
           setCart(c => c.map(x => x.lineId === popustVrstice ? { ...x, discountEur: z, discountPct: 0 } : x))
           setPopustVrstice(null)
         }
+        // PRELET 207: uveljavi, kar je vpisano v poljih. Prazno polje pomeni
+        // brez popusta te vrste, zato se drugo ne pobrise po nesreci.
+        const potrdiPopust = () => {
+          const o = Number(String(vnosOdstotek).replace(',', '.')) || 0
+          const z = Number(String(vnosZnesek).replace(',', '.')) || 0
+          if (z > 0) nastaviEur(z)
+          else nastavi(Math.min(100, Math.max(0, o)))
+        }
         return (
           <div onClick={() => setPopustVrstice(null)}
             style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:900, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
@@ -3006,30 +3017,36 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
                       color: Number(vrstica.discountPct||0) === p ? '#fff' : 'inherit' }}>{p}%</button>
                 ))}
               </div>
+              {/* POPRAVLJENO (prelet 207): vpisana vrednost se je uveljavila
+                  SAMO s tipko Enter, gumb pa je bil "Zapri" - kdor je vpisal
+                  popust in kliknil gumb, ga je izgubil. Zdaj polji hranita
+                  vrednost, gumb pa se imenuje "Potrdi" in jo uveljavi. */}
               <div style={{ display:'flex', gap:8, marginBottom:12 }}>
                 <div style={{ flex:1 }}>
                   <label style={{ fontSize:10, color:T.muted, display:'block', marginBottom:3 }}>Odstotek</label>
                   <input type="number" min={0} max={100} step="any" autoFocus
-                    defaultValue={Number(vrstica.discountPct||0) || ''}
-                    onKeyDown={e => { if (e.key === 'Enter') nastavi(Math.min(100, Math.max(0, Number((e.target as any).value) || 0))) }}
+                    value={vnosOdstotek}
+                    onChange={e => { setVnosOdstotek(e.target.value); if (e.target.value) setVnosZnesek('') }}
+                    onKeyDown={e => { if (e.key === 'Enter') potrdiPopust() }}
                     placeholder="%"
                     style={{ width:'100%', padding:'10px 12px', borderRadius:8, border:'1px solid '+T.line, fontSize:14, fontFamily:'inherit' }}/>
                 </div>
                 <div style={{ flex:1 }}>
                   <label style={{ fontSize:10, color:T.muted, display:'block', marginBottom:3 }}>Znesek (€)</label>
                   <input type="number" min={0} step="any"
-                    defaultValue={Number(vrstica.discountEur||0) || ''}
-                    onKeyDown={e => { if (e.key === 'Enter') nastaviEur(Math.max(0, Number((e.target as any).value) || 0)) }}
+                    value={vnosZnesek}
+                    onChange={e => { setVnosZnesek(e.target.value); if (e.target.value) setVnosOdstotek('') }}
+                    onKeyDown={e => { if (e.key === 'Enter') potrdiPopust() }}
                     placeholder="€"
                     style={{ width:'100%', padding:'10px 12px', borderRadius:8, border:'1px solid '+T.line, fontSize:14, fontFamily:'inherit' }}/>
                 </div>
               </div>
               <div style={{ fontSize:10.5, color:T.muted, marginBottom:12, lineHeight:1.5 }}>
-                Znesek se odsteje za celo postavko, ne na kos. Vnos potrdite s tipko Enter.
+                Znesek se odsteje za celo postavko, ne na kos.
               </div>
               <div style={{ display:'flex', gap:8 }}>
                 <button onClick={() => { setCart(c => c.map(x => x.lineId === popustVrstice ? { ...x, discountPct: 0, discountEur: 0 } : x)); setPopustVrstice(null) }} style={{ flex:1, padding:'11px 0', borderRadius:9, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontFamily:'inherit', fontSize:13 }}>Brez popusta</button>
-                <button onClick={() => setPopustVrstice(null)} style={{ flex:1, padding:'11px 0', borderRadius:9, border:'none', background:T.accent, color:'#fff', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:13 }}>Zapri</button>
+                <button onClick={potrdiPopust} style={{ flex:1, padding:'11px 0', borderRadius:9, border:'none', background:T.accent, color:'#fff', cursor:'pointer', fontFamily:'inherit', fontWeight:700, fontSize:13 }}>Potrdi</button>
               </div>
             </div>
           </div>
@@ -3065,7 +3082,11 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
                 </button>
                 {/* PRELET 201: popust SAMO na to postavko. Popust na celoten
                     nakup ostaja spodaj; oba se lahko uporabita hkrati. */}
-                <button onClick={() => setPopustVrstice(l.lineId)}
+                <button onClick={() => {
+                    setVnosOdstotek(Number(l.discountPct||0) ? String(l.discountPct) : '')
+                    setVnosZnesek(Number(l.discountEur||0) ? String(l.discountEur) : '')
+                    setPopustVrstice(l.lineId)
+                  }}
                   title="Popust na to postavko"
                   style={{ width:24, height:24, borderRadius:6, marginLeft:2, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700,
                     border: '1px solid ' + (Number(l.discountPct||0) > 0 || Number(l.discountEur||0) > 0 ? T.accent : T.line),
@@ -14694,6 +14715,24 @@ function KlasikApp() {
   const [sellPackageModal, setSellPackageModal] = useState(null)
   const [heldOrdersOpen, setHeldOrdersOpen] = useState(false)
   const [heldOrders, setHeldOrders] = useState<any[]>([])
+
+  /**
+   * ŠTEVEC SHRANJENIH RAČUNOV (prelet 207)
+   *
+   * Gumb je stevilo prikazal SELE PO kliku - dokler ga nihce ni odprl, ni
+   * bilo videti, da je kaj shranjeno. Naročilo, shranjeno s pritiskom na
+   * "Shrani" namesto "Placaj", je tako mizo drzalo zasedeno in tiho visel
+   * po vec dni; eno je bilo odkrito sele po dveh dneh.
+   *
+   * Zdaj se preberejo ob zagonu in ob vsaki osvezitvi podatkov.
+   */
+  useEffect(() => {
+    let ustavljeno = false
+    pos.orders.getHeldOrders()
+      .then(o => { if (!ustavljeno) setHeldOrders(o || []) })
+      .catch(() => {})
+    return () => { ustavljeno = true }
+  }, [posData.loading])
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 30000); return () => clearInterval(t) }, [])
   useEffect(() => { if (!nav.includes(screen)) setScreen(nav[0] || 'sale') }, [profileId])
