@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { zgradiERacunXml } from '@/lib/e-racun'
+import { zgradiESlogXml } from '@/lib/e-slog'
 
 /**
- * PRENOS E-RAČUNA (EN 16931 / UBL 2.1)
+ * PRENOS E-RAČUNA (e-SLOG 2.0)
  *
- * Vrne datoteko XML, ki jo uporabnik naloži v svojo spletno banko ali pri
- * ponudniku e-poti. Neposredne oddaje ta pot NE opravlja - portal UJPeRacun
+ * Vrne datoteko XML, ki jo uporabnik nalozi v spletno banko ali pri
+ * ponudniku e-poti. Neposredne oddaje na UJP ta pot NE opravlja - portal
  * nalozenih datotek ne sprejema.
  *
  * Od 1.1.2028 bo tak zapis obvezen za vse racune med podjetji (ZIERDED).
@@ -27,58 +27,52 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
 
     const { data: racun } = await supabase
       .from('issued_invoices').select('*').eq('id', id).maybeSingle()
-    if (!racun) return NextResponse.json({ error: 'Racun ni najden' }, { status: 404 })
+    if (!racun) return NextResponse.json({ error: 'Račun ni najden' }, { status: 404 })
+
+    if (racun.status === 'draft') {
+      return NextResponse.json({ error: 'Osnutek ni izdan račun. Najprej ga izdajte.' }, { status: 400 })
+    }
 
     const { data: org } = await supabase
       .from('organizations').select('*').eq('id', racun.org_id).maybeSingle()
     if (!org) return NextResponse.json({ error: 'Organizacija ni najdena' }, { status: 404 })
 
-    // Osnutek ni racun - e-racuna zanj ne izdajamo.
-    if (racun.status === 'draft') {
-      return NextResponse.json({ error: 'Osnutek ni izdan racun. Najprej ga izdajte.' }, { status: 400 })
-    }
+    const postavke = (Array.isArray(racun.line_items) ? racun.line_items : []).map((p: any) => ({
+      opis: String(p.description ?? ''),
+      kolicina: Number(p.quantity ?? 1),
+      cenaBrezDdv: Number(p.unit_price ?? 0),
+      stopnjaDdv: Number(p.vat_rate ?? 22),
+      popustOdstotek: Number(p.discount_pct ?? 0),
+    }))
 
-    const postavke = (Array.isArray(racun.line_items) ? racun.line_items : []).map((p: any) => {
-      // Popust na postavko vracunamo v ceno - norma ga sicer pozna, a ga
-      // podpremo sele, ko bo potrjeno, da ga prejemniki pravilno berejo.
-      const popust = Number(p.discount_pct ?? 0)
-      const cena = Number(p.unit_price ?? 0) * (1 - popust / 100)
-      return {
-        opis: String(p.description ?? ''),
-        kolicina: Number(p.quantity ?? 1),
-        cenaBrezDdv: cena,
-        stopnjaDdv: Number(p.vat_rate ?? 22),
-      }
-    })
+    const davcnaBrez = String(org.tax_number || '').replace(/^SI/i, '')
 
-    const xml = zgradiERacunXml({
+    const xml = zgradiESlogXml({
       stevilka: racun.invoice_number,
       datumIzdaje: String(racun.issue_date),
       datumZapadlosti: racun.due_date ? String(racun.due_date) : null,
-      datumStoritve: racun.service_date ? String(racun.service_date) : null,
+      datumDobave: racun.service_date ? String(racun.service_date) : null,
       sklic: racun.reference || null,
       opomba: racun.notes || null,
       izdajatelj: {
         naziv: org.name,
-        naslov: org.address || '',
+        naslov: org.address || null,
         posta: org.post_code || null,
         kraj: org.city || null,
-        davcna: String(org.tax_number || '').replace(/^SI/i, ''),
-        zavezanecZaDdv: !!org.vat_registered,
+        davcna: davcnaBrez,
+        // ID za DDV se navede SAMO pri zavezancu - sicer prejemnik pricakuje
+        // odbitek DDV, ki ga na racunu ni.
+        idZaDdv: org.vat_registered ? `SI${davcnaBrez}` : null,
         iban: org.iban || null,
         bic: org.bic || null,
       },
-      prejemnik: {
+      kupec: {
         naziv: racun.client_name,
         naslov: racun.client_address || null,
         davcna: racun.client_tax_number || null,
         idZaDdv: racun.client_vat_number || null,
-        email: racun.client_email || null,
       },
       postavke,
-      osnova: Number(racun.amount_net || 0),
-      ddv: Number(racun.vat_amount || 0),
-      skupaj: Number(racun.amount_total || 0),
       klavzulaOprostitve: racun.vat_exemption_text || null,
     })
 
@@ -91,6 +85,6 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     })
   } catch (e: any) {
     console.error('e-racun:', e)
-    return NextResponse.json({ error: 'E-racuna ni bilo mogoce pripraviti.' }, { status: 500 })
+    return NextResponse.json({ error: 'E-računa ni bilo mogoče pripraviti.' }, { status: 500 })
   }
 }
