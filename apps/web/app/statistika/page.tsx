@@ -49,6 +49,9 @@ export default function StatistikaPage() {
   const [pieData, setPieData] = useState<any[]>([])
   const [invoiceStats, setInvoiceStats] = useState({ total:0, paid:0, unpaid:0, overdue:0 })
   const [totals, setTotals] = useState({ revenue:0, expenses:0, profit:0, avgMonth:0 })
+  // PRELET 218: izbrani vir prihodka in vsote po virih za izbrano obdobje.
+  const [virPrihodka, setVirPrihodka] = useState<'skupaj' | 'portal' | 'blagajna' | 'drugo'>('skupaj')
+  const [vsotaPoViru, setVsotaPoViru] = useState({ racuni:0, blagajna:0, drugo:0 })
   const supabase = createClient()
   const now = new Date()
   const currentYear = now.getFullYear()
@@ -75,7 +78,9 @@ export default function StatistikaPage() {
       // DODANO (30.7.2026): KPO prihodki (POS, banka, kartice...) - SAMO
       // brez invoice_id (izognemo se dvojnemu stetju s placili ze
       // prestetih racunov, ista varovalka kot povsod drugod danes).
-      supabase.from('kpo_entries').select('income, entry_date').eq('org_id', o.id)
+      // PRELET 218: dodana `category` - brez nje ni mogoce lociti
+      // blagajniskega prometa od bancnih in karticnih prilivov.
+      supabase.from('kpo_entries').select('income, entry_date, category').eq('org_id', o.id)
         .eq('entry_type', 'income').is('invoice_id', null)
         .gte('entry_date', yearStart).lte('entry_date', yearEnd),
       // DODANO (30.7.2026): KPO stroski, simetricno - SAMO brez receipt_id.
@@ -93,12 +98,26 @@ export default function StatistikaPage() {
     const allMonthly = MONTHS.map((name, i) => {
       const m = String(i+1).padStart(2,'0')
       const monthStr = `${currentYear}-${m}`
-      const rev = invoices
+      /**
+       * PRIHODEK PO VIRIH (prelet 218)
+       *
+       * Statistika je blagajniski promet ze stela, a ga ni locila od
+       * bancnih in karticnih prilivov - iz grafa ni bilo razvidno, koliko
+       * prinese blagajna in koliko izdani racuni.
+       *
+       * Enaka razdelitev kot na nadzorni plosci (prelet 217), da se stevilki
+       * med stranema ujemata.
+       */
+      const revPortal = invoices
         .filter((inv: any) => inv.issue_date?.startsWith(monthStr))
         .reduce((s: number, inv: any) => s + Number(inv.amount_net), 0)
-        + kpoIncomeOnly
-        .filter((e: any) => e.entry_date?.startsWith(monthStr))
+      const kpoMeseca = kpoIncomeOnly.filter((e: any) => e.entry_date?.startsWith(monthStr))
+      const jeBlagajna = (e: any) => e.category === 'pos_prodaja' || e.category === 'pos_storitve'
+      const revBlagajna = kpoMeseca.filter(jeBlagajna)
         .reduce((s: number, e: any) => s + Number(e.income || 0), 0)
+      const revDrugo = kpoMeseca.filter((e: any) => !jeBlagajna(e))
+        .reduce((s: number, e: any) => s + Number(e.income || 0), 0)
+      const rev = revPortal + revBlagajna + revDrugo
       const exp = receipts
         .filter((r: any) => r.receipt_date?.startsWith(monthStr))
         .reduce((s: number, r: any) => s + Number(r.amount_net), 0)
@@ -107,6 +126,10 @@ export default function StatistikaPage() {
         .reduce((s: number, e: any) => s + Number(e.expense || 0), 0)
       return {
         name,
+        // PRELET 218: razclenitev za preklop; `Prihodki` ostane sestevek.
+        Racuni: Math.round(revPortal),
+        Blagajna: Math.round(revBlagajna),
+        Drugo: Math.round(revDrugo),
         Prihodki: Math.round(rev),
         Odhodki: Math.round(exp),
         Dobiček: Math.round(rev - exp),
@@ -150,6 +173,13 @@ export default function StatistikaPage() {
 
     // Skupno
     const totalRev = filtered.reduce((s, m) => s + m.Prihodki, 0)
+    // PRELET 218: vsote po virih za IZBRANO obdobje - da se gumbi ujemajo
+    // s tem, kar je na grafu, tudi ko preklopis na cetrtletje ali leto.
+    setVsotaPoViru({
+      racuni: Math.round(filtered.reduce((s: number, m: any) => s + (m.Racuni || 0), 0)),
+      blagajna: Math.round(filtered.reduce((s: number, m: any) => s + (m.Blagajna || 0), 0)),
+      drugo: Math.round(filtered.reduce((s: number, m: any) => s + (m.Drugo || 0), 0)),
+    })
     const totalExp = filtered.reduce((s, m) => s + m.Odhodki, 0)
     const monthCount = filtered.length
     setTotals({
@@ -200,7 +230,35 @@ export default function StatistikaPage() {
 
         {/* Summary cards */}
         <div style={{ display:'flex', flexWrap:'wrap', gap:'12px', marginBottom:'24px' }}>
-          <StatCard label="Prihodki" value={`€${totals.revenue.toLocaleString()}`} sub="Brez DDV" color="#27500A" />
+          {/* PRELET 218: preklop med viri, enak kot na nadzorni plosci.
+              Gumbi se pokazejo le, kadar je kaj za locevati. */}
+          <div>
+            <StatCard
+              label={virPrihodka === 'skupaj' ? 'Prihodki' : `Prihodki — ${virPrihodka === 'portal' ? 'računi' : virPrihodka === 'blagajna' ? 'blagajna' : 'drugo'}`}
+              value={`€${(virPrihodka === 'portal' ? vsotaPoViru.racuni
+                        : virPrihodka === 'blagajna' ? vsotaPoViru.blagajna
+                        : virPrihodka === 'drugo' ? vsotaPoViru.drugo
+                        : totals.revenue).toLocaleString()}`}
+              sub="Brez DDV" color="#27500A" />
+            {(vsotaPoViru.blagajna > 0 || vsotaPoViru.drugo > 0) && (
+              <div style={{ display:'flex', flexWrap:'wrap', gap:4, marginTop:6 }}>
+                {([
+                  ['skupaj', 'Skupaj', totals.revenue],
+                  ['portal', 'Računi', vsotaPoViru.racuni],
+                  ['blagajna', 'Blagajna', vsotaPoViru.blagajna],
+                  ['drugo', 'Drugo', vsotaPoViru.drugo],
+                ] as const).filter(([k, , z]) => k === 'skupaj' || z > 0).map(([kljuc, oznaka]) => (
+                  <button key={kljuc} onClick={() => setVirPrihodka(kljuc)}
+                    style={{
+                      padding:'3px 9px', borderRadius:6, fontSize:11, fontWeight:600, cursor:'pointer',
+                      fontFamily:'inherit', border:'1px solid ' + (virPrihodka === kljuc ? '#27500A' : '#e5e7eb'),
+                      background: virPrihodka === kljuc ? '#27500A' : '#fff',
+                      color: virPrihodka === kljuc ? '#fff' : '#666',
+                    }}>{oznaka}</button>
+                ))}
+              </div>
+            )}
+          </div>
           <StatCard label="Odhodki" value={`€${totals.expenses.toLocaleString()}`} sub="Brez DDV" color="#A32D2D" />
           <StatCard label="Dobiček" value={`€${totals.profit.toLocaleString()}`} sub="Prihodki − odhodki" color={totals.profit >= 0 ? '#0D1F12' : '#A32D2D'} />
           <StatCard label="Povprečje/mes" value={`€${totals.avgMonth.toLocaleString()}`} sub="Prihodki" color="#0D1F12" />
@@ -230,7 +288,10 @@ export default function StatistikaPage() {
                     animacija pa se ob dvojnem priklopu (React) zatakne na zacetku.
                     Ker gre za poslovni pregled in ne za predstavitev, jo
                     izklopimo - graf se izrise takoj in vedno. */}
-                <Bar dataKey="Prihodki" fill="#3B6D11" radius={[3,3,0,0]} maxBarSize={24}  isAnimationActive={false} />
+                {/* PRELET 218: stolpec sledi izbranemu viru, da se graf in
+                    stevilka nad njim ne razhajata. */}
+                <Bar dataKey={virPrihodka === 'portal' ? 'Racuni' : virPrihodka === 'blagajna' ? 'Blagajna' : virPrihodka === 'drugo' ? 'Drugo' : 'Prihodki'}
+                  fill="#3B6D11" radius={[3,3,0,0]} maxBarSize={24} isAnimationActive={false} />
                 <Bar dataKey="Odhodki" fill="#F09595" radius={[3,3,0,0]} maxBarSize={24}  isAnimationActive={false} />
                 <Bar dataKey="Dobiček" fill="#EF9F27" radius={[3,3,0,0]} maxBarSize={24}  isAnimationActive={false} />
               </BarChart>
