@@ -229,19 +229,57 @@ export default function PosScreen() {
     if (cart.length === 0) return;
     setPaying(true);
     try {
+      /**
+       * IZMENA MORA BITI ODPRTA (prelet 225)
+       *
+       * Mobilna blagajna izmene doslej ni poznala. Prodaja je tekla mimo
+       * blagajniskega dne, zato promet s telefona NI prisel ne v vmesno
+       * stanje, ne v Z-obracun in ne v knjigo prihodkov - prenos v KPO se
+       * namrec sprozi ob zakljucku izmene.
+       *
+       * To ni bila napaka prikaza, ampak manjkajoc prihodek v evidenci.
+       */
+      const { data: izmena } = await supabase
+        .from('cash_sessions')
+        .select('id')
+        .eq('business_id', auth!.businessId)
+        .eq('status', 'open')
+        .limit(1)
+        .maybeSingle();
+
+      if (!izmena) {
+        setPaying(false);
+        Alert.alert('Blagajna ni odprta',
+          'Pred prodajo odprite blagajno. Brez odprte izmene promet ne bi prišel v dnevni obračun ne v knjigo prihodkov.');
+        return;
+      }
+
+      /**
+       * NAROČILO SKOZI ISTO POT KOT SPLETNA BLAGAJNA (prelet 225)
+       *
+       * Prej je mobilna zapisala narocilo NEPOSREDNO s `status: 'paid'` in
+       * placilo posebej. S tem je zaobsla `pay_order` - funkcijo, v kateri
+       * so vsi popravki zadnjih tednov: pravilno zakljucevanje racuna,
+       * upostevanje popusta, sprostitev mize, zapis v dnevnik.
+       *
+       * Zdaj narocilo nastane ODPRTO, vrstice se vpisejo, nato pa placilo
+       * opravi `pay_order`. Vsak prihodnji popravek te funkcije bo tako
+       * samodejno veljal za obe blagajni.
+       */
       const { data: order, error: orderError } = await supabase.from('orders').insert({
         business_id: auth!.businessId,
-        status: 'paid',
-        total,
-        subtotal,
-        discount_amount: discountAmt,
-        closed_at: new Date().toISOString(),
+        status: 'open',
+        table_id: tableId !== 'quick' ? tableId : null,
+        // Popust hranimo v IZVORNEM stolpcu - `discount_amount` in `total`
+        // izracuna sprozilec v bazi (prelet 178).
+        discount_fixed: discountAmt || 0,
       }).select().single();
       if (orderError || !order) throw new Error(orderError?.message);
 
-      await supabase.from('order_lines').insert(
+      const { error: linesError } = await supabase.from('order_lines').insert(
         cart.map(l => ({
           order_id: order.id,
+          item_id: l.item.id,
           name: l.item.name,
           qty: l.qty,
           unit_price: l.item.price,
@@ -249,17 +287,28 @@ export default function PosScreen() {
           total: l.item.price * l.qty,
         }))
       );
-      await supabase.from('payments').insert({
-        order_id: order.id,
-        method: payMethod,
-        amount: total,
-        business_id: auth!.businessId,
-      });
+      if (linesError) throw new Error(linesError.message);
 
-      if (tableId !== 'quick') {
-      supabase.from('tables').update({ status: 'free' }).eq('id', tableId);
-    }
-    clearCart(tableId);
+      // PRELET 225: dnevna stevilka za kuhinjo - odloci baza, ker ve, kateri
+      // artikli so oznaceni kot kuhinjski.
+      try {
+        await supabase.rpc('dodeli_kuhinjsko_stevilko', { p_order_id: order.id });
+      } catch { /* ni usodno za placilo */ }
+
+      const { error: payError } = await supabase.rpc('pay_order', {
+        p_order_id: order.id,
+        p_method: payMethod,
+        p_amount: total,
+        p_received: payMethod === 'cash' && given ? Number(given) : null,
+        p_furs: fursEnabled,
+        p_cashier_id: null,
+      });
+      if (payError) throw new Error(payError.message);
+
+      // PRELET 225: mize NE sproscamo rocno - to opravi `pay_order`, ki jo
+      // sprosti sele, ko je racun res placan. Rocno sproscanje je bilo vzrok,
+      // da so mize ostajale prazne, naročila pa odprta.
+      clearCart(tableId);
       setPayModal(false);
       setCartOpen(false);
       setGiven('');
