@@ -29,6 +29,23 @@
  *   G_SG50  skupni zneski
  *   G_SG52  razclenitev DDV
  *
+ * DAVCNA KATEGORIJA (D_5305) - po uradnem pojasnilu Nacionalnega foruma:
+ *   S  obicajna stopnja
+ *   Z  niclna stopnja
+ *   E  oproscen DDV (mali davcni zavezanec, 94. clen)
+ *   AE obrnjena davcna obveznost
+ *   O  ni predmet DDV
+ *
+ * DAVCNE STEVILKE - po pojasnilu z 25.11.2020:
+ *   Zavezanec:    VA = SI12345678  IN  AHP = SI12345678  (oba S PREDPONO)
+ *   Nezavezanec:  samo AHP = 12345678  (BREZ predpone, brez VA)
+ *   Pri kodi O se navede SAMO AHP.
+ *
+ * Prejeti racun ponudnika 1 Klik tega ne upostava: kupcu z veljavno
+ * identifikacijsko stevilko je zapisal AHP brez predpone. Tudi shemi ne
+ * ustreza - ima prazne elemente. Zato se ravnamo po pojasnilu in shemi,
+ * ne po njem.
+ *
  * SIFRE ZNESKOV (D_5025), preverjene na zgledu:
  *   203 vrednost postavke PO popustu · 125 osnova · 124 DDV · 204 popust
  *   79 sestevek postavk · 260 popusti skupaj · 389 osnova skupaj
@@ -80,6 +97,15 @@ const z = (n: number): string => (Math.round((Number(n) || 0) * 100) / 100).toFi
 const moa = (sifra: number, znesek: number) =>
   `<S_MOA><C_C516><D_5025>${sifra}</D_5025><D_5004>${z(znesek)}</D_5004></C_C516></S_MOA>`
 
+/**
+ * Davcna kategorija po uradnem pojasnilu. Nezavezanec izda racun s kodo E
+ * in klavzulo o razlogu - enako kot na papirnem racunu.
+ */
+function davcnaKategorija(stopnja: number, zavezanec: boolean): string {
+  if (!zavezanec) return 'E'
+  return (Number(stopnja) || 0) > 0 ? 'S' : 'Z'
+}
+
 const dtm = (sifra: number, datum: string) =>
   `<S_DTM><C_C507><D_2005>${sifra}</D_2005><D_2380>${x(datum)}</D_2380></C_C507></S_DTM>`
 
@@ -88,9 +114,17 @@ const rff = (koda: string, vrednost: string) =>
   `<G_SG3><S_RFF><C_C506><D_1153>${koda}</D_1153><D_1154>${x(vrednost)}</D_1154></C_C506></S_RFF></G_SG3>`
 
 function stranka(vloga: 'SE' | 'BY' | 'DP', s: ERacunStranka): string {
+  /**
+   * Po pojasnilu Nacionalnega foruma (25.11.2020):
+   *   zavezanec   -> VA in AHP, OBA s predpono SI
+   *   nezavezanec -> samo AHP, BREZ predpone
+   * Praznih elementov ne izpisemo - shema jih zavrne.
+   */
+  const jeZavezanec = !!s.idZaDdv
+  const davcnaZaAhp = jeZavezanec ? s.idZaDdv! : (s.davcna || '')
   const sklici = [
-    s.idZaDdv ? rff('VA', s.idZaDdv) : '',
-    s.davcna ? rff('AHP', s.davcna) : '',
+    jeZavezanec ? rff('VA', s.idZaDdv!) : '',
+    davcnaZaAhp ? rff('AHP', davcnaZaAhp) : '',
     s.maticna ? rff('0199', s.maticna) : '',
   ].join('')
 
@@ -118,6 +152,8 @@ function stranka(vloga: 'SE' | 'BY' | 'DP', s: ERacunStranka): string {
 }
 
 export function zgradiESlogXml(d: ERacunPodatki): string {
+  // Zavezanost se doloca po IZDAJATELJU - on obracunava DDV.
+  const zavezanecZaDdv = !!d.izdajatelj.idZaDdv
   // Postavke: vrednost pred popustom, popust, osnova, DDV.
   let sestevekPostavk = 0, popustiSkupaj = 0, osnovaSkupaj = 0, ddvSkupaj = 0
   const poStopnji = new Map<number, { osnova: number; ddv: number }>()
@@ -152,7 +188,8 @@ export function zgradiESlogXml(d: ERacunPodatki): string {
       // navede posebej v G_SG39, sestevek pred popusti pa v MOA 79.
       `<G_SG27>${moa(203, osnova)}</G_SG27>` +
       `<G_SG34><S_TAX><D_5283>7</D_5283><C_C241><D_5153>VAT</D_5153></C_C241>` +
-      `<C_C243><D_5278>${z(stopnja)}</D_5278></C_C243></S_TAX>` +
+      `<C_C243><D_5278>${z(stopnja)}</D_5278></C_C243>` +
+      `<D_5305>${davcnaKategorija(stopnja, zavezanecZaDdv)}</D_5305></S_TAX>` +
       moa(125, osnova) + moa(124, ddv) + `</G_SG34>` +
       popustBlok +
       `</G_SG26>`
@@ -162,7 +199,8 @@ export function zgradiESlogXml(d: ERacunPodatki): string {
 
   const razclenitevDdv = [...poStopnji.entries()].map(([stopnja, v]) =>
     `<G_SG52><S_TAX><D_5283>7</D_5283><C_C241><D_5153>VAT</D_5153></C_C241>` +
-    `<C_C243><D_5278>${z(stopnja)}</D_5278></C_C243></S_TAX>` +
+    `<C_C243><D_5278>${z(stopnja)}</D_5278></C_C243>` +
+    `<D_5305>${davcnaKategorija(stopnja, zavezanecZaDdv)}</D_5305></S_TAX>` +
     moa(125, v.osnova) + moa(124, v.ddv) + `</G_SG52>`).join('')
 
   const datumDobave = d.datumDobave || d.datumIzdaje
