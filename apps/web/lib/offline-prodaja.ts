@@ -80,11 +80,29 @@ function kljucStevca(premiseCode: string, deviceCode: string, leto: number): str
   return `${PREDPONA_STEVCA}:${premiseCode}:${deviceCode}:${leto}`
 }
 
-export function zabeleziZadnjoStevilko(premiseCode: string, deviceCode: string, leto: number, stevilka: number): void {
+/**
+ * Zapise zadnjo porabljeno stevilko.
+ *
+ * POPRAVLJENO (prelet 224): prej je stevec sel LAHKO SAMO NAVZGOR
+ * (`if (stevilka > prej)`). Varovalka je bila mišljena proti podvajanju,
+ * ob spremembi nacina stevilcenja pa se obrne proti nam:
+ *
+ * Ob preklopu iz "central" na "device" zacne stevec v BAZI znova, lokalni
+ * v brskalniku pa ostane pri stari, visji vrednosti. Blagajna nato kaze
+ * napacno naslednjo stevilko - pri nas 496 namesto 490 - in ob prvi prodaji
+ * BREZ POVEZAVE bi nastala sestmestna vrzel v zaporedju.
+ *
+ * `poravnaj` zato dovoli tudi znizanje, in sicer SAMO takrat, ko stevilko
+ * potrdi streznik. Pri obicajnem zapisu ostane varovalka nedotaknjena.
+ */
+export function zabeleziZadnjoStevilko(
+  premiseCode: string, deviceCode: string, leto: number, stevilka: number,
+  poravnaj = false,
+): void {
   try {
     const k = kljucStevca(premiseCode, deviceCode, leto)
     const prej = Number(localStorage.getItem(k) || 0)
-    if (stevilka > prej) localStorage.setItem(k, String(stevilka))
+    if (poravnaj || stevilka > prej) localStorage.setItem(k, String(stevilka))
   } catch {}
 }
 
@@ -98,7 +116,10 @@ export function zabeleziIzPolneStevilke(polna: string): void {
   if (deli.length !== 3) return
   const n = parseInt(deli[2], 10)
   if (!Number.isInteger(n) || n <= 0) return
-  zabeleziZadnjoStevilko(deli[0], deli[1], new Date().getFullYear(), n)
+  // PRELET 224: to stevilko je podelil STREZNIK, zato je merodajna - tudi ce
+  // je nizja od lokalne. Tako se razkorak po spremembi nacina stevilcenja
+  // popravi sam ob prvi prodaji s povezavo.
+  zabeleziZadnjoStevilko(deli[0], deli[1], new Date().getFullYear(), n, true)
 }
 
 /**
