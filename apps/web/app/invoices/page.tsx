@@ -495,6 +495,24 @@ export default function InvoicesPage() {
                       >
                         📋 Podvoji račun
                       </button>
+
+                      {/* PRELET 220: prenos e-racuna po normi EN 16931.
+                          Od 1.1.2028 so e-racuni med podjetji obvezni (ZIERDED).
+                          Datoteko uporabnik nalozi v spletno banko ali pri
+                          ponudniku e-poti - neposredne oddaje na UJP ta pot NE
+                          opravlja, ker portal nalozenih datotek ne sprejema.
+
+                          Pri osnutkih gumba ne kazemo: osnutek ni izdan racun. */}
+                      {inv.status !== 'draft' && (
+                        <button
+                          onClick={() => { window.location.href = `/api/invoices/${inv.id}/eracun`; setActionInv(null) }}
+                          title="XML za banko ali ponudnika e-poti"
+                          style={{ width: '100%', padding: '10px 16px', textAlign: 'left', fontSize: '13px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                          className="hover:bg-gray-50"
+                        >
+                          🧾 Prenesi e-račun (XML)
+                        </button>
+                      )}
                       {inv.status !== 'cancelled' && !inv.invoice_number?.includes('-S') && !inv.invoice_number?.includes('-D') && (
                         <>
                           <div style={{ height: '0.5px', background: '#eee', margin: '4px 0' }} />
