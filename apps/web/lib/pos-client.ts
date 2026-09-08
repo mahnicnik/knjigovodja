@@ -486,18 +486,34 @@ export const pos = {
         //    je bila v KPO knjizena kot "prodaja izdelkov".
         //  • `vat_exemption_code` prinese razlog za neobracunan DDV, ki ga
         //    racunovodja doslej iz knjige ni videl.
-        .select('id, closed_at, cashier_id, order_lines(qty, unit_price, total, vat_rate, voided, item_id, service_id, items(bookable, vat_exemption_code, vat_exemption_custom_text))')
+        // PRELET 216: dodana `subtotal` in `discount_amount` - brez njiju
+        // prenos ne pozna popusta na CELEM racunu in knjizi prevec.
+        .select('id, closed_at, cashier_id, subtotal, discount_amount, order_lines(qty, unit_price, total, vat_rate, voided, item_id, service_id, items(bookable, vat_exemption_code, vat_exemption_custom_text))')
         .eq('business_id', BUSINESS_ID)
         .eq('status', 'paid')
         .gte('closed_at', sessionFrom)
         .lte('closed_at', sessionTo)
       if (!orders || orders.length === 0) return null
 
-      // Filtriraj na narocila TE seje (tega blagajnika). Ce staffId ni podan
-      // (stare seje brez staff_id), obdrzimo staro obnasanje - vsa narocila.
-      const mojaNarocila = staffId
-        ? (orders as any[]).filter(o => o.cashier_id === staffId)
-        : (orders as any[])
+      /**
+       * POPRAVLJENO (prelet 216): PRENOS ZAJAME CELOTNO IZMENO.
+       *
+       * NAPAKA: filtriralo se je po `cashier_id === staffId`, torej po osebi,
+       * ki je izmeno ODPRLA. Vse, kar so izdali drugi blagajniki, v knjigo
+       * prihodkov ni prislo NIKOLI - ne ob zakljucku, ne pozneje.
+       *
+       * Posledica ni bila le napacen prikaz: manjkal je PRIHODEK v uradni
+       * evidenci. V enem tednu je tako izpadlo okoli 500 EUR prometa.
+       *
+       * Enako napako sem 3.9.2026 odpravil v `getSessionStats` (prelet 204),
+       * tu pa je ostala. Filter je bil uveden 16.8.2026, ko je imel vsak
+       * blagajnik svojo izmeno; od preleta 196 je izmena SKUPNA za podjetje,
+       * zato mora biti skupen tudi prenos.
+       *
+       * `staffId` ostaja v podpisu, ker ga klici se posiljajo.
+       */
+      void staffId
+      const mojaNarocila = orders as any[]
       if (mojaNarocila.length === 0) return null
 
       let productNet = 0, productVat = 0
@@ -517,8 +533,23 @@ export const pos = {
           // v knjigi bi bil prenizek. Stolpec total jih ze vsebuje.
           const lineTotal = l.total != null ? Number(l.total) : Number(l.qty || 0) * Number(l.unit_price || 0)
           const rate = Number(l.vat_rate ?? 22)
-          const net = rate > 0 ? lineTotal / (1 + rate / 100) : lineTotal
-          const vat = lineTotal - net
+          /**
+           * POPUST NA CELEM RACUNU (prelet 216)
+           *
+           * Prenos je sestel VRSTICE, popust na racunu pa je zapisan na
+           * NAROCILU - zato ga ni poznal in je v knjigo prihodkov knjizil
+           * vec, kot je gost placal.
+           *
+           * Popust razdelimo med vrstice sorazmerno z njihovo vrednostjo -
+           * enako, kot to pocne baza pri izracunu DDV in kot smo popravili
+           * porocilo po artiklih (prelet 181).
+           */
+          const osnovaRacuna = Number((o as any).subtotal || 0)
+          const popustRacuna = Number((o as any).discount_amount || 0)
+          const faktor = osnovaRacuna > 0 ? Math.max(0, (osnovaRacuna - popustRacuna) / osnovaRacuna) : 1
+          const znesekPoPopustu = lineTotal * faktor
+          const net = rate > 0 ? znesekPoPopustu / (1 + rate / 100) : znesekPoPopustu
+          const vat = znesekPoPopustu - net
 
           // POPRAVLJENO (19.8.2026): prej samo `!!l.service_id`. Storitev se ob
           // shranjevanju sinhronizira v katalog artiklov in se proda kot ARTIKEL,

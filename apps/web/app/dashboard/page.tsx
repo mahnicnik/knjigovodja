@@ -201,8 +201,17 @@ export default function DashboardPage() {
   // le prikaz na mestu, kjer lastnik dejansko pogleda.
   const [posOpozorila, setPosOpozorila] = useState<any[]>([])
   const [emailConnectionsCount, setEmailConnectionsCount] = useState(0)
+  /**
+   * PRELET 217: izbrani vir prihodka na kartici.
+   * Privzeto skupaj - to je stevilka, ki jo vecina isce; razclenitev je en
+   * klik stran in se ne vsiljuje tistim, ki blagajne nimajo.
+   */
+  const [virPrihodka, setVirPrihodka] = useState<'skupaj' | 'portal' | 'blagajna' | 'drugo'>('skupaj')
+
   const [data, setData] = useState({
     revenue: 0, expenses: 0, vatDue: 0, kpoReceivedMonth: 0,
+    // PRELET 217: prihodek po virih (portal / blagajna / drugo).
+    prihodekPortal: 0, prihodekBlagajna: 0, prihodekDrugo: 0,
     unpaidCount: 0, unpaidAmount: 0,
     overdueAmount: 0, overdueCount: 0,
     yearRevenue: 0,
@@ -416,6 +425,31 @@ export default function DashboardPage() {
       // kazal stalno izgubo. Zdaj po ISTEM nacelu kot letni izracun: racuni +
       // KPO vnosi brez invoice_id (POS, banka, kartice).
       const revenue = monthInv.reduce((s:number,i:any) => s + Number(i.amount_net), 0) + kpoPrihodekMesec
+
+      /**
+       * PRIHODEK PO VIRIH (prelet 217)
+       * ══════════════════════════════
+       *
+       * Doslej ena sama stevilka, v kateri so bili racuni iz portala,
+       * blagajniski promet in bancni priliv sesteti skupaj. Za s.p., ki dela
+       * samo z racuni, je to dovolj; za lokal z blagajno pa ne - iz ene
+       * stevilke ni razvidno, koliko prinese sank in koliko storitve.
+       *
+       * Vire lociomo po tem, KJE je prihodek nastal:
+       *   · portal   - izdani racuni (`issued_invoices`)
+       *   · blagajna - kategoriji `pos_prodaja` in `pos_storitve`
+       *   · drugo    - banka, kartice, ostali vnosi brez racuna
+       *
+       * Sestevek je enak `revenue`, zato se skupna stevilka ne spremeni.
+       */
+      const jeBlagajna = (e: any) => e.category === 'pos_prodaja' || e.category === 'pos_storitve'
+      const prihodekPortal = monthInv.reduce((s: number, i: any) => s + Number(i.amount_net), 0)
+      const prihodekBlagajna = kpoMesec
+        .filter((e: any) => !e.invoice_id && jeBlagajna(e))
+        .reduce((s: number, e: any) => s + Number(e.income || 0), 0)
+      const prihodekDrugo = kpoMesec
+        .filter((e: any) => !e.invoice_id && !jeBlagajna(e))
+        .reduce((s: number, e: any) => s + Number(e.income || 0), 0)
       // POPRAVLJENO (30.7.2026): letni prihodek za prag normiranca je prej
       // stel SAMO izdane racune - manjkal je POS/bancni/karticni promet.
       // SAMO KPO vnosi BREZ invoice_id (izognemo se dvojnemu stetju s
@@ -484,6 +518,8 @@ export default function DashboardPage() {
 
       setData({
         revenue, expenses, kpoReceivedMonth,
+        // PRELET 217: razclenitev za preklop med viri.
+        prihodekPortal, prihodekBlagajna, prihodekDrugo,
         vatDue: Math.max(0, vatOut - vatIn),
         unpaidCount: unpaid.length,
         unpaidAmount: unpaid.reduce((s:number,i:any) => s + Number(i.amount_total), 0),
@@ -936,16 +972,44 @@ export default function DashboardPage() {
         </section>
 
         <section className="rk-triple rk-triple-attached">
-          <Link href="/invoices" className="rk-stat">
-            <div className="rk-stat-lbl"><span>Prihodki {MONTHS_SHORT[month]}</span><span className="rk-arr">→</span></div>
-            <div className="rk-stat-val">€{Math.round(data.revenue)}</div>
+          {/* PRELET 217: preklop med viri prihodka. Privzeto skupaj, ker je
+              to stevilka, ki jo vecina isce; razclenitev je en klik stran.
+              Viri, ki so prazni, se ne kazejo - s.p. brez blagajne tako ne
+              dobi gumbov, ki mu nic ne povedo. */}
+          <div className="rk-stat" style={{ cursor: 'default' }}>
+            <div className="rk-stat-lbl">
+              <span>Prihodki {MONTHS_SHORT[month]}</span>
+              <Link href="/invoices" className="rk-arr" style={{ textDecoration:'none' }}>→</Link>
+            </div>
+            <div className="rk-stat-val">
+              €{Math.round(
+                virPrihodka === 'portal' ? data.prihodekPortal
+                : virPrihodka === 'blagajna' ? data.prihodekBlagajna
+                : virPrihodka === 'drugo' ? data.prihodekDrugo
+                : data.revenue
+              )}
+            </div>
             <div className="rk-stat-meta">Brez DDV</div>
-            {data.kpoReceivedMonth > 0 && (
-              <div className="rk-stat-meta" style={{ marginTop: 2, opacity: 0.75 }}>
-                💰 Prejeto na račun: €{Math.round(data.kpoReceivedMonth)} <span title="Dejanski denarni tok iz KPO evidence (banka, kartice, POS, plače...) - ločeno od fakturiranega zneska zgoraj.">ⓘ</span>
+
+            {(data.prihodekBlagajna > 0 || data.prihodekDrugo > 0) && (
+              <div style={{ display:'flex', flexWrap:'wrap', gap:4, marginTop:8 }}>
+                {([
+                  ['skupaj', 'Skupaj', data.revenue],
+                  ['portal', 'Računi', data.prihodekPortal],
+                  ['blagajna', 'Blagajna', data.prihodekBlagajna],
+                  ['drugo', 'Drugo', data.prihodekDrugo],
+                ] as const).filter(([k, , znesek]) => k === 'skupaj' || znesek > 0).map(([kljuc, oznaka]) => (
+                  <button key={kljuc} onClick={() => setVirPrihodka(kljuc)}
+                    style={{
+                      padding:'3px 9px', borderRadius:6, fontSize:11, fontWeight:600, cursor:'pointer',
+                      fontFamily:'inherit', border:'1px solid ' + (virPrihodka === kljuc ? '#0D1F12' : '#e5e7eb'),
+                      background: virPrihodka === kljuc ? '#0D1F12' : '#fff',
+                      color: virPrihodka === kljuc ? '#fff' : '#666',
+                    }}>{oznaka}</button>
+                ))}
               </div>
             )}
-          </Link>
+          </div>
           <Link href="/expenses" className="rk-stat">
             <div className="rk-stat-lbl"><span>Odhodki {MONTHS_SHORT[month]}</span><span className="rk-arr">→</span></div>
             <div className="rk-stat-val" style={{ color: data.expenses === 0 ? 'var(--ink3)' : undefined, fontWeight: data.expenses === 0 ? 500 : undefined }}>€{Math.round(data.expenses)}</div>
