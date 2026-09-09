@@ -2206,7 +2206,31 @@ function SideNav({ screen, setScreen, nav, staffId }) {
   }
 
   return (
-    <div style={{ width:80, background:T.surface, borderRight:'1px solid '+T.line, display:'flex', flexDirection:'column', alignItems:'center', padding:'10px 0', gap:4, flexShrink:0 }}>
+    /**
+     * MENI NA NIZKIH ZASLONIH (prelet 232)
+     * ════════════════════════════════════
+     *
+     * NAPAKA: stolpec je bil pokoncen seznam BREZ moznosti pomikanja - ne
+     * `overflowY`, ne omejitve visine. Ko postavk ni slo vec na zaslon, so se
+     * preprosto odrezale in do njih NI BILO POTI.
+     *
+     * Deset postavk zahteva okoli 670 pik. Na prenosniku s 768 pikami ostane
+     * po glavi brskalnika, glavi blagajne in traku o povezavi priblizno 600 -
+     * zadnje tri postavke (Porocila, Nastavitve in del Opravil) so izginile.
+     *
+     * Uporabnik z visjim zaslonom tega ne opazi nikoli, uporabnik s 17-palcnim
+     * prenosnikom pa ne more do nastavitev.
+     *
+     * POPRAVEK: seznam postavk se pomika, gumbi spodaj (zaklep, odjava)
+     * ostanejo PRITRJENI - do njih mora biti mogoce priti vedno, tudi sredi
+     * pomikanja. Zato sta locena: zunanji stolpec drzi visino, notranji se
+     * pomika.
+     *
+     * `scrollbarWidth:'none'` skrije drsnik, ker bi na ozkem stolpcu pojedel
+     * cetrtino sirine; pomikanje s kolescem in dotikom deluje naprej.
+     */
+    <div style={{ width:80, background:T.surface, borderRight:'1px solid '+T.line, display:'flex', flexDirection:'column', alignItems:'center', padding:'10px 0', gap:4, flexShrink:0, minHeight:0 }}>
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, overflowY:'auto', flex:1, minHeight:0, width:'100%', scrollbarWidth:'none' }}>
       {vrstniRed.map(id => {
         const s = SCREENS[id]
         if (!s) return null
@@ -2242,7 +2266,10 @@ function SideNav({ screen, setScreen, nav, staffId }) {
         )
       })}
 
-      <div style={{ marginTop:'auto', display:'flex', flexDirection:'column', gap:4, alignItems:'center' }}>
+      </div>
+      {/* PRELET 232: gumbi spodaj so ZUNAJ pomicnega dela, da so vedno
+          dosegljivi - `marginTop:'auto'` zato ni vec potreben. */}
+      <div style={{ display:'flex', flexDirection:'column', gap:4, alignItems:'center', paddingTop:6, flexShrink:0 }}>
         {urejanje && (
           <button onClick={() => { try { localStorage.removeItem(kljuc) } catch {}; setVrstniRed(nav) }}
             title="Povrni privzeti vrstni red"
