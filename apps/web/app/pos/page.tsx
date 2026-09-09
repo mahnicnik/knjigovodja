@@ -10884,7 +10884,11 @@ function AdminScreen({ auth, posData }) {
     { id:'categories', label:'Kategorije & Artikli',  icon:'grid'     },
     { id:'storitve',   label:'Storitve & Paketi',      icon:'calendar' },
     { id:'happyhour',  label:'Happy hour',            icon:'happy'    },
-    { id:'rojstni',    label:'Rojstnodnevne čestitke', icon:'users'   },
+    // PRELET 228: zavihek je nosil ime enega od treh razdelkov, ki jih
+    // vsebuje. Poleg rojstnodnevnih cestitk sta tu se opomniki o poteku
+    // kartic in urnik obvestil o zalogi - kdor je iskal drugo dvoje, tega
+    // pod tem imenom ni pricakoval.
+    { id:'rojstni',    label:'Obveščanje',            icon:'users'   },
     { id:'kuhinja',    label:'Kuhinja & display',     icon:'receipt'  },
     { id:'autolock',   label:'Avt. zaklepanje',       icon:'pin'      },
     { id:'furs',       label:'FURS & DDV',            icon:'receipt', ownerOnly:true },
