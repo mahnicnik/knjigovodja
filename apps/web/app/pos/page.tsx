@@ -15200,6 +15200,14 @@ function KlasikApp() {
           {screen==='inventory' && <InventoryScreen posData={posData}/>}
           {screen==='inventura' && <InventuraScreen posData={posData} auth={auth}/>}
           {screen==='orders'    && <OrdersScreen posData={posData} auth={auth}/>}
+          {/* POPRAVLJENO (prelet 236): zaslon je bil v preletu 233 dodan v MENI,
+              izrisa zanj pa NI BILO - klik na "Kuhinja" je pokazal prazno
+              obmocje. Postavka v meniju brez izrisa je slabsa od nobene:
+              uporabnik misli, da je nekaj pokvarjeno.
+
+              `KuhinjaSection` je ista komponenta, ki je prej zivela v
+              nastavitvah - le da je zdaj tam, kamor kuhar pride. */}
+          {screen==='kitchen'   && <KuhinjaSection posData={posData}/>}
           {screen==='opravila'  && <OpravilaScreen posData={{ ...posData, T }} auth={auth}/>}
           {/* POPRAVLJENO (prelet 159): Porocila in Nastavitve sta bila do zdaj
               ZUNAJ tega vsebovalnika. Prelet 156 je zaradi traku stanja povezave
