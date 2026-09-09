@@ -13264,6 +13264,10 @@ function RojstniDneviSection({ posData }) {
   const [vklopljeno, setVklopljeno] = React.useState(false)
   // PRELET 171: nacin posiljanja opomnikov o poteku kartic.
   const [samodejnoPosiljanje, setSamodejnoPosiljanje] = React.useState(true)
+  // PRELET 227: urnik obvescanja o zalogi. Privzeto pon-pet ob 10:00, kar je
+  // pri vecini grosistov pred rokom za narocilo.
+  const [zalogaDnevi, setZalogaDnevi] = React.useState<number[]>([1,2,3,4,5])
+  const [zalogaUra, setZalogaUra] = React.useState(10)
   const [besedilo, setBesedilo] = React.useState('')
   const [stanje, setStanje] = React.useState({ zRojstnimDnem: 0, sPrivolitvijo: 0, biPrejeli: 0 })
   const [shranjujem, setShranjujem] = React.useState(false)
@@ -13275,10 +13279,15 @@ function RojstniDneviSection({ posData }) {
       const orgId = posData?.org?.id
       if (orgId) {
         const { data } = await db.from('organizations')
-          .select('birthday_emails_enabled, birthday_email_text, notify_auto_send').eq('id', orgId).maybeSingle()
+          .select('birthday_emails_enabled, birthday_email_text, notify_auto_send, stock_notify_days, stock_notify_hour').eq('id', orgId).maybeSingle()
         setVklopljeno(!!data?.birthday_emails_enabled)
         setBesedilo(data?.birthday_email_text || '')
         setSamodejnoPosiljanje((data as any)?.notify_auto_send !== false)
+        // PRELET 227: prazen seznam je veljavna izbira (brez obvestil), zato
+        // privzeto vrednost uporabimo SAMO, ce polja se ni.
+        const dnevi = (data as any)?.stock_notify_days
+        setZalogaDnevi(Array.isArray(dnevi) ? dnevi : [1,2,3,4,5])
+        setZalogaUra(Number((data as any)?.stock_notify_hour ?? 10))
       }
       const { data: str } = await db.from('customers')
         .select('birth_date, email, marketing_consent')
@@ -13298,7 +13307,9 @@ function RojstniDneviSection({ posData }) {
     setShranjujem(true); setSporocilo('')
     const { error } = await createClient().from('organizations')
       .update({ birthday_emails_enabled: vklopljeno, birthday_email_text: besedilo || null,
-                notify_auto_send: samodejnoPosiljanje })
+                notify_auto_send: samodejnoPosiljanje,
+                stock_notify_days: zalogaDnevi,
+                stock_notify_hour: zalogaUra })
       .eq('id', orgId)
     setShranjujem(false)
     setSporocilo(error ? `Napaka: ${error.message}` : 'Shranjeno.')
@@ -13339,6 +13350,45 @@ function RojstniDneviSection({ posData }) {
           </div>
         </span>
       </label>
+
+      {/* PRELET 227: urnik obvescanja o zalogi.
+          Pri vecini grosistov je treba narociti do dolocene ure, zato je
+          obvestilo koristno ENKRAT na dan pred rokom - ne ob vsaki prodaji. */}
+      <div style={{ height:1, background:T.line, margin:'18px 0' }}/>
+      <div style={{ fontSize:15, fontWeight:700, marginBottom:6 }}>Obvestila o zalogi</div>
+      <div style={{ fontSize:13, color:T.muted, marginBottom:14, lineHeight:1.6 }}>
+        Kdaj naj vas sistem opozori, česa primanjkuje. Izberite čas pred rokom, do katerega naročate pri dobavitelju.
+      </div>
+
+      <div style={{ fontSize:12, fontWeight:600, marginBottom:6 }}>Dnevi</div>
+      <div style={{ display:'flex', gap:5, flexWrap:'wrap', marginBottom:14 }}>
+        {[['Pon',1],['Tor',2],['Sre',3],['Čet',4],['Pet',5],['Sob',6],['Ned',7]].map(([oznaka, dan]) => {
+          const izbran = zalogaDnevi.includes(dan as number)
+          return (
+            <button key={dan as number}
+              onClick={() => setZalogaDnevi(d => izbran ? d.filter(x => x !== dan) : [...d, dan as number].sort())}
+              style={{ padding:'7px 12px', borderRadius:8, cursor:'pointer', fontFamily:'inherit',
+                fontSize:12, fontWeight:600,
+                border:'1px solid ' + (izbran ? T.accent : T.line),
+                background: izbran ? T.accentSoft : T.surface,
+                color: izbran ? T.accent : T.muted }}>{oznaka as string}</button>
+          )
+        })}
+      </div>
+
+      <div style={{ fontSize:12, fontWeight:600, marginBottom:6 }}>Ura</div>
+      <select value={zalogaUra} onChange={e => setZalogaUra(Number(e.target.value))}
+        style={{ padding:'9px 12px', borderRadius:8, border:'1px solid '+T.line, fontSize:13,
+                 fontFamily:'inherit', background:T.surface, marginBottom:8 }}>
+        {Array.from({ length: 24 }, (_, u) => (
+          <option key={u} value={u}>{String(u).padStart(2,'0')}:00</option>
+        ))}
+      </select>
+      <div style={{ fontSize:11.5, color:T.muted, marginBottom:20, lineHeight:1.6 }}>
+        {zalogaDnevi.length === 0
+          ? 'Brez izbranih dni obvestil o zalogi ne bo.'
+          : `Obvestilo bo enkrat na dan ob ${String(zalogaUra).padStart(2,'0')}:00.`}
+      </div>
 
       <div style={{ padding:'10px 12px', borderRadius:8, background:T.surface2, fontSize:11.5, color:T.muted, lineHeight:1.6, marginBottom:24 }}>
         Opomnik se <b>ne</b> pošlje, če stranko pokriva druga kartica, ki velja dlje.

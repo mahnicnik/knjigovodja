@@ -160,8 +160,27 @@ export default function NewInvoicePage() {
 
   function addItem() { setItems([...items, { description: '', quantity: 1, unit_price: 0, vat_rate: org?.vat_registered ? 22 : 0, discount_pct: 0 }]) }
   function removeItem(i: number) { setItems(items.filter((_, idx) => idx !== i)) }
+  /**
+   * POPRAVLJENO (prelet 227): dva zaporedna klica sta se PREPISALA.
+   *
+   * `const updated = [...items]` prebere stanje, kakršno je bilo ob izrisu.
+   * Ce se v istem koraku poklice dvakrat - kot pri gumbu "Vstavi ceno brez
+   * DDV", ki nastavi ceno IN stopnjo - oba klica bereta ISTO staro stanje in
+   * drugi povozi prvega. Cena se je izgubila, ostala je le stopnja DDV.
+   *
+   * Zato je gumb izgledal, kot da ne dela, rocni vnos pa je deloval - tam je
+   * klic en sam.
+   *
+   * `setItems(prej => ...)` vedno dobi NAJNOVEJSE stanje, zato se zaporedni
+   * klici sestejejo namesto prepisujejo.
+   */
   function updateItem(i: number, field: keyof LineItem, value: any) {
-    const updated = [...items]; updated[i] = { ...updated[i], [field]: value }; setItems(updated)
+    setItems(prej => prej.map((v, idx) => idx === i ? { ...v, [field]: value } : v))
+  }
+
+  /** Vec polj hkrati - en sam zapis, brez tveganja prepisa. */
+  function updateItemFields(i: number, polja: Partial<LineItem>) {
+    setItems(prej => prej.map((v, idx) => idx === i ? { ...v, ...polja } : v))
   }
 
   const lineNet = (item: LineItem) => item.quantity * item.unit_price * (1 - (item.discount_pct || 0) / 100)
@@ -606,9 +625,12 @@ export default function NewInvoicePage() {
                   <button disabled={!kalkIzracun}
                     onClick={() => {
                       if (!kalkIzracun) return
-                      // Na racun gre VEDNO cena brez DDV - DDV izracuna racun sam.
-                      updateItem(kalkulator.vrstica, 'unit_price', kalkIzracun.neto)
-                      updateItem(kalkulator.vrstica, 'vat_rate', Number(kalkStopnja))
+                      // PRELET 227: oboje v ENEM zapisu - dva zaporedna klica
+                      // sta se prepisala in cena se ni vpisala.
+                      updateItemFields(kalkulator.vrstica, {
+                        unit_price: kalkIzracun.neto,
+                        vat_rate: Number(kalkStopnja),
+                      })
                       setKalkulator(null)
                     }}
                     className={`w-full py-3 rounded-xl text-sm font-semibold ${kalkIzracun ? 'bg-gray-900 text-white' : 'bg-gray-200 text-gray-400'}`}>
@@ -627,7 +649,16 @@ export default function NewInvoicePage() {
                 <div key={i} className="grid grid-cols-12 gap-2 items-center">
                   <div className="col-span-3"><input value={item.description} onChange={e => updateItem(i, 'description', e.target.value)} placeholder="Opis storitve" className={inp} /></div>
                   <div className="col-span-2"><input type="number" onFocus={e => e.target.select()} step="any" value={item.quantity} onChange={e => updateItem(i, 'quantity', +e.target.value)} style={{ MozAppearance: 'textfield' as any }} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none text-center [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></div>
-                  <div className="col-span-2"><input type="number" onFocus={e => e.target.select()} value={item.unit_price} onChange={e => updateItem(i, 'unit_price', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none text-right" /></div>
+                  {/* POPRAVLJENO (prelet 227): gumb "DDV" je bil v zadnjem
+                      stolpcu skupaj z zneskom in krizcem - trije elementi v
+                      2/12 sirine so se prerivali in vrstica je bila razmetana.
+                      Zdaj je pod poljem za ceno, kjer je prostor prost. */}
+                  <div className="col-span-2">
+                    <input type="number" onFocus={e => e.target.select()} value={item.unit_price} onChange={e => updateItem(i, 'unit_price', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none text-right" />
+                    <button onClick={() => { setKalkulator({ vrstica: i }); setKalkStopnja(Number(item.vat_rate) || 22); setKalkSmer('bruto'); setKalkZnesek('') }}
+                      title="Preračunaj iz cene z DDV"
+                      className="mt-1 w-full text-[10px] text-gray-400 hover:text-gray-900 transition-colors">iz cene z DDV</button>
+                  </div>
                   <div className="col-span-2">
                     <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-2 py-2 text-sm focus:outline-none bg-white">
                       <option value={22}>22 %</option><option value={9.5}>9,5 %</option><option value={0}>0 %</option>
@@ -638,12 +669,7 @@ export default function NewInvoicePage() {
                     <span className="text-sm text-gray-900 tabular-nums">
                       €{formatEurNumber(Number(item.quantity || 0) * Number(item.unit_price || 0) * (1 - Number(item.discount_pct || 0) / 100))}
                     </span>
-                    {/* POPRAVLJENO (prelet 187): gumb je bil le majhen siv znak
-                        "%" ob krizcu in ga ni bilo mogoce opaziti. Gumb, ki ga
-                        je treba iskati, je enako uporaben kot noben. */}
-                    <button onClick={() => { setKalkulator({ vrstica: i }); setKalkStopnja(Number(item.vat_rate) || 22); setKalkSmer('bruto'); setKalkZnesek('') }}
-                      title="Preracunaj iz cene z DDV"
-                      className="shrink-0 border border-gray-200 rounded-lg px-2 py-1 text-[11px] font-medium text-gray-500 hover:text-gray-900 hover:border-gray-400 transition-colors">DDV</button>
+                    {/* PRELET 227: gumb je prestavljen pod polje za ceno. */}
                     {items.length > 1 && <button onClick={() => removeItem(i)} className="text-gray-300 hover:text-red-500 text-lg leading-none pl-1">×</button>}
                   </div>
                 </div>
