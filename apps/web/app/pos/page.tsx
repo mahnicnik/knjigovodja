@@ -286,6 +286,8 @@ function usePosData() {
   const [notifications, setNotifications] = useState([])
   const [todayStats, setTodayStats] = useState({ promet: 0, racuni: 0, napitnine: 0 })
   const [businessProfile, setBusinessProfile] = useState('all')
+  // PRELET 234: izbrani zasloni pri profilu "po meri". null = pokazi vse.
+  const [customNav, setCustomNav] = useState<string[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [reloadKey, setReloadKey] = useState(0)
   const [bizReady, setBizReady] = useState(false)
@@ -432,8 +434,11 @@ function usePosData() {
         // DODANO (16.8.2026): nalozi happy hour pravila
         const hhRes = await createClient().from('happy_hour_rules').select('*').eq('business_id', BUSINESS_ID).eq('active', true)
         setHappyHourRules(hhRes.data || [])
-        const { data: bizData } = await createClient().from('businesses').select('profile_type').eq('id', BUSINESS_ID).single()
+        // PRELET 234: brez `custom_nav` bi izbor zaslonov obstajal v bazi, a
+        // se ne bi nikoli uporabil - profil "po meri" bi vedno kazal vse.
+        const { data: bizData } = await createClient().from('businesses').select('profile_type, custom_nav').eq('id', BUSINESS_ID).single()
         if (bizData?.profile_type) setBusinessProfile(bizData.profile_type)
+        setCustomNav(Array.isArray(bizData?.custom_nav) ? bizData.custom_nav : null)
       } catch (e) {
         console.error('usePosData error:', e)
       }
@@ -455,7 +460,7 @@ function usePosData() {
     return [{ id: 'cat-fav', name: 'Priljubljeno', icon: '★', color: '#E9B949' }, ...categories]
   }, [categories])
 
-  return { categories: categoriesWithFav, items, spaces, customers, staffList, packageTemplates, services, ingredients, notifications, setNotifications, todayStats, businessProfile, setBusinessProfile, happyHourRules, loading, itemsIn, refresh, bizNapaka, businessName, org, fursTestMode, potrebujePrvoNastavitev, setPotrebujePrvoNastavitev }
+  return { categories: categoriesWithFav, items, spaces, customers, staffList, packageTemplates, services, ingredients, notifications, setNotifications, todayStats, businessProfile, setBusinessProfile, customNav, happyHourRules, loading, itemsIn, refresh, bizNapaka, businessName, org, fursTestMode, potrebujePrvoNastavitev, setPotrebujePrvoNastavitev }
 }
 
 // ================================================================
@@ -2034,6 +2039,19 @@ async function autoPrint(data) {
         vat_rate: Number(l.vat_rate ?? 22),
         total: Number(l.total || (l.qty * (l.unitPrice||l.unit_price||0))),
       })),
+      /**
+       * ODREZEK ZA KUHINJO (prelet 234)
+       *
+       * Samo kuhinjski artikli - pijaca kuharja ne zanima in bi odrezek po
+       * nepotrebnem podaljsala. Vrstica velja za kuhinjsko, ce je artikel
+       * tako oznacen (`kitchen`), kar odloci baza in ne blagajna.
+       *
+       * Brez stevilke narocila odrezka ni: kuhar in gost se ujameta prav
+       * po njej, brez nje pa bi bil listek neuporaben.
+       */
+      kitchenLines: (data.lines||[])
+        .filter(l => l.kitchen || l.items?.kitchen)
+        .map(l => ({ name: l.name, qty: Number(l.qty), note: l.note || null })),
       subtotal: Number(data.subtotal||data.total||0),
       discountAmount: Number(data.discount_amount||0),
       tip: Number(data.tip||0),
@@ -13706,6 +13724,18 @@ function FursSection() {
 function ProfileSection({ posData }) {
   const [saving, setSaving] = useState(false)
   const currentProfile = posData.businessProfile || 'all'
+  // PRELET 234: izbrani zasloni pri profilu po meri.
+  const [izbraniZasloni, setIzbraniZasloni] = React.useState<string[]>(
+    Array.isArray(posData.customNav) ? posData.customNav : []
+  )
+
+  async function shraniZaslone(novi: string[]) {
+    try {
+      await createClient().from('businesses')
+        .update({ custom_nav: novi.length ? novi : null }).eq('id', BUSINESS_ID)
+      posData.refresh?.()
+    } catch (e) { console.warn('Izbora zaslonov ni bilo mogoce shraniti:', e) }
+  }
 
   async function select(pid) {
     if (saving) return
@@ -13750,6 +13780,45 @@ function ProfileSection({ posData }) {
           )
         })}
       </div>
+      {/* PRELET 234: izbirnik zaslonov za profil po meri.
+          Prikaze se SAMO pri tem profilu - pri ostalih je vrstni red dolocen
+          in bi izbirnik le zmedel. */}
+      {currentProfile === 'custom' && (
+        <div style={{ marginTop:20 }}>
+          <div style={{ fontSize:15, fontWeight:700, marginBottom:6 }}>Kateri zasloni naj bodo v meniju</div>
+          <div style={{ fontSize:12.5, color:T.muted, marginBottom:14, lineHeight:1.6 }}>
+            Izberite, kar potrebujete. Vrstni red lahko pozneje spremenite kar v meniju.
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(150px, 1fr))', gap:8 }}>
+            {Object.entries(SCREENS).map(([id, s]) => {
+              const izbran = izbraniZasloni.includes(id)
+              return (
+                <label key={id} style={{ display:'flex', alignItems:'center', gap:8, padding:'9px 11px',
+                  borderRadius:9, cursor:'pointer', fontSize:13,
+                  border:'1px solid ' + (izbran ? T.accent : T.line),
+                  background: izbran ? T.accentSoft : T.surface }}>
+                  <input type="checkbox" checked={izbran}
+                    onChange={e => {
+                      const novi = e.target.checked
+                        ? [...izbraniZasloni, id]
+                        : izbraniZasloni.filter(x => x !== id)
+                      setIzbraniZasloni(novi)
+                      shraniZaslone(novi)
+                    }}
+                    style={{ accentColor:T.accent, width:15, height:15 }}/>
+                  <span>{(s as any).label}</span>
+                </label>
+              )
+            })}
+          </div>
+          {izbraniZasloni.length === 0 && (
+            <div style={{ fontSize:11.5, color:T.muted, marginTop:10 }}>
+              Brez izbire se pokažejo vsi zasloni.
+            </div>
+          )}
+        </div>
+      )}
+
       <div style={{ marginTop:16, padding:'12px 14px', background:T.surface2, borderRadius:10, fontSize:12, color:T.muted }}>
         💡 Sprememba profila takoj posodobi navigacijo. Podatki ostanejo nespremenjeni.
       </div>
