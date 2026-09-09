@@ -59,6 +59,10 @@ const SECTIONS = [
   // Kartica pelje naravnost na /integracije, stran ostane, kjer je.
   { id: 'integracije',  icon: '🔌', label: 'Integracije',        desc: 'Stripe, WooCommerce, Shopify' },
   { id: 'email',        icon: '📧', label: 'E-mail skeniranje',  desc: 'Avtomatski uvoz stroškov' },
+  // DODANO (prelet 230): stran /prenosi je obstajala, a nanjo ni vodil noben
+  // clen - ne iz menija, ne z javne strani. Namizna aplikacija je tako za
+  // stranko prakticno ni bilo.
+  { id: 'prenosi',      icon: '⬇️', label: 'Prenosi',            desc: 'Aplikacija za Windows in telefon' },
 ]
 
 const SI_BANKS: Record<string, string> = {
@@ -538,6 +542,52 @@ export default function NastavitevPage() {
                 style={{ padding: '11px 20px', borderRadius: 10, background: '#0D1F12', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, opacity: (pwSaving || !pwNew || !pwConfirm) ? 0.5 : 1 }}>
                 {pwSaving ? 'Shranjujem...' : 'Spremeni geslo'}
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* PRELET 230: PRENOSI
+            Povezavi vodita na GitHub, kjer so izdaje. Stran /prenosi zna sama
+            poiskati zadnjo razlicico, zato gumb pelje nanjo namesto da bi tu
+            podvajali logiko iskanja. */}
+        {activeSection === 'prenosi' && (
+          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>⬇️ Prenosi</div>
+            <div style={{ fontSize: 13, color: '#888', marginBottom: 22, lineHeight: 1.6 }}>
+              Blagajna deluje tudi v brskalniku. Aplikacijo potrebujete, če želite
+              tiskati na termalni tiskalnik ali izdajati račune brez povezave.
+            </div>
+
+            <div style={{ display: 'grid', gap: 12, maxWidth: 460 }}>
+              <a href="/prenosi" style={{ display: 'flex', alignItems: 'center', gap: 14,
+                   padding: '16px 18px', borderRadius: 12, border: '1px solid #f0f0f0',
+                   textDecoration: 'none', color: 'inherit' }}>
+                <div style={{ fontSize: 26 }}>🖥️</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>Windows</div>
+                  <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+                    Blagajna v svojem oknu, tiskanje prek USB, delo brez povezave
+                  </div>
+                </div>
+                <div style={{ fontSize: 13, color: '#0D1F12', fontWeight: 600 }}>Prenesi →</div>
+              </a>
+
+              <a href="/prenosi" style={{ display: 'flex', alignItems: 'center', gap: 14,
+                   padding: '16px 18px', borderRadius: 12, border: '1px solid #f0f0f0',
+                   textDecoration: 'none', color: 'inherit' }}>
+                <div style={{ fontSize: 26 }}>📱</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>Android</div>
+                  <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+                    Blagajna na telefonu — za naročila ob mizah in prodajo na terenu
+                  </div>
+                </div>
+                <div style={{ fontSize: 13, color: '#0D1F12', fontWeight: 600 }}>Prenesi →</div>
+              </a>
+            </div>
+
+            <div style={{ fontSize: 11.5, color: '#888', marginTop: 16, lineHeight: 1.6 }}>
+              Namizna aplikacija se posodablja sama — ob zagonu preveri, ali je na voljo novejša različica.
             </div>
           </div>
         )}
