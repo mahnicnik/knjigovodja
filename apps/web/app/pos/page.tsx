@@ -398,7 +398,22 @@ function usePosData() {
         // Modifier grupe se naložijo v InventoryScreen in CatalogSection
 
         // Generiraj in fetch notifikacije
-        await createClient().rpc('generate_pos_notifications', { p_business_id: BUSINESS_ID })
+        /**
+         * PRELET 226: `p_vkljuci_zalogo: false`.
+         *
+         * Obvestila o zalogi so doslej nastajala tudi ob VSAKEM odprtju
+         * blagajne. Ker sporocilo vsebuje trenutno kolicino, je vsaka prodaja
+         * ustvarila novo - po vsakem prodanem pivu se eno opozorilo, da ga
+         * primanjkuje.
+         *
+         * Zaloga je odslej v pristojnosti nocnega opravila, ki tece ob uri,
+         * nastavljeni v Nastavitve → Obvescanje. Kartice in obiski se se
+         * naprej osvezujejo sproti, ker se ne spreminjajo ob prodaji.
+         */
+        await createClient().rpc('generate_pos_notifications', {
+          p_business_id: BUSINESS_ID,
+          p_vkljuci_zalogo: false,
+        })
         // DODANO (22.8.2026): tudi podatki KARTICE, da lahko v opomniku
         // navedemo obdobje veljavnosti in preostale obiske. Prej je bil
         // naveden samo datum poteka.

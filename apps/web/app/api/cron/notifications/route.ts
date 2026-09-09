@@ -103,8 +103,26 @@ export async function GET(req: NextRequest) {
 
       bizContext.set(biz.id, { biz, org: orgForBiz })
 
-      // 2. Generiraj notifikacije za ta business
-      await supabase.rpc('generate_pos_notifications', { p_business_id: biz.id })
+      /**
+       * URNIK OBVEŠČANJA O ZALOGI (prelet 226)
+       *
+       * Pri vecini grosistov je treba narociti do dolocene ure. Obvestilo o
+       * tem, cesa primanjkuje, je zato koristno ENKRAT na dan, pred rokom -
+       * ne pa ob vsaki prodaji.
+       *
+       * Dneve in uro doloci uporabnik v Nastavitve → Obvescanje. Privzeto
+       * ponedeljek do petek ob 10:00, kar je pred obicajnim rokom.
+       */
+      const zdajSl = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Ljubljana' }))
+      const danVTednu = zdajSl.getDay() === 0 ? 7 : zdajSl.getDay()   // 1 = ponedeljek
+      const dnevi: number[] = orgForBiz?.stock_notify_days ?? [1, 2, 3, 4, 5]
+      const ura: number = orgForBiz?.stock_notify_hour ?? 10
+      const casZaZalogo = dnevi.includes(danVTednu) && zdajSl.getHours() === ura
+
+      await supabase.rpc('generate_pos_notifications', {
+        p_business_id: biz.id,
+        p_vkljuci_zalogo: casZaZalogo,
+      })
 
       // 3. Pridobi neposlane notifikacije s customer emailom
       const { data: notifs } = await supabase
