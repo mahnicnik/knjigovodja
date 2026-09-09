@@ -13791,14 +13791,18 @@ function ProfileSection({ posData }) {
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(150px, 1fr))', gap:8 }}>
             {Object.entries(SCREENS).map(([id, s]) => {
-              const izbran = izbraniZasloni.includes(id)
+              // PRELET 235: "Nastavitve" so vedno vklopljene in jih ni mogoce
+              // odkljukati - sicer bi si uporabnik zaprl edino pot nazaj.
+              const obvezen = id === 'admin'
+              const izbran = obvezen || izbraniZasloni.includes(id)
               return (
                 <label key={id} style={{ display:'flex', alignItems:'center', gap:8, padding:'9px 11px',
                   borderRadius:9, cursor:'pointer', fontSize:13,
                   border:'1px solid ' + (izbran ? T.accent : T.line),
                   background: izbran ? T.accentSoft : T.surface }}>
-                  <input type="checkbox" checked={izbran}
+                  <input type="checkbox" checked={izbran} disabled={obvezen}
                     onChange={e => {
+                      if (obvezen) return
                       const novi = e.target.checked
                         ? [...izbraniZasloni, id]
                         : izbraniZasloni.filter(x => x !== id)
@@ -13807,6 +13811,7 @@ function ProfileSection({ posData }) {
                     }}
                     style={{ accentColor:T.accent, width:15, height:15 }}/>
                   <span>{(s as any).label}</span>
+                  {obvezen && <span style={{ fontSize:10, color:T.muted }}>obvezno</span>}
                 </label>
               )
             })}
@@ -14798,9 +14803,23 @@ function KlasikApp() {
    * nastavljen, pokazemo vse - bolje odvec kot manjkajoce.
    */
   const vsiZasloni = Object.keys(SCREENS)
+  /**
+   * POPRAVLJENO (prelet 235): NASTAVITVE SO VEDNO DEL MENIJA.
+   *
+   * Pri profilu po meri je bilo mogoce odkljukati "Nastavitve" - in s tem
+   * odstraniti edino pot nazaj. Uporabnik bi ostal brez dostopa do
+   * nastavitev, vkljucno z nastavitvijo, s katero bi to popravil.
+   *
+   * Zaslon `admin` zato dodamo vedno, ne glede na izbor. Kdor ga ne sme
+   * videti, ga tako ali tako ne bo - to odloca pravica `systemSettings`,
+   * ne ta izbor.
+   */
+  const OBVEZNI = ['admin']
+  const izbraniPoMeri = Array.isArray(posData.customNav) && posData.customNav.length
+    ? [...posData.customNav, ...OBVEZNI.filter(z => !posData.customNav.includes(z))]
+    : vsiZasloni
   const profile = profileId === 'custom'
-    ? { id:'custom', name:'Po meri', icon:'⚙️',
-        nav: (Array.isArray(posData.customNav) && posData.customNav.length ? posData.customNav : vsiZasloni) }
+    ? { id:'custom', name:'Po meri', icon:'⚙️', nav: izbraniPoMeri }
     : (CFG.profiles.find(p => p.id === profileId) || CFG.profiles[0])
 
   // POPRAVLJENO (16.8.2026, VARNOST): 'admin' je bil null = dostopen VSEM,
