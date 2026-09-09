@@ -11,6 +11,31 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  // PRELET 229: dokler sta nastavljena, cakamo na kodo iz aplikacije.
+  const [mfaFaktor, setMfaFaktor] = useState<string | null>(null)
+  const [mfaIzziv, setMfaIzziv] = useState<string | null>(null)
+  const [mfaKoda, setMfaKoda] = useState('')
+
+  async function potrdiKodo() {
+    if (!mfaFaktor || !mfaIzziv || mfaKoda.length < 6) return
+    setLoading(true); setError('')
+    const supabase = createClient()
+    const { error: napaka } = await supabase.auth.mfa.verify({
+      factorId: mfaFaktor, challengeId: mfaIzziv, code: mfaKoda.trim(),
+    })
+    if (napaka) {
+      setError('Koda ni pravilna. Poskusite z novo.')
+      setMfaKoda('')
+      // Vsak izziv je enkraten - po neuspehu pripravimo novega.
+      const { data: nov } = await supabase.auth.mfa.challenge({ factorId: mfaFaktor })
+      setMfaIzziv(nov?.id || null)
+      setLoading(false)
+      return
+    }
+    const kam = new URLSearchParams(window.location.search).get('next')
+    const varnaPot = kam && kam.startsWith('/') && !kam.startsWith('//') ? kam : null
+    router.push(varnaPot || '/dashboard')
+  }
   const router = useRouter()
   const supabase = createClient()
 
@@ -25,6 +50,29 @@ export default function LoginPage() {
       setError('Napačen email ali geslo.')
       setLoading(false)
       return
+    }
+
+    /**
+     * DRUGA STOPNJA (prelet 229)
+     *
+     * Po pravilnem geslu Supabase sejo ustvari, a jo oznaci kot NEPOPOLNO,
+     * ce ima uporabnik vklopljeno dvostopenjsko prijavo. Raven `aal1` pomeni
+     * "geslo je pravilno", `aal2` pa "koda je potrjena".
+     *
+     * Dokler koda ni vpisana, uporabnika ne spustimo naprej - sicer bi bila
+     * druga stopnja le videz.
+     */
+    const { data: raven } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+    if (raven?.nextLevel === 'aal2' && raven.nextLevel !== raven.currentLevel) {
+      const { data: faktorji } = await supabase.auth.mfa.listFactors()
+      const totp = ((faktorji?.totp || []) as any[]).find(f => f.status === 'verified')
+      if (totp) {
+        const { data: izziv } = await supabase.auth.mfa.challenge({ factorId: totp.id })
+        setMfaFaktor(totp.id)
+        setMfaIzziv(izziv?.id || null)
+        setLoading(false)
+        return
+      }
     }
 
     // Preveri ali ima uporabnik organizacijo
@@ -68,6 +116,31 @@ export default function LoginPage() {
           <p className="text-gray-500 mt-2">AI računovodja za slovenskega s.p.</p>
         </div>
 
+        {/* PRELET 229: obrazec za kodo. Prikaze se SELE po pravilnem geslu,
+            zato nikoli ne izda, ali je racun sploh zavarovan z drugo stopnjo. */}
+        {mfaFaktor ? (
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Vpišite šestmestno kodo iz aplikacije na telefonu.</p>
+              <input
+                value={mfaKoda}
+                onChange={e => setMfaKoda(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                onKeyDown={e => { if (e.key === 'Enter') potrdiKodo() }}
+                placeholder="000000" inputMode="numeric" autoFocus
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-lg tracking-[0.18em] text-center focus:outline-none focus:ring-2 focus:ring-gray-900"
+              />
+            </div>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <button onClick={potrdiKodo} disabled={loading || mfaKoda.length < 6}
+              className="w-full bg-gray-900 text-white rounded-xl py-3 font-medium disabled:bg-gray-200 disabled:text-gray-400">
+              {loading ? 'Preverjam…' : 'Potrdi in se prijavi'}
+            </button>
+            <button onClick={() => { setMfaFaktor(null); setMfaIzziv(null); setMfaKoda(''); setError('') }}
+              className="w-full text-sm text-gray-500 hover:text-gray-900">
+              Nazaj na prijavo
+            </button>
+          </div>
+        ) : (
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
             <label className="text-sm text-gray-600 block mb-1">Email</label>
@@ -104,6 +177,7 @@ export default function LoginPage() {
             {loading ? 'Prijavljam...' : 'Prijava'}
           </button>
         </form>
+        )}
 
         <div className="mt-6 space-y-3 text-center text-sm text-gray-500">
           <p>

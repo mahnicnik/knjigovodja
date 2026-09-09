@@ -12,6 +12,9 @@ import BlagajnaSekcija from '@/components/nastavitve/Blagajna'
 import EkipaSekcija from '@/components/nastavitve/Ekipa'
 import ApiKljuciSekcija from '@/components/nastavitve/ApiKljuci'
 import IntegracijeSekcija from '@/components/nastavitve/Integracije'
+// PRELET 231: dvostopenjska prijava (prelet 229) je bila zgrajena, a ni bila
+// nikjer prikazana - komponenta brez vstopne tocke je enaka, kot da je ni.
+import DvostopenjskaPrijava from '@/components/DvostopenjskaPrijava'
 import EmailSkeniranjeSekcija from '@/components/nastavitve/EmailSkeniranje'
 import posthog from 'posthog-js'
 import UpgradeButton from '@/components/UpgradeButton'
@@ -50,7 +53,8 @@ const SECTIONS = [
   { id: 'banka',        icon: '🏦', label: 'Bančni podatki',     desc: 'IBAN, BIC/SWIFT' },
   { id: 'blagajna',     icon: '🧾', label: 'Davčna blagajna',    desc: 'FURS, certifikat' },
   { id: 'ekipa',        icon: '👥', label: 'Ekipa',              desc: 'Uporabniki, dostop' },
-  { id: 'geslo',        icon: '🔐', label: 'Geslo',              desc: 'Sprememba gesla' },
+  // PRELET 231: razdelek zdaj vsebuje tudi dvostopenjsko prijavo.
+  { id: 'geslo',        icon: '🔐', label: 'Prijava & varnost',  desc: 'Geslo in dvostopenjska prijava' },
   { id: 'plan',         icon: '⭐', label: 'Naročnina',          desc: 'Plan, nadgradnja' },
   { id: 'racunovodja',  icon: '📒', label: 'Računovodja portal', desc: 'Dostop računovodje' },
   { id: 'api',          icon: '🔑', label: 'API ključi',         desc: 'Integracije, dostop' },
@@ -545,6 +549,11 @@ export default function NastavitevPage() {
             </div>
           </div>
         )}
+
+        {/* PRELET 231: dvostopenjska prijava spada pod "Geslo", ker gre za
+            isto stvar - kako se uporabnik prijavi. Prikaze se pod obrazcem za
+            spremembo gesla, kot druga plast iste zascite. */}
+        {activeSection === 'geslo' && <DvostopenjskaPrijava />}
 
         {/* PRELET 230: PRENOSI
             Povezavi vodita na GitHub, kjer so izdaje. Stran /prenosi zna sama
