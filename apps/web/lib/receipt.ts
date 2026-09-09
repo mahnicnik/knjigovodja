@@ -60,6 +60,11 @@ export interface ReceiptData {
    * NI del zaporedne stevilke racuna - ta ostane neprekinjena za FURS.
    */
   kitchenNumber?: number | null
+  /**
+   * PRELET 233: vrstice za kuhinjo. Ce so podane in obstaja stevilka
+   * narocila, se za racunom natisne se odrezek za kuharja.
+   */
+  kitchenLines?: { name: string; qty: number; note?: string | null }[]
 }
 
 const METHOD_LABELS: Record<string, string> = {
@@ -311,6 +316,29 @@ export async function buildReceiptHTML(d: ReceiptData): Promise<string> {
   <div class="line"></div>
   <div class="center small" style="margin-top:6px">Hvala za obisk!</div>
   <div class="line"></div>
+  ${(d.kitchenNumber && d.kitchenLines && d.kitchenLines.length) ? `
+  <!-- ODREZEK ZA KUHINJO (prelet 233)
+       Natisne se ZA racunom, na istem traku. Kuhar ga odtrga, gostu da
+       zgornji del s stevilko - ob prevzemu se ujameta.
+
+       Vsebuje SAMO kuhinjske artikle: pijaca kuharja ne zanima in bi
+       odrezek po nepotrebnem podaljsala.
+
+       Zneskov tu ni. Odrezek NI racun in ne sme biti videti kot racun -
+       kuhar potrebuje, kaj skuhati, ne koliko stane. -->
+  <div style="page-break-before:always"></div>
+  <div class="doubleline"></div>
+  <div class="center" style="font-size:15px;font-weight:800;letter-spacing:1px;margin:8px 0 2px">ZA KUHINJO</div>
+  <div class="center" style="font-size:30px;font-weight:800;line-height:1.1;margin:4px 0 8px">${d.kitchenNumber}</div>
+  <div class="doubleline"></div>
+  ${d.kitchenLines.map(l => `
+    <div style="display:flex;gap:8px;margin:5px 0;font-size:14px;font-weight:700">
+      <span style="min-width:26px">${l.qty}×</span>
+      <span style="flex:1">${escapeHtml(l.name)}</span>
+    </div>` + (l.note ? `<div class="small" style="margin:0 0 4px 34px;font-style:italic">${escapeHtml(l.note)}</div>` : '')).join('')}
+  <div class="doubleline"></div>
+  <div class="center small" style="margin:6px 0">${d.issueDate ? new Date(d.issueDate).toLocaleTimeString('sl-SI', { hour:'2-digit', minute:'2-digit' }) : ''}</div>
+  ` : ''}
   <div class="footer">
     <div>Izdano s sistemom</div>
     <!-- POPRAVLJENO (prelet 198): v HTML izpisu je pisalo "RACUNKO" brez

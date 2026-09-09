@@ -149,6 +149,9 @@ const CFG = {
     { id: 'never', label: 'Nikoli',    ms: 0      },
   ],
   profiles: [
+    // PRELET 233: profil po meri. Zasloni se izberejo posebej, zato je `nav`
+    // tu prazen - dejanski izbor pride iz `businesses.custom_nav`.
+    { id: 'custom',   name: 'Po meri',          icon: '⚙️', nav: [] },
     { id: 'all',      name: 'Vse v enem',       icon: '🌐', nav: ['floor','sale','calendar','customers','packages','inventory','orders','reports','opravila','admin'] },
     { id: 'rest',     name: 'Restavracija',      icon: '🍽', nav: ['floor','sale','calendar','customers','inventory','orders','reports','opravila','admin'] },
     { id: 'bar',      name: 'Bar / Kavarna',     icon: '🍺', nav: ['floor','sale','customers','inventory','orders','reports','opravila','admin'] },
@@ -2150,6 +2153,10 @@ const SCREENS = {
   customers: { label:'Stranke',         icon:'users'    },
   packages:  { label:'Paketi',          icon:'package'  },
   inventory: { label:'Zaloga',          icon:'box'      },
+  // PRELET 233: kuhinjski zaslon je zivel v NASTAVITVAH, kamor kuhar med
+  // delom ne hodi - in ce bi sel, bi imel pred sabo se cenik in davcne
+  // nastavitve. Zaslon, ki se osvezuje v zivo, spada med zaslone.
+  kitchen:   { label:'Kuhinja',         icon:'receipt'  },
   inventura: { label:'Inventura',       icon:'scale'    },
   orders:    { label:'Računi',          icon:'receipt'  },
   // DODANO (26.8.2026): opravila po fazah izmene in sporocila lastnika osebju.
@@ -14711,14 +14718,30 @@ function KlasikApp() {
     }
   }, [posData.businessProfile])
 
-  const profile = CFG.profiles.find(p => p.id === profileId) || CFG.profiles[0]
+  /**
+   * PROFIL PO MERI (prelet 233)
+   *
+   * Ponujeni profili pokrivajo obicajne primere, ne pa vseh. Lokal s
+   * kuhinjo in vadbenimi paketi ni ne restavracija ne storitve - doslej je
+   * moral izbrati najblizjega in ziveti z odvecnimi ali manjkajocimi zasloni.
+   *
+   * Profil `custom` hrani izbor zaslonov v `businesses.custom_nav`. Ce ta ni
+   * nastavljen, pokazemo vse - bolje odvec kot manjkajoce.
+   */
+  const vsiZasloni = Object.keys(SCREENS)
+  const profile = profileId === 'custom'
+    ? { id:'custom', name:'Po meri', icon:'⚙️',
+        nav: (Array.isArray(posData.customNav) && posData.customNav.length ? posData.customNav : vsiZasloni) }
+    : (CFG.profiles.find(p => p.id === profileId) || CFG.profiles[0])
 
   // POPRAVLJENO (16.8.2026, VARNOST): 'admin' je bil null = dostopen VSEM,
   // vkljucno z blagajniki, ki imajo systemSettings:false - lahko so urejali
   // cenik, zaposlene in nastavitve sistema. 'orders' (Racuni) ostaja odprt
   // vsem, ker blagajnik potrebuje ponoven izpis racuna - gumba za storno in
   // vracilo znotraj pa sta zdaj zaklenjena s svojima pravicama.
-  const screenPerm = { floor:null, sale:'sale', calendar:'manageBookings', customers:'viewMembers', packages:'editPrices', inventory:'editPrices', orders:null, reports:'viewReports', admin:'systemSettings' }
+  // PRELET 233: kuhinjski zaslon je vezan na pravico za prodajo - kdor sme
+  // prodajati, sme videti, kaj je treba pripraviti.
+  const screenPerm = { kitchen:'sale', floor:null, sale:'sale', calendar:'manageBookings', customers:'viewMembers', packages:'editPrices', inventory:'editPrices', orders:null, reports:'viewReports', admin:'systemSettings' }
   const nav = profile.nav.filter(s => { const p = screenPerm[s]; if (!p) return true; return auth.permissions[p] })
 
   const [screen, setScreen] = useState('sale')
