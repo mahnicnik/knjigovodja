@@ -5720,6 +5720,18 @@ function AddCustomerModal({ onClose, onSaved }) {
 }
 
 
+/**
+ * ENOTE ZA ROCNI VNOS (prelet 247)
+ *
+ * Izbrane po tem, kar je v cenikih dejansko v rabi, ne po abecedi: kos in
+ * liter pokrivata vecino, sledijo kilogram, deciliter in centiliter.
+ * Stekleniske enote (0.5L, 0.33L) so tu, ker jih pijaca uporablja pogosto.
+ *
+ * Zakaj izbirnik in ne prosto polje: pri prostem vnosu bi nastali "L", "l"
+ * in "lit" kot tri razlicne enote, ujemanje z artikli pa bi se pokvarilo.
+ */
+const ENOTE = ['kos', 'L', 'kg', 'dl', 'cl', 'g', 'ml', '0.5L', '0.33L', '0.25L', '0.7L', 'zaboj', 'paket', 'ura']
+
 function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
   /**
    * POPRAVLJENO (prelet 246): gumb je odprl PRAZNO okence.
@@ -6016,7 +6028,10 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
   }
 
   return (
-    <Modal open onClose={onClose} width={580}>
+    // POPRAVLJENO (prelet 247): 580 pik je bilo premalo za pet stolpcev
+    // rocnega vnosa - polje s ceno je padlo cez rob in vsebina se je pomikala
+    // levo-desno.
+    <Modal open onClose={onClose} width={760}>
       <ModalHeader title="Uvoz dobavnice (AI)" onClose={onClose}/>
       <div style={{ padding:'20px 22px', maxHeight:'75vh', overflowY:'auto' }}>
         {step === 'upload' && (
@@ -6060,7 +6075,7 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
               Vpišite postavke z dobavnice. Po potrditvi jih boste povezali z artikli v blagajni — enako kot pri samodejnem branju.
             </div>
 
-            <div style={{ display:'grid', gridTemplateColumns:'1.4fr 1fr 1fr', gap:8, marginBottom:16 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr)', gap:8, marginBottom:16 }}>
               <input value={rocno.dobavitelj} onChange={e=>setRocno(p=>({...p, dobavitelj:e.target.value}))}
                 placeholder="Dobavitelj"
                 style={{ padding:'9px 11px', borderRadius:8, border:'1px solid '+T.line, fontSize:13, fontFamily:'inherit', background:T.inputBg }}/>
@@ -6073,7 +6088,7 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
 
             <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', marginBottom:8 }}>Postavke</div>
             {rocno.vrstice.map((v, i) => (
-              <div key={i} style={{ display:'grid', gridTemplateColumns:'2fr 0.8fr 0.8fr 1fr auto', gap:6, marginBottom:6, alignItems:'center' }}>
+              <div key={i} style={{ display:'grid', gridTemplateColumns:'minmax(0,2.2fr) minmax(0,0.7fr) minmax(0,0.9fr) minmax(0,1fr) auto', gap:6, marginBottom:6, alignItems:'center' }}>
                 <input value={v.naziv} onChange={e=>setRocno(p=>({...p, vrstice:p.vrstice.map((x,j)=>j===i?{...x,naziv:e.target.value}:x)}))}
                   placeholder="Naziv artikla"
                   style={{ padding:'8px 10px', borderRadius:7, border:'1px solid '+T.line, fontSize:12.5, fontFamily:'inherit', background:T.inputBg }}/>
@@ -6081,9 +6096,14 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
                   onChange={e=>setRocno(p=>({...p, vrstice:p.vrstice.map((x,j)=>j===i?{...x,kolicina:Number(e.target.value)}:x)}))}
                   placeholder="kol."
                   style={{ padding:'8px 10px', borderRadius:7, border:'1px solid '+T.line, fontSize:12.5, fontFamily:'inherit', background:T.inputBg, textAlign:'right' }}/>
-                <input value={v.enota} onChange={e=>setRocno(p=>({...p, vrstice:p.vrstice.map((x,j)=>j===i?{...x,enota:e.target.value}:x)}))}
-                  placeholder="enota"
-                  style={{ padding:'8px 10px', borderRadius:7, border:'1px solid '+T.line, fontSize:12.5, fontFamily:'inherit', background:T.inputBg }}/>
+                {/* PRELET 247: enota je izbirnik, ne prosto polje.
+                    Enote so iz obstojecih artiklov, da se zapis ujema - pri
+                    prostem vnosu bi nastali "L", "l" in "lit" kot tri
+                    razlicne enote in ujemanje z artikli bi se pokvarilo. */}
+                <select value={v.enota} onChange={e=>setRocno(p=>({...p, vrstice:p.vrstice.map((x,j)=>j===i?{...x,enota:e.target.value}:x)}))}
+                  style={{ padding:'8px 10px', borderRadius:7, border:'1px solid '+T.line, fontSize:12.5, fontFamily:'inherit', background:T.inputBg }}>
+                  {ENOTE.map(e => <option key={e} value={e}>{e}</option>)}
+                </select>
                 <input type="number" step="any" min={0} value={v.neto_cena_brez_ddv || ''}
                   onChange={e=>setRocno(p=>({...p, vrstice:p.vrstice.map((x,j)=>j===i?{...x,neto_cena_brez_ddv:Number(e.target.value)}:x)}))}
                   placeholder="cena/enoto"
