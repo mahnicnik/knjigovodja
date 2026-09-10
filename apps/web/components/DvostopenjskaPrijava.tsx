@@ -35,6 +35,20 @@ export default function DvostopenjskaPrijava() {
   const [napaka, setNapaka] = useState<string | null>(null)
   const [sporocilo, setSporocilo] = useState<string | null>(null)
   const [delam, setDelam] = useState(false)
+  // PRELET 241: kode se prikazejo SAMO ob ustvarjanju - v bazi so zgoscene.
+  const [noveKode, setNoveKode] = useState<string[] | null>(null)
+
+  async function ustvariKode() {
+    setNapaka(null); setDelam(true)
+    try {
+      const res = await fetch('/api/mfa/backup-codes', { method: 'POST' })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'Napaka')
+      setNoveKode(d.kode)
+    } catch (e: any) {
+      setNapaka(e?.message || 'Kod ni bilo mogoče ustvariti.')
+    } finally { setDelam(false) }
+  }
 
   const sb = createClient()
 
@@ -139,6 +153,55 @@ export default function DvostopenjskaPrijava() {
             <div style={{ fontSize:12, color:'#166534', marginTop:4, lineHeight:1.5 }}>
               Ob naslednji prijavi boste vpisali kodo iz aplikacije.
             </div>
+          </div>
+
+          {/* REZERVNE KODE (prelet 241)
+              Brez njih je izgubljen telefon enak izgubljenemu racunu - in prav
+              to je razlog, da ljudje dvostopenjske prijave ne vklopijo. */}
+          <div style={{ padding:'14px 16px', borderRadius:10, border:'1px solid #f0f0f0', marginBottom:16 }}>
+            <div style={{ fontSize:13, fontWeight:600, marginBottom:6 }}>Rezervne kode</div>
+            <div style={{ fontSize:12, color:'#666', marginBottom:12, lineHeight:1.6 }}>
+              Če izgubite telefon, se z rezervno kodo prijavite in dvostopenjsko prijavo
+              nastavite na novo. Vsaka koda velja enkrat.
+            </div>
+
+            {noveKode ? (
+              <>
+                <div style={{ padding:'10px 12px', borderRadius:8, background:'#fffbeb', border:'1px solid #fde68a', fontSize:12, color:'#92400e', marginBottom:10, lineHeight:1.6 }}>
+                  <b>Shranite jih zdaj.</b> Pozneje jih ni mogoče priklicati — le ustvariti nove.
+                  Hranite jih ločeno od gesla; skupaj z geslom omogočajo dostop do računa.
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom:12 }}>
+                  {noveKode.map(k => (
+                    <code key={k} style={{ fontSize:13, letterSpacing:'0.06em', padding:'7px 9px', background:'#f9fafb', borderRadius:6, textAlign:'center' }}>{k}</code>
+                  ))}
+                </div>
+                <div style={{ display:'flex', gap:8 }}>
+                  <button onClick={() => { navigator.clipboard?.writeText(noveKode.join('\n')); setSporocilo('Kode so kopirane.') }}
+                    style={{ padding:'9px 14px', borderRadius:9, border:'1px solid #e5e7eb', background:'#fff', cursor:'pointer', fontFamily:'inherit', fontSize:12.5 }}>
+                    Kopiraj
+                  </button>
+                  <button onClick={() => window.print()}
+                    style={{ padding:'9px 14px', borderRadius:9, border:'1px solid #e5e7eb', background:'#fff', cursor:'pointer', fontFamily:'inherit', fontSize:12.5 }}>
+                    Natisni
+                  </button>
+                  <button onClick={() => setNoveKode(null)}
+                    style={{ padding:'9px 14px', borderRadius:9, border:'none', background:'#0D1F12', color:'#fff', cursor:'pointer', fontFamily:'inherit', fontSize:12.5, fontWeight:600 }}>
+                    Shranil sem jih
+                  </button>
+                </div>
+              </>
+            ) : (
+              <button onClick={ustvariKode} disabled={delam}
+                style={{ padding:'9px 14px', borderRadius:9, border:'1px solid #e5e7eb', background:'#fff', cursor:'pointer', fontFamily:'inherit', fontSize:12.5 }}>
+                {delam ? 'Pripravljam…' : 'Ustvari nove rezervne kode'}
+              </button>
+            )}
+            {!noveKode && (
+              <div style={{ fontSize:11.5, color:'#888', marginTop:8 }}>
+                Ustvarjanje novih kod razveljavi obstoječe.
+              </div>
+            )}
           </div>
           <button onClick={izklopi} disabled={delam}
             style={{ padding:'10px 16px', borderRadius:10, border:'1px solid #e5e7eb', background:'#fff',

@@ -15,6 +15,29 @@ export default function LoginPage() {
   const [mfaFaktor, setMfaFaktor] = useState<string | null>(null)
   const [mfaIzziv, setMfaIzziv] = useState<string | null>(null)
   const [mfaKoda, setMfaKoda] = useState('')
+  // PRELET 241: rezervna koda za primer izgubljenega telefona.
+  const [rezervni, setRezervni] = useState(false)
+  const [rezervnaKoda, setRezervnaKoda] = useState('')
+
+  async function uporabiRezervno() {
+    if (rezervnaKoda.trim().length < 8) return
+    setLoading(true); setError('')
+    try {
+      const res = await fetch('/api/mfa/use-backup-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ koda: rezervnaKoda }),
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'Koda ni pravilna.')
+      const kam = new URLSearchParams(window.location.search).get('next')
+      const varnaPot = kam && kam.startsWith('/') && !kam.startsWith('//') ? kam : null
+      router.push(varnaPot || '/dashboard')
+    } catch (e: any) {
+      setError(e?.message || 'Kode ni bilo mogoče preveriti.')
+      setLoading(false)
+    }
+  }
 
   async function potrdiKodo() {
     if (!mfaFaktor || !mfaIzziv || mfaKoda.length < 6) return
@@ -135,6 +158,32 @@ export default function LoginPage() {
               className="w-full bg-gray-900 text-white rounded-xl py-3 font-medium disabled:bg-gray-200 disabled:text-gray-400">
               {loading ? 'Preverjam…' : 'Potrdi in se prijavi'}
             </button>
+            {/* PRELET 241: rezervna koda. Seje ne dvigne na drugo stopnjo -
+                Supabase tega ne omogoca - ampak dvostopenjsko prijavo ODSTRANI,
+                da uporabnik pride noter in jo nastavi na novo. */}
+            {rezervni ? (
+              <div className="space-y-2">
+                <p className="text-sm text-gray-600">Vpišite eno od rezervnih kod.</p>
+                <input value={rezervnaKoda} onChange={e => setRezervnaKoda(e.target.value.toUpperCase())}
+                  onKeyDown={e => { if (e.key === 'Enter') uporabiRezervno() }}
+                  placeholder="XXXXX-XXXXX" autoFocus
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-center tracking-[0.08em] focus:outline-none focus:ring-2 focus:ring-gray-900"/>
+                <button onClick={uporabiRezervno} disabled={loading || rezervnaKoda.length < 8}
+                  className="w-full bg-gray-900 text-white rounded-xl py-3 font-medium disabled:bg-gray-200 disabled:text-gray-400">
+                  {loading ? 'Preverjam…' : 'Odkleni z rezervno kodo'}
+                </button>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  Po uporabi bo dvostopenjska prijava izklopljena. Nastavite jo znova v nastavitvah.
+                </p>
+                <button onClick={() => { setRezervni(false); setRezervnaKoda(''); setError('') }}
+                  className="w-full text-sm text-gray-500 hover:text-gray-900">Nazaj</button>
+              </div>
+            ) : (
+              <button onClick={() => { setRezervni(true); setError('') }}
+                className="w-full text-sm text-gray-500 hover:text-gray-900">
+                Nimam telefona — uporabi rezervno kodo
+              </button>
+            )}
             <button onClick={() => { setMfaFaktor(null); setMfaIzziv(null); setMfaKoda(''); setError('') }}
               className="w-full text-sm text-gray-500 hover:text-gray-900">
               Nazaj na prijavo
