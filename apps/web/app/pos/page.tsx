@@ -2295,6 +2295,24 @@ function SideNav({ screen, setScreen, nav, staffId }) {
       {/* PRELET 232: gumbi spodaj so ZUNAJ pomicnega dela, da so vedno
           dosegljivi - `marginTop:'auto'` zato ni vec potreben. */}
       <div style={{ display:'flex', flexDirection:'column', gap:4, alignItems:'center', paddingTop:6, flexShrink:0 }}>
+        {/* POPRAVLJENO (prelet 240): BLAGAJNA NE UPORABLJA `AppLayout`.
+         *
+         * Prelet 237 je plavajoci gumb za pomoc odstranil in ga nadomestil s
+         * postavko v meniju - a SAMO v portalu, ki tece skozi `AppLayout`.
+         * Blagajna ima svoj meni, zato je tu gumb izginil brez nadomestila.
+         *
+         * Napako sem dvakrat iskal v portalu, kjer je gumb ves cas bil.
+         *
+         * Dogodek je isti kot v portalu; `PageHelp` ga uslisi ne glede na to,
+         * od kod pride, ker zivi v korenski postavitvi. */}
+        <button onClick={() => window.dispatchEvent(new CustomEvent('racunko-pomoc'))}
+          title="Pomoč za ta zaslon"
+          style={{ width:64, padding:'9px 4px', borderRadius:10, border:'none', background:'transparent',
+                   color:T.muted, cursor:'pointer', fontFamily:'inherit', display:'flex',
+                   flexDirection:'column', alignItems:'center', gap:3 }}>
+          <span style={{ fontSize:17, lineHeight:1 }}>?</span>
+          <span style={{ fontSize:10, fontWeight:700 }}>Pomoč</span>
+        </button>
         {urejanje && (
           <button onClick={() => { try { localStorage.removeItem(kljuc) } catch {}; setVrstniRed(nav) }}
             title="Povrni privzeti vrstni red"
