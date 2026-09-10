@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 
 interface HelpStep {
@@ -269,6 +269,25 @@ export default function PageHelp() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
 
+  /**
+   * PRELET 237: pomoc odpre postavka v meniju.
+   *
+   * Meni je v `AppLayout`, vsebina pomoci pa tu - komponenti se ne poznata.
+   * Povezemo ju z dogodkom na oknu: meni ga sprozi, ta komponenta ga uslisi.
+   *
+   * Ob priklopu javimo, da je pomoc za to stran NA VOLJO, da meni postavke
+   * ne kaze tam, kjer bi bila mrtva.
+   */
+  useEffect(() => {
+    const odpri = () => setOpen(true)
+    window.addEventListener('racunko-pomoc', odpri)
+    window.dispatchEvent(new CustomEvent('racunko-pomoc-na-voljo', { detail: true }))
+    return () => {
+      window.removeEventListener('racunko-pomoc', odpri)
+      window.dispatchEvent(new CustomEvent('racunko-pomoc-na-voljo', { detail: false }))
+    }
+  }, [])
+
   const help = PAGE_HELP[pathname] || DEFAULT_HELP
   const jeBlagajna = pathname?.startsWith('/pos') ?? false
 
@@ -295,7 +314,19 @@ export default function PageHelp() {
           }
         }
       `}</style>
+      {/* POPRAVLJENO (prelet 237): PLAVAJOCI GUMB JE ODSTRANJEN.
+          Bil je pritrjen cez vsebino in so ga ze dvakrat premikali, ker je
+          nekaj zakrival - najprej ga je pozrl stranski meni, nato je na
+          blagajni prekrival znesek "Skupaj". Vsak tak premik je odkril novo
+          mesto, ki ga zakriva.
+
+          Gumb, ki se mora umikati vsebini, je na napacnem mestu. Zdaj je
+          navadna postavka v meniju, pod Nastavitvami - tam, kjer ga uporabnik
+          isce in kjer nicesar ne prekriva.
+
+          Okence s pomocjo ostane isto; odpre ga dogodek iz menija. */}
       <button
+        hidden
         className="pagehelp-fab"
         onClick={() => setOpen(true)}
         style={{

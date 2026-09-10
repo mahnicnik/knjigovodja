@@ -126,6 +126,14 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
   const [role, setRole] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
+  // PRELET 237: ali ima trenutna stran pomoc. Javi jo `PageHelp` ob priklopu.
+  const [pomocNaVoljo, setPomocNaVoljo] = useState(false)
+
+  useEffect(() => {
+    const posluh = (e: Event) => setPomocNaVoljo(!!(e as CustomEvent).detail)
+    window.addEventListener('racunko-pomoc-na-voljo', posluh)
+    return () => window.removeEventListener('racunko-pomoc-na-voljo', posluh)
+  }, [])
   const [saving, setSaving] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
 
@@ -347,6 +355,19 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
             </div>
           </div>
         </Link>
+        {/* PRELET 237: pomoc za trenutno stran. Prikaze se le, kadar stran
+            pomoc sploh ima - postavka, ki ne naredi nicesar, je slabsa od
+            nobene. */}
+        {pomocNaVoljo && (
+          <button onClick={() => window.dispatchEvent(new CustomEvent('racunko-pomoc'))}
+            style={{ width: '100%', marginTop: '4px', padding: '5px 8px', background: 'transparent',
+                     border: 'none', color: 'rgba(255,255,255,0.55)', fontSize: '12px',
+                     textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit',
+                     display: 'flex', alignItems: 'center', gap: '8px', borderRadius: '8px' }}>
+            <span style={{ fontSize: '13px' }}>?</span>
+            <span>Pomoč za to stran</span>
+          </button>
+        )}
         <button onClick={handleLogout} style={{ width: '100%', marginTop: '4px', padding: '5px 8px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.2)', fontSize: '11px', cursor: 'pointer', textAlign: 'left', borderRadius: '6px' }}>Odjava</button>
         <div style={{display:'flex',gap:'12px',padding:'4px 8px',marginBottom:'4px'}}>
   <Link href="/privacy" style={{fontSize:'10px',color:'rgba(255,255,255,0.2)',textDecoration:'none'}}>Zasebnost</Link>
