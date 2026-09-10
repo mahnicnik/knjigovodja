@@ -5720,8 +5720,9 @@ function AddCustomerModal({ onClose, onSaved }) {
 }
 
 
-function DobavnicaImportModal({ posData, onClose, onImported }) {
-  const [step, setStep] = React.useState('upload')
+function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
+  // PRELET 245: `zacetniKorak='rocno'` odpre okence naravnost v rocnem vnosu.
+  const [step, setStep] = React.useState(zacetniKorak === 'rocno' ? 'preview' : 'upload')
   const [loading, setLoading] = React.useState(false)
   const [result, setResult] = React.useState(null)
   const [error, setError] = React.useState('')
@@ -6011,6 +6012,23 @@ function DobavnicaImportModal({ posData, onClose, onImported }) {
               <div style={{ fontSize:12, color:T.muted }}>PDF dobavnice ali racuni dobaviteljev</div>
               <input ref={fileRef} type="file" accept=".pdf" style={{ display:'none' }} onChange={e=>handleFile(e.target.files?.[0])}/>
             </div>
+            {/* PRELET 245: ROCNI VNOS.
+             *
+             * AI branje deluje, a ne vedno. Ena dobavnica je bila natisnjena
+             * CEZ starega, tako da se je vsak znak podvojil - iz takega
+             * dokumenta ne prebere niti clovek.
+             *
+             * Prelet 243 je rocni vnos dodal v PORTAL (/zaloge), uporabnik pa
+             * dela v BLAGAJNI, ki ima svoj zaslon Zaloga. Tam ga ni bilo.
+             * Ista napaka kot pri gumbu za pomoc (prelet 240).
+             *
+             * Vnos vodi v ISTI korak "preview" kot samodejno branje, zato se
+             * uporabi ze obstojece ujemanje z artikli in prevzem v zalogo -
+             * brez podvajanja logike. */}
+            <button onClick={() => { setResult({ dobavitelj:'', dokument:'', datum:new Date().toISOString().slice(0,10), artikli:[{ opis:'', kolicina:1, cena_brez_ddv:0, stopnja_ddv:22 }] }); setSelected({ 0:true }); setStep('preview') }}
+              style={{ marginTop:14, width:'100%', padding:'11px', borderRadius:10, border:'1px dashed '+T.line, background:'transparent', color:T.muted, cursor:'pointer', fontFamily:'inherit', fontSize:12.5 }}>
+              Ne gre samodejno? Vpiši dobavnico ročno
+            </button>
             {loading && <div style={{ marginTop:16, padding:'14px 16px', background:T.accentSoft, borderRadius:10, fontSize:13, color:T.accent }}>AI analizira dobavnico...</div>}
             {error && <div style={{ marginTop:12, padding:'12px 14px', background:'rgba(168,50,50,0.1)', borderRadius:9, fontSize:13, color:T.danger }}>{error}</div>}
           </div>
@@ -6619,7 +6637,7 @@ function InventoryScreen({ posData }) {
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', minHeight:0 }}>
-      {dobavnicaModal && <DobavnicaImportModal posData={posData} onClose={()=>setDobavnicaModal(false)} onImported={()=>{posData.refresh();setDobavnicaModal(false)}}/> }
+      {dobavnicaModal && <DobavnicaImportModal posData={posData} zacetniKorak={dobavnicaModal === 'rocno' ? 'rocno' : 'upload'} onClose={()=>setDobavnicaModal(false)} onImported={()=>{posData.refresh();setDobavnicaModal(false)}}/> }
 
       {/* Header statistike */}
       <div style={{ padding:'14px 20px', background:T.surface, borderBottom:'1px solid '+T.line }}>
@@ -6647,6 +6665,9 @@ function InventoryScreen({ posData }) {
           </div>
           <div style={{ marginLeft:'auto', display:'flex', gap:6, alignItems:'center' }}>
             <button onClick={()=>setDobavnicaModal(true)} style={{ ...btnS, fontSize:12, display:'flex', alignItems:'center', gap:5 }}>Uvozi dobavnico</button>
+            {/* PRELET 245: rocni vnos je v istem okencu - tu le bliznjica,
+                da ga uporabnik najde brez ugibanja. */}
+            <button onClick={()=>setDobavnicaModal('rocno')} style={{ ...btnS, fontSize:12, display:'flex', alignItems:'center', gap:5 }}>Ročni vnos</button>
             <button onClick={()=>exportInventory(allItems,allIngredients)} style={{ ...btnS, fontSize:12, display:'flex', alignItems:'center', gap:5 }}>
               <KI name="print" size={13}/> Izvozi
             </button>
