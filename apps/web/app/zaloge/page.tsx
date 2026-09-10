@@ -48,6 +48,63 @@ export default function ZalogePage() {
   // DODANO (26.8.2026): uvoz dobavnice. Blagajna ga je imela, portal pa ne -
   // stranka brez blagajne je morala vsak artikel vnesti rocno.
   const [uvozModal, setUvozModal] = useState<any>(null)
+  // PRELET 243: rocni vnos dobavnice z vec postavkami naenkrat.
+  const [rocnaDobavnica, setRocnaDobavnica] = useState<any>(null)
+  const [shranjujemDobavnico, setShranjujemDobavnico] = useState(false)
+
+  /**
+   * SHRANJEVANJE ROCNE DOBAVNICE (prelet 243)
+   *
+   * Naredi natanko to, kar ob uspehu naredi AI uvoz: za vsako postavko zapise
+   * gibanje zaloge, poveca kolicino in osvezi nabavno ceno.
+   *
+   * Zaloga se povecuje ATOMARNO v bazi, ne z branjem in zapisom - ce vmes tece
+   * prodaja na blagajni, se tista sprememba ne sme izgubiti.
+   *
+   * Ce katera postavka ne uspe, se ustavimo in povemo, katera. Delno vpisana
+   * dobavnica je slabsa od nevpisane: uporabnik ne ve, kaj je ze notri.
+   */
+  async function shraniRocnoDobavnico() {
+    if (!orgId || !rocnaDobavnica) return
+    const veljavne = rocnaDobavnica.vrstice.filter((v: any) => v.itemId && Number(v.kolicina) > 0)
+    if (veljavne.length === 0) { showToast('Dodajte vsaj eno postavko s količino.'); return }
+
+    setShranjujemDobavnico(true)
+    try {
+      const sklic = [rocnaDobavnica.dobavitelj, rocnaDobavnica.stevilka]
+        .filter(Boolean).join(' · ') || 'Ročni vnos dobavnice'
+
+      for (const v of veljavne) {
+        const artikel = items.find(i => i.id === v.itemId)
+        const cena = Number(v.cena) > 0 ? Number(v.cena) : null
+
+        const { error: movErr } = await supabase.from('inventory_movements').insert({
+          org_id: orgId, item_id: v.itemId, type: 'in',
+          quantity: Number(v.kolicina), unit_price: cena, reference: sklic,
+        })
+        if (movErr) throw new Error(`${artikel?.name || 'postavka'}: ${movErr.message}`)
+
+        const { error: stockErr } = await supabase.rpc('adjust_inventory_stock', {
+          p_item_id: v.itemId, p_delta: Number(v.kolicina),
+        })
+        if (stockErr) throw new Error(`${artikel?.name || 'postavka'}: zaloge ni bilo mogoče povečati`)
+
+        // Nabavno ceno osvezimo SAMO, ce je vpisana - sicer bi jo prazno polje
+        // pobrisalo in izracun nabavne vrednosti bi se pokvaril.
+        if (cena) {
+          await supabase.from('inventory_items').update({ purchase_price: cena }).eq('id', v.itemId)
+        }
+      }
+
+      showToast(`Dobavnica vpisana — ${veljavne.length} postavk`)
+      setRocnaDobavnica(null)
+      await load()
+    } catch (e: any) {
+      showToast('Napaka: ' + (e?.message || 'vnos ni uspel'))
+    } finally {
+      setShranjujemDobavnico(false)
+    }
+  }
   // DODANO (25.8.2026): portal in blagajna sta imela LOCENI zalogi - v portalu
   // 1 artikel, v blagajni 123. Ob koncu leta ni bilo od kod dobiti popisa za
   // racunovodkinjo. Zdaj portal bere zalogo NEPOSREDNO iz blagajne.
@@ -214,6 +271,13 @@ export default function ZalogePage() {
           <div style={{ display: 'flex', gap: 10 }}>
             <Link href="/dashboard" style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)', padding: '8px 16px', borderRadius: 8, fontSize: 13, textDecoration: 'none' }}>← Nazaj</Link>
             <button onClick={() => setUvozModal({ korak: 'izbira' })} style={{ background: 'rgba(255,255,255,0.12)', color: '#fff', border: 0, padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>📄 Uvozi dobavnico</button>
+            {/* PRELET 243: rocni vnos cele dobavnice.
+                AI branje deluje, a ne vedno - dobavnica je lahko slabo
+                skenirana, rocno napisana ali (kot pri enem dobavitelju)
+                natisnjena cez star dokument, tako da se znaki podvajajo.
+                Takrat mora obstajati pot naprej, sicer prevzem obstane. */}
+            <button onClick={() => setRocnaDobavnica({ dobavitelj:'', stevilka:'', datum:new Date().toISOString().slice(0,10), vrstice:[{ itemId:'', kolicina:0, cena:0 }] })}
+              style={{ background: 'rgba(255,255,255,0.12)', color: '#fff', border: 0, padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>✍️ Ročni vnos</button>
             <button onClick={() => setItemModal({ unit: 'kos', vat_rate: 22, current_stock: 0, min_stock: 0 })} style={{ background: '#1D9E75', color: '#fff', border: 0, padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>+ Nov artikel</button>
           </div>
         </div>
@@ -416,6 +480,88 @@ export default function ZalogePage() {
       </div>
 
       {/* ARTIKEL MODAL */}
+      {/* PRELET 243: okence za rocni vnos dobavnice. */}
+      {rocnaDobavnica && (
+        <div onClick={e => { if (e.target === e.currentTarget && !shranjujemDobavnico) setRocnaDobavnica(null) }}
+          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', display:'flex',
+                   alignItems:'center', justifyContent:'center', zIndex:1000, padding:16 }}>
+          <div style={{ background:'#fff', borderRadius:16, padding:24, width:'100%', maxWidth:720,
+                        maxHeight:'88vh', overflowY:'auto' }}>
+            <div style={{ fontSize:17, fontWeight:700, marginBottom:4 }}>Ročni vnos dobavnice</div>
+            <div style={{ fontSize:12.5, color:'#888', marginBottom:18, lineHeight:1.6 }}>
+              Uporabite, kadar dobavnice ni mogoče prebrati samodejno. Postavke povečajo zalogo enako,
+              kot bi jo samodejni uvoz.
+            </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1.4fr 1fr 1fr', gap:10, marginBottom:18 }}>
+              <div>
+                <label style={{ fontSize:11, color:'#666', display:'block', marginBottom:4 }}>Dobavitelj</label>
+                <input value={rocnaDobavnica.dobavitelj}
+                  onChange={e => setRocnaDobavnica((p:any) => ({ ...p, dobavitelj:e.target.value }))}
+                  placeholder="npr. Černigoj Jožef"
+                  style={{ width:'100%', padding:'9px 11px', borderRadius:8, border:'1px solid #e5e7eb', fontSize:13, fontFamily:'inherit' }}/>
+              </div>
+              <div>
+                <label style={{ fontSize:11, color:'#666', display:'block', marginBottom:4 }}>Št. dobavnice</label>
+                <input value={rocnaDobavnica.stevilka}
+                  onChange={e => setRocnaDobavnica((p:any) => ({ ...p, stevilka:e.target.value }))}
+                  placeholder="3/2026"
+                  style={{ width:'100%', padding:'9px 11px', borderRadius:8, border:'1px solid #e5e7eb', fontSize:13, fontFamily:'inherit' }}/>
+              </div>
+              <div>
+                <label style={{ fontSize:11, color:'#666', display:'block', marginBottom:4 }}>Datum</label>
+                <input type="date" value={rocnaDobavnica.datum}
+                  onChange={e => setRocnaDobavnica((p:any) => ({ ...p, datum:e.target.value }))}
+                  style={{ width:'100%', padding:'9px 11px', borderRadius:8, border:'1px solid #e5e7eb', fontSize:13, fontFamily:'inherit' }}/>
+              </div>
+            </div>
+
+            <div style={{ fontSize:12, fontWeight:600, marginBottom:8 }}>Postavke</div>
+            {rocnaDobavnica.vrstice.map((v:any, i:number) => (
+              <div key={i} style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr auto', gap:8, marginBottom:8, alignItems:'center' }}>
+                <select value={v.itemId}
+                  onChange={e => setRocnaDobavnica((p:any) => ({ ...p, vrstice: p.vrstice.map((x:any,j:number) => j===i ? { ...x, itemId:e.target.value } : x) }))}
+                  style={{ padding:'9px 11px', borderRadius:8, border:'1px solid #e5e7eb', fontSize:13, fontFamily:'inherit', background:'#fff' }}>
+                  <option value="">— izberite artikel —</option>
+                  {items.map(a => <option key={a.id} value={a.id}>{a.name} ({a.unit})</option>)}
+                </select>
+                <input type="number" step="any" min={0} value={v.kolicina || ''}
+                  onChange={e => setRocnaDobavnica((p:any) => ({ ...p, vrstice: p.vrstice.map((x:any,j:number) => j===i ? { ...x, kolicina:Number(e.target.value) } : x) }))}
+                  placeholder="količina"
+                  style={{ padding:'9px 11px', borderRadius:8, border:'1px solid #e5e7eb', fontSize:13, fontFamily:'inherit', textAlign:'right' }}/>
+                <input type="number" step="any" min={0} value={v.cena || ''}
+                  onChange={e => setRocnaDobavnica((p:any) => ({ ...p, vrstice: p.vrstice.map((x:any,j:number) => j===i ? { ...x, cena:Number(e.target.value) } : x) }))}
+                  placeholder="cena/enoto"
+                  style={{ padding:'9px 11px', borderRadius:8, border:'1px solid #e5e7eb', fontSize:13, fontFamily:'inherit', textAlign:'right' }}/>
+                <button onClick={() => setRocnaDobavnica((p:any) => ({ ...p, vrstice: p.vrstice.length > 1 ? p.vrstice.filter((_:any,j:number) => j!==i) : p.vrstice }))}
+                  title="Odstrani vrstico"
+                  style={{ border:'none', background:'transparent', color:'#999', cursor:'pointer', fontSize:18, padding:'0 4px' }}>×</button>
+              </div>
+            ))}
+
+            <button onClick={() => setRocnaDobavnica((p:any) => ({ ...p, vrstice: [...p.vrstice, { itemId:'', kolicina:0, cena:0 }] }))}
+              style={{ marginTop:4, padding:'8px 14px', borderRadius:8, border:'1px dashed #d1d5db', background:'#fff', cursor:'pointer', fontSize:12.5, fontFamily:'inherit' }}>
+              + Dodaj postavko
+            </button>
+
+            <div style={{ fontSize:11.5, color:'#888', marginTop:14, lineHeight:1.6 }}>
+              Cena na enoto ni obvezna — če jo pustite prazno, obstoječa nabavna cena artikla ostane nespremenjena.
+            </div>
+
+            <div style={{ display:'flex', gap:8, marginTop:20, justifyContent:'flex-end' }}>
+              <button onClick={() => setRocnaDobavnica(null)} disabled={shranjujemDobavnico}
+                style={{ padding:'10px 18px', borderRadius:9, border:'1px solid #e5e7eb', background:'#fff', cursor:'pointer', fontSize:13, fontFamily:'inherit' }}>
+                Prekliči
+              </button>
+              <button onClick={shraniRocnoDobavnico} disabled={shranjujemDobavnico}
+                style={{ padding:'10px 18px', borderRadius:9, border:'none', background:'#0D1F12', color:'#fff', cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:'inherit' }}>
+                {shranjujemDobavnico ? 'Shranjujem…' : 'Vpiši in povečaj zalogo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {uvozModal && orgId && (
         <UvozDobavniceModal
           orgId={orgId}
