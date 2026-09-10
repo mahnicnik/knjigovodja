@@ -5721,8 +5721,25 @@ function AddCustomerModal({ onClose, onSaved }) {
 
 
 function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
-  // PRELET 245: `zacetniKorak='rocno'` odpre okence naravnost v rocnem vnosu.
-  const [step, setStep] = React.useState(zacetniKorak === 'rocno' ? 'preview' : 'upload')
+  /**
+   * POPRAVLJENO (prelet 246): gumb je odprl PRAZNO okence.
+   *
+   * Prelet 245 je rocni vnos vodil v korak "preview", a ta je bil zgrajen za
+   * PREGLED prebranega, ne za vnasanje - kolicino izpise kot besedilo in
+   * ponuja le izbiro, s katerim artiklom naj se vrstica ujame. Poleg tega je
+   * ob odprtju iz orodne vrstice `result` ostal prazen, zato se ni izrisalo
+   * nic.
+   *
+   * Zdaj ima rocni vnos SVOJ korak z urejljivimi vrsticami. Ko ga uporabnik
+   * potrdi, se sestavi enak zapis, kot ga vrne samodejno branje, in gre v
+   * isti pregled - tako se uporabi ze obstojece ujemanje z artikli in prevzem
+   * v zalogo.
+   */
+  const [step, setStep] = React.useState(zacetniKorak === 'rocno' ? 'rocno' : 'upload')
+  const [rocno, setRocno] = React.useState({
+    dobavitelj: '', stevilka: '', datum: new Date().toISOString().slice(0, 10),
+    vrstice: [{ naziv: '', kolicina: 1, enota: 'kos', neto_cena_brez_ddv: 0 }],
+  })
   const [loading, setLoading] = React.useState(false)
   const [result, setResult] = React.useState(null)
   const [error, setError] = React.useState('')
@@ -6025,7 +6042,7 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
              * Vnos vodi v ISTI korak "preview" kot samodejno branje, zato se
              * uporabi ze obstojece ujemanje z artikli in prevzem v zalogo -
              * brez podvajanja logike. */}
-            <button onClick={() => { setResult({ dobavitelj:'', dokument:'', datum:new Date().toISOString().slice(0,10), artikli:[{ opis:'', kolicina:1, cena_brez_ddv:0, stopnja_ddv:22 }] }); setSelected({ 0:true }); setStep('preview') }}
+            <button onClick={() => { setError(''); setStep('rocno') }}
               style={{ marginTop:14, width:'100%', padding:'11px', borderRadius:10, border:'1px dashed '+T.line, background:'transparent', color:T.muted, cursor:'pointer', fontFamily:'inherit', fontSize:12.5 }}>
               Ne gre samodejno? Vpiši dobavnico ročno
             </button>
@@ -6033,6 +6050,81 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
             {error && <div style={{ marginTop:12, padding:'12px 14px', background:'rgba(168,50,50,0.1)', borderRadius:9, fontSize:13, color:T.danger }}>{error}</div>}
           </div>
         )}
+        {/* PRELET 246: ROCNI VNOS.
+            Uporabi se, kadar dokumenta ni mogoce prebrati - slabo skeniran,
+            rocno napisan ali natisnjen cez starega, tako da se znaki
+            podvajajo. */}
+        {step === 'rocno' && (
+          <div>
+            <div style={{ fontSize:13, color:T.muted, marginBottom:16, lineHeight:1.6 }}>
+              Vpišite postavke z dobavnice. Po potrditvi jih boste povezali z artikli v blagajni — enako kot pri samodejnem branju.
+            </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1.4fr 1fr 1fr', gap:8, marginBottom:16 }}>
+              <input value={rocno.dobavitelj} onChange={e=>setRocno(p=>({...p, dobavitelj:e.target.value}))}
+                placeholder="Dobavitelj"
+                style={{ padding:'9px 11px', borderRadius:8, border:'1px solid '+T.line, fontSize:13, fontFamily:'inherit', background:T.inputBg }}/>
+              <input value={rocno.stevilka} onChange={e=>setRocno(p=>({...p, stevilka:e.target.value}))}
+                placeholder="Št. dobavnice"
+                style={{ padding:'9px 11px', borderRadius:8, border:'1px solid '+T.line, fontSize:13, fontFamily:'inherit', background:T.inputBg }}/>
+              <input type="date" value={rocno.datum} onChange={e=>setRocno(p=>({...p, datum:e.target.value}))}
+                style={{ padding:'9px 11px', borderRadius:8, border:'1px solid '+T.line, fontSize:13, fontFamily:'inherit', background:T.inputBg }}/>
+            </div>
+
+            <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', marginBottom:8 }}>Postavke</div>
+            {rocno.vrstice.map((v, i) => (
+              <div key={i} style={{ display:'grid', gridTemplateColumns:'2fr 0.8fr 0.8fr 1fr auto', gap:6, marginBottom:6, alignItems:'center' }}>
+                <input value={v.naziv} onChange={e=>setRocno(p=>({...p, vrstice:p.vrstice.map((x,j)=>j===i?{...x,naziv:e.target.value}:x)}))}
+                  placeholder="Naziv artikla"
+                  style={{ padding:'8px 10px', borderRadius:7, border:'1px solid '+T.line, fontSize:12.5, fontFamily:'inherit', background:T.inputBg }}/>
+                <input type="number" step="any" min={0} value={v.kolicina || ''}
+                  onChange={e=>setRocno(p=>({...p, vrstice:p.vrstice.map((x,j)=>j===i?{...x,kolicina:Number(e.target.value)}:x)}))}
+                  placeholder="kol."
+                  style={{ padding:'8px 10px', borderRadius:7, border:'1px solid '+T.line, fontSize:12.5, fontFamily:'inherit', background:T.inputBg, textAlign:'right' }}/>
+                <input value={v.enota} onChange={e=>setRocno(p=>({...p, vrstice:p.vrstice.map((x,j)=>j===i?{...x,enota:e.target.value}:x)}))}
+                  placeholder="enota"
+                  style={{ padding:'8px 10px', borderRadius:7, border:'1px solid '+T.line, fontSize:12.5, fontFamily:'inherit', background:T.inputBg }}/>
+                <input type="number" step="any" min={0} value={v.neto_cena_brez_ddv || ''}
+                  onChange={e=>setRocno(p=>({...p, vrstice:p.vrstice.map((x,j)=>j===i?{...x,neto_cena_brez_ddv:Number(e.target.value)}:x)}))}
+                  placeholder="cena/enoto"
+                  style={{ padding:'8px 10px', borderRadius:7, border:'1px solid '+T.line, fontSize:12.5, fontFamily:'inherit', background:T.inputBg, textAlign:'right' }}/>
+                <button onClick={()=>setRocno(p=>({...p, vrstice: p.vrstice.length>1 ? p.vrstice.filter((_,j)=>j!==i) : p.vrstice}))}
+                  title="Odstrani"
+                  style={{ border:'none', background:'transparent', color:T.muted, cursor:'pointer', fontSize:17, padding:'0 4px' }}>×</button>
+              </div>
+            ))}
+
+            <button onClick={()=>setRocno(p=>({...p, vrstice:[...p.vrstice, { naziv:'', kolicina:1, enota:'kos', neto_cena_brez_ddv:0 }]}))}
+              style={{ marginTop:6, padding:'8px 14px', borderRadius:8, border:'1px dashed '+T.line, background:'transparent', color:T.muted, cursor:'pointer', fontSize:12.5, fontFamily:'inherit' }}>
+              + Dodaj postavko
+            </button>
+
+            <div style={{ display:'flex', gap:8, marginTop:20, justifyContent:'flex-end' }}>
+              <button onClick={onClose}
+                style={{ ...btnS, padding:'10px 18px' }}>Prekliči</button>
+              <button onClick={() => {
+                  const veljavne = rocno.vrstice.filter(v => v.naziv.trim() && Number(v.kolicina) > 0)
+                  if (!veljavne.length) { setError('Vpišite vsaj eno postavko z nazivom in količino.'); return }
+                  setError('')
+                  // Sestavimo ENAK zapis, kot ga vrne samodejno branje.
+                  setResult({
+                    dobavitelj: rocno.dobavitelj || null,
+                    stevilka: rocno.stevilka || null,
+                    datum: rocno.datum || null,
+                    artikli: veljavne,
+                    skupaj_z_ddv: null,
+                  })
+                  setSelected(Object.fromEntries(veljavne.map((_, i) => [i, true])))
+                  setStep('preview')
+                }}
+                style={{ padding:'10px 18px', borderRadius:9, border:'none', background:T.accent, color:'#fff', cursor:'pointer', fontSize:13, fontWeight:700, fontFamily:'inherit' }}>
+                Naprej na povezovanje
+              </button>
+            </div>
+            {error && <div style={{ marginTop:12, padding:'10px 12px', background:'rgba(168,50,50,0.1)', borderRadius:8, fontSize:12.5, color:T.danger }}>{error}</div>}
+          </div>
+        )}
+
         {step === 'preview' && result && (
           <div>
             <div style={{ padding:'12px 14px', background:T.accentSoft, borderRadius:10, marginBottom:16, fontSize:13 }}>
