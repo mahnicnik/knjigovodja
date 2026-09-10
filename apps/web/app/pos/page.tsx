@@ -5842,6 +5842,11 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
         total_ex_vat: result?.skupaj_brez_ddv || null,
         total_vat: result?.skupaj_ddv || null,
         total_inc_vat: result?.skupaj_z_ddv || null,
+        // PRELET 249: pavsalno nadomestilo (95. clen ZDDV-1) se v obracunu
+        // DDV-O knjizi v DRUGO polje kot obicajni vstopni DDV, zato mora biti
+        // razlocno oznaceno - sicer bi ga izvoz za racunovodstvo zamenjal.
+        is_flat_rate: !!result?.is_flat_rate,
+        flat_rate_permit: result?.flat_rate_permit || null,
       }).select().single()
       if (deliveryErr) throw deliveryErr
       deliveryId = delivery.id
@@ -5999,6 +6004,9 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
         .filter(({ i }) => selected[i])
         .map(({ a }) => ({
           delivery_id: deliveryId,
+          // PRELET 249: pavsalno nadomestilo (95. clen ZDDV-1) ni DDV in se v
+          // obracunu knjizi v drugo polje - zato locena oznaka.
+          is_flat_rate: !!a.is_flat_rate,
           item_id: a.ujemanje_id || null,
           // Surovina se vodi loceno - brez tega brisanje dobavnice ne bi
           // znalo vrniti zaloge surovine nazaj (20.8.2026).
@@ -6086,6 +6094,20 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
                 style={{ padding:'9px 11px', borderRadius:8, border:'1px solid '+T.line, fontSize:13, fontFamily:'inherit', background:T.inputBg }}/>
             </div>
 
+            {/* PRELET 249: stevilka dovoljenja. Kupec sme nadomestilo odbiti
+                LE, ce ima dobavitelj veljavno dovoljenje - in to mora
+                preveriti OB VSAKI DOBAVI. Zato jo zapisemo k dobavnici. */}
+            {rocno.vrstice.some(v => Number(v.ddv_stopnja) === -8) && (
+              <div style={{ marginBottom:14 }}>
+                <input value={rocno.dovoljenje || ''}
+                  onChange={e=>setRocno(p=>({...p, dovoljenje:e.target.value}))}
+                  placeholder="Št. dovoljenja FURS za pavšalno nadomestilo (npr. DT 4232-31095/2019-2)"
+                  style={{ width:'100%', padding:'9px 11px', borderRadius:8, border:'1px solid '+T.line, fontSize:12.5, fontFamily:'inherit', background:T.inputBg }}/>
+                <div style={{ fontSize:11, color:T.muted, marginTop:5, lineHeight:1.5 }}>
+                  Veljavnost dovoljenja preverite na eDavkih ob vsaki dobavi — brez tega odbitek ni dovoljen.
+                </div>
+              </div>
+            )}
             <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', marginBottom:8 }}>Postavke</div>
             {rocno.vrstice.map((v, i) => (
               <div key={i} style={{ display:'grid', gridTemplateColumns:'minmax(0,2fr) minmax(0,0.6fr) minmax(0,0.8fr) minmax(0,0.9fr) minmax(0,0.7fr) auto', gap:6, marginBottom:6, alignItems:'center' }}>
@@ -6115,6 +6137,12 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
                   <option value={9.5}>9,5 %</option>
                   <option value={5}>5 %</option>
                   <option value={0}>0 %</option>
+                  {/* PRELET 249: pavsalno nadomestilo po 95. clenu ZDDV-1.
+                      Ni stopnja DDV - 8 % v Sloveniji sploh ni veljavna
+                      stopnja - ampak pribitek, ki ga kmet pavsalist zaracuna
+                      kupcu, ta pa ga odbije kot vstopni DDV. Zato ima svojo
+                      izbiro in se zapise loceno. */}
+                  <option value={-8}>8 % pavšalno</option>
                 </select>
                 <button onClick={()=>setRocno(p=>({...p, vrstice: p.vrstice.length>1 ? p.vrstice.filter((_,j)=>j!==i) : p.vrstice}))}
                   title="Odstrani"
@@ -6152,11 +6180,17 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
                   const dopolnjene = veljavne.map(v => {
                     const kolicina = Number(v.kolicina) || 0
                     const cena = Number(v.neto_cena_brez_ddv) || 0
-                    const stopnja = Number(v.ddv_stopnja ?? 22)
+                    // PRELET 249: -8 pomeni pavsalno nadomestilo, ne DDV.
+                    // Znesek se izracuna enako, zapise pa se z oznako, da ga
+                    // izvoz za racunovodstvo ne obravnava kot DDV.
+                    const izbrana = Number(v.ddv_stopnja ?? 22)
+                    const pavsalno = izbrana === -8
+                    const stopnja = pavsalno ? 8 : izbrana
                     const brezDdv = Math.round(kolicina * cena * 100) / 100
                     const ddv = Math.round(brezDdv * stopnja) / 100
                     return {
                       ...v,
+                      is_flat_rate: pavsalno,
                       ddv_stopnja: stopnja,
                       cena_brez_ddv: cena,
                       neto_cena_z_ddv: Math.round(cena * (1 + stopnja / 100) * 100) / 100,
@@ -6167,10 +6201,13 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
                   const skupajBrez = Math.round(dopolnjene.reduce((s, v) => s + v.vrednost_brez_ddv, 0) * 100) / 100
                   const skupajZ = Math.round(dopolnjene.reduce((s, v) => s + v.vrednost_z_ddv, 0) * 100) / 100
 
+                  const jePavsalna = dopolnjene.some(v => v.is_flat_rate)
                   setResult({
                     dobavitelj: rocno.dobavitelj || null,
                     stevilka_dokumenta: rocno.stevilka || null,
                     datum: rocno.datum || null,
+                    is_flat_rate: jePavsalna,
+                    flat_rate_permit: jePavsalna ? (rocno.dovoljenje || null) : null,
                     artikli: dopolnjene,
                     skupaj_brez_ddv: skupajBrez,
                     skupaj_ddv: Math.round((skupajZ - skupajBrez) * 100) / 100,
