@@ -276,8 +276,26 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
     dragItem.current = null
   }
 
+  /**
+   * POPRAVLJENO (prelet 239): SPODNJI DEL MENIJA JE BIL POD ROBOM.
+   *
+   * Stranski meni je imel `height:100vh` in `overflowY:auto`, pomikal pa se je
+   * V CELOTI - vkljucno s spodnjim delom, kjer so podatki o podjetju, odjava
+   * in (od preleta 237) pomoc.
+   *
+   * Postavk v meniju je okoli dvajset. Na prenosniku spodnji del pade pod rob
+   * in do njega je treba meni podrsati - cesar vecina ne stori. Gumb za pomoc
+   * je bil torej tam, a ga ni bilo videti; enako velja za odjavo.
+   *
+   * Ista napaka kot v blagajni (prelet 232): seznam brez lastnega pomikanja
+   * potisne vse pod sabo iz vidnega polja.
+   *
+   * POPRAVEK: `minHeight:'100%'` -> `height:'100%'`, da se stolpec drzi visine
+   * okna in ne raste cez njo. Seznam postavk dobi svoje pomikanje, spodnji del
+   * pa `flexShrink:0` - zato ostane viden vedno.
+   */
   const sidebarContent = (
-    <div style={{ direction: 'ltr', display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+    <div style={{ direction: 'ltr', display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Logo */}
       <div style={{ padding: '20px 18px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
@@ -322,7 +340,8 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
       )}
 
       {/* Nav */}
-      <nav style={{ flex: 1, padding: '8px 0' }}>
+      {/* PRELET 239: pomika se SAMO seznam postavk. */}
+      <nav style={{ flex: 1, padding: '8px 0', overflowY: 'auto', minHeight: 0 }}>
         {orderedNav.map((section, sIdx) => (
           <div key={section.label} draggable onDragStart={() => handleSectionDragStart(sIdx)} onDragOver={e => handleSectionDragOver(e, sIdx)} onDrop={() => handleSectionDrop(sIdx)} style={{ padding: '12px 10px 4px', cursor: 'grab' }}>
             <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.2)', letterSpacing: '1.2px', textTransform: 'uppercase', padding: '0 8px', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -389,7 +408,10 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
       {/* DESKTOP LAYOUT */}
       {!isMobile && (
         <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', minHeight: '100vh', background: '#F7F6F2' }}>
-          <aside style={{ background: '#0D1F12', position: 'sticky', top: 0, height: '100vh', overflowY: 'auto', overflowX: 'hidden', direction: 'rtl', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.12) transparent' }}>
+          {/* PRELET 239: pomikanje je prevzel notranji seznam, zato ga tu
+              odstranimo - sicer bi se pomikala oba in spodnji del bi spet
+              zdrsnil pod rob. */}
+          <aside style={{ background: '#0D1F12', position: 'sticky', top: 0, height: '100vh', overflow: 'hidden', direction: 'rtl', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.12) transparent' }}>
             {sidebarContent}
           </aside>
           <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
