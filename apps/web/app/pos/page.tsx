@@ -5750,7 +5750,7 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
   const [step, setStep] = React.useState(zacetniKorak === 'rocno' ? 'rocno' : 'upload')
   const [rocno, setRocno] = React.useState({
     dobavitelj: '', stevilka: '', datum: new Date().toISOString().slice(0, 10),
-    vrstice: [{ naziv: '', kolicina: 1, enota: 'kos', neto_cena_brez_ddv: 0 }],
+    vrstice: [{ naziv: '', kolicina: 1, enota: 'kos', neto_cena_brez_ddv: 0, ddv_stopnja: 22 }],
   })
   const [loading, setLoading] = React.useState(false)
   const [result, setResult] = React.useState(null)
@@ -6088,7 +6088,7 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
 
             <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', marginBottom:8 }}>Postavke</div>
             {rocno.vrstice.map((v, i) => (
-              <div key={i} style={{ display:'grid', gridTemplateColumns:'minmax(0,2.2fr) minmax(0,0.7fr) minmax(0,0.9fr) minmax(0,1fr) auto', gap:6, marginBottom:6, alignItems:'center' }}>
+              <div key={i} style={{ display:'grid', gridTemplateColumns:'minmax(0,2fr) minmax(0,0.6fr) minmax(0,0.8fr) minmax(0,0.9fr) minmax(0,0.7fr) auto', gap:6, marginBottom:6, alignItems:'center' }}>
                 <input value={v.naziv} onChange={e=>setRocno(p=>({...p, vrstice:p.vrstice.map((x,j)=>j===i?{...x,naziv:e.target.value}:x)}))}
                   placeholder="Naziv artikla"
                   style={{ padding:'8px 10px', borderRadius:7, border:'1px solid '+T.line, fontSize:12.5, fontFamily:'inherit', background:T.inputBg }}/>
@@ -6108,13 +6108,21 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
                   onChange={e=>setRocno(p=>({...p, vrstice:p.vrstice.map((x,j)=>j===i?{...x,neto_cena_brez_ddv:Number(e.target.value)}:x)}))}
                   placeholder="cena/enoto"
                   style={{ padding:'8px 10px', borderRadius:7, border:'1px solid '+T.line, fontSize:12.5, fontFamily:'inherit', background:T.inputBg, textAlign:'right' }}/>
+                <select value={v.ddv_stopnja ?? 22}
+                  onChange={e=>setRocno(p=>({...p, vrstice:p.vrstice.map((x,j)=>j===i?{...x,ddv_stopnja:Number(e.target.value)}:x)}))}
+                  style={{ padding:'8px 6px', borderRadius:7, border:'1px solid '+T.line, fontSize:12.5, fontFamily:'inherit', background:T.inputBg }}>
+                  <option value={22}>22 %</option>
+                  <option value={9.5}>9,5 %</option>
+                  <option value={5}>5 %</option>
+                  <option value={0}>0 %</option>
+                </select>
                 <button onClick={()=>setRocno(p=>({...p, vrstice: p.vrstice.length>1 ? p.vrstice.filter((_,j)=>j!==i) : p.vrstice}))}
                   title="Odstrani"
                   style={{ border:'none', background:'transparent', color:T.muted, cursor:'pointer', fontSize:17, padding:'0 4px' }}>×</button>
               </div>
             ))}
 
-            <button onClick={()=>setRocno(p=>({...p, vrstice:[...p.vrstice, { naziv:'', kolicina:1, enota:'kos', neto_cena_brez_ddv:0 }]}))}
+            <button onClick={()=>setRocno(p=>({...p, vrstice:[...p.vrstice, { naziv:'', kolicina:1, enota:'kos', neto_cena_brez_ddv:0, ddv_stopnja:22 }]}))}
               style={{ marginTop:6, padding:'8px 14px', borderRadius:8, border:'1px dashed '+T.line, background:'transparent', color:T.muted, cursor:'pointer', fontSize:12.5, fontFamily:'inherit' }}>
               + Dodaj postavko
             </button>
@@ -6126,13 +6134,47 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
                   const veljavne = rocno.vrstice.filter(v => v.naziv.trim() && Number(v.kolicina) > 0)
                   if (!veljavne.length) { setError('Vpišite vsaj eno postavko z nazivom in količino.'); return }
                   setError('')
-                  // Sestavimo ENAK zapis, kot ga vrne samodejno branje.
+                  /**
+                   * POPRAVLJENO (prelet 248): zapis se ni shranil pravilno.
+                   *
+                   * Zapis dobavnice bere `stevilka_dokumenta`, jaz sem
+                   * nastavil `stevilka` - zato je v seznamu ostal pomisljaj
+                   * namesto stevilke.
+                   *
+                   * Zneskov nisem racunal: `skupaj_brez_ddv`, `skupaj_ddv` in
+                   * `skupaj_z_ddv` so ostali prazni, zato so bili tudi v
+                   * seznamu pomisljaji. Rocno vnesena dobavnica je tako
+                   * izgledala kot napaka, ceprav so bile postavke vpisane.
+                   *
+                   * Zdaj vrstice dopolnimo z vrednostmi, ki jih zapis pricakuje,
+                   * in sestevke izracunamo iz njih.
+                   */
+                  const dopolnjene = veljavne.map(v => {
+                    const kolicina = Number(v.kolicina) || 0
+                    const cena = Number(v.neto_cena_brez_ddv) || 0
+                    const stopnja = Number(v.ddv_stopnja ?? 22)
+                    const brezDdv = Math.round(kolicina * cena * 100) / 100
+                    const ddv = Math.round(brezDdv * stopnja) / 100
+                    return {
+                      ...v,
+                      ddv_stopnja: stopnja,
+                      cena_brez_ddv: cena,
+                      neto_cena_z_ddv: Math.round(cena * (1 + stopnja / 100) * 100) / 100,
+                      vrednost_brez_ddv: brezDdv,
+                      vrednost_z_ddv: Math.round((brezDdv + ddv) * 100) / 100,
+                    }
+                  })
+                  const skupajBrez = Math.round(dopolnjene.reduce((s, v) => s + v.vrednost_brez_ddv, 0) * 100) / 100
+                  const skupajZ = Math.round(dopolnjene.reduce((s, v) => s + v.vrednost_z_ddv, 0) * 100) / 100
+
                   setResult({
                     dobavitelj: rocno.dobavitelj || null,
-                    stevilka: rocno.stevilka || null,
+                    stevilka_dokumenta: rocno.stevilka || null,
                     datum: rocno.datum || null,
-                    artikli: veljavne,
-                    skupaj_z_ddv: null,
+                    artikli: dopolnjene,
+                    skupaj_brez_ddv: skupajBrez,
+                    skupaj_ddv: Math.round((skupajZ - skupajBrez) * 100) / 100,
+                    skupaj_z_ddv: skupajZ,
                   })
                   setSelected(Object.fromEntries(veljavne.map((_, i) => [i, true])))
                   setStep('preview')
@@ -6151,7 +6193,9 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
               <div style={{ fontWeight:700, marginBottom:4 }}>{result.dobavitelj || 'Neznan dobavitelj'}</div>
               <div style={{ color:T.muted, display:'flex', gap:16 }}>
                 {result.datum && <span>{result.datum}</span>}
-                {result.stevilka && <span>St: {result.stevilka}</span>}
+                {/* PRELET 248: samodejno branje polni `stevilka_dokumenta`,
+                    zato beremo obe imeni - starejsi zapisi imajo lahko prvo. */}
+                {(result.stevilka_dokumenta || result.stevilka) && <span>Št: {result.stevilka_dokumenta || result.stevilka}</span>}
                 {result.skupaj_z_ddv && <span>{eur(result.skupaj_z_ddv)}</span>}
               </div>
             </div>
