@@ -74,8 +74,75 @@ export default function InvoicesPage() {
     setActionLoading('paid_' + inv.id)
     // POPRAVLJENO (16.8.2026): prej brez preverbe napake - racun je ostal
     // neplacan, uporabnik pa je videl, da je oznacen kot placan.
-    const { error: paidErr } = await supabase.from('issued_invoices').update({ status: 'paid' }).eq('id', inv.id)
+    // PRELET 242: ob polnem placilu zapisemo tudi ZNESEK - sicer bi racun
+    // veljal za placanega, `paid_amount` pa bi ostal na delnem znesku in
+    // porocila o neporavnanih zneskih bi bila napacna.
+    const { error: paidErr } = await supabase.from('issued_invoices').update({
+      status: 'paid',
+      paid_amount: Number(inv.amount_total || 0),
+      paid_at: new Date().toISOString(),
+    }).eq('id', inv.id)
     if (paidErr) { alert('Računa ni bilo mogoče označiti kot plačanega: ' + paidErr.message); setActionLoading(''); return }
+    await load()
+    setActionLoading('')
+    setActionInv(null)
+  }
+
+  /**
+   * DELNA PLAČILA (prelet 242)
+   * ══════════════════════════
+   *
+   * Stolpec `paid_amount` je v bazi ze obstajal, obravnave pa ni bilo - racun
+   * je bil ali placan ali neplacan. Kdor je prejel polovico zneska, ni imel
+   * kam tega zapisati; nadzorna plosca je tak racun stela med neplacane v
+   * CELOTNEM znesku, cetudi je vecina denarja ze prisla.
+   *
+   * Zdaj se vsako placilo prišteje. Ko sestevek doseze znesek racuna, se ta
+   * sam oznaci kot placan - da uporabniku ni treba misliti na dvoje.
+   *
+   * Zaokrozevanje: primerjamo na cent, ker bi pri 0.1 + 0.2 sicer ostal
+   * neznaten ostanek in racun ne bi bil nikoli placan.
+   */
+  async function vpisiDelnoPlacilo(inv: any) {
+    const doslej = Number(inv.paid_amount || 0)
+    const skupaj = Number(inv.amount_total || 0)
+    const ostanek = Math.round((skupaj - doslej) * 100) / 100
+
+    const vnos = prompt(
+      `Račun ${inv.invoice_number} — ${skupaj.toFixed(2)} €\n` +
+      (doslej > 0 ? `Doslej plačano: ${doslej.toFixed(2)} €\n` : '') +
+      `Za plačilo ostane: ${ostanek.toFixed(2)} €\n\n` +
+      `Koliko je stranka plačala?`,
+      ostanek.toFixed(2),
+    )
+    if (vnos === null) return
+
+    const znesek = Number(String(vnos).replace(',', '.'))
+    if (!Number.isFinite(znesek) || znesek <= 0) {
+      alert('Vpišite znesek, večji od nič.')
+      return
+    }
+    if (znesek > ostanek + 0.005) {
+      alert(`Znesek presega neporavnani del (${ostanek.toFixed(2)} €).`)
+      return
+    }
+
+    setActionLoading('delno_' + inv.id)
+    const novoPlacano = Math.round((doslej + znesek) * 100) / 100
+    // Do centa natancno: sicer bi zaradi zaokrozevanja ostal neznaten ostanek.
+    const jePoravnan = novoPlacano >= skupaj - 0.005
+
+    const { error } = await supabase.from('issued_invoices').update({
+      paid_amount: novoPlacano,
+      status: jePoravnan ? 'paid' : inv.status,
+      paid_at: jePoravnan ? new Date().toISOString() : inv.paid_at,
+    }).eq('id', inv.id)
+
+    if (error) {
+      alert('Plačila ni bilo mogoče zabeležiti: ' + error.message)
+      setActionLoading('')
+      return
+    }
     await load()
     setActionLoading('')
     setActionInv(null)
@@ -83,7 +150,11 @@ export default function InvoicesPage() {
 
   async function markSent(inv: any) {
     setActionLoading('sent_' + inv.id)
-    const { error: sentErr } = await supabase.from('issued_invoices').update({ status: 'sent' }).eq('id', inv.id)
+    // PRELET 242: ob razveljavitvi pocistimo tudi znesek in datum - sicer bi
+    // racun veljal za neplacanega, v porocilih pa bi se stel kot poravnan.
+    const { error: sentErr } = await supabase.from('issued_invoices').update({
+      status: 'sent', paid_amount: 0, paid_at: null,
+    }).eq('id', inv.id)
     if (sentErr) { alert('Računa ni bilo mogoče označiti kot poslanega: ' + sentErr.message); setActionLoading(''); return }
     await load()
     setActionLoading('')
@@ -469,6 +540,18 @@ export default function InvoicesPage() {
                           className="hover:bg-gray-50"
                         >
                           ✅ Označi kot plačano
+                        </button>
+                      )}
+                      {/* PRELET 242: delno placilo. Pri storniranih racunih
+                          nima smisla, pri placanih pa ni kaj dodati. */}
+                      {inv.status !== 'paid' && inv.status !== 'cancelled' && (
+                        <button
+                          onClick={() => vpisiDelnoPlacilo(inv)}
+                          disabled={actionLoading === 'delno_' + inv.id}
+                          style={{ width: '100%', padding: '10px 16px', textAlign: 'left', fontSize: '13px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                          className="hover:bg-gray-50"
+                        >
+                          💶 Zabeleži delno plačilo
                         </button>
                       )}
                       {inv.status === 'paid' && (
