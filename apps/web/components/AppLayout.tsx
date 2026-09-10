@@ -355,10 +355,17 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
             </div>
           </div>
         </Link>
-        {/* PRELET 237: pomoc za trenutno stran. Prikaze se le, kadar stran
-            pomoc sploh ima - postavka, ki ne naredi nicesar, je slabsa od
-            nobene. */}
-        {pomocNaVoljo && (
+        {/* POPRAVLJENO (prelet 238): postavka se ni prikazala NIKOLI.
+         *
+         * VZROK: `PageHelp` zivi v KORENSKI postavitvi in se ob prehodu med
+         * stranmi ne priklopi znova - dogodek o razpolozljivosti je torej
+         * sprozil samo enkrat, ob prvem nalaganju. `AppLayout` pa se ob
+         * prehodu priklopi znova in takrat dogodka ne ujame vec.
+         *
+         * Preverjanje je bilo tudi odvec: `PAGE_HELP[pathname] || DEFAULT_HELP`
+         * pomeni, da je pomoc na voljo VEDNO. Pogoj je torej odstranjen -
+         * manj gibljivih delov in ena past manj. */}
+        {true && (
           <button onClick={() => window.dispatchEvent(new CustomEvent('racunko-pomoc'))}
             style={{ width: '100%', marginTop: '4px', padding: '5px 8px', background: 'transparent',
                      border: 'none', color: 'rgba(255,255,255,0.55)', fontSize: '12px',
