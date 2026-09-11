@@ -169,7 +169,7 @@ const PLANS = [
     // slabost cenika. Konkurent daje NEOMEJENO izdajanje s FURS potrjevanjem
     // zastonj - kdor primerja, nas zavrne, preden pogleda karkoli drugega.
     // Omejitev je odslej drugje, ne pri stevilu racunov.
-    features:['Neomejeni računi','FURS davčno potrjevanje','PDF prenos','Prispevki in UPN QR'],
+    features:['Neomejeni računi','FURS davčno potrjevanje','PDF prenos','Prispevki in UPN QR','🤖 AI pomočnik za vprašanja'],
     cta:'Začni brezplačno', ctaClass:'btn btn-ghost btn-block', highlighted: false,
   },
   {
@@ -177,12 +177,16 @@ const PLANS = [
     // Prej je letna cena znasala natanko dvanajstkratnik mesecne, torej
     // popusta ni bilo; nihce ne placa leta vnaprej brez razloga.
     name:'Pro', price:'12', priceDec:'.99', per:'/mes', tag:'129,90 €/leto — 2 meseca gratis', tagClass:'plan-tag-amber',
-    features:['Neomejeni računi','Email pošiljanje računov','Dobavnice','AI računovodja','DDV evidenca'],
+    // POPRAVLJENO (prelet 253): cenik je nastel pet splosnih postavk, med
+    // njimi pa NI bilo tistega, kar uporabnika dejansko prihrani cas -
+    // skeniranja racunov, glasovnega vnosa, uvoza placil iz banke. Kdor
+    // primerja cenike, vidi samo to, kar tam pise.
+    features:['Neomejeni računi in predračuni','📷 Skeniraj račun — AI ga prebere sam','🎙️ Glasovni vnos računa','🤖 AI računovodja odgovarja na vprašanja','🏦 Uvoz plačil iz bančnega izpiska','e-račun (e-SLOG) za B2B','DDV evidenca in KPO knjiga','Izvoz za Vasco in Pantheon'],
     cta:'Začni brezplačno →', ctaClass:'btn btn-on-dark btn-block', highlighted: true, flag:'Najbolj priljubljen',
   },
   {
     name:'Pro + POS', price:'29', priceDec:'.99', per:'/mes', tag:'299,90 €/leto — 2 meseca gratis', tagClass:'plan-tag-soft',
-    features:['Vse iz Pro +','POS blagajna','Terminski koledar','Člani & naročnine','Ekipa & dostopi','Desktop & mobilna app'],
+    features:['Vse iz Pro +','Blagajna z mizami in tlorisom','Delitev računa in popusti','⚡ Delo brez povezave do 2 dni','Kuhinjski zaslon in odrezki','📷 Skeniraj dobavnico — zaloga se posodobi','Zaloge z normativi in inventuro','Člani, paketi in terminski koledar','Ekipa s PIN prijavo','Namizna in mobilna aplikacija'],
     cta:'Začni brezplačno →', ctaClass:'btn btn-primary btn-block', highlighted: false,
   },
 ];
@@ -589,6 +593,100 @@ export default function LandingPage() {
        *
        * To je edina pot, po kateri lahko majhen ponudnik doseze stranke, ki
        * jih sam ne bi nikoli nasel. */}
+      {/* VSE FUNKCIJE (prelet 253)
+       *
+       * ZAKAJ: stran je imela stiri zavihke - racuni, finance, blagajna,
+       * kadri. Pametnih funkcij ni omenjala nikjer: ne skeniranja, ne
+       * glasovnega vnosa, ne dela brez povezave, ne integracij.
+       *
+       * Kdor primerja ponudnike, presteje, kar je nasteto. Funkcija, ki ni
+       * zapisana, v primerjavi ne obstaja - tudi ce je zgrajena in dela.
+       *
+       * Seznam je razdeljen po opravilih, ne po zaslonih: uporabnik isce
+       * "kako hitreje vnesem racun", ne "kateri modul to pokriva". */}
+      <section className="section" id="funkcije-vse">
+        <div className="section-head">
+          <span className="kicker">Vse funkcije</span>
+          <h2 className="h2">Kar vam <em>prihrani čas.</em></h2>
+          <p className="lede">Ne naštevamo modulov. Naštevamo opravila, ki jih ne boste več delali ročno.</p>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(290px,1fr))',gap:24,maxWidth:1100,margin:'0 auto'}}>
+          {[
+            ['🤖', 'Umetna inteligenca', [
+              'Skeniraj prejeti račun — AI prebere dobavitelja, znesek in DDV',
+              'Skeniraj dobavnico — zaloga se posodobi sama',
+              'Glasovni vnos: povej stranko in postavke, osnutek je pripravljen',
+              'AI računovodja odgovarja na vprašanja o vaših podatkih',
+              'Uvoz starih računov iz drugega programa',
+            ]],
+            ['🧾', 'Računi in dokumenti', [
+              'Računi, predračuni, avansni računi, dobavnice',
+              'Ponavljajoči računi s samodejnim pošiljanjem',
+              'e-račun v obliki e-SLOG 2.0 (obvezno od 2028)',
+              'UPN QR koda na vsakem računu',
+              'Delna plačila in samodejni opomniki',
+              'Računi na podjetje z davčno številko',
+            ]],
+            ['🖥️', 'Blagajna za lokale', [
+              'Tloris z mizami in odprtimi naročili',
+              'Delitev računa med goste',
+              'Popust na postavko ali na celoten račun',
+              'Delo brez povezave do dveh delovnih dni',
+              'Kuhinjski zaslon in odrezek za kuharja',
+              'Prijava osebja s PIN, skupna izmena',
+              'Happy hour in ceniki po urah',
+            ]],
+            ['📦', 'Zaloge in nabava', [
+              'Normativi — prodaja odpiše sestavine',
+              'Inventura z razlikami',
+              'Ročni ali samodejni vnos dobavnice',
+              'Pavšalno nadomestilo za kmete (95. člen)',
+              'Opozorila o zalogi ob uri, ki jo določite',
+            ]],
+            ['📊', 'Davki in evidence', [
+              'KPO knjiga, ki se polni sama iz računov in blagajne',
+              'Evidence DDV in obračun',
+              'Prispevki OPSVZ in dohodnina',
+              'Amortizacija osnovnih sredstev',
+              'Normiranec: prag in izračun',
+              'Opomniki na davčne roke, sedem dni vnaprej',
+            ]],
+            ['👥', 'Ekipa in člani', [
+              'Plače, REK-1 in regres',
+              'Evidenca delovnega časa in dopusti',
+              'Potni nalogi in kilometrina',
+              'Člani, paketi in terminski koledar',
+              'Dovoljenja po posameznem zaposlenem',
+            ]],
+            ['🔌', 'Povezave', [
+              'Stripe — plačila postanejo davčno potrjeni računi',
+              'WooCommerce in Shopify — naročila iz trgovine',
+              'Uvoz plačil iz bančnega izpiska (camt.053)',
+              'Izvoz VOD za Vasco, Pantheon in Opal',
+              'Portal za računovodjo',
+            ]],
+            ['🔐', 'Varnost in dostop', [
+              'Dvostopenjska prijava z rezervnimi kodami',
+              'Namizna aplikacija za Windows',
+              'Mobilna aplikacija za Android',
+              'Podatki v Evropski uniji',
+            ]],
+          ].map(([ikona, naslov, postavke]) => (
+            <div key={naslov as string} style={{background:'#FBF7EE',border:'1px solid #D9D2C2',borderRadius:20,padding:'26px 24px'}}>
+              <div style={{fontSize:26,marginBottom:10}}>{ikona as string}</div>
+              <div style={{fontWeight:700,fontSize:17,marginBottom:14}}>{naslov as string}</div>
+              <ul style={{listStyle:'none',padding:0,margin:0}}>
+                {(postavke as string[]).map(p => (
+                  <li key={p} style={{fontSize:14,lineHeight:1.6,color:'#4A4A44',marginBottom:9,paddingLeft:18,position:'relative'}}>
+                    <span style={{position:'absolute',left:0,color:'#1F4732'}}>·</span>{p}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section className="section" id="racunovodje" style={{background:'#0E3D2A',color:'#F7F6F2',padding:'72px 0'}}>
         <div style={{maxWidth:820,margin:'0 auto',padding:'0 24px'}}>
           <span className="kicker" style={{color:'#A8C9B5'}}>Za računovodske servise</span>
@@ -623,136 +721,6 @@ export default function LandingPage() {
               ['Stalen pregled', 'Vidite, kaj se dogaja med mesecem — ne šele, ko vam stranka prinese mapo.'],
               ['Evidence DDV v enem koraku', 'Za vse stranke hkrati, ne za vsako posebej.'],
               ['Manj vprašanj po telefonu', 'Stranka vidi isto kot vi. Kar manjka, vidita oba.'],
-            ].map(([n, o]) => (
-              <div key={n}>
-                <div style={{fontWeight:700,fontSize:15,color:'#fff'}}>{n}</div>
-                <div style={{fontSize:14,lineHeight:1.65,marginTop:6,color:'#B9CFC3'}}>{o}</div>
-              </div>
-            ))}
-          </div>
-          <a href="/racunovodja" style={{display:'inline-block',marginTop:36,padding:'13px 24px',borderRadius:10,background:'#D89328',color:'#1A1A16',textDecoration:'none',fontWeight:700,fontSize:15}}>
-            Portal za računovodje →
-          </a>
-        </div>
-      </section>
-
-      {/* VPRASANJA IN ODGOVORI (prelet 250)
-       *
-       * ZAKAJ TA RAZDELEK: iskalniki in AI pomocniki odgovarjajo na vprasanja.
-       * Kdor v Google ali pomocnika vtipka "ali potrebujem davcno blagajno za
-       * lokal", dobi odgovor s strani, ki ga ima zapisanega - ne s strani, ki
-       * govori o sebi.
-       *
-       * Odgovori so KRATKI IN DEJSTVENI, ne prodajni. Pomocnik navede vir, ki
-       * mu lahko zaupa; oglasno besedilo preskoci.
-       *
-       * Zapis JSON-LD spodaj pove iskalniku, da gre za vprasanja in odgovore,
-       * zato jih lahko prikaze neposredno v rezultatih. */}
-      <section className="section" id="vprasanja">
-        <div className="section-head">
-          <span className="kicker">Pogosta vprašanja</span>
-          <h2 className="h2">Kar vas <em>zanima.</em></h2>
-        </div>
-        <div style={{maxWidth:760,margin:'0 auto'}}>
-          {[
-            ['Ali potrebujem davčno blagajno za lokal?',
-             'Da. Če za blago ali storitev prejmete gotovino, kartico ali drugo neposredno plačilo, mora biti račun davčno potrjen pri FURS. To velja za bare, kavarne, restavracije, frizerske salone in fitnes studie. Za plačila na transakcijski račun potrjevanje ni potrebno.'],
-            ['Kaj potrebujem, da začnem izdajati davčno potrjene račune?',
-             'Troje: digitalno potrdilo FURS, prijavljen poslovni prostor in sprejet interni akt o številčenju. Vse troje uredite v Računku; potrdilo pridobite brezplačno prek eDavkov.'],
-            ['Ali blagajna deluje brez interneta?',
-             'Da. Ob izpadu povezave Računko izda račun z zaščitno oznako ZOI in ga natisne, nato pa ga samodejno prijavi pri FURS, ko se povezava vrne. Zakonski rok za naknadno prijavo sta dva delovna dneva.'],
-            ['Ali Računko nadomesti računovodski servis?',
-             'Ne in tega ne poskuša. Računko vodi vaše račune, stroške, KPO in DDV evidenco ter jih izvozi v obliki, ki jo računovodski program prebere — Vasco, Pantheon ali Opal. Vaša računovodkinja tako dobi čiste podatke namesto mape s papirji.'],
-            ['Kdaj bodo e-računi med podjetji obvezni?',
-             'Od 1. januarja 2028. Zakon ZIERDED, sprejet oktobra 2025, zahteva strukturirano obliko (e-SLOG ali skladno z EN 16931) in prepoveduje izmenjavo po e-pošti. Računko že zdaj izvozi e-račun v obliki e-SLOG 2.0.'],
-            ['Koliko stane?',
-             'Brezplačni paket za osnovno izdajanje računov. Pro stane 12,99 € na mesec, Pro + POS z blagajno 29,99 €. Letno plačilo pomeni dva meseca brezplačno. Brez vezave.'],
-          ].map(([v, o]) => (
-            <details key={v} style={{borderBottom:'1px solid #D9D2C2',padding:'18px 0'}}>
-              <summary style={{fontWeight:600,fontSize:17,cursor:'pointer',listStyle:'none'}}>{v}</summary>
-              <p style={{marginTop:12,lineHeight:1.7,color:'#4A4A44'}}>{o}</p>
-            </details>
-          ))}
-        </div>
-      </section>
-
-      {/* Strukturirani podatki. Iskalnik in AI pomocnik iz njih razberejo,
-          kaj izdelek je, koliko stane in na katera vprasanja odgovarja - brez
-          ugibanja iz besedila strani. */}
-      <script type="application/ld+json" dangerouslySetInnerHTML={{__html: JSON.stringify({
-        '@context': 'https://schema.org',
-        '@graph': [
-          {
-            '@type': 'SoftwareApplication',
-            name: 'Računko',
-            applicationCategory: 'BusinessApplication',
-            operatingSystem: 'Web, Windows, Android',
-            inLanguage: 'sl',
-            description: 'Davčna blagajna za lokale in fakturiranje za slovenski s.p. v enem programu. FURS potrjevanje, delo brez povezave, izvoz za računovodski program.',
-            offers: [
-              { '@type': 'Offer', name: 'Brezplačno', price: '0', priceCurrency: 'EUR' },
-              { '@type': 'Offer', name: 'Pro', price: '12.99', priceCurrency: 'EUR',
-                priceSpecification: { '@type': 'UnitPriceSpecification', price: '12.99', priceCurrency: 'EUR', billingDuration: 1, billingIncrement: 1, unitCode: 'MON' } },
-              { '@type': 'Offer', name: 'Pro + POS', price: '29.99', priceCurrency: 'EUR',
-                priceSpecification: { '@type': 'UnitPriceSpecification', price: '29.99', priceCurrency: 'EUR', billingDuration: 1, billingIncrement: 1, unitCode: 'MON' } },
-            ],
-            featureList: [
-              'Davčno potrjevanje računov (FURS)',
-              'POS blagajna za gostinstvo — mize, delitev računa, kuhinjski zaslon',
-              'Delo brez povezave do dveh delovnih dni',
-              'e-račun v obliki e-SLOG 2.0',
-              'KPO knjiga in evidence DDV',
-              'Izvoz za Vasco, Pantheon in Opal',
-            ],
-          },
-          {
-            '@type': 'FAQPage',
-            mainEntity: [
-              ['Ali potrebujem davčno blagajno za lokal?', 'Da. Če za blago ali storitev prejmete gotovino, kartico ali drugo neposredno plačilo, mora biti račun davčno potrjen pri FURS. Za plačila na transakcijski račun potrjevanje ni potrebno.'],
-              ['Ali blagajna deluje brez interneta?', 'Da. Ob izpadu povezave se račun izda z zaščitno oznako ZOI in se samodejno prijavi pri FURS, ko se povezava vrne. Zakonski rok sta dva delovna dneva.'],
-              ['Ali Računko nadomesti računovodski servis?', 'Ne. Računko vodi račune, stroške, KPO in DDV evidenco ter jih izvozi v obliki, ki jo prebere Vasco, Pantheon ali Opal.'],
-              ['Kdaj bodo e-računi med podjetji obvezni?', 'Od 1. januarja 2028 po zakonu ZIERDED. Zahtevana je strukturirana oblika e-SLOG ali skladna z EN 16931.'],
-            ].map(([q, a]) => ({
-              '@type': 'Question', name: q,
-              acceptedAnswer: { '@type': 'Answer', text: a },
-            })),
-          },
-        ],
-      })}} />
-
-      {/* ZA RACUNOVODSKE SERVISE (prelet 250)
-       *
-       * ZAKAJ: doslej je stran obljubljala, da "zamenja racunovodja". To je
-       * dvakrat slabo. Ni res - Racunko nima glavne knjige, osnovnih sredstev
-       * ne obracuna plac na ravni servisa. In naredi sovraznika iz ljudi, ki
-       * bi lahko bili najboljsi prodajni kanal.
-       *
-       * Racunovodkinja ne bo zapustila Vasca, ker v njem vodi VSE svoje
-       * stranke. Zamenjala pa bo mapo papirjev za cist izvoz - in stranki
-       * priporocila program, ki ji prihrani delo.
-       *
-       * To je edina pot, po kateri lahko majhen ponudnik doseze stranke, ki
-       * jih sam ne bi nikoli nasel. */}
-      <section className="section" id="racunovodje" style={{background:'#0E3D2A',color:'#F7F6F2',padding:'72px 0'}}>
-        <div style={{maxWidth:820,margin:'0 auto',padding:'0 24px'}}>
-          <span className="kicker" style={{color:'#A8C9B5'}}>Za računovodske servise</span>
-          <h2 className="h2" style={{color:'#F7F6F2',marginTop:8}}>
-            Ne zamenjamo vas. <em style={{color:'#D89328'}}>Delamo za vas.</em>
-          </h2>
-          <p style={{fontSize:17,lineHeight:1.75,marginTop:20,color:'#DCE7E0'}}>
-            Računko nima glavne knjige, osnovnih sredstev ne obračuna plač na ravni servisa —
-            in jih ne namerava imeti. Vaš program ostane vaš.
-          </p>
-          <p style={{fontSize:17,lineHeight:1.75,marginTop:16,color:'#DCE7E0'}}>
-            Kar Računko naredi, je delo pred vami: stranka izda račune, poslika stroške in
-            vodi blagajno, vi pa namesto mape papirjev dobite <strong style={{color:'#fff'}}>izvoz,
-            ki ga vaš program prebere</strong> — VOD za Vasco in Pantheon, Excel za vse ostalo.
-          </p>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:20,marginTop:36}}>
-            {[
-              ['Knjižbe brez prepisovanja', 'Izdani računi v VOD XML, pripravljeni za neposreden uvoz.'],
-              ['Evidence DDV za več strank', 'En korak za vse, ki so vas povabile v svoj portal.'],
-              ['Stranka ureja sproti', 'Stroški poslikani ob nastanku, ne v mapi konec kvartala.'],
             ].map(([n, o]) => (
               <div key={n}>
                 <div style={{fontWeight:700,fontSize:15,color:'#fff'}}>{n}</div>
