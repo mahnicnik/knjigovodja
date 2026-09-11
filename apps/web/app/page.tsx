@@ -165,16 +165,23 @@ const TESTIMONIALS = [
 const PLANS = [
   {
     name:'Brezplačno', price:'0', priceDec:'', per:'/ vedno', tag:'Začni danes', tagClass:'plan-tag-soft',
-    features:['Do 5 računov/mesec','PDF download','Prispevki QR','UPN QR koda'],
+    // POPRAVLJENO (prelet 251): pet racunov na mesec je bila najvecja
+    // slabost cenika. Konkurent daje NEOMEJENO izdajanje s FURS potrjevanjem
+    // zastonj - kdor primerja, nas zavrne, preden pogleda karkoli drugega.
+    // Omejitev je odslej drugje, ne pri stevilu racunov.
+    features:['Neomejeni računi','FURS davčno potrjevanje','PDF prenos','Prispevki in UPN QR'],
     cta:'Začni brezplačno', ctaClass:'btn btn-ghost btn-block', highlighted: false,
   },
   {
-    name:'Pro', price:'9', priceDec:'.99', per:'/mes', tag:'€119.88/leto', tagClass:'plan-tag-amber',
+    // PRELET 251: 12,99 mesecno, 129,90 letno - dva meseca brezplacno.
+    // Prej je letna cena znasala natanko dvanajstkratnik mesecne, torej
+    // popusta ni bilo; nihce ne placa leta vnaprej brez razloga.
+    name:'Pro', price:'12', priceDec:'.99', per:'/mes', tag:'129,90 €/leto — 2 meseca gratis', tagClass:'plan-tag-amber',
     features:['Neomejeni računi','Email pošiljanje računov','Dobavnice','AI računovodja','DDV evidenca'],
     cta:'Začni brezplačno →', ctaClass:'btn btn-on-dark btn-block', highlighted: true, flag:'Najbolj priljubljen',
   },
   {
-    name:'Pro + POS', price:'24', priceDec:'.99', per:'/mes', tag:'€299.88/leto', tagClass:'plan-tag-soft',
+    name:'Pro + POS', price:'29', priceDec:'.99', per:'/mes', tag:'299,90 €/leto — 2 meseca gratis', tagClass:'plan-tag-soft',
     features:['Vse iz Pro +','POS blagajna','Terminski koledar','Člani & naročnine','Ekipa & dostopi','Desktop & mobilna app'],
     cta:'Začni brezplačno →', ctaClass:'btn btn-primary btn-block', highlighted: false,
   },
@@ -247,7 +254,8 @@ export default function LandingPage() {
   const [openFaq, setOpenFaq] = useState<number>(0);
 
   const annual = accountantCost * 12;
-  const savings = Math.round(annual - 119.88);
+  // PRELET 251: primerjamo z letnim paketom Pro (129,90 EUR).
+  const savings = Math.round(annual - 129.90);
   const fmt = (n: number) => Math.round(n).toLocaleString('sl-SI');
 
   const tabBtnStyle = (tab: TabId): React.CSSProperties => ({
@@ -336,7 +344,7 @@ export default function LandingPage() {
           <div className="section-head">
             <span className="kicker kicker-warn">Preprosta matematika</span>
             <h2 className="h2">Koliko vas <em>dejansko</em> stane računovodja?</h2>
-            <p className="lede">Premaknite drsnik na svoj mesečni račun. Računko Pro stane €9.99 mesečno.</p>
+            <p className="lede">Premaknite drsnik na svoj mesečni račun. Računko Pro stane 12,99 € mesečno.</p>
           </div>
           <div className="calc">
             <div className="calc-card calc-input">
@@ -355,7 +363,7 @@ export default function LandingPage() {
             <div className="calc-card calc-result">
               <div className="calc-label">Letno</div>
               <div className="calc-value" style={{color:'#F4EFE6'}}><span className="cur">€</span><span>{fmt(annual)}</span></div>
-              <div className="calc-foot">Računko Pro: <strong>€119.88/leto</strong></div>
+              <div className="calc-foot">Računko Pro: <strong>129,90 €/leto</strong></div>
             </div>
           </div>
           <div className="savings">
@@ -718,7 +726,7 @@ export default function LandingPage() {
                   <div key={item} style={{display:'flex',gap:11,alignItems:'flex-start',fontSize:'0.94rem'}}><Check color="#1F4732" /><span>{item}</span></div>
                 ))}
               </div>
-              <div style={{textAlign:'center',padding:'10px 14px',background:'#F4D9CE',borderRadius:999,fontSize:'0.82rem',fontWeight:500,color:'#C9442B'}}>Priporočamo: Pro · €9.99/mes</div>
+              <div style={{textAlign:'center',padding:'10px 14px',background:'#F4D9CE',borderRadius:999,fontSize:'0.82rem',fontWeight:500,color:'#C9442B'}}>Priporočamo: Pro · 12,99 €/mes</div>
             </div>
           </div>
           {/* Gostinec */}
@@ -734,7 +742,7 @@ export default function LandingPage() {
                   <div key={item} style={{display:'flex',gap:11,alignItems:'flex-start',fontSize:'0.94rem'}}><Check color="#F4EFE6" /><span>{item}</span></div>
                 ))}
               </div>
-              <div style={{textAlign:'center',padding:'10px 14px',background:'rgba(255,255,255,0.1)',border:'1px solid rgba(255,255,255,0.18)',borderRadius:999,fontSize:'0.82rem',fontWeight:500,color:'#F4EFE6'}}>Priporočamo: Pro + POS · €24.99/mes</div>
+              <div style={{textAlign:'center',padding:'10px 14px',background:'rgba(255,255,255,0.1)',border:'1px solid rgba(255,255,255,0.18)',borderRadius:999,fontSize:'0.82rem',fontWeight:500,color:'#F4EFE6'}}>Priporočamo: Pro + POS · 29,99 €/mes</div>
             </div>
           </div>
           {/* Fitness */}
@@ -750,7 +758,7 @@ export default function LandingPage() {
                   <div key={item} style={{display:'flex',gap:11,alignItems:'flex-start',fontSize:'0.94rem'}}><Check color="#1F4732" /><span>{item}</span></div>
                 ))}
               </div>
-              <div style={{textAlign:'center',padding:'10px 14px',background:'#D7E4D4',borderRadius:999,fontSize:'0.82rem',fontWeight:500,color:'#1F4732'}}>Priporočamo: Pro + POS · €24.99/mes</div>
+              <div style={{textAlign:'center',padding:'10px 14px',background:'#D7E4D4',borderRadius:999,fontSize:'0.82rem',fontWeight:500,color:'#1F4732'}}>Priporočamo: Pro + POS · 29,99 €/mes</div>
             </div>
           </div>
         </div>
