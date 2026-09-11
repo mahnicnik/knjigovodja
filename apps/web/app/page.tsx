@@ -595,20 +595,34 @@ export default function LandingPage() {
           <h2 className="h2" style={{color:'#F7F6F2',marginTop:8}}>
             Ne zamenjamo vas. <em style={{color:'#D89328'}}>Delamo za vas.</em>
           </h2>
+          {/* POPRAVLJENO (prelet 252): prejsnje besedilo je trdilo, da Racunko
+              nima osnovnih sredstev in obracuna plac. To NI res - ima
+              amortizacijo, place in REK-1. Netocnost bi racunovodkinja opazila
+              v prvi minuti in izgubili bi zaupanje pri vsem ostalem.
+              Preverjeno v kodi: glavne knjige, kontnega nacrta, temeljnic,
+              bilance stanja in izkaza poslovnega izida res ni. */}
           <p style={{fontSize:17,lineHeight:1.75,marginTop:20,color:'#DCE7E0'}}>
-            Računko nima glavne knjige, osnovnih sredstev ne obračuna plač na ravni servisa —
-            in jih ne namerava imeti. Vaš program ostane vaš.
+            Računko ni program za računovodski servis — nima glavne knjige, kontnega načrta
+            ne dvostavnega knjigovodstva. Vodi eno podjetje, ne vaše pisarne.
           </p>
           <p style={{fontSize:17,lineHeight:1.75,marginTop:16,color:'#DCE7E0'}}>
-            Kar Računko naredi, je delo pred vami: stranka izda račune, poslika stroške in
-            vodi blagajno, vi pa namesto mape papirjev dobite <strong style={{color:'#fff'}}>izvoz,
-            ki ga vaš program prebere</strong> — VOD za Vasco in Pantheon, Excel za vse ostalo.
+            Kar naredi, je delo pred vami: stranka izda račune, poslika stroške in vodi
+            blagajno, KPO in amortizacijo. Vi pa namesto mape papirjev dobite
+            <strong style={{color:'#fff'}}> izvoz, ki ga vaš program prebere</strong>.
+          </p>
+          <p style={{fontSize:17,lineHeight:1.75,marginTop:16,color:'#DCE7E0'}}>
+            Z enim uporabniškim računom preklapljate med vsemi strankami, ki so vas povabile.
+            Knjigovodstvo teče <strong style={{color:'#fff'}}>sproti</strong>, ne konec kvartala —
+            ko potrebujete dokumente, so že tam.
           </p>
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:20,marginTop:36}}>
             {[
-              ['Knjižbe brez prepisovanja', 'Izdani računi v VOD XML, pripravljeni za neposreden uvoz.'],
-              ['Evidence DDV za več strank', 'En korak za vse, ki so vas povabile v svoj portal.'],
-              ['Stranka ureja sproti', 'Stroški poslikani ob nastanku, ne v mapi konec kvartala.'],
+              ['Vse stranke na enem mestu', 'Z enim računom preklapljate med podjetji, ki so vas povabila. Brez ločenih prijav.'],
+              ['Dokumenti, ko jih rabite', 'Izdani računi, prejeti stroški in dnevni zaključki blagajne — pripravljeni za prenos.'],
+              ['Knjižbe brez prepisovanja', 'Izvoz VOD XML za Vasco, Pantheon in Opal. Excel za vse ostalo.'],
+              ['Stalen pregled', 'Vidite, kaj se dogaja med mesecem — ne šele, ko vam stranka prinese mapo.'],
+              ['Evidence DDV v enem koraku', 'Za vse stranke hkrati, ne za vsako posebej.'],
+              ['Manj vprašanj po telefonu', 'Stranka vidi isto kot vi. Kar manjka, vidita oba.'],
             ].map(([n, o]) => (
               <div key={n}>
                 <div style={{fontWeight:700,fontSize:15,color:'#fff'}}>{n}</div>
