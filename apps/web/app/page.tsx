@@ -1,4 +1,7 @@
-'use client';
+'use client'
+
+// PRELET 260: preklikljivo okno namesto negibne slike.
+import DemoOkno from '@/components/DemoOkno';
 
 import { useState } from 'react';
 
@@ -385,163 +388,17 @@ export default function LandingPage() {
       {/* ── DASHBOARD ── */}
       <section className="section" id="vmesnik">
         <div className="section-head">
-          <h2 className="h2">Vse kar potrebujete.<br /><em>Na enem zaslonu.</em></h2>
+          <h2 className="h2">Poglejte, kako <em>deluje.</em></h2>
           <p className="lede">Prihodki, roki, računi in AI računovodja. Brez iskanja po mailu, brez čakanja na odgovor.</p>
         </div>
-        <div style={{marginTop:40,borderRadius:16,overflow:'hidden',background:'#0B1A10',boxShadow:'0 40px 80px -30px rgba(14,61,42,0.35),0 12px 24px -12px rgba(14,61,42,0.2)'}}>
-          {/* Browser bar */}
-          <div style={{height:38,background:'#091410',display:'flex',alignItems:'center',padding:'0 14px',position:'relative'}}>
-            <div style={{display:'inline-flex',gap:6}}><i style={{width:11,height:11,borderRadius:'50%',background:'rgba(255,255,255,0.18)',display:'block'}} /><i style={{width:11,height:11,borderRadius:'50%',background:'rgba(255,255,255,0.18)',display:'block'}} /><i style={{width:11,height:11,borderRadius:'50%',background:'rgba(255,255,255,0.18)',display:'block'}} /></div>
-            <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',fontFamily:"'JetBrains Mono',monospace",fontSize:'0.74rem',color:'rgba(255,255,255,0.55)',background:'rgba(14,61,42,0.6)',padding:'4px 16px',borderRadius:6}}>računko.si/dashboard</div>
-          </div>
-          {/* Body */}
-          <div style={{display:'grid',gridTemplateColumns:'56px 1fr'}}>
-            {/* Icon sidebar */}
-            <div style={{background:'#091410',display:'flex',flexDirection:'column',alignItems:'center',padding:'14px 0 12px',gap:3,borderRight:'1px solid rgba(255,255,255,0.05)',minHeight:560}}>
-              <BrandMark size={28} />
-              <div style={{marginBottom:10}} />
-              {[
-                <svg key="home" width="16" height="16" fill="none" viewBox="0 0 16 16"><path d="M2 7L8 2L14 7V13.5C14 14.05 13.55 14.5 13 14.5H10.5V10H5.5V14.5H3C2.45 14.5 2 14.05 2 13.5V7Z" stroke="white" strokeWidth="1.4" strokeLinejoin="round"/></svg>,
-                <svg key="inv" width="16" height="16" fill="none" viewBox="0 0 16 16"><rect x="1.5" y="2" width="13" height="12" rx="1.5" stroke="rgba(255,255,255,0.35)" strokeWidth="1.4"/><path d="M1.5 6H14.5" stroke="rgba(255,255,255,0.35)" strokeWidth="1.3"/></svg>,
-                <svg key="exp" width="16" height="16" fill="none" viewBox="0 0 16 16"><path d="M2 2H14L12.5 10H3.5L2 2Z" stroke="rgba(255,255,255,0.35)" strokeWidth="1.4" strokeLinejoin="round"/></svg>,
-                <svg key="usr" width="16" height="16" fill="none" viewBox="0 0 16 16"><circle cx="8" cy="6" r="3" stroke="rgba(255,255,255,0.35)" strokeWidth="1.4"/><path d="M2 14C2 11.79 4.69 10 8 10C11.31 10 14 11.79 14 14" stroke="rgba(255,255,255,0.35)" strokeWidth="1.4" strokeLinecap="round"/></svg>,
-                <svg key="stats" width="16" height="16" fill="none" viewBox="0 0 16 16"><path d="M1.5 10.5L4.5 5.5L7.5 8.5L10 5.5L14.5 10.5" stroke="rgba(255,255,255,0.35)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>,
-              ].map((icon, i) => (
-                <div key={i} style={{width:36,height:36,borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',background: i===0 ? 'rgba(255,255,255,0.1)' : 'transparent'}}>{icon}</div>
-              ))}
-              <div style={{marginTop:'auto',display:'flex',flexDirection:'column',gap:6,alignItems:'center'}}>
-                <div style={{width:30,height:30,background:'#C9921B',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.75rem',fontWeight:700,color:'white'}}>€</div>
-              </div>
-            </div>
-            {/* Main */}
-            <div style={{background:'#F4EFE6',display:'flex',flexDirection:'column'}}>
-              {/* Top bar */}
-              <div style={{padding:'13px 18px 11px',borderBottom:'1px solid rgba(0,0,0,0.07)',display:'flex',justifyContent:'space-between',alignItems:'center',background:'#F4EFE6',flexShrink:0}}>
-                <div>
-                  <div style={{fontSize:'0.65rem',color:'#3A4A40',letterSpacing:'0.07em',textTransform:'uppercase',marginBottom:3}}>SREDA · 18. JUNIJ 2026</div>
-                  <div style={{fontFamily:"'Instrument Serif',serif",fontSize:'1.2rem',letterSpacing:'-0.01em',color:'#0C2A1E',lineHeight:1.2}}>Dober dan, Jaka <span className="wave">👋</span></div>
-                </div>
-                <div style={{display:'flex',alignItems:'center',gap:8}}>
-                  <div style={{display:'flex',alignItems:'center',gap:8,background:'white',border:'1px solid #D9D2C2',borderRadius:8,padding:'6px 12px',fontSize:'0.78rem',color:'#3A4A40'}}>
-                    <svg width="13" height="13" fill="none" viewBox="0 0 13 13" style={{opacity:0.45}}><circle cx="5.5" cy="5.5" r="4" stroke="currentColor" strokeWidth="1.3"/><path d="M9 9L11.5 11.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
-                    Iskanje računov...
-                    <span style={{background:'#F4EFE6',border:'1px solid #D9D2C2',borderRadius:4,padding:'1px 5px',fontSize:'0.66rem',fontFamily:"'JetBrains Mono',monospace",opacity:0.7}}>⌘K</span>
-                  </div>
-                  <div style={{width:30,height:30,background:'#0E3D2A',color:'#F4EFE6',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.68rem',fontWeight:700}}>JK</div>
-                </div>
-              </div>
-              {/* Content */}
-              <div style={{padding:'12px 14px',display:'flex',flexDirection:'column',gap:9,overflow:'hidden'}}>
-                {/* Quick actions */}
-                <div>
-                  <div style={{fontSize:'0.62rem',letterSpacing:'0.07em',textTransform:'uppercase',color:'#3A4A40',marginBottom:7}}>BLIŽNJICE</div>
-                  <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:7}}>
-                    {['Nov račun','Dodaj strošek','Prispevki QR','Skeniraj račun'].map(label => (
-                      <div key={label} style={{background:'white',border:'1px solid #D9D2C2',borderRadius:9,padding:'10px 8px',textAlign:'center',display:'flex',flexDirection:'column',alignItems:'center',gap:5}}>
-                        <svg width="16" height="16" fill="none" viewBox="0 0 16 16" style={{color:'#0E3D2A'}}><rect x="3" y="3" width="10" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.4"/><path d="M8 5.5V10.5M5.5 8H10.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
-                        <span style={{fontSize:'0.72rem',color:'#0C2A1E'}}>{label}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                {/* Revenue card */}
-                <div style={{background:'#0E3D2A',color:'#F4EFE6',borderRadius:12,padding:'18px 20px'}}>
-                  <div style={{fontSize:'0.62rem',letterSpacing:'0.09em',textTransform:'uppercase',opacity:0.5,marginBottom:10}}>ČISTI PRIHODEK · JUNIJ 2026 · NORMIRANI 80%</div>
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end'}}>
-                    <div>
-                      <div style={{fontFamily:"'Instrument Serif',serif",fontSize:'2.8rem',lineHeight:1,letterSpacing:'-0.03em'}}>€1.539<span style={{fontSize:'0.5em',opacity:0.6}}>.89</span></div>
-                      <div style={{fontSize:'0.75rem',opacity:0.55,marginTop:8}}>Po prispevkih in davkih (22%) · projekcija <strong style={{color:'#F4EFE6',opacity:1}}>€2.673</strong></div>
-                    </div>
-                    <svg width="140" height="54" viewBox="0 0 140 54" fill="none" style={{flexShrink:0,marginLeft:16}}>
-                      <defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#D89328" stopOpacity="0.35"/><stop offset="100%" stopColor="#D89328" stopOpacity="0"/></linearGradient></defs>
-                      <path d="M2 50 C10 48 18 44 26 40 C34 36 38 38 46 34 C54 30 60 26 70 22 C80 18 88 15 98 11 C108 7 120 5 138 3" stroke="#D89328" strokeWidth="2" strokeLinecap="round" fill="none"/>
-                      <path d="M2 50 C10 48 18 44 26 40 C34 36 38 38 46 34 C54 30 60 26 70 22 C80 18 88 15 98 11 C108 7 120 5 138 3 L138 54 L2 54 Z" fill="url(#sg)"/>
-                    </svg>
-                  </div>
-                </div>
-                {/* Stats row */}
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
-                  <div style={{background:'white',border:'1px solid #D9D2C2',borderRadius:10,padding:'14px 15px'}}>
-                    <div style={{fontSize:'0.62rem',letterSpacing:'0.06em',textTransform:'uppercase',color:'#3A4A40',marginBottom:6}}>PRIHODKI JUN</div>
-                    <div style={{fontFamily:"'Instrument Serif',serif",fontSize:'1.55rem',letterSpacing:'-0.02em',lineHeight:1,color:'#0C2A1E'}}>€1.974</div>
-                    <div style={{fontSize:'0.74rem',color:'#3A4A40',marginTop:5}}>Brez DDV</div>
-                  </div>
-                  <div style={{background:'white',border:'1px solid #D9D2C2',borderRadius:10,padding:'14px 15px'}}>
-                    <div style={{fontSize:'0.62rem',letterSpacing:'0.06em',textTransform:'uppercase',color:'#3A4A40',marginBottom:6}}>ODHODKI JUN</div>
-                    <div style={{fontFamily:"'Instrument Serif',serif",fontSize:'1.55rem',letterSpacing:'-0.02em',lineHeight:1,color:'#0C2A1E'}}>€0</div>
-                    <div style={{fontSize:'0.74rem',color:'#3A4A40',marginTop:5}}>Skeniraj prvi račun</div>
-                  </div>
-                  <div style={{background:'#0E3D2A',border:'1px solid #0E3D2A',borderRadius:10,padding:'14px 15px',color:'#F4EFE6'}}>
-                    <div style={{fontSize:'0.62rem',letterSpacing:'0.06em',textTransform:'uppercase',opacity:0.5,marginBottom:6}}>STRANKE VAM DOLGUJEJO</div>
-                    <div style={{fontFamily:"'Instrument Serif',serif",fontSize:'1.55rem',letterSpacing:'-0.02em',lineHeight:1}}>€2.403</div>
-                    <div style={{fontSize:'0.74rem',opacity:0.55,marginTop:5}}>7 odprtih računov</div>
-                  </div>
-                </div>
-                {/* Activity + Deadlines */}
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-                  <div style={{background:'white',border:'1px solid #D9D2C2',borderRadius:10,padding:'13px 15px'}}>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:11}}>
-                      <div style={{fontWeight:600,fontSize:'0.88rem'}}>Zadnja aktivnost</div>
-                    </div>
-                    <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                      {[
-                        {bg:'#D7E4D4',tc:'#1F4732',init:'M',name:'Meta Platforms',num:'#2026-013',amount:'+€174',status:'POSLANO',stBg:'#DDF1E6',stC:'#1F6B49'},
-                        {bg:'#D9E5F4',tc:'#2A4A7A',init:'G',name:'Google LLC',num:'#2026-011',amount:'+€480',status:'POSLANO',stBg:'#DDF1E6',stC:'#1F6B49'},
-                        {bg:'#F4D9CE',tc:'#C9442B',init:'A',name:'Amazon EU S.à r.l.',num:'#2026-009',amount:'+€480',status:'POSLANO',stBg:'#DDF1E6',stC:'#1F6B49'},
-                      ].map(r => (
-                        <div key={r.init} style={{display:'flex',alignItems:'center',gap:9,fontSize:'0.8rem'}}>
-                          <div style={{width:26,height:26,background:r.bg,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.66rem',fontWeight:700,color:r.tc,flexShrink:0}}>{r.init}</div>
-                          <div style={{flex:1,minWidth:0}}><div style={{fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{r.name}</div><div style={{fontSize:'0.7rem',color:'#3A4A40'}}>{r.num}</div></div>
-                          <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:'0.78rem',color:'#0C2A1E',fontWeight:500,flexShrink:0}}>{r.amount}</span>
-                          <span style={{fontSize:'0.66rem',padding:'2px 7px',background:r.stBg,color:r.stC,borderRadius:999,fontWeight:500,flexShrink:0}}>{r.status}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={{background:'white',border:'1px solid #D9D2C2',borderRadius:10,padding:'13px 15px'}}>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:11}}>
-                      <div style={{fontWeight:600,fontSize:'0.88rem'}}>Bližnji roki</div>
-                      <span style={{fontSize:'0.78rem',color:'#0E3D2A'}}>Koledar →</span>
-                    </div>
-                    <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                      {[
-                        {label:'Prispevki s.p.',amount:'€624.05',date:'15. jun',tagBg:'#F4D9CE',tagC:'#C9442B',tagLabel:'ZAMUDA'},
-                        {label:'Akontacija dohodnine',amount:'€84',date:'15. jun',tagBg:'#F4D9CE',tagC:'#C9442B',tagLabel:'ZAMUDA'},
-                        {label:'DDV-O obračun',amount:'Q2',date:'31. jul',tagBg:'#D7E4D4',tagC:'#1F4732',tagLabel:'25 dni'},
-                      ].map((d,i) => (
-                        <div key={i}>
-                          {i > 0 && <div style={{height:1,background:'#D9D2C2',margin:'0 0 10px'}} />}
-                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:3}}><span style={{fontSize:'0.84rem',fontWeight:500}}>{d.label}</span><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:'0.8rem',fontWeight:600,color:'#0C2A1E'}}>{d.amount}</span></div>
-                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontSize:'0.72rem',color:'#3A4A40'}}>{d.date}</span><span style={{fontSize:'0.66rem',padding:'2px 8px',background:d.tagBg,color:d.tagC,borderRadius:999,fontWeight:500}}>{d.tagLabel}</span></div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                {/* AI suggestion */}
-                <div style={{background:'#0C1F14',borderRadius:10,padding:'11px 15px',display:'flex',alignItems:'center',gap:12}}>
-                  <div style={{width:30,height:30,background:'#1F6B3A',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-                    <svg width="14" height="14" fill="none" viewBox="0 0 14 14" style={{color:'#F4EFE6'}}><path d="M7 1L8.5 4.5H12L9.25 6.75L10.25 10.5L7 8.5L3.75 10.5L4.75 6.75L2 4.5H5.5L7 1Z" fill="currentColor"/></svg>
-                  </div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:'0.6rem',letterSpacing:'0.08em',textTransform:'uppercase',color:'rgba(244,239,230,0.4)',marginBottom:2}}>AI RAČUNOVODJA PREDLAGA</div>
-                    <div style={{fontSize:'0.8rem',color:'#F4EFE6'}}>Imate <span style={{color:'#D89328',fontWeight:500}}>3 stroške v e-pošti</span>, ki niso vneseni. Skupaj ~€240.</div>
-                  </div>
-                  <div style={{display:'flex',gap:6,flexShrink:0}}>
-                    <button style={{padding:'5px 11px',background:'transparent',color:'rgba(244,239,230,0.4)',border:'none',fontFamily:'inherit',fontSize:'0.76rem',cursor:'pointer',borderRadius:6}}>Pozneje</button>
-                    <button style={{padding:'5px 12px',background:'#C9921B',color:'white',border:'none',fontFamily:'inherit',fontSize:'0.76rem',fontWeight:500,cursor:'pointer',borderRadius:6}}>Da, skeniraj</button>
-                  </div>
-                </div>
-              </div>
-              {/* Bottom bar */}
-              <div style={{padding:'10px 14px',borderTop:'1px solid #D9D2C2',background:'#F4EFE6',display:'flex',justifyContent:'flex-end',flexShrink:0}}>
-                <div style={{display:'inline-flex',alignItems:'center',gap:6,padding:'8px 16px',background:'#0E3D2A',color:'#F4EFE6',borderRadius:8,fontSize:'0.82rem',fontWeight:500,cursor:'pointer'}}>
-                  <span style={{fontSize:'1.1rem',fontWeight:300,lineHeight:1}}>+</span> Nov račun
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* POPRAVLJENO (prelet 260): tu je bila NEGIBNA slika nadzorne
+            plosce. Slika pove, kako izgleda; ne pove, kako se uporablja.
+            Kdor klikne, si zapomni bistveno vec od tistega, ki gleda.
+
+            `DemoOkno` je posnemano, ne prava aplikacija - ta je na /demo.
+            Tu gre za drugo stvar: obcutek BREZ odhoda s strani. Vsak odhod
+            je mesto, kjer obiskovalca izgubimo. */}
+        <DemoOkno />
       </section>
 
       {/* ── FEATURE TABS ── */}
