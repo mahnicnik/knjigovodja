@@ -294,12 +294,16 @@ export default function LandingPage() {
       <nav className="nav" id="top">
         <div className="nav-inner">
           <a href="#top" className="brand"><BrandMark /><span>Računko</span></a>
+          {/* PRELET 257: povezave do podstrani.
+              Podstrani so obstajale, a nanje ni vodil noben clen iz menija -
+              do njih je prisel samo tisti, ki je prebral do dna. Iskalnik jih
+              prav tako najde tezje, ce nanje ne kaze nic z zacetne strani. */}
           <nav className="nav-links">
-            <a href="#funkcije">Funkcije</a>
-            <a href="#vmesnik">Vmesnik</a>
-            <a href="#primerjava">Primerjava</a>
+            <a href="/funkcije">Funkcije</a>
+            <a href="/davcna-blagajna">Blagajna</a>
+            <a href="/e-racun">E-računi 2028</a>
             <a href="#cene">Cene</a>
-            <a href="#faq">FAQ</a>
+            <a href="/za-racunovodje">Za računovodje</a>
           </nav>
           <div className="nav-cta">
             <a href="/login" className="btn btn-ghost">Prijava</a>
