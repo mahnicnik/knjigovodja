@@ -53,8 +53,47 @@ export const metadata: Metadata = {
     shortcut: "/favicon.svg",
     apple: "/favicon.svg",
   },
-  title: "Računko — AI računovodja za slovenskega s.p.",
-  description: "Zamenja računovodja za €9.99/mesec. AI ki pozna FURS, vaše dejanske podatke in slovensko davčno pravo. Brez vezave, brez kreditne kartice.",
+  /**
+   * METAPODATKI (prelet 250)
+   * ════════════════════════
+   *
+   * PREJ: \"Zamenja racunovodja za 9.99/mesec\". Dvoje je bilo narobe.
+   *
+   * 1. CENA je bila stara - paket Pro stane 12,99 EUR, Pro + POS pa 29,99.
+   *    Napacna cena v iskalniku je slabsa od nobene: obiskovalec pride z
+   *    napacnim pricakovanjem in odide razocaran.
+   *
+   * 2. \"ZAMENJA RACUNOVODJA\" je napacna obljuba in slaba strategija.
+   *    Racunko nima glavne knjige, osnovnih sredstev ne obracuna plac na
+   *    ravni servisa - racunovodkinje torej ne zamenja. Predvsem pa si s tem
+   *    stavkom naredi sovraznika iz racunovodskih servisov, ki bi lahko bili
+   *    najboljsi prodajni kanal: izvoz VOD jim prinese ciste podatke za
+   *    uvoz v Vasco ali Pantheon.
+   *
+   * ZDAJ: blagajna in racunovodstvo v enem, z izvozom za racunovodjo.
+   * To je hkrati resnicno IN edinstveno - nihce drug v Sloveniji nima
+   * prave gostinske blagajne skupaj s knjigo prihodkov.
+   */
+  metadataBase: new URL('https://xn--raunko-j2a.si'),
+  title: {
+    default: "Računko — blagajna in računovodstvo za slovenski s.p.",
+    template: "%s · Računko",
+  },
+  description: "Davčna blagajna za lokale in fakturiranje za s.p. v enem programu. FURS potrjevanje, delo brez povezave, izvoz za računovodjo (Vasco, Pantheon). Od 12,99 €/mesec.",
+  keywords: [
+    "davčna blagajna", "blagajna za lokal", "POS blagajna gostinstvo",
+    "program za izdajanje računov", "s.p. računi", "FURS davčno potrjevanje",
+    "e-račun eSLOG", "KPO knjiga", "računovodski program s.p.",
+  ],
+  alternates: { canonical: '/' },
+  openGraph: {
+    type: 'website',
+    locale: 'sl_SI',
+    siteName: 'Računko',
+    title: 'Računko — blagajna in računovodstvo za slovenski s.p.',
+    description: 'Davčna blagajna za lokale in fakturiranje za s.p. v enem programu. FURS potrjevanje, delo brez povezave, izvoz za računovodjo.',
+  },
+  robots: { index: true, follow: true },
 };
 
 export default function RootLayout({

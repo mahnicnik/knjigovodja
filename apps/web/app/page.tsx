@@ -568,6 +568,136 @@ export default function LandingPage() {
       </div>
 
       {/* ── FOR WHOM ── */}
+      {/* ZA RACUNOVODSKE SERVISE (prelet 250)
+       *
+       * ZAKAJ: doslej je stran obljubljala, da "zamenja racunovodja". To je
+       * dvakrat slabo. Ni res - Racunko nima glavne knjige, osnovnih sredstev
+       * ne obracuna plac na ravni servisa. In naredi sovraznika iz ljudi, ki
+       * bi lahko bili najboljsi prodajni kanal.
+       *
+       * Racunovodkinja ne bo zapustila Vasca, ker v njem vodi VSE svoje
+       * stranke. Zamenjala pa bo mapo papirjev za cist izvoz - in stranki
+       * priporocila program, ki ji prihrani delo.
+       *
+       * To je edina pot, po kateri lahko majhen ponudnik doseze stranke, ki
+       * jih sam ne bi nikoli nasel. */}
+      <section className="section" id="racunovodje" style={{background:'#0E3D2A',color:'#F7F6F2',padding:'72px 0'}}>
+        <div style={{maxWidth:820,margin:'0 auto',padding:'0 24px'}}>
+          <span className="kicker" style={{color:'#A8C9B5'}}>Za računovodske servise</span>
+          <h2 className="h2" style={{color:'#F7F6F2',marginTop:8}}>
+            Ne zamenjamo vas. <em style={{color:'#D89328'}}>Delamo za vas.</em>
+          </h2>
+          <p style={{fontSize:17,lineHeight:1.75,marginTop:20,color:'#DCE7E0'}}>
+            Računko nima glavne knjige, osnovnih sredstev ne obračuna plač na ravni servisa —
+            in jih ne namerava imeti. Vaš program ostane vaš.
+          </p>
+          <p style={{fontSize:17,lineHeight:1.75,marginTop:16,color:'#DCE7E0'}}>
+            Kar Računko naredi, je delo pred vami: stranka izda račune, poslika stroške in
+            vodi blagajno, vi pa namesto mape papirjev dobite <strong style={{color:'#fff'}}>izvoz,
+            ki ga vaš program prebere</strong> — VOD za Vasco in Pantheon, Excel za vse ostalo.
+          </p>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:20,marginTop:36}}>
+            {[
+              ['Knjižbe brez prepisovanja', 'Izdani računi v VOD XML, pripravljeni za neposreden uvoz.'],
+              ['Evidence DDV za več strank', 'En korak za vse, ki so vas povabile v svoj portal.'],
+              ['Stranka ureja sproti', 'Stroški poslikani ob nastanku, ne v mapi konec kvartala.'],
+            ].map(([n, o]) => (
+              <div key={n}>
+                <div style={{fontWeight:700,fontSize:15,color:'#fff'}}>{n}</div>
+                <div style={{fontSize:14,lineHeight:1.65,marginTop:6,color:'#B9CFC3'}}>{o}</div>
+              </div>
+            ))}
+          </div>
+          <a href="/racunovodja" style={{display:'inline-block',marginTop:36,padding:'13px 24px',borderRadius:10,background:'#D89328',color:'#1A1A16',textDecoration:'none',fontWeight:700,fontSize:15}}>
+            Portal za računovodje →
+          </a>
+        </div>
+      </section>
+
+      {/* VPRASANJA IN ODGOVORI (prelet 250)
+       *
+       * ZAKAJ TA RAZDELEK: iskalniki in AI pomocniki odgovarjajo na vprasanja.
+       * Kdor v Google ali pomocnika vtipka "ali potrebujem davcno blagajno za
+       * lokal", dobi odgovor s strani, ki ga ima zapisanega - ne s strani, ki
+       * govori o sebi.
+       *
+       * Odgovori so KRATKI IN DEJSTVENI, ne prodajni. Pomocnik navede vir, ki
+       * mu lahko zaupa; oglasno besedilo preskoci.
+       *
+       * Zapis JSON-LD spodaj pove iskalniku, da gre za vprasanja in odgovore,
+       * zato jih lahko prikaze neposredno v rezultatih. */}
+      <section className="section" id="vprasanja">
+        <div className="section-head">
+          <span className="kicker">Pogosta vprašanja</span>
+          <h2 className="h2">Kar vas <em>zanima.</em></h2>
+        </div>
+        <div style={{maxWidth:760,margin:'0 auto'}}>
+          {[
+            ['Ali potrebujem davčno blagajno za lokal?',
+             'Da. Če za blago ali storitev prejmete gotovino, kartico ali drugo neposredno plačilo, mora biti račun davčno potrjen pri FURS. To velja za bare, kavarne, restavracije, frizerske salone in fitnes studie. Za plačila na transakcijski račun potrjevanje ni potrebno.'],
+            ['Kaj potrebujem, da začnem izdajati davčno potrjene račune?',
+             'Troje: digitalno potrdilo FURS, prijavljen poslovni prostor in sprejet interni akt o številčenju. Vse troje uredite v Računku; potrdilo pridobite brezplačno prek eDavkov.'],
+            ['Ali blagajna deluje brez interneta?',
+             'Da. Ob izpadu povezave Računko izda račun z zaščitno oznako ZOI in ga natisne, nato pa ga samodejno prijavi pri FURS, ko se povezava vrne. Zakonski rok za naknadno prijavo sta dva delovna dneva.'],
+            ['Ali Računko nadomesti računovodski servis?',
+             'Ne in tega ne poskuša. Računko vodi vaše račune, stroške, KPO in DDV evidenco ter jih izvozi v obliki, ki jo računovodski program prebere — Vasco, Pantheon ali Opal. Vaša računovodkinja tako dobi čiste podatke namesto mape s papirji.'],
+            ['Kdaj bodo e-računi med podjetji obvezni?',
+             'Od 1. januarja 2028. Zakon ZIERDED, sprejet oktobra 2025, zahteva strukturirano obliko (e-SLOG ali skladno z EN 16931) in prepoveduje izmenjavo po e-pošti. Računko že zdaj izvozi e-račun v obliki e-SLOG 2.0.'],
+            ['Koliko stane?',
+             'Brezplačni paket za osnovno izdajanje računov. Pro stane 12,99 € na mesec, Pro + POS z blagajno 29,99 €. Letno plačilo pomeni dva meseca brezplačno. Brez vezave.'],
+          ].map(([v, o]) => (
+            <details key={v} style={{borderBottom:'1px solid #D9D2C2',padding:'18px 0'}}>
+              <summary style={{fontWeight:600,fontSize:17,cursor:'pointer',listStyle:'none'}}>{v}</summary>
+              <p style={{marginTop:12,lineHeight:1.7,color:'#4A4A44'}}>{o}</p>
+            </details>
+          ))}
+        </div>
+      </section>
+
+      {/* Strukturirani podatki. Iskalnik in AI pomocnik iz njih razberejo,
+          kaj izdelek je, koliko stane in na katera vprasanja odgovarja - brez
+          ugibanja iz besedila strani. */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{__html: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@graph': [
+          {
+            '@type': 'SoftwareApplication',
+            name: 'Računko',
+            applicationCategory: 'BusinessApplication',
+            operatingSystem: 'Web, Windows, Android',
+            inLanguage: 'sl',
+            description: 'Davčna blagajna za lokale in fakturiranje za slovenski s.p. v enem programu. FURS potrjevanje, delo brez povezave, izvoz za računovodski program.',
+            offers: [
+              { '@type': 'Offer', name: 'Brezplačno', price: '0', priceCurrency: 'EUR' },
+              { '@type': 'Offer', name: 'Pro', price: '12.99', priceCurrency: 'EUR',
+                priceSpecification: { '@type': 'UnitPriceSpecification', price: '12.99', priceCurrency: 'EUR', billingDuration: 1, billingIncrement: 1, unitCode: 'MON' } },
+              { '@type': 'Offer', name: 'Pro + POS', price: '29.99', priceCurrency: 'EUR',
+                priceSpecification: { '@type': 'UnitPriceSpecification', price: '29.99', priceCurrency: 'EUR', billingDuration: 1, billingIncrement: 1, unitCode: 'MON' } },
+            ],
+            featureList: [
+              'Davčno potrjevanje računov (FURS)',
+              'POS blagajna za gostinstvo — mize, delitev računa, kuhinjski zaslon',
+              'Delo brez povezave do dveh delovnih dni',
+              'e-račun v obliki e-SLOG 2.0',
+              'KPO knjiga in evidence DDV',
+              'Izvoz za Vasco, Pantheon in Opal',
+            ],
+          },
+          {
+            '@type': 'FAQPage',
+            mainEntity: [
+              ['Ali potrebujem davčno blagajno za lokal?', 'Da. Če za blago ali storitev prejmete gotovino, kartico ali drugo neposredno plačilo, mora biti račun davčno potrjen pri FURS. Za plačila na transakcijski račun potrjevanje ni potrebno.'],
+              ['Ali blagajna deluje brez interneta?', 'Da. Ob izpadu povezave se račun izda z zaščitno oznako ZOI in se samodejno prijavi pri FURS, ko se povezava vrne. Zakonski rok sta dva delovna dneva.'],
+              ['Ali Računko nadomesti računovodski servis?', 'Ne. Računko vodi račune, stroške, KPO in DDV evidenco ter jih izvozi v obliki, ki jo prebere Vasco, Pantheon ali Opal.'],
+              ['Kdaj bodo e-računi med podjetji obvezni?', 'Od 1. januarja 2028 po zakonu ZIERDED. Zahtevana je strukturirana oblika e-SLOG ali skladna z EN 16931.'],
+            ].map(([q, a]) => ({
+              '@type': 'Question', name: q,
+              acceptedAnswer: { '@type': 'Answer', text: a },
+            })),
+          },
+        ],
+      })}} />
+
       <section className="section" id="primerjava">
         <div className="section-head">
           <span className="kicker">Za koga je Računko</span>
