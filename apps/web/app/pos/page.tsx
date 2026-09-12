@@ -1334,8 +1334,49 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
             fursNapaka = 'FURS ni vrnil potrditvene kode (EOR).'
           }
         } catch (e: any) {
-          console.warn('FURS klic ni uspel, račun bo shranjen brez EOR:', e?.message)
+          console.warn('FURS klic ni uspel:', e?.message)
           fursNapaka = e?.message || 'Povezava s FURS ni uspela.'
+        }
+
+        /**
+         * POPRAVLJENO (prelet 262): NEUSPELA PRIJAVA GRE V LOKALNO VRSTO.
+         * ═══════════════════════════════════════════════════════════════
+         *
+         * KAJ SE JE ZGODILO 11.9.2026 ob 22:39: racun za 16 EUR je dobil
+         * zabelezeno placilo, ostal pa BREZ stevilke, BREZ ZOI in BREZ EOR.
+         * Gost je placal, veljavnega racuna pa ni dobil.
+         *
+         * VZROK: pot brez povezave se je sprozila SAMO, ce obnovitev seje
+         * pade z omrezno napako IN zaznava potrdi, da povezave ni. Tisti
+         * vecer je bila povezava videti delujoca - seja se je obnovila -
+         * zato se ni sprozila. Klic na FURS je nato odpovedal, `catch` ga
+         * je prestregel in koda se je TIHO nadaljevala do zapisa placila.
+         *
+         * Med "povezava dela" in "povezave ni" obstaja tretje stanje:
+         * povezava dela, TA ZAHTEVEK pa je padel. Vanj je zdrsnil racun.
+         *
+         * POPRAVEK: ce prijava ne vrne niti ZOI, prodaje NE nadaljujemo po
+         * obicajni poti, ampak jo preusmerimo v lokalno vrsto - enako kot ob
+         * izpadu. Racun dobi stevilko in ZOI na napravi, prijavi pa se
+         * naknadno, v zakonskem roku dveh delovnih dni.
+         *
+         * ZAKAJ PREUSMERITEV IN NE ZAVRNITEV: gost stoji pred blagajno.
+         * Zavrnitev bi ustavila prodajo; preusmeritev je zanj neopazna,
+         * racun pa je veljaven ze v trenutku izdaje.
+         *
+         * POGOJ je stevilcenje PO NAPRAVI - pri centralnem blagajna stevilke
+         * ne sme podeliti sama. Takrat ostane opozorilo blagajniku.
+         */
+        if (!fursZoi) {
+          const ctx = await preberiKontekst()
+          if (ctx?.numberingMode === 'device') {
+            console.warn('Prijava ni vrnila ZOI — prodaja gre v lokalno vrsto.')
+            await izvediOfflineProdajo()
+            return
+          }
+          // Pri centralnem stevilcenju lokalne stevilke ne smemo podeliti.
+          fursNapaka = (fursNapaka || 'Davčna potrditev ni uspela.') +
+            ' Račun NI davčno potrjen — preverite povezavo in ga prijavite naknadno.'
         }
       }
 
