@@ -1,7 +1,10 @@
 'use client'
 
 // PRELET 260: preklikljivo okno namesto negibne slike.
-import DemoOkno from '@/components/DemoOkno';
+// PRELET 264: `DemoOkno` je bilo POSNEMANO - priblizek, narisan po spominu.
+// Priblizek izda sam sebe: razmiki so drugacni, pisave tudi, in obiskovalec
+// zacuti, da gleda skico. Zdaj tece PRAVA aplikacija.
+import ZivaPredstavitev from '@/components/ZivaPredstavitev';
 
 import { useState } from 'react';
 
@@ -388,7 +391,7 @@ export default function LandingPage() {
       {/* ── DASHBOARD ── */}
       <section className="section" id="vmesnik">
         <div className="section-head">
-          <h2 className="h2">Poglejte, kako <em>deluje.</em></h2>
+          <h2 className="h2">Poskusite <em>zdaj.</em></h2>
           <p className="lede">Prihodki, roki, računi in AI računovodja. Brez iskanja po mailu, brez čakanja na odgovor.</p>
         </div>
         {/* POPRAVLJENO (prelet 260): tu je bila NEGIBNA slika nadzorne
@@ -398,7 +401,7 @@ export default function LandingPage() {
             `DemoOkno` je posnemano, ne prava aplikacija - ta je na /demo.
             Tu gre za drugo stvar: obcutek BREZ odhoda s strani. Vsak odhod
             je mesto, kjer obiskovalca izgubimo. */}
-        <DemoOkno />
+        <ZivaPredstavitev />
       </section>
 
       {/* ── FEATURE TABS ── */}
