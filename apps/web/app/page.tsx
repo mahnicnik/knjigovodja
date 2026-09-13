@@ -333,7 +333,12 @@ export default function LandingPage() {
           <p className="hero-sub">Računko je poslovni portal za slovenskega podjetnika. Fakturiranje, blagajna, davki, člani, ekipa — brez papirjev.</p>
           <div className="hero-cta">
             <a href="/register" className="btn btn-primary btn-lg">Začni brezplačno →</a>
-            <a href="#funkcije" className="btn btn-quiet btn-lg">Oglej si funkcije</a>
+            {/* PRELET 259: vstop v predstavitev.
+                Kdor preklika, se odloci pogosteje kot tisti, ki bere - zato
+                stoji ob glavnem gumbu, ne skrit med povezavami.
+                Besedilo pove, da ni ovire: brez registracije je tisto, kar
+                obiskovalca prepreca najpogosteje. */}
+            <a href="/demo" className="btn btn-quiet btn-lg">Preizkusi brez registracije</a>
           </div>
           <p className="hero-proof">Brez kreditne kartice · Podatki v EU · Nastavitev v 5 minutah</p>
           <ul className="trust">

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import PageHelp from "@/components/PageHelp";
+import DemoPasica from "@/components/DemoPasica";
 import ZascitaStevilcnihPolj from "@/components/ZascitaStevilcnihPolj";
 import ZaznavaNoveRazlicice from "@/components/ZaznavaNoveRazlicice";
 import { Geist, Geist_Mono, Newsreader, Bricolage_Grotesque, Plus_Jakarta_Sans, Fraunces, Schibsted_Grotesk, JetBrains_Mono } from "next/font/google";
@@ -126,7 +127,10 @@ export default function RootLayout({
             kliku v polje resujemo z `font-size: 16px` v globals.css. */}
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
-      <body className="min-h-full flex flex-col">{children}<PageHelp /><ZascitaStevilcnihPolj /><ZaznavaNoveRazlicice /></body>
+      {/* PRELET 259: pasica se prikaze SAMO predstavitvenemu uporabniku.
+          Obiskovalec mora ves cas vedeti, kje je - sicer bo mislil, da je
+          odprl svoj racun, in se cudil tujim podatkom. */}
+      <body className="min-h-full flex flex-col">{children}<DemoPasica /><PageHelp /><ZascitaStevilcnihPolj /><ZaznavaNoveRazlicice /></body>
     </html>
   );
 }
