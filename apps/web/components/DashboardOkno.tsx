@@ -7,7 +7,7 @@
  * kartica cistega prihodka z grafom, tri kartice, pretok denarja in AI
  * predlog. Barve, pisave in razmiki so prevzeti iz posnetkov.
  *
- * Podatki so IZMISLJENI (kavarna "Lipa"), a verjetni - zneski, ki bi jih
+ * Podatki so IZMISLJENI (kavarna "Lipa") in NE ustrezajo nobenemu resnicnemu podjetju - zneski, ki bi jih
  * imel resnicen mali lokal.
  *
  * Staticno: nic se ne shranjuje, nic ni mogoce vnesti. To je slika, ki
@@ -109,7 +109,7 @@ export default function DashboardOkno() {
             <div style={{ flex:1 }}>
               <div style={{ ...OZN, color:'#E8B74A' }}>Fokus tedna · 13.–20. sep</div>
               <div style={{ fontSize:'0.9rem', fontWeight:600, marginTop:3 }}>
-                Prispevki za s.p. (<span style={{ color:'#E8B74A' }}>€651,04</span>) zapadejo{' '}
+                Prispevki za s.p. (<span style={{ color:'#E8B74A' }}>€612,30</span>) zapadejo{' '}
                 <span style={{ color:'#E8B74A' }}>čez 7 dni</span>. Vse je pripravljeno za UPN nakazilo.
               </div>
             </div>
@@ -142,11 +142,11 @@ export default function DashboardOkno() {
             <div>
               <div style={{ ...OZN, color:'rgba(244,239,230,0.55)' }}>Čisti prihodek · september 2026 · normirani 80%</div>
               <div style={{ fontSize:'3.2rem', fontWeight:800, letterSpacing:'-0.04em', lineHeight:1, margin:'8px 0 6px' }}>
-                €2793<sup style={{ fontSize:'0.4em', fontWeight:400, color:'rgba(244,239,230,0.55)', marginLeft:2 }}>,27</sup>
+                €3412<sup style={{ fontSize:'0.4em', fontWeight:400, color:'rgba(244,239,230,0.55)', marginLeft:2 }}>,80</sup>
               </div>
               <div style={{ fontFamily:"'Instrument Serif',serif", fontStyle:'italic', fontSize:'0.85rem',
                             color:'rgba(244,239,230,0.75)' }}>
-                Po prispevkih in davkih (23%) · projekcija do konca meseca <b style={{ fontStyle:'normal', color:'#fff' }}>€5496</b>
+                Po prispevkih in davkih (22%) · projekcija do konca meseca <b style={{ fontStyle:'normal', color:'#fff' }}>€6150</b>
               </div>
             </div>
             <svg width="220" height="70" viewBox="0 0 220 70" style={{ flexShrink:0 }}>
@@ -161,9 +161,9 @@ export default function DashboardOkno() {
           {/* tri kartice */}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginTop:10 }}>
             {[
-              ['Prihodki sep','€3635','Brez DDV', false],
-              ['Odhodki sep','€2002','Brez DDV', false],
-              ['Stranke vam dolgujejo','€1460','Od tega €480 v zamudi', true],
+              ['Prihodki sep','€4280','Brez DDV', false],
+              ['Odhodki sep','€1865','Brez DDV', false],
+              ['Stranke vam dolgujejo','€920','Od tega €310 v zamudi', true],
             ].map(([n,v,p,dark]) => (
               <div key={n as string} style={{ ...KART, padding:'14px 16px',
                     background: dark ? '#1F4732' : '#fff', color: dark ? '#F4EFE6' : '#0C2A1E',
@@ -173,7 +173,7 @@ export default function DashboardOkno() {
                 </div>
                 <div style={{ fontSize:'1.7rem', fontWeight:800, letterSpacing:'-0.03em', margin:'8px 0 6px' }}>{v}</div>
                 <div style={{ fontSize:'0.66rem', color: dark ? 'rgba(244,239,230,0.75)' : '#5A6B60' }}>
-                  {dark ? <>Od tega <b style={{ color:'#E8B74A' }}>€480 v zamudi</b> (1 račun)</> : p}
+                  {dark ? <>Od tega <b style={{ color:'#E8B74A' }}>€310 v zamudi</b> (2 računa)</> : p}
                 </div>
               </div>
             ))}
