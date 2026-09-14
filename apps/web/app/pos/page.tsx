@@ -10671,6 +10671,10 @@ function ReportsScreen({ posData, auth, setScreen }) {
   const [reportData, setReportData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showPeriodModal, setShowPeriodModal] = useState(false)
+  // PRELET 267: razvrscanje prodanih artiklov po kosih ali prihodku in
+  // prikaz vseh. Tu, ker morajo kavlji stati PRED predcasnimi izhodi.
+  const [razvrsti, setRazvrsti] = useState<'total'|'qty'>('qty')
+  const [prikaziVse, setPrikaziVse] = useState(false)
   const [showZReport, setShowZReport] = useState(false)
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
@@ -10839,7 +10843,18 @@ function ReportsScreen({ posData, auth, setScreen }) {
         itemMap[k].total += Number(l.unit_price || 0) * Number(l.qty || 1) * faktor
       }
     })
-    const topItems = Object.values(itemMap).sort((a:any,b:any) => b.total - a.total).slice(0,5)
+    /**
+     * POPRAVLJENO (prelet 267): prej `.slice(0,5)` - samo pet po prihodku.
+     *
+     * Za lokal je to napacen pogled. V septembru je bila "Kava z mlekom" s
+     * 109 kosi DRUGI najbolj prodajan artikel, po prihodku pa sesti - ker so
+     * jo prehiteli paketi treniranja po 480 EUR z enim kosom. Vrh po prihodku
+     * so tako sestavljali trije paketi in dve pivi, kave pa ni bilo nikjer.
+     *
+     * Zdaj vrnemo VSE artikle; razvrscanje in stevilo prikazanih odloci
+     * zaslon, ne poizvedba.
+     */
+    const topItems = Object.values(itemMap).sort((a:any,b:any) => b.total - a.total)
 
     const staffTotalMin = staffBookings.reduce((s:any, b:any) => s + (b.duration_min||60), 0)
     const staffTotalRevenue = staffBookings.reduce((s:any, b:any) => s + (b.services?.price||0), 0)
@@ -10862,7 +10877,10 @@ function ReportsScreen({ posData, auth, setScreen }) {
   const { promet, napitnine, vracila, racuni, byHour, byMethod, topItems, refunds } = reportData
   const maxHour = Math.max(...Object.values(byHour).map(Number), 1)
   const maxMethod = Math.max(...Object.values(byMethod).map(Number), 1)
-  const maxItem = Math.max(...(topItems as any[]).map((i:any) => i.total), 1)
+  // PRELET 267: izpeljano iz stanja, ki je deklarirano na vrhu komponente.
+  const urejeni = [...(topItems as any[])].sort((a:any,b:any) => b[razvrsti] - a[razvrsti])
+  const prikazani = prikaziVse ? urejeni : urejeni.slice(0, 10)
+  const maxItem = Math.max(...urejeni.map((i:any) => i[razvrsti]), 1)
 
   const hours = Array.from({length:24}, (_,i) => i).filter(h => byHour[h])
 
@@ -10968,7 +10986,20 @@ function ReportsScreen({ posData, auth, setScreen }) {
       <div style={{ display:'grid', gridTemplateColumns:'1fr 340px', gap:12 }}>
         {/* Top artikli */}
         <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:20 }}>
-          <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:16 }}>NAJBOLJ PRODAJANI ARTIKLI</div>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em' }}>
+              PRODANI ARTIKLI · {(topItems as any[]).length}
+            </div>
+            <div style={{ display:'flex', gap:4 }}>
+              {([['qty','Po kosih'],['total','Po prihodku']] as const).map(([k,l]) => (
+                <button key={k} onClick={() => setRazvrsti(k)}
+                  style={{ padding:'5px 10px', borderRadius:7, fontSize:11, fontWeight:600, cursor:'pointer', fontFamily:'inherit',
+                           border:'1px solid '+(razvrsti===k ? T.accent : T.line),
+                           background: razvrsti===k ? T.accent : 'transparent',
+                           color: razvrsti===k ? '#fff' : T.muted }}>{l}</button>
+              ))}
+            </div>
+          </div>
           {(topItems as any[]).length === 0 ? (
             <div style={{ fontSize:13, color:T.muted }}>Ni podatkov</div>
           ) : (
@@ -10982,20 +11013,27 @@ function ReportsScreen({ posData, auth, setScreen }) {
                 </tr>
               </thead>
               <tbody>
-                {(topItems as any[]).map((item:any) => (
+                {prikazani.map((item:any) => (
                   <tr key={item.name} style={{ borderTop:'1px solid '+T.line }}>
                     <td style={{ padding:'10px 0', fontSize:13, fontWeight:600 }}>{item.name}</td>
                     <td style={{ padding:'10px 0', fontSize:13, textAlign:'right', fontVariantNumeric:'tabular-nums' }}>{item.qty}</td>
                     <td style={{ padding:'10px 0', fontSize:13, textAlign:'right', fontVariantNumeric:'tabular-nums', fontWeight:700 }}>{eur(item.total)}</td>
                     <td style={{ padding:'10px 0 10px 12px' }}>
                       <div style={{ height:6, background:T.surface3, borderRadius:999, overflow:'hidden' }}>
-                        <div style={{ height:'100%', width:(item.total/maxItem*100)+'%', background:T.accent, borderRadius:999 }}/>
+                        <div style={{ height:'100%', width:(item[razvrsti]/maxItem*100)+'%', background:T.accent, borderRadius:999 }}/>
                       </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          )}
+          {!prikaziVse && urejeni.length > 10 && (
+            <button onClick={() => setPrikaziVse(true)}
+              style={{ marginTop:12, width:'100%', padding:'9px', borderRadius:8, border:'1px dashed '+T.line,
+                       background:'transparent', color:T.muted, cursor:'pointer', fontFamily:'inherit', fontSize:12 }}>
+              Prikaži vseh {urejeni.length} artiklov
+            </button>
           )}
         </div>
 
