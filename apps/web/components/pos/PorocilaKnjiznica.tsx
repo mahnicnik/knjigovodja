@@ -318,21 +318,22 @@ export default function PorocilaKnjiznica() {
   return (
     <div style={{ display:'grid', gridTemplateColumns:'240px 1fr', height:'100%', minHeight:0, background:T.bg }}>
       {/* ── drevo porocil ── */}
-      <aside style={{ background:T.surface, borderRight:'1px solid '+T.line, overflowY:'auto', padding:'14px 10px' }}>
+      {/* PRELET 273: navaden div, ne aside - blagajna oznako aside sloguje temno za svoj meni. */}
+      <div style={{ background:'#ffffff', color:'#1a1f1a', borderRight:'1px solid '+T.line, overflowY:'auto', padding:'14px 10px' }}>
         {skupine.map((sk: string) => (
           <div key={sk} style={{ marginBottom:14 }}>
             <div style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', padding:'0 8px 6px' }}>{sk}</div>
             {POROCILA.filter(p => p.skupina === sk).map(p => (
               <button key={p.id} onClick={() => setAktivno(p.id)}
                 style={{ display:'block', width:'100%', textAlign:'left', padding:'7px 10px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:12.5,
-                         background: aktivno === p.id ? T.accent : 'transparent', color: aktivno === p.id ? '#fff' : T.ink, marginBottom:1 }}>{p.ime}</button>
+                         background: aktivno === p.id ? T.accent : 'transparent', color: aktivno === p.id ? '#ffffff' : '#1a1f1a', marginBottom:1 }}>{p.ime}</button>
             ))}
           </div>
         ))}
-      </aside>
+      </div>
 
       {/* ── porocilo ── */}
-      <main style={{ padding:'18px 22px', overflow:'auto', minWidth:0 }}>
+      <div style={{ padding:'18px 22px', overflow:'auto', minWidth:0, color:'#1a1f1a' }}>
         <div style={{ fontSize:20, fontWeight:800, marginBottom:4 }}>{porocilo.ime}</div>
         <div style={{ fontSize:12.5, color:T.muted, marginBottom:14, maxWidth:720, lineHeight:1.5 }}>{porocilo.opis}</div>
 
@@ -379,7 +380,7 @@ export default function PorocilaKnjiznica() {
             </div>
           )}
         </div>
-      </main>
+      </div>
     </div>
   )
 }
