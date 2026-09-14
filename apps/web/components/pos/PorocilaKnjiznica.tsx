@@ -279,6 +279,9 @@ export default function PorocilaKnjiznica() {
   const [nalagam, setNalagam] = useState(false)
   const [napaka, setNapaka] = useState<string | null>(null)
   const [iskanje, setIskanje] = useState('')
+  // PRELET 274: skupine se odpirajo kot spustni seznam; odprta je le tista
+  // z aktivnim porocilom, da seznam ne preplavi zaslona.
+  const [odprte, setOdprte] = useState<Record<string, boolean>>({ [POROCILA[0].skupina]: true })
 
   const porocilo = useMemo(() => POROCILA.find(p => p.id === aktivno)!, [aktivno])
   const skupine = useMemo<string[]>(() => [...new Set(POROCILA.map(p => p.skupina))], [])
@@ -320,16 +323,26 @@ export default function PorocilaKnjiznica() {
       {/* ── drevo porocil ── */}
       {/* PRELET 273: navaden div, ne aside - blagajna oznako aside sloguje temno za svoj meni. */}
       <div style={{ background:'#ffffff', color:'#1a1f1a', borderRight:'1px solid '+T.line, overflowY:'auto', padding:'14px 10px' }}>
-        {skupine.map((sk: string) => (
-          <div key={sk} style={{ marginBottom:14 }}>
-            <div style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', padding:'0 8px 6px' }}>{sk}</div>
-            {POROCILA.filter(p => p.skupina === sk).map(p => (
-              <button key={p.id} onClick={() => setAktivno(p.id)}
+        {skupine.map((sk: string) => {
+          const odprta = !!odprte[sk]
+          const stevilo = POROCILA.filter(p => p.skupina === sk).length
+          return (
+          <div key={sk} style={{ marginBottom:6 }}>
+            <button onClick={() => setOdprte(o => ({ ...o, [sk]: !odprta }))}
+              style={{ display:'flex', alignItems:'center', width:'100%', textAlign:'left', padding:'8px 10px', borderRadius:8, border:'none',
+                       cursor:'pointer', fontFamily:'inherit', background: odprta ? T.surface2 : 'transparent', color:'#1a1f1a' }}>
+              <span style={{ fontSize:10, color:T.muted, width:14, display:'inline-block', transition:'transform .15s', transform: odprta ? 'rotate(90deg)' : 'none' }}>▶</span>
+              <span style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em' }}>{sk}</span>
+              <span style={{ marginLeft:'auto', fontSize:10.5, color:T.muted }}>{stevilo}</span>
+            </button>
+            {odprta && POROCILA.filter(p => p.skupina === sk).map(p => (
+              <button key={p.id} onClick={() => { setAktivno(p.id); setOdprte(o => ({ ...o, [sk]: true })) }}
                 style={{ display:'block', width:'100%', textAlign:'left', padding:'7px 10px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:12.5,
-                         background: aktivno === p.id ? T.accent : 'transparent', color: aktivno === p.id ? '#ffffff' : '#1a1f1a', marginBottom:1 }}>{p.ime}</button>
+                         background: aktivno === p.id ? T.accent : 'transparent', color: aktivno === p.id ? '#ffffff' : '#1a1f1a', marginBottom:1, paddingLeft:24 }}>{p.ime}</button>
             ))}
           </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* ── porocilo ── */}
