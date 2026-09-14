@@ -10675,8 +10675,6 @@ function ReportsScreen({ posData, auth, setScreen }) {
   // prikaz vseh. Tu, ker morajo kavlji stati PRED predcasnimi izhodi.
   const [razvrsti, setRazvrsti] = useState<'total'|'qty'>('qty')
   const [prikaziVse, setPrikaziVse] = useState(false)
-  // PRELET 268: filter bar / storitve / vse.
-  const [vrstaFilter, setVrstaFilter] = useState<'vse'|'bar'|'storitev'>('vse')
   const [showZReport, setShowZReport] = useState(false)
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
@@ -10811,7 +10809,7 @@ function ReportsScreen({ posData, auth, setScreen }) {
     // POPRAVLJENO (prelet 181): dodana `subtotal` in `discount_amount`.
     // Brez njiju iz vrstice ni bilo mogoce vedeti, ali je bil na racunu popust.
     const linesRes = await db.from('order_lines')
-      .select('name, qty, unit_price, item_id, orders!inner(closed_at, status, business_id, subtotal, discount_amount, payments(method))')
+      .select('name, qty, unit_price, orders!inner(closed_at, status, business_id, subtotal, discount_amount, payments(method))')
       .eq('orders.business_id', BUSINESS_ID)
       .eq('orders.status', 'paid')
       .gte('orders.closed_at', fromStr)
@@ -10821,20 +10819,7 @@ function ReportsScreen({ posData, auth, setScreen }) {
     ;(linesRes.data || []).forEach(l => {
       const k = l.name
       const sKartico = ((l as any).orders?.payments || []).some((p: any) => p.method === 'pkg')
-      /**
-       * PRELET 268: BAR ALI STORITEV.
-       *
-       * Storitve - clanske karte, treniranje, paketi - se prodajo BREZ
-       * `item_id`, ker niso artikli iz cenika, ampak paketi. Bar (pijaca,
-       * hrana) ima `item_id` vedno. Locnica je v podatkih ze cista; tu jo
-       * le uporabimo.
-       *
-       * V septembru: bar 1.029 kosov za 2.537 EUR, storitve 6 kosov za
-       * 1.143 EUR. Brez locitve je paket za 480 EUR z enim kosom prehitel
-       * kavo s 109 kosi - in lastnik ni videl, kaj se v lokalu res prodaja.
-       */
-      const vrsta = (l as any).item_id ? 'bar' : 'storitev'
-      if (!itemMap[k]) itemMap[k] = { name:k, qty:0, total:0, vrsta }
+      if (!itemMap[k]) itemMap[k] = { name:k, qty:0, total:0 }
       itemMap[k].qty += Number(l.qty || 1)
       if (!sKartico) {
         /**
@@ -10871,19 +10856,13 @@ function ReportsScreen({ posData, auth, setScreen }) {
      */
     const topItems = Object.values(itemMap).sort((a:any,b:any) => b.total - a.total)
 
-    // PRELET 268: sestevka po vrsti za kartici zgoraj.
-    const poVrsti = { bar: { total:0, qty:0 }, storitev: { total:0, qty:0 } }
-    for (const it of Object.values(itemMap) as any[]) {
-      poVrsti[it.vrsta].total += it.total
-      poVrsti[it.vrsta].qty += it.qty
-    }
     const staffTotalMin = staffBookings.reduce((s:any, b:any) => s + (b.duration_min||60), 0)
     const staffTotalRevenue = staffBookings.reduce((s:any, b:any) => s + (b.services?.price||0), 0)
 
     setReportData({
       promet, napitnine, vracila,
       racuni: orders.length,
-      byHour, byMethod, topItems, refunds, from, to, poVrsti,
+      byHour, byMethod, topItems, refunds, from, to,
       staffBookings, staffTotalMin, staffTotalRevenue,
       isStaffFiltered: !!staffFilter,
     })
@@ -10899,10 +10878,7 @@ function ReportsScreen({ posData, auth, setScreen }) {
   const maxHour = Math.max(...Object.values(byHour).map(Number), 1)
   const maxMethod = Math.max(...Object.values(byMethod).map(Number), 1)
   // PRELET 267: izpeljano iz stanja, ki je deklarirano na vrhu komponente.
-  const poVrsti = (reportData as any).poVrsti || { bar:{total:0,qty:0}, storitev:{total:0,qty:0} }
-  const urejeni = [...(topItems as any[])]
-    .filter((i:any) => vrstaFilter === 'vse' || i.vrsta === vrstaFilter)
-    .sort((a:any,b:any) => b[razvrsti] - a[razvrsti])
+  const urejeni = [...(topItems as any[])].sort((a:any,b:any) => b[razvrsti] - a[razvrsti])
   const prikazani = prikaziVse ? urejeni : urejeni.slice(0, 10)
   const maxItem = Math.max(...urejeni.map((i:any) => i[razvrsti]), 1)
 
@@ -11008,39 +10984,13 @@ function ReportsScreen({ posData, auth, setScreen }) {
       </div>
 
       <div style={{ display:'grid', gridTemplateColumns:'1fr 340px', gap:12 }}>
-        {/* PRELET 268: bar in storitve loceno - da lastnik vidi, koliko
-            prinese lokal in koliko paketi, namesto ene stevilke za oboje. */}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-          {([['bar','🍺 Bar — pijača in hrana'],['storitev','🎫 Storitve — karte in paketi']] as const).map(([k,l]) => (
-            <div key={k} onClick={() => setVrstaFilter(vrstaFilter === k ? 'vse' : k)}
-              style={{ background:T.surface, borderRadius:12, padding:'16px 18px', cursor:'pointer',
-                       border:'1px solid '+(vrstaFilter === k ? T.accent : T.line) }}>
-              <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em' }}>{l}</div>
-              <div style={{ fontSize:24, fontWeight:800, marginTop:6, fontVariantNumeric:'tabular-nums' }}>{eur(poVrsti[k].total)}</div>
-              <div style={{ fontSize:12, color:T.muted, marginTop:2 }}>
-                {poVrsti[k].qty} {k === 'bar' ? 'kosov' : 'prodaj'} ·{' '}
-                {promet > 0 ? Math.round(poVrsti[k].total / (poVrsti.bar.total + poVrsti.storitev.total || 1) * 100) : 0} % prodaje
-              </div>
-            </div>
-          ))}
-        </div>
-
         {/* Top artikli */}
         <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:20 }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
             <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em' }}>
-              PRODANI ARTIKLI · {urejeni.length}
+              PRODANI ARTIKLI · {(topItems as any[]).length}
             </div>
             <div style={{ display:'flex', gap:4 }}>
-              {/* PRELET 268: bar / storitve / vse */}
-              {([['vse','Vse'],['bar','Bar'],['storitev','Storitve']] as const).map(([k,l]) => (
-                <button key={k} onClick={() => setVrstaFilter(k)}
-                  style={{ padding:'5px 10px', borderRadius:7, fontSize:11, fontWeight:600, cursor:'pointer', fontFamily:'inherit',
-                           border:'1px solid '+(vrstaFilter===k ? T.text : T.line),
-                           background: vrstaFilter===k ? T.text : 'transparent',
-                           color: vrstaFilter===k ? T.surface : T.muted }}>{l}</button>
-              ))}
-              <span style={{ width:1, background:T.line, margin:'0 4px' }}/>
               {([['qty','Po kosih'],['total','Po prihodku']] as const).map(([k,l]) => (
                 <button key={k} onClick={() => setRazvrsti(k)}
                   style={{ padding:'5px 10px', borderRadius:7, fontSize:11, fontWeight:600, cursor:'pointer', fontFamily:'inherit',
