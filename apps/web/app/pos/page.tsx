@@ -11009,23 +11009,6 @@ function ReportsScreen({ posData, auth, setScreen }) {
       </div>
 
       <div style={{ display:'grid', gridTemplateColumns:'1fr 340px', gap:12 }}>
-        {/* PRELET 268: bar in storitve loceno - da lastnik vidi, koliko
-            prinese lokal in koliko paketi, namesto ene stevilke za oboje. */}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-          {([['bar','🍺 Bar — pijača in hrana'],['storitev','🎫 Storitve — karte in paketi']] as const).map(([k,l]) => (
-            <div key={k} onClick={() => setVrstaFilter(vrstaFilter === k ? 'vse' : k)}
-              style={{ background:T.surface, borderRadius:12, padding:'16px 18px', cursor:'pointer',
-                       border:'1px solid '+(vrstaFilter === k ? T.accent : T.line) }}>
-              <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em' }}>{l}</div>
-              <div style={{ fontSize:24, fontWeight:800, marginTop:6, fontVariantNumeric:'tabular-nums' }}>{eur(poVrsti[k].total)}</div>
-              <div style={{ fontSize:12, color:T.muted, marginTop:2 }}>
-                {poVrsti[k].qty} {k === 'bar' ? 'kosov' : 'prodaj'} ·{' '}
-                {promet > 0 ? Math.round(poVrsti[k].total / (poVrsti.bar.total + poVrsti.storitev.total || 1) * 100) : 0} % prodaje
-              </div>
-            </div>
-          ))}
-        </div>
-
         {/* Top artikli */}
         <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:20 }}>
           {/* PRELET 269: ena vrstica gumbov, en napis, seznam. */}
