@@ -237,6 +237,70 @@ const POROCILA: Porocilo[] = [
       return (data || []).filter((i: any) => i.min_stock != null && Number(i.stock_qty) < Number(i.min_stock)).map((i: any) => ({ sestavina:i.name, stanje:n2(i.stock_qty), min:n2(i.min_stock), enota:i.unit, dobavitelj:i.supplier || '—' }))
     } },
 
+  /* ── DELOVNI CAS ── */
+  { id:'dc-po-zaposlenih', skupina:'Delovni čas', ime:'Delovni čas po zaposlenih', opis:'Skupne ure, odmori in nadure po zaposlenem v obdobju. Evidenca je po ZEPDSV obvezna za vsakega delodajalca.',
+    stolpci:[{k:'zaposleni',l:'Zaposleni'},{k:'dni',l:'Dni',tip:'int'},{k:'ure',l:'Ur',tip:'num'},{k:'odmor',l:'Odmor (ur)',tip:'num'},{k:'nadure',l:'Nadure (ur)',tip:'num'},{k:'povp',l:'Povprečno na dan',tip:'num'}],
+    nalozi: async (db, od, do_) => {
+      const [{ data, error }, s] = await Promise.all([
+        db.from('work_sessions').select('staff_id, clock_in, total_minutes, break_minutes, overtime_minutes')
+          .eq('business_id', BUSINESS_ID).gte('clock_in', od).lte('clock_in', do_ + 'T23:59:59'), osebje(db)])
+      if (error) throw error
+      return [...grupiraj(data || [], (w: any) => w.staff_id || '')].map(([k, v]) => {
+        const ur = (v as any[]).reduce((a, w) => a + Number(w.total_minutes || 0), 0) / 60
+        return { zaposleni:s[k] || '—', dni:v.length, ure:n2(ur),
+          odmor:n2((v as any[]).reduce((a, w) => a + Number(w.break_minutes || 0), 0) / 60),
+          nadure:n2((v as any[]).reduce((a, w) => a + Number(w.overtime_minutes || 0), 0) / 60),
+          povp:n2(ur / (v.length || 1)) }
+      }).sort((a, b) => b.ure - a.ure)
+    } },
+  { id:'dc-po-dnevih', skupina:'Delovni čas', ime:'Evidenca po dnevih', opis:'Posamezna izmena: prihod, odhod, odmor in ure. To je izpis, ki ga inšpektor zahteva ob nadzoru.',
+    stolpci:[{k:'dan',l:'Dan',tip:'date'},{k:'zaposleni',l:'Zaposleni'},{k:'prihod',l:'Prihod'},{k:'odhod',l:'Odhod'},{k:'odmor',l:'Odmor (min)',tip:'int'},{k:'ure',l:'Ur',tip:'num'},{k:'stanje',l:'Stanje'}],
+    nalozi: async (db, od, do_) => {
+      const [{ data, error }, s] = await Promise.all([
+        db.from('work_sessions').select('*').eq('business_id', BUSINESS_ID)
+          .gte('clock_in', od).lte('clock_in', do_ + 'T23:59:59').order('clock_in', { ascending:false }), osebje(db)])
+      if (error) throw error
+      const ura = (v: any) => v ? new Date(v).toLocaleTimeString('sl-SI', { hour:'2-digit', minute:'2-digit' }) : '—'
+      return (data || []).map((w: any) => ({
+        dan:dan(w.clock_in), zaposleni:s[w.staff_id] || '—', prihod:ura(w.clock_in), odhod:ura(w.clock_out),
+        odmor:Math.round(Number(w.break_minutes || 0)), ure:n2(Number(w.total_minutes || 0) / 60),
+        stanje: w.clock_out ? (w.status || 'zaključeno') : 'V TEKU' }))
+    } },
+  { id:'dc-odprte-izmene', skupina:'Delovni čas', ime:'Nezaključene izmene', opis:'Kdor se je prijavil, a ni odjavil. Take izmene pokvarijo evidenco in jih je treba popraviti.', brezObdobja:true,
+    stolpci:[{k:'zaposleni',l:'Zaposleni'},{k:'prihod',l:'Prihod',tip:'datetime'},{k:'traja',l:'Traja (ur)',tip:'num'}],
+    nalozi: async (db) => {
+      const [{ data }, s] = await Promise.all([
+        db.from('work_sessions').select('staff_id, clock_in').eq('business_id', BUSINESS_ID).is('clock_out', null).order('clock_in', { ascending:false }), osebje(db)])
+      const zdaj = Date.now()
+      return (data || []).map((w: any) => ({ zaposleni:s[w.staff_id] || '—', prihod:w.clock_in,
+        traja:n2((zdaj - new Date(w.clock_in).getTime()) / 3600000) }))
+    } },
+  { id:'dc-odsotnosti', skupina:'Delovni čas', ime:'Dopusti in odsotnosti', opis:'Dopust, bolniška in druge odsotnosti v obdobju.',
+    stolpci:[{k:'zaposleni',l:'Zaposleni'},{k:'vrsta',l:'Vrsta'},{k:'od',l:'Od',tip:'date'},{k:'do',l:'Do',tip:'date'},{k:'dni',l:'Dni',tip:'num'},{k:'placano',l:'Plačano'},{k:'odobreno',l:'Odobreno'}],
+    nalozi: async (db, od, do_) => {
+      const [{ data, error }, { data: emp }] = await Promise.all([
+        db.from('leave_records').select('*').gte('from_date', od).lte('from_date', do_).order('from_date', { ascending:false }),
+        db.from('employees').select('id, full_name')])
+      if (error) throw error
+      const ime = Object.fromEntries((emp || []).map((e: any) => [e.id, e.full_name]))
+      return (data || []).map((l: any) => ({ zaposleni:ime[l.employee_id] || '—', vrsta:l.leave_type || '—',
+        od:l.from_date, do:l.to_date, dni:n2(l.days), placano: l.paid ? 'da' : 'ne', odobreno: l.approved ? 'da' : 'ČAKA' }))
+    } },
+  { id:'dc-stanje-dopusta', skupina:'Delovni čas', ime:'Stanje dopusta', opis:'Koliko dopusta je zaposlenemu ostalo v tekočem letu.', brezObdobja:true,
+    stolpci:[{k:'zaposleni',l:'Zaposleni'},{k:'pripada',l:'Pripada',tip:'num'},{k:'izrabljeno',l:'Izrabljeno',tip:'num'},{k:'ostane',l:'Ostane',tip:'num'}],
+    nalozi: async (db) => {
+      const leto = new Date().getFullYear()
+      const [{ data: emp }, { data: lr }] = await Promise.all([
+        db.from('employees').select('id, full_name, annual_leave_days, vacation_days_per_year, status'),
+        db.from('leave_records').select('employee_id, days, leave_type, from_date').gte('from_date', `${leto}-01-01`)])
+      return (emp || []).filter((e: any) => e.status !== 'inactive').map((e: any) => {
+        const pripada = Number(e.annual_leave_days ?? e.vacation_days_per_year ?? 0)
+        const izrab = (lr || []).filter((l: any) => l.employee_id === e.id && String(l.leave_type || '').toLowerCase().includes('dopust'))
+          .reduce((a: number, l: any) => a + Number(l.days || 0), 0)
+        return { zaposleni:e.full_name, pripada:n2(pripada), izrabljeno:n2(izrab), ostane:n2(pripada - izrab) }
+      })
+    } },
+
   /* ── NADZOR ── */
   { id:'storno', skupina:'Nadzor', ime:'Stornacije in vračila', opis:'Vsa vračila z razlogom, blagajnikom in odobritvijo.',
     stolpci:[{k:'datum',l:'Datum',tip:'datetime'},{k:'znesek',l:'Znesek',tip:'eur'},{k:'nacin',l:'Način'},{k:'razlog',l:'Razlog'},{k:'blagajnik',l:'Blagajnik'},{k:'odobril',l:'Odobril'}],
@@ -328,7 +392,7 @@ export default function PorocilaKnjiznica() {
           const stevilo = POROCILA.filter(p => p.skupina === sk).length
           return (
           <div key={sk} style={{ marginBottom:6 }}>
-            <button onClick={() => setOdprte(o => ({ ...o, [sk]: !odprta }))}
+            <button onClick={() => setOdprte((o: Record<string, boolean>) => ({ ...o, [sk]: !odprta }))}
               style={{ display:'flex', alignItems:'center', width:'100%', textAlign:'left', padding:'8px 10px', borderRadius:8, border:'none',
                        cursor:'pointer', fontFamily:'inherit', background: odprta ? T.surface2 : 'transparent', color:'#1a1f1a' }}>
               <span style={{ fontSize:10, color:T.muted, width:14, display:'inline-block', transition:'transform .15s', transform: odprta ? 'rotate(90deg)' : 'none' }}>▶</span>
@@ -336,7 +400,7 @@ export default function PorocilaKnjiznica() {
               <span style={{ marginLeft:'auto', fontSize:10.5, color:T.muted }}>{stevilo}</span>
             </button>
             {odprta && POROCILA.filter(p => p.skupina === sk).map(p => (
-              <button key={p.id} onClick={() => { setAktivno(p.id); setOdprte(o => ({ ...o, [sk]: true })) }}
+              <button key={p.id} onClick={() => { setAktivno(p.id); setOdprte((o: Record<string, boolean>) => ({ ...o, [sk]: true })) }}
                 style={{ display:'block', width:'100%', textAlign:'left', padding:'7px 10px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:12.5,
                          background: aktivno === p.id ? T.accent : 'transparent', color: aktivno === p.id ? '#ffffff' : '#1a1f1a', marginBottom:1, paddingLeft:24 }}>{p.ime}</button>
             ))}
