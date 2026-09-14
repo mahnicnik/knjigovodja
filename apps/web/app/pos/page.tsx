@@ -10899,11 +10899,12 @@ function ReportsScreen({ posData, auth, setScreen }) {
   const maxHour = Math.max(...Object.values(byHour).map(Number), 1)
   const maxMethod = Math.max(...Object.values(byMethod).map(Number), 1)
   // PRELET 267: izpeljano iz stanja, ki je deklarirano na vrhu komponente.
+  // PRELET 269: filtriran in razvrscen seznam - VSI artikli, brez rezanja.
   const poVrsti = (reportData as any).poVrsti || { bar:{total:0,qty:0}, storitev:{total:0,qty:0} }
   const urejeni = [...(topItems as any[])]
     .filter((i:any) => vrstaFilter === 'vse' || i.vrsta === vrstaFilter)
     .sort((a:any,b:any) => b[razvrsti] - a[razvrsti])
-  const prikazani = prikaziVse ? urejeni : urejeni.slice(0, 10)
+  const prikazani = urejeni
   const maxItem = Math.max(...urejeni.map((i:any) => i[razvrsti]), 1)
 
   const hours = Array.from({length:24}, (_,i) => i).filter(h => byHour[h])
@@ -11027,32 +11028,29 @@ function ReportsScreen({ posData, auth, setScreen }) {
 
         {/* Top artikli */}
         <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:20 }}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
-            <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em' }}>
-              PRODANI ARTIKLI · {urejeni.length}
-            </div>
-            <div style={{ display:'flex', gap:4 }}>
-              {/* PRELET 268: bar / storitve / vse */}
-              {([['vse','Vse'],['bar','Bar'],['storitev','Storitve']] as const).map(([k,l]) => (
-                <button key={k} onClick={() => setVrstaFilter(k)}
-                  style={{ padding:'5px 10px', borderRadius:7, fontSize:11, fontWeight:600, cursor:'pointer', fontFamily:'inherit',
-                           border:'1px solid '+(vrstaFilter===k ? T.text : T.line),
-                           background: vrstaFilter===k ? T.text : 'transparent',
-                           color: vrstaFilter===k ? T.surface : T.muted }}>{l}</button>
-              ))}
-              <span style={{ width:1, background:T.line, margin:'0 4px' }}/>
-              {([['qty','Po kosih'],['total','Po prihodku']] as const).map(([k,l]) => (
-                <button key={k} onClick={() => setRazvrsti(k)}
-                  style={{ padding:'5px 10px', borderRadius:7, fontSize:11, fontWeight:600, cursor:'pointer', fontFamily:'inherit',
-                           border:'1px solid '+(razvrsti===k ? T.accent : T.line),
-                           background: razvrsti===k ? T.accent : 'transparent',
-                           color: razvrsti===k ? '#fff' : T.muted }}>{l}</button>
-              ))}
-            </div>
+          {/* PRELET 269: ena vrstica gumbov, en napis, seznam. */}
+          <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>
+            PRODANI ARTIKLI · {urejeni.length}
+          </div>
+          <div style={{ display:'flex', gap:4, flexWrap:'wrap', alignItems:'center', marginBottom:8 }}>
+            {([['vse','Vse'],['bar','Bar'],['storitev','Storitve']] as const).map(([k,l]) => {
+              const A = vrstaFilter === k
+              return <button key={k} onClick={() => setVrstaFilter(k)} style={{ padding:'5px 11px', borderRadius:7, fontSize:11, fontWeight:600, cursor:'pointer', fontFamily:'inherit', border:'1px solid '+(A ? T.accent : T.line), background: A ? T.accent : 'transparent', color: A ? '#fff' : T.muted }}>{l}</button>
+            })}
+            <span style={{ width:1, height:18, background:T.line, margin:'0 6px' }}/>
+            {([['qty','Po kosih'],['total','Po prihodku']] as const).map(([k,l]) => {
+              const A = razvrsti === k
+              return <button key={k} onClick={() => setRazvrsti(k)} style={{ padding:'5px 11px', borderRadius:7, fontSize:11, fontWeight:600, cursor:'pointer', fontFamily:'inherit', border:'1px solid '+(A ? T.accent : T.line), background: A ? T.accent : 'transparent', color: A ? '#fff' : T.muted }}>{l}</button>
+            })}
+          </div>
+          <div style={{ fontSize:12, color:T.muted, marginBottom:14 }}>
+            Bar <b style={{ color:T.text }}>{eur(poVrsti.bar.total)}</b> · {poVrsti.bar.qty} kosov
+            &nbsp;&nbsp;·&nbsp;&nbsp; Storitve <b style={{ color:T.text }}>{eur(poVrsti.storitev.total)}</b> · {poVrsti.storitev.qty} prodaj
           </div>
           {(topItems as any[]).length === 0 ? (
             <div style={{ fontSize:13, color:T.muted }}>Ni podatkov</div>
           ) : (
+            <div style={{ maxHeight:420, overflowY:'auto' }}>
             <table style={{ width:'100%', borderCollapse:'collapse' }}>
               <thead>
                 <tr style={{ fontSize:10, color:T.muted, fontWeight:700, textTransform:'uppercase' }}>
@@ -11077,13 +11075,7 @@ function ReportsScreen({ posData, auth, setScreen }) {
                 ))}
               </tbody>
             </table>
-          )}
-          {!prikaziVse && urejeni.length > 10 && (
-            <button onClick={() => setPrikaziVse(true)}
-              style={{ marginTop:12, width:'100%', padding:'9px', borderRadius:8, border:'1px dashed '+T.line,
-                       background:'transparent', color:T.muted, cursor:'pointer', fontFamily:'inherit', fontSize:12 }}>
-              Prikaži vseh {urejeni.length} artiklov
-            </button>
+            </div>
           )}
         </div>
 
