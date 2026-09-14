@@ -11,6 +11,8 @@ import VatExemptionPicker from '@/components/VatExemptionPicker'
 import { vatExemptionText } from '@/lib/vat-exemptions'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+// PRELET 271: knjiznica porocil.
+import PorocilaKnjiznica from '@/components/pos/PorocilaKnjiznica'
 import { pos, BUSINESS_ID, resolveBusinessId, imaOsebje, ustvariPrvegaUporabnika } from '@/lib/pos-client'
 import { lokalniDatum } from '@/lib/tax-constants'
 import { buildReceiptHTML } from '@/lib/receipt'
@@ -10675,6 +10677,9 @@ function ReportsScreen({ posData, auth, setScreen }) {
   // prikaz vseh. Tu, ker morajo kavlji stati PRED predcasnimi izhodi.
   const [razvrsti, setRazvrsti] = useState<'total'|'qty'>('qty')
   const [prikaziVse, setPrikaziVse] = useState(false)
+  // PRELET 272: knjiznica porocil je DEL Porocil - preklop Pregled / Vsa
+  // porocila v glavi, ne locen zaslon v meniju.
+  const [pogled, setPogled] = useState<'pregled'|'knjiznica'>('pregled')
   // PRELET 268: filter bar / storitve / vse.
   const [vrstaFilter, setVrstaFilter] = useState<'vse'|'bar'|'storitev'>('vse')
   const [showZReport, setShowZReport] = useState(false)
@@ -10910,7 +10915,22 @@ function ReportsScreen({ posData, auth, setScreen }) {
   const hours = Array.from({length:24}, (_,i) => i).filter(h => byHour[h])
 
   return (
-    <div style={{ flex:1, overflow:'auto', padding:20, background:T.bg }}>
+    <div style={{ flex:1, overflow:'auto', padding:20, background:T.bg, display:'flex', flexDirection:'column' }}>
+      {/* PRELET 272: preklop Pregled / Vsa porocila */}
+      <div style={{ display:'flex', gap:4, marginBottom:16 }}>
+        {([['pregled','Pregled'],['knjiznica','Vsa poročila']] as const).map(([k,l]) => (
+          <button key={k} onClick={() => setPogled(k)}
+            style={{ padding:'7px 14px', borderRadius:8, fontSize:12.5, fontWeight:600, cursor:'pointer', fontFamily:'inherit',
+                     border:'1px solid '+(pogled===k ? T.accent : T.line), background: pogled===k ? T.accent : T.surface,
+                     color: pogled===k ? '#fff' : T.muted }}>{l}</button>
+        ))}
+      </div>
+      {pogled === 'knjiznica' && (
+        <div style={{ flex:1, minHeight:0, borderRadius:12, border:'1px solid '+T.line, overflow:'hidden', display:'flex' }}>
+          <div style={{ flex:1, minHeight:0 }}><PorocilaKnjiznica /></div>
+        </div>
+      )}
+      {pogled === 'pregled' && (<>
       {/* Header */}
       <div style={{ display:'flex', alignItems:'center', marginBottom:20 }}>
         <div>
@@ -11168,6 +11188,7 @@ function ReportsScreen({ posData, auth, setScreen }) {
           </div>
         </Modal>
       )}
+      </>)}
     </div>
   )
 }
