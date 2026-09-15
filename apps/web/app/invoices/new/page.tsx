@@ -406,6 +406,10 @@ export default function NewInvoicePage() {
                       <div>
                         <label style={{ fontSize:'10px', color:'#888', display:'block', marginBottom:'3px' }}>Cena (€)</label>
                         <input type="number" onFocus={e => e.target.select()} value={item.unit_price} onChange={e => updateItem(i, 'unit_price', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none text-right" />
+                        {/* PRELET 279: kalkulator DDV je bil samo v namiznem razporedu. */}
+                        <button onClick={() => { setKalkulator({ vrstica: i }); setKalkStopnja(Number(item.vat_rate) || 22); setKalkSmer('bruto'); setKalkZnesek('') }}
+                          title="Preračunaj iz cene z DDV"
+                          className="mt-1 w-full text-[10px] text-gray-400">iz cene z DDV</button>
                       </div>
                       <div>
                         <label style={{ fontSize:'10px', color:'#888', display:'block', marginBottom:'3px' }}>DDV</label>
@@ -494,6 +498,25 @@ export default function NewInvoicePage() {
 
           <div style={{ background:'#fff', borderRadius:'12px', border:'0.5px solid rgba(0,0,0,0.08)', padding:'16px' }}>
             <div style={{ fontSize:'13px', fontWeight:'500', color:'#0D1F12', marginBottom:'12px' }}>Opombe</div>
+            {/* PRELET 279: datum opravljene storitve in besedilo nad tabelo sta
+                bila samo v namiznem razporedu. Polji sta se shranjevali skupaj,
+                zato sta na telefonu tiho odhajali prazni. */}
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px', marginBottom:'12px' }}>
+              <div>
+                <label style={{ fontSize:'10px', color:'#888', display:'block', marginBottom:'3px' }}>Storitev od</label>
+                <input type="date" value={serviceDate} onChange={e => setServiceDate(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none" />
+              </div>
+              <div>
+                <label style={{ fontSize:'10px', color:'#888', display:'block', marginBottom:'3px' }}>Storitev do</label>
+                <input type="date" value={serviceDateTo} onChange={e => setServiceDateTo(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none" />
+              </div>
+            </div>
+            <label style={{ fontSize:'10px', color:'#888', display:'block', marginBottom:'3px' }}>Besedilo nad tabelo (neobvezno)</label>
+            <textarea value={headerText} onChange={e => setHeaderText(e.target.value)} placeholder="Npr: Na podlagi pogodbe z dne 1.1.2026..." rows={2}
+              className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none mb-3" />
+            <label style={{ fontSize:'10px', color:'#888', display:'block', marginBottom:'3px' }}>Opombe</label>
             <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Dodatne opombe..." rows={3} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none resize-none" />
           </div>
         </div>
