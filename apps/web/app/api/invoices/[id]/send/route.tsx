@@ -4,6 +4,8 @@ import { resend, FROM_EMAIL } from '@/lib/resend'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { InvoicePDF, generateUpnQr } from '@/lib/invoice-pdf'
 import { buildInvoiceEmailHtml } from '@/lib/invoice-email'
+// PRELET 281: generator e-racuna po uradni shemi e-SLOG 2.0.
+import { zgradiESlogXml } from '@/lib/e-slog'
 
 export async function POST(
   request: NextRequest,
@@ -81,10 +83,69 @@ export async function POST(
       },
     ]
 
-    // ODSTRANJENO (19.8.2026): eSLOG XML priloga. Modul e-Racun je bil
-    // odstranjen - portal UJPeRacun ne sprejema generiranih datotek, oddaja
-    // poteka prek lastnega portala eracuni.ujp.gov.si s kvalificiranim
-    // potrdilom. Priloga zato ni imela uporabne vrednosti.
+    /**
+     * PRELET 281: E-RACUN (e-SLOG 2.0) KOT DRUGA PRILOGA.
+     *
+     * 19. 8. 2026 je bila priloga odstranjena, ker "portal UJPeRacun ne
+     * sprejema generiranih datotek". To drzi za JAVNI SEKTOR - tam oddaja
+     * tece prek portala UJP s kvalificiranim potrdilom.
+     *
+     * Za racune PODJETJEM je namen drug: prejemnikov racunovodski program
+     * XML uvozi in racuna ni treba prepisovati. Generator je od preleta 222
+     * drug - e-SLOG 2.0 po uradni shemi, preverjen z XSD.
+     *
+     * Pripnemo SAMO, kadar ima kupec davcno stevilko (torej je podjetje).
+     * Fizicni osebi datoteka ne koristi.
+     *
+     * Ce gradnja odpove, e-posta VSEENO odide s PDF - racun mora oditi.
+     */
+    const kupecJePodjetje = !!String(invoice.client_tax_number || '').trim()
+    if (kupecJePodjetje) {
+      try {
+        const postavke = (Array.isArray(invoice.line_items) ? invoice.line_items : []).map((p: any) => ({
+          opis: String(p.description ?? ''),
+          kolicina: Number(p.quantity ?? 1),
+          cenaBrezDdv: Number(p.unit_price ?? 0),
+          stopnjaDdv: Number(p.vat_rate ?? 22),
+          popustOdstotek: Number(p.discount_pct ?? 0),
+        }))
+        const davcnaBrez = String(org.tax_number || '').replace(/^SI/i, '')
+        const xml = zgradiESlogXml({
+          stevilka: invoice.invoice_number,
+          datumIzdaje: String(invoice.issue_date),
+          datumZapadlosti: invoice.due_date ? String(invoice.due_date) : null,
+          datumDobave: invoice.service_date ? String(invoice.service_date) : null,
+          sklic: invoice.reference || null,
+          opomba: invoice.notes || null,
+          izdajatelj: {
+            naziv: org.name,
+            naslov: org.address || null,
+            posta: org.post_code || null,
+            kraj: org.city || null,
+            davcna: davcnaBrez,
+            // ID za DDV samo pri zavezancu - sicer prejemnik pricakuje odbitek,
+            // ki ga na racunu ni.
+            idZaDdv: org.vat_registered ? `SI${davcnaBrez}` : null,
+            iban: org.iban || null,
+            bic: org.bic || null,
+          },
+          kupec: {
+            naziv: invoice.client_name,
+            naslov: invoice.client_address || null,
+            davcna: invoice.client_tax_number || null,
+            idZaDdv: invoice.client_vat_number || null,
+          },
+          postavke,
+          klavzulaOprostitve: invoice.vat_exemption_text || null,
+        })
+        attachments.push({
+          filename: `e-racun-${String(invoice.invoice_number).replace(/[^0-9A-Za-z-]/g, '_')}.xml`,
+          content: xml,
+        })
+      } catch (e: any) {
+        console.warn('e-racun XML ni bilo mogoce zgraditi, posiljam samo PDF:', e?.message)
+      }
+    }
 
     // Zgradimo email HTML
     const emailHtml = buildInvoiceEmailHtml({
