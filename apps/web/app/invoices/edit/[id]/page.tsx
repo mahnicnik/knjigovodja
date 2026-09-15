@@ -16,6 +16,7 @@ interface LineItem {
   quantity: number
   unit_price: number
   vat_rate: number
+  discount_pct?: number  // PRELET 278: popust na vrstico v odstotkih
 }
 
 export default function EditInvoicePage() {
@@ -113,8 +114,29 @@ export default function EditInvoicePage() {
     const updated = [...items]; updated[i] = { ...updated[i], [field]: value }; setItems(updated)
   }
 
-  const subtotal = items.reduce((s, item) => s + item.quantity * item.unit_price, 0)
-  const vatAmount = items.reduce((s, item) => s + item.quantity * item.unit_price * (item.vat_rate / 100), 0)
+  /**
+   * POPRAVLJENO (prelet 278): vsote so se racunale BREZ popusta.
+   * Kdor je odprl racun s popustom in ga shranil, je dobil napacne zneske -
+   * popust je v vrstici ostal zapisan, v vsoti pa ni bil upostevan.
+   */
+  const lineNet = (item: LineItem) => item.quantity * item.unit_price * (1 - (item.discount_pct || 0) / 100)
+  const subtotal = items.reduce((s, item) => s + lineNet(item), 0)
+  const vatAmount = items.reduce((s, item) => s + lineNet(item) * (item.vat_rate / 100), 0)
+
+  // PRELET 278: kalkulator DDV - enak kot na strani za nov racun (prelet 186).
+  const [kalkulator, setKalkulator] = useState<{ vrstica: number } | null>(null)
+  const [kalkZnesek, setKalkZnesek] = useState('')
+  const [kalkStopnja, setKalkStopnja] = useState(22)
+  const [kalkSmer, setKalkSmer] = useState<'bruto' | 'neto'>('bruto')
+  const kalkIzracun = (() => {
+    const v = parseFloat(String(kalkZnesek).replace(',', '.'))
+    if (!isFinite(v) || v <= 0) return null
+    const s = Number(kalkStopnja) / 100
+    const neto = Math.round((kalkSmer === 'bruto' ? v / (1 + s) : v) * 100) / 100
+    const ddv = Math.round(neto * s * 100) / 100
+    return { neto, ddv, bruto: Math.round((neto + ddv) * 100) / 100 }
+  })()
+  const odpriKalkulator = (i: number) => { setKalkulator({ vrstica: i }); setKalkStopnja(Number(items[i]?.vat_rate) || 22); setKalkSmer('bruto'); setKalkZnesek('') }
   const total = subtotal + vatAmount
 
   async function handleSave(status: 'draft' | 'sent') {
@@ -251,7 +273,7 @@ export default function EditInvoicePage() {
                   <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
                     <input value={item.description} onChange={e => updateItem(i, 'description', e.target.value)}
                       placeholder="Opis storitve" className={inp} />
-                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'8px' }}>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 0.8fr', gap:'8px' }}>
                       <div>
                         <label style={{ fontSize:'10px', color:'#888', display:'block', marginBottom:'3px' }}>Količina</label>
                         <input type="number" onFocus={e => e.target.select()} value={item.quantity} onChange={e => updateItem(i, 'quantity', +e.target.value)}
@@ -261,6 +283,9 @@ export default function EditInvoicePage() {
                         <label style={{ fontSize:'10px', color:'#888', display:'block', marginBottom:'3px' }}>Cena (€)</label>
                         <input type="number" onFocus={e => e.target.select()} value={item.unit_price} onChange={e => updateItem(i, 'unit_price', +e.target.value)}
                           className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none text-right" />
+                        {/* PRELET 278: kalkulator tudi na telefonu. */}
+                        <button onClick={() => odpriKalkulator(i)} title="Preračunaj iz cene z DDV"
+                          className="mt-1 w-full text-[10px] text-gray-400">iz cene z DDV</button>
                       </div>
                       <div>
                         <label style={{ fontSize:'10px', color:'#888', display:'block', marginBottom:'3px' }}>DDV</label>
@@ -271,9 +296,14 @@ export default function EditInvoicePage() {
                           <option value={0}>0%</option>
                         </select>
                       </div>
+                      <div>
+                        <label style={{ fontSize:'10px', color:'#888', display:'block', marginBottom:'3px' }}>Popust %</label>
+                        <input type="number" onFocus={e => e.target.select()} min={0} max={100} value={item.discount_pct || 0} onChange={e => updateItem(i, 'discount_pct', +e.target.value)}
+                          className="w-full border border-gray-200 rounded-xl px-2 py-3 text-sm focus:outline-none text-center" />
+                      </div>
                     </div>
                     <div style={{ display:'flex', justifyContent:'flex-end', fontSize:'12px', color:'#888' }}>
-                      Skupaj: <strong style={{ color:'#0D1F12', marginLeft:'4px' }}>€{formatEurNumber((item.quantity * item.unit_price * (1 + item.vat_rate/100)))}</strong>
+                      Skupaj: <strong style={{ color:'#0D1F12', marginLeft:'4px' }}>€{formatEurNumber(lineNet(item) * (1 + item.vat_rate/100))}</strong>
                     </div>
                   </div>
                 </div>
@@ -482,23 +512,30 @@ export default function EditInvoicePage() {
             </div>
             <h3 className="font-medium text-gray-900 mb-4">Storitve in blago</h3>
             <div className="grid grid-cols-12 gap-2 mb-2 px-1">
-              <div className="col-span-5 text-xs font-medium text-gray-400">Storitev</div>
+              <div className="col-span-4 text-xs font-medium text-gray-400">Storitev</div>
               <div className="col-span-2 text-xs font-medium text-gray-400 text-center">Količina</div>
               <div className="col-span-2 text-xs font-medium text-gray-400 text-right">Cena (€)</div>
               <div className="col-span-2 text-xs font-medium text-gray-400 text-center">DDV</div>
+              <div className="col-span-1 text-xs font-medium text-gray-400 text-center">Popust</div>
               <div className="col-span-1"></div>
             </div>
             <div className="space-y-2 mb-4">
               {items.map((item, i) => (
                 <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                  <div className="col-span-5"><input value={item.description} onChange={e => updateItem(i, 'description', e.target.value)} placeholder="Opis storitve" className={inp} /></div>
+                  <div className="col-span-4"><input value={item.description} onChange={e => updateItem(i, 'description', e.target.value)} placeholder="Opis storitve" className={inp} /></div>
                   <div className="col-span-2"><input type="number" onFocus={e => e.target.select()} value={item.quantity} onChange={e => updateItem(i, 'quantity', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none text-center" /></div>
-                  <div className="col-span-2"><input type="number" onFocus={e => e.target.select()} value={item.unit_price} onChange={e => updateItem(i, 'unit_price', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none text-right" /></div>
+                  <div className="col-span-2">
+                    <input type="number" onFocus={e => e.target.select()} value={item.unit_price} onChange={e => updateItem(i, 'unit_price', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none text-right" />
+                    {/* PRELET 278: kalkulator pod poljem za ceno, kot na strani za nov racun. */}
+                    <button onClick={() => odpriKalkulator(i)} title="Preračunaj iz cene z DDV"
+                      className="mt-1 w-full text-[10px] text-gray-400 hover:text-gray-900 transition-colors">iz cene z DDV</button>
+                  </div>
                   <div className="col-span-2">
                     <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none">
                       <option value={22}>22 %</option><option value={9.5}>9,5 %</option><option value={0}>0 %</option>
                     </select>
                   </div>
+                  <div className="col-span-1"><input type="number" onFocus={e => e.target.select()} min={0} max={100} value={item.discount_pct || 0} onChange={e => updateItem(i, 'discount_pct', +e.target.value)} title="Popust %" style={{ MozAppearance: 'textfield' as any }} className="w-full border border-gray-200 rounded-xl px-1 py-2 text-sm focus:outline-none text-center [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></div>
                   <div className="col-span-1 flex justify-center">
                     {items.length > 1 && <button onClick={() => removeItem(i)} className="text-gray-300 hover:text-red-500 text-xl">×</button>}
                   </div>
@@ -583,6 +620,44 @@ export default function EditInvoicePage() {
         </div>
       </div>
     </div>
+      {/* PRELET 278: okno kalkulatorja DDV - enako kot na strani za nov racun. */}
+      {kalkulator && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setKalkulator(null)}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="font-semibold">Kalkulator DDV</div>
+              <button onClick={() => setKalkulator(null)} className="text-gray-400 hover:text-gray-900 text-xl">×</button>
+            </div>
+            <div className="flex gap-2 mb-3">
+              {(['bruto', 'neto'] as const).map(sm => (
+                <button key={sm} onClick={() => setKalkSmer(sm)}
+                  className={'flex-1 py-2 rounded-xl text-sm font-medium border ' + (kalkSmer === sm ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-600')}>
+                  {sm === 'bruto' ? 'Iz cene z DDV' : 'Iz cene brez DDV'}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              <input autoFocus value={kalkZnesek} onChange={e => setKalkZnesek(e.target.value)} placeholder={kalkSmer === 'bruto' ? 'Cena z DDV' : 'Cena brez DDV'}
+                className="col-span-2 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              <select value={kalkStopnja} onChange={e => setKalkStopnja(+e.target.value)} className="border border-gray-200 rounded-xl px-2 py-3 text-sm focus:outline-none">
+                <option value={22}>22 %</option><option value={9.5}>9,5 %</option><option value={5}>5 %</option><option value={0}>0 %</option>
+              </select>
+            </div>
+            {kalkIzracun ? (
+              <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-1 mb-4">
+                <div className="flex justify-between"><span className="text-gray-500">Brez DDV</span><span className="tabular-nums font-medium">€{formatEurNumber(kalkIzracun.neto)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">DDV {kalkStopnja} %</span><span className="tabular-nums">€{formatEurNumber(kalkIzracun.ddv)}</span></div>
+                <div className="flex justify-between font-semibold border-t border-gray-200 pt-1"><span>Z DDV</span><span className="tabular-nums">€{formatEurNumber(kalkIzracun.bruto)}</span></div>
+              </div>
+            ) : <div className="text-xs text-gray-400 mb-4">Vpišite znesek.</div>}
+            <button disabled={!kalkIzracun}
+              onClick={() => { if (!kalkIzracun) return; const i = kalkulator.vrstica; const u = [...items]; u[i] = { ...u[i], unit_price: kalkIzracun.neto, vat_rate: kalkStopnja }; setItems(u); setKalkulator(null) }}
+              className="w-full bg-gray-900 text-white rounded-xl py-3 font-medium disabled:bg-gray-200 disabled:text-gray-400">
+              Vpiši ceno brez DDV v vrstico
+            </button>
+          </div>
+        </div>
+      )}
     </AppLayout>
   )
 }
