@@ -674,34 +674,52 @@ export const pos = {
   // ─── Reports & Stats ─────────────────────────────────────────────
   reports: {
     async dailyStats(date?: string): Promise<DailyStats> {
-      const today = date ?? new Date().toISOString().substring(0, 10)
-      // KLJUCNO: izkljuci storirana narocila (status='voided') iz prometa -
-      // placilo ostane v payments tudi po stornu, ampak ne sme steti v PROMET
+      /**
+       * POPRAVLJENO (prelet 276): PROMET V GLAVI JE PADEL NA NIC.
+       * ═══════════════════════════════════════════════════════════
+       *
+       * Prej je funkcija najprej prebrala VSE ID-je narocil podjetja in jih
+       * nato poslala kot filter `.in('order_id', [...])`. Vsak ID je 36 znakov;
+       * pri 600 narocilih je naslov zahtevka prerasel ~27 kB in streznik ga je
+       * zavrnil (HTTP 400). Napaka se je TIHO pozrla - `error` je bil razstavljen,
+       * a nikoli preverjen - zato je `data` ostal prazen in promet je kazal 0,00.
+       *
+       * Zgodilo se je 14. 9. 2026 okoli 15:00, ko je stevilo narocil preslo 600.
+       * Do takrat je delovalo; nato bi z vsakim dnem ostalo pokvarjeno.
+       *
+       * ZDAJ: ena poizvedba z notranjim stikom na `orders`. Naslov je dolg ~300
+       * znakov ne glede na stevilo narocil, napitnine pridejo v istem odgovoru,
+       * napaka pa se PREVERI - bolje, da poci, kot da tiho kaze nic.
+       *
+       * Hkrati popravljen DATUM: prej `toISOString().substring(0,10)` = UTC dan,
+       * zato se je promet med polnocjo in 02:00 po lokalnem casu stel v vcerajsnji
+       * dan. Zdaj meje dneva v lokalnem casu naprave.
+       */
+      let start: Date
+      if (date) { start = new Date(date + 'T00:00:00') }
+      else { start = new Date(); start.setHours(0, 0, 0, 0) }
+      const end = new Date(start); end.setDate(end.getDate() + 1)
+
       const { data, error } = await sb()
         .from('payments')
-        .select('amount, order_id')
-        .gte('paid_at', `${today}T00:00:00`)
-        .lte('paid_at', `${today}T23:59:59`)
-        // Filter by business via orders, izkljuci storirana
-        .in('order_id', (await sb()
-          .from('orders')
-          .select('id')
-          .eq('business_id', BUSINESS_ID)
-          .neq('status', 'voided')
-        ).data?.map(o => o.id) ?? [])
+        .select('amount, order_id, orders!inner(business_id, status, tip_amount)')
+        .eq('orders.business_id', BUSINESS_ID)
+        .neq('orders.status', 'voided')
+        .gte('paid_at', start.toISOString())
+        .lt('paid_at', end.toISOString())
+      if (error) throw error
 
       const payments = data ?? []
-      const orderIds = [...new Set(payments.map(p => p.order_id))]
-
-      const { data: tips } = await sb()
-        .from('orders')
-        .select('tip_amount')
-        .in('id', orderIds)
+      // Napitnina je lastnost NAROCILA, ne placila - stejemo jo enkrat na narocilo.
+      const poNarocilu = new Map<string, number>()
+      for (const p of payments as any[]) {
+        if (!poNarocilu.has(p.order_id)) poNarocilu.set(p.order_id, Number(p.orders?.tip_amount || 0))
+      }
 
       return {
-        promet: payments.reduce((s, p) => s + Number(p.amount), 0),
-        racuni: orderIds.length,
-        napitnine: (tips ?? []).reduce((s, o) => s + Number(o.tip_amount || 0), 0),
+        promet: payments.reduce((s: number, p: any) => s + Number(p.amount || 0), 0),
+        racuni: poNarocilu.size,
+        napitnine: [...poNarocilu.values()].reduce((s, t) => s + t, 0),
       }
     },
 
