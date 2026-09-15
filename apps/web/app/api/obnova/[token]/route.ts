@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { lokalniDatum } from '@/lib/tax-constants'
 import { Resend } from 'resend'
-import { FROM_EMAIL } from '@/lib/resend'
+import { FROM_EMAIL, posiljateljZa } from '@/lib/resend'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { InvoicePDF, generateUpnQr } from '@/lib/invoice-pdf'
 import { buildInvoiceEmailHtml } from '@/lib/invoice-email'
@@ -195,7 +195,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
         const pdf0 = await renderToBuffer(InvoicePDF({ invoice: zaPdf, org: org0, qrDataUrl: qr0 }) as any)
         const resend0 = new Resend(process.env.RESEND_API_KEY)
         const { error: e0 } = await resend0.emails.send({
-          from: FROM_EMAIL,
+          from: posiljateljZa(org0.name),  // PRELET 277
           to: [(z.customers as any).email],
           subject: `Predračun ${q0.quote_number} — podaljšanje kartice`,
           html: buildInvoiceEmailHtml({
@@ -359,7 +359,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
       const resend = new Resend(process.env.RESEND_API_KEY)
       const { error: reErr } = await resend.emails.send({
-        from: FROM_EMAIL,
+        from: posiljateljZa(org.name),  // PRELET 277
         to: [stranka.email],
         subject: `Predračun ${predracun.quote_number} — podaljšanje kartice`,
         html,

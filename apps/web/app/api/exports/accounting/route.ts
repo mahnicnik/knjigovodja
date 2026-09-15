@@ -12,7 +12,7 @@ import {
   type IssuedInvoiceRow,
   type ReceiptRow,
 } from '@/lib/accounting-export'
-import { resend, FROM_EMAIL } from '@/lib/resend'
+import { resend, FROM_EMAIL, posiljateljZa } from '@/lib/resend'
 import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 
 const MONTHS = [
@@ -360,7 +360,7 @@ export async function POST(req: NextRequest) {
       `
 
       const { error: emailError } = await resend.emails.send({
-        from: FROM_EMAIL,
+        from: posiljateljZa(org.name),  // PRELET 277: v imenu podjetja
         to: recipientEmail,
         replyTo: user.email,
         subject: `Računovodski izvoz · ${escapeHtml(org.name)} · ${periodLabel}`,

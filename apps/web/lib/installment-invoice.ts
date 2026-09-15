@@ -2,7 +2,7 @@ import { renderToBuffer } from '@react-pdf/renderer'
 import { lokalniDatum } from '@/lib/tax-constants'
 import { InvoicePDF, generateUpnQr } from '@/lib/invoice-pdf'
 import { buildInvoiceEmailHtml } from '@/lib/invoice-email'
-import { resend, FROM_EMAIL } from '@/lib/resend'
+import { resend, FROM_EMAIL, posiljateljZa } from '@/lib/resend'
 
 interface InstallmentToInvoice {
   id: string
@@ -149,7 +149,7 @@ export async function issueInstallmentInvoice(
   const zadeva = `Račun za obrok — ${newInvoice.invoice_number}`
 
   const { data: resendData, error: resendError } = await resend.emails.send({
-    from: FROM_EMAIL,
+    from: posiljateljZa(org.name),  // PRELET 277: v imenu podjetja
     to: [customer.email],
     subject: zadeva,
     html: emailHtml,

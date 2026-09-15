@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
-import { resend, FROM_EMAIL } from '@/lib/resend'
+import { resend, FROM_EMAIL, posiljateljZa } from '@/lib/resend'
 import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 
 async function getSupabase() {
@@ -211,7 +211,7 @@ export async function POST(req: NextRequest) {
 </body></html>`
 
     const { error: emailError } = await resend.emails.send({
-      from: FROM_EMAIL,
+      from: posiljateljZa(org?.name),  // PRELET 277: v imenu podjetja
       to: [email],
       subject: isNewUser
         ? `Vaš dostop do ${org?.name ?? 'Računko'} — vloga: ${roleLabel}`

@@ -2964,7 +2964,7 @@ th{background:#f5f5f5;font-weight:bold}.right{text-align:right}.total-row{font-s
 ${cartDiscount > 0 ? `<div style="text-align:right;color:#666">Popust ${fmtPct(cartDiscount)}%: -${eur2(totals.total-total)}</div>` : ''}
 <div class="total-row" style="text-align:right;font-size:18px;margin:12px 0">SKUPAJ: ${eur2(total)}</div>
 <div class="stamp">Predracun ni davčno potrjen. Velja do: ${new Date(Date.now()+7*86400000).toLocaleDateString('sl-SI')}</div>
-<div class="footer">${escapeHtml(pp.ime)} · www.racunko.si<br>Predracun izdan s sistemom RACUNKO</div>
+<div class="footer">${escapeHtml(pp.ime)} · www.računko.si<br>Predracun izdan s sistemom RACUNKO</div>
 <!-- SPREMENJENO (21.8.2026): samodejni window.print() je odprl MODALNO okno
      operacijskega sistema, ki blokira cel brskalnik, dokler ga uporabnik ne
      zapre. Pri vsakem racunu je bil to odvecen klik, pri strankah brez
@@ -3038,7 +3038,7 @@ th{background:#f5f5f5;font-weight:bold}.right{text-align:right}
   <div>
     <div style="font-size:20px;font-weight:bold">${escapeHtml(pp.ime)}</div>
     ${pp.naslov ? `<div style="color:#666">${escapeHtml(pp.naslov)}</div>` : ''}
-    <div style="color:#666">www.racunko.si</div>
+    <div style="color:#666">www.računko.si</div>
   </div>
   <div style="text-align:right">
     <div style="font-size:22px;font-weight:bold">PREDRAČUN</div>
@@ -3061,7 +3061,7 @@ ${recipientHtml}
   </div>
 </div>
 <div class="stamp">Ta predračun ni davčno potrjen račun.<br>Po plačilu izstavimo uradni davčni račun.</div>
-<div class="footer">${escapeHtml(pp.ime)}${pp.davcna ? ' · Davčna: ' + pp.davcna : ''}<br>Izdano s sistemom RAČUNKO · www.racunko.si</div>
+<div class="footer">${escapeHtml(pp.ime)}${pp.davcna ? ' · Davčna: ' + pp.davcna : ''}<br>Izdano s sistemom RAČUNKO · www.računko.si</div>
 <!-- SPREMENJENO (21.8.2026): samodejni window.print() je odprl MODALNO okno
      operacijskega sistema, ki blokira cel brskalnik, dokler ga uporabnik ne
      zapre. Pri vsakem racunu je bil to odvecen klik, pri strankah brez
@@ -4117,6 +4117,7 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
             method:'POST',
             headers:{'Content-Type':'application/json'},
             body:JSON.stringify({
+          orgName: posData?.org?.name ?? null,  // PRELET 277: e-posta v imenu podjetja
               to: cust.email,
               subject: `Opomnik: ${svc?.name || 'termin'} – ${termDate.toLocaleDateString('sl-SI')}`,
               customerName: cust.name,
@@ -4796,7 +4797,7 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
           pricakuje - v nogi sporocila je bilo ime podjetja prazno. */}
       {bulkEmailModal && <BulkEmailModal customers={posData.customers} posData={posData} onClose={()=>setBulkEmailModal(false)}/>}
       {bonModal && <BonModal data={bonModal} onClose={()=>setBonModal(null)} onDone={()=>{ setBonModal(null); posData.refresh(); setCustomerDetailRefreshKey(k=>k+1) }}/>}
-      {mailModal && <PosljiMailModal data={mailModal} onClose={()=>setMailModal(null)}/>}
+      {mailModal && <PosljiMailModal data={{ ...mailModal, org: posData?.org }} onClose={()=>setMailModal(null)}/>}
     </div>
   )
 }
@@ -5057,6 +5058,7 @@ function PosljiMailModal({ data, onClose }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          orgName: data.org?.name ?? null,  // PRELET 277: e-posta v imenu podjetja
           to: c.email,
           subject: zadeva.trim(),
           html: `<div style="font-family:Inter,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px">
@@ -5143,6 +5145,7 @@ function BulkEmailModal({ customers, onClose, posData }) {
           method:'POST',
           headers:{'Content-Type':'application/json'},
           body:JSON.stringify({
+          orgName: posData?.org?.name ?? null,  // PRELET 277: e-posta v imenu podjetja
             to: c.email,
             subject,
             html: `<div style="font-family:Inter,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px">
@@ -8129,6 +8132,7 @@ function CloseCashModal({ session, posData, auth, onClose, onClosed }) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+          orgName: posData?.org?.name ?? null,  // PRELET 277: e-posta v imenu podjetja
             to: user.email,
             subject: `Z-poročilo #${zReportNumber} — ${new Date().toLocaleDateString('sl-SI')}`,
             html,
@@ -8463,6 +8467,7 @@ function ZReportModal({ posData, onClose }) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+          orgName: posData?.org?.name ?? null,  // PRELET 277: e-posta v imenu podjetja
             to: currentUser.email,
             subject: `Z-poročilo #${reportNumber} — ${data.date.toLocaleDateString('sl-SI')}`,
             html: buildZReportHTML(data, reportNumber, cashOpening, cashClosing),
@@ -9412,7 +9417,7 @@ ${voidEor ? `
   <div>⚡ Izdano s sistemom</div>
   <div class="brand">RAČUNKO</div>
   <div>AI knjigovodstvo za s.p.</div>
-  <div style="font-weight:700">www.racunko.si</div>
+  <div style="font-weight:700">www.računko.si</div>
 </div>
 <!-- SPREMENJENO (21.8.2026): samodejni window.print() je odprl MODALNO okno
      operacijskega sistema, ki blokira cel brskalnik, dokler ga uporabnik ne
@@ -9449,7 +9454,7 @@ function buildRefundReceiptHTML({ order, refundAmount, reason, cashierName }) {
 <div class="footer">
   <div>⚡ Izdano s sistemom</div>
   <div class="brand">RAČUNKO</div>
-  <div style="font-weight:700">www.racunko.si</div>
+  <div style="font-weight:700">www.računko.si</div>
 </div>
 <!-- SPREMENJENO (21.8.2026): samodejni window.print() je odprl MODALNO okno
      operacijskega sistema, ki blokira cel brskalnik, dokler ga uporabnik ne
@@ -14440,6 +14445,7 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          orgName: posData?.org?.name ?? null,  // PRELET 277: e-posta v imenu podjetja
           to: cust.email,
           subject: n.type === 'expired' ? `Vaša karta je potekla` : `Vaša karta kmalu poteče`,
           customerName: cust.name,

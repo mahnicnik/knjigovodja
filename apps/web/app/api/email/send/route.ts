@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { FROM_EMAIL } from '@/lib/resend'
+import { FROM_EMAIL, posiljateljZa } from '@/lib/resend'
 import { escapeHtml } from '@/lib/html-escape'
 
 // POPRAVLJENO (audit 23.7.2026): endpoint je bil ODPRT RELAY - poljuben
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { to, subject, html, customerName, packageName, expiresAt, validFrom, remaining, severity, orgPhone, orgEmail, obnovaUrl, unsubscribeToken } = await req.json()
+    const { to, subject, html, customerName, packageName, expiresAt, validFrom, remaining, severity, orgPhone, orgEmail, orgName, obnovaUrl, unsubscribeToken } = await req.json()
 
     if (!to || !subject) {
       return NextResponse.json({ error: 'Manjka prejemnik ali zadeva' }, { status: 400 })
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
         // zavrnjeno z "The racunko.si domain is not verified".
         // Uporabljamo isti naslov kot preostala aplikacija, ki dokazano dela
         // (obrocni racun je prisel).
-        from: FROM_EMAIL,
+        from: posiljateljZa(orgName),  // PRELET 277: v imenu podjetja
         to: [to],
         subject,
         html: emailHtml,

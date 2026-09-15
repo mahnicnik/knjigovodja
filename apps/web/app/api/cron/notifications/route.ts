@@ -276,6 +276,7 @@ export async function GET(req: NextRequest) {
               // kjer opomnike poslje cron, gumba in kontakta ni bilo.
               orgPhone: (orgForBiz as any)?.phone ?? null,
               orgEmail: (orgForBiz as any)?.email ?? null,
+              orgName: (orgForBiz as any)?.name ?? null,  // PRELET 277
               obnovaUrl: zetonObnove
                 ? `${process.env.NEXT_PUBLIC_APP_URL}/obnova/${zetonObnove}`
                 : null,
@@ -391,6 +392,7 @@ export async function GET(req: NextRequest) {
             // sporocilo obravnava kot mnozicno posto brez odjave.
             unsubscribeToken: (cust as any).unsubscribe_token || null,
             orgEmail: orgForBiz?.email || null,
+            orgName: orgForBiz?.name || null,  // PRELET 277
             html: `<div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#fff">
               <div style="text-align:center;margin-bottom:28px">
                 <div style="font-size:22px;font-weight:800;color:#0d2818">${escapeHtml(biz.name)}</div>

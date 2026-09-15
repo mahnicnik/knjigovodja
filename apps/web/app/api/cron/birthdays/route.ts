@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { resend, FROM_EMAIL } from '@/lib/resend'
+import { resend, FROM_EMAIL, posiljateljZa } from '@/lib/resend'
 
 /**
  * ROJSTNODNEVNE ČESTITKE (26.8.2026)
@@ -110,7 +110,7 @@ export async function GET(req: NextRequest) {
 
       try {
         const { error } = await resend.emails.send({
-          from: FROM_EMAIL,
+          from: posiljateljZa(org.name),  // PRELET 277: v imenu podjetja
           to: [s.email],
           subject: `Vse najboljše, ${(s.name || '').split(/\s+/)[0]}! 🎂`,
           html: besediloCestitke(

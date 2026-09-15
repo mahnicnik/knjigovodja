@@ -3,7 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
-import { FROM_EMAIL } from '@/lib/resend'
+import { FROM_EMAIL, posiljateljZa } from '@/lib/resend'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { InvoicePDF, generateUpnQr } from '@/lib/invoice-pdf'
 import { buildInvoiceEmailHtml } from '@/lib/invoice-email'
@@ -197,7 +197,7 @@ export async function POST(req: NextRequest) {
 
       const resend = new Resend(process.env.RESEND_API_KEY)
       const { data: rd, error: reErr } = await resend.emails.send({
-        from: FROM_EMAIL,
+        from: posiljateljZa(org.name),  // PRELET 277: v imenu podjetja
         to: [stranka.email],
         subject: `Račun ${racun.invoice_number} — kartica je podaljšana`,
         html,
