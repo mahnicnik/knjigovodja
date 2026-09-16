@@ -9479,6 +9479,8 @@ function OrdersScreen({ posData, auth }) {
   const [orderPayment, setOrderPayment] = useState(null)
   // DODANO (19.8.2026): stevilke storno dokumentov, kljuc = order_id.
   const [stornoNumbers, setStornoNumbers] = useState({})
+  // PRELET 282: opozorilo, ce je bilo racunov vec kot varovalka dovoli.
+  const [ordersTruncated, setOrdersTruncated] = useState(false)
   const [period, setPeriod] = useState('today')
   const [search, setSearch] = useState('')
   const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate()-30); return lokalniDatum(d) })
@@ -9528,29 +9530,47 @@ function OrdersScreen({ posData, auth }) {
     // izginili iz seznama - podatki niso bili izbrisani, a jih ni bilo mozno
     // videti brez rocnega poizvedovanja v bazo. Zdaj ostanejo vidni, obstojeca
     // "Storniran" znacka (voided_at) jih jasno oznaci ob odprtju.
-    let q = sb
-      .from('orders')
-      // POPRAVLJENO (19.8.2026): manjkal je `id` placila. Modal "Spremeni nacin
-      // placila" shranjuje z `.eq('id', payment.id)` - ker id ni bil izbran, je
-      // bil undefined, poizvedba ni zadela nobene vrstice in sprememba se ni
-      // shranila. Napake ni javilo, ker Supabase update brez zadetka NI napaka.
-      // POPRAVLJENO (24.8.2026): izbor ni vseboval `cashier_id`, zato
-      // `payment?.cashier_id` ni bil nikoli definiran - iskanje imena
-      // blagajnika se je preskocilo in na racunu je pisalo "Blagajnik: —".
-      // Ista vrsta napake kot `package_id` in `template_id`.
-      .select('*, payments(id, method, amount, furs_zoi, furs_eor, paid_at, cashier_id)')
-      .eq('business_id', BUSINESS_ID)
-      .in('status', ['paid', 'voided'])
-      .order('closed_at', { ascending: false })
-      .limit(500)
+    /**
+     * POPRAVLJENO (prelet 282): PREJ `.limit(500)` - starejsi racuni so bili
+     * nedosegljivi. Zdaj nalagamo po straneh po 1000 (privzeta najvecja
+     * velikost odgovora pri Supabase/PostgREST), dokler stran ni prazna, z
+     * varovalko pri 30.000, da izjemno velika zgodovina ne zamrzne brskalnika.
+     */
+    const STRAN = 1000
+    const NAJVEC_STRANI = 30
+    let vseNar: any[] = []
+    let obrezano = false
+    for (let stran = 0; stran < NAJVEC_STRANI; stran++) {
+      let q = sb
+        .from('orders')
+        // POPRAVLJENO (19.8.2026): manjkal je `id` placila. Modal "Spremeni nacin
+        // placila" shranjuje z `.eq('id', payment.id)` - ker id ni bil izbran, je
+        // bil undefined, poizvedba ni zadela nobene vrstice in sprememba se ni
+        // shranila. Napake ni javilo, ker Supabase update brez zadetka NI napaka.
+        // POPRAVLJENO (24.8.2026): izbor ni vseboval `cashier_id`, zato
+        // `payment?.cashier_id` ni bil nikoli definiran - iskanje imena
+        // blagajnika se je preskocilo in na racunu je pisalo "Blagajnik: —".
+        // Ista vrsta napake kot `package_id` in `template_id`.
+        .select('*, payments(id, method, amount, furs_zoi, furs_eor, paid_at, cashier_id)')
+        .eq('business_id', BUSINESS_ID)
+        .in('status', ['paid', 'voided'])
+        .order('closed_at', { ascending: false })
+        .range(stran * STRAN, stran * STRAN + STRAN - 1)
 
-    if (period !== 'all') {
-      q = q.gte('closed_at', fromDate.toISOString()).lte('closed_at', toDate.toISOString())
+      if (period !== 'all') {
+        q = q.gte('closed_at', fromDate.toISOString()).lte('closed_at', toDate.toISOString())
+      }
+
+      const { data, error } = await q
+      if (error) { console.error('loadOrders:', error.message); break }
+      const stranNar = data || []
+      vseNar = vseNar.concat(stranNar)
+      if (stranNar.length < STRAN) break
+      if (stran === NAJVEC_STRANI - 1) obrezano = true
     }
-
-    const { data, error } = await q
-    const nar = data || []
+    const nar = vseNar
     setOrders(nar)
+    setOrdersTruncated(obrezano)
 
     // DODANO (19.8.2026): stevilke STORNO dokumentov. Ob stornu se izda nov
     // dokument z lastno zaporedno stevilko (ZDavPR: "racun se stornira tako, da
@@ -9558,15 +9578,25 @@ function OrdersScreen({ posData, auth }) {
     // videti je bilo le precrtan izvirnik. Stranka tako ni mogla dobiti storno
     // dokumenta, pri nadzoru pa se stevilo dokumentov v blagajni ni ujemalo s
     // stevilom, ki jih ima FURS.
+    /**
+     * PRELET 282: `.in('order_id', stornirani)` je prej dobival ID-je iz
+     * kvecjemu 500 racunov. Zdaj jih je lahko vec tisoc - ista vrsta napake
+     * kot pri prometu v glavi (prelet 276): predolg naslov zahtevka, ki ga
+     * streznik tiho zavrne. Poizvedbo zato razdelimo na skupine po 200.
+     */
     const stornirani = nar.filter(o => o.voided_at || o.status === 'voided').map(o => o.id)
     if (stornirani.length > 0) {
-      const { data: st } = await sb
-        .from('pos_invoice_numbers')
-        .select('order_id, invoice_number, sequence_number, created_at, note')
-        .in('order_id', stornirani)
-        .not('note', 'is', null)
       const map = {}
-      ;(st || []).forEach(r => { map[r.order_id] = r })
+      const SKUPINA = 200
+      for (let z = 0; z < stornirani.length; z += SKUPINA) {
+        const { data: st, error: stErr } = await sb
+          .from('pos_invoice_numbers')
+          .select('order_id, invoice_number, sequence_number, created_at, note')
+          .in('order_id', stornirani.slice(z, z + SKUPINA))
+          .not('note', 'is', null)
+        if (stErr) { console.error('storno numbers:', stErr.message); continue }
+        ;(st || []).forEach(r => { map[r.order_id] = r })
+      }
       setStornoNumbers(map)
     } else {
       setStornoNumbers({})
@@ -9848,6 +9878,9 @@ function OrdersScreen({ posData, auth }) {
           <div style={{ fontSize:12, color:T.muted, whiteSpace:'nowrap' }}>
             {filtered.length} računov · €{totalFiltered.toFixed(2)}
             {stStorniranih > 0 && <span style={{ color:T.danger }}> · {stStorniranih} storn.</span>}
+            {/* PRELET 282: ce je varovalka le prekoracena - obvestimo, namesto
+                da bi najstarejsi racuni tiho izginili. */}
+            {ordersTruncated && <span style={{ color:T.danger }}> · prikazanih le zadnjih 30.000</span>}
           </div>
         </div>
         <div style={{ flex:1, overflowY:'auto' }}>
