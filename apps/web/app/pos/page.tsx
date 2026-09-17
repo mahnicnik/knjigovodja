@@ -10797,6 +10797,7 @@ function ReportsScreen({ posData, auth, setScreen }) {
     // Izračuni
     let promet = 0, napitnine = 0, vracila = 0
     const byHour = {}
+    const byDay = {}  // PRELET 283: promet po dnevih
     const byMethod = { cash:0, card:0, bon:0, prep:0, other:0 }
 
     // Posebej pridobi payments za te orderje
@@ -10833,6 +10834,11 @@ function ReportsScreen({ posData, auth, setScreen }) {
       napitnine += tip
       const h = new Date(o.closed_at).getHours()
       byHour[h] = (byHour[h] || 0) + amt
+      // PRELET 283: promet po dnevih za crtni graf. Kljuc je lokalni datum,
+      // ne UTC - sicer bi promet po polnoci pristal v napacnem dnevu.
+      const d = new Date(o.closed_at)
+      const dan = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+      byDay[dan] = (byDay[dan] || 0) + amt
       const method = payments[0]?.method || 'cash'
       if (method === 'cash') byMethod.cash += amt
       else if (method === 'card') byMethod.card += amt
@@ -10926,7 +10932,7 @@ function ReportsScreen({ posData, auth, setScreen }) {
     setReportData({
       promet, napitnine, vracila,
       racuni: orders.length,
-      byHour, byMethod, topItems, refunds, from, to, poVrsti,
+      byHour, byDay, byMethod, topItems, refunds, from, to, poVrsti,
       staffBookings, staffTotalMin, staffTotalRevenue,
       isStaffFiltered: !!staffFilter,
     })
@@ -10939,6 +10945,33 @@ function ReportsScreen({ posData, auth, setScreen }) {
   if (!reportData) return null
 
   const { promet, napitnine, vracila, racuni, byHour, byMethod, topItems, refunds } = reportData
+  /**
+   * PRELET 283: CRTNI GRAF PO DNEVIH S TRENDNO LINIJO.
+   *
+   * Graf po urah pove, kdaj v dnevu je gneca; ne pove pa, ali posel raste.
+   * Trendna linija je premica najmanjsih kvadratov cez dnevne vrednosti -
+   * njen naklon je povprecna dnevna sprememba prometa.
+   *
+   * Prikazemo le, kadar je dni vec kot en; pri enem dnevu premica nima smisla.
+   */
+  const byDay = (reportData as any).byDay || {}
+  const dnevi = Object.keys(byDay).sort()
+  const dnevneVrednosti = dnevi.map(d => Number(byDay[d] || 0))
+  const maxDan = Math.max(...dnevneVrednosti, 1)
+  const trend = (() => {
+    const n = dnevneVrednosti.length
+    if (n < 2) return null
+    // Premica y = a + b·x po metodi najmanjsih kvadratov.
+    const sx = (n - 1) * n / 2
+    const sy = dnevneVrednosti.reduce((a, b) => a + b, 0)
+    const sxx = dnevneVrednosti.reduce((a, _, i) => a + i * i, 0)
+    const sxy = dnevneVrednosti.reduce((a, y, i) => a + i * y, 0)
+    const im = n * sxx - sx * sx
+    if (im === 0) return null
+    const b = (n * sxy - sx * sy) / im
+    const a = (sy - b * sx) / n
+    return { a, b, zacetek: a, konec: a + b * (n - 1) }
+  })()
   const maxHour = Math.max(...Object.values(byHour).map(Number), 1)
   const maxMethod = Math.max(...Object.values(byMethod).map(Number), 1)
   // PRELET 267: izpeljano iz stanja, ki je deklarirano na vrhu komponente.
@@ -11019,6 +11052,50 @@ function ReportsScreen({ posData, auth, setScreen }) {
       </div>
 
       <div style={{ display:'grid', gridTemplateColumns:'1fr 340px', gap:12, marginBottom:12 }}>
+        {/* PRELET 283: PROMET PO DNEVIH — crtni graf s trendno linijo.
+            Prikazan samo, kadar obdobje zajema vec kot en dan. */}
+        {dnevi.length > 1 && (
+          <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:20, marginBottom:12 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:14, flexWrap:'wrap', gap:8 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em' }}>
+                PROMET PO DNEVIH · {dnevi.length} dni
+              </div>
+              {trend && (
+                <div style={{ fontSize:12, color: trend.b >= 0 ? T.accent : T.danger, fontWeight:600 }}>
+                  {trend.b >= 0 ? '▲' : '▼'} trend {trend.b >= 0 ? '+' : ''}{eur(trend.b)} na dan
+                </div>
+              )}
+            </div>
+            <svg viewBox={`0 0 ${Math.max(dnevi.length * 40, 200)} 150`} preserveAspectRatio="none" style={{ width:'100%', height:170, overflow:'visible' }}>
+              {/* vodoravne crte za orientacijo */}
+              {[0, 0.5, 1].map(f => (
+                <line key={f} x1="0" y1={120 - f * 110} x2={Math.max(dnevi.length * 40, 200)} y2={120 - f * 110}
+                  stroke={T.line} strokeWidth="1" />
+              ))}
+              {/* trendna linija */}
+              {trend && (
+                <line x1={20} y1={120 - Math.max(0, Math.min(trend.zacetek, maxDan)) / maxDan * 110}
+                      x2={20 + (dnevi.length - 1) * 40} y2={120 - Math.max(0, Math.min(trend.konec, maxDan)) / maxDan * 110}
+                      stroke={T.brand} strokeWidth="2" strokeDasharray="5 4" />
+              )}
+              {/* crta prometa */}
+              <polyline fill="none" stroke={T.accent} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"
+                points={dnevi.map((d, i) => `${20 + i * 40},${120 - (byDay[d] || 0) / maxDan * 110}`).join(' ')} />
+              {/* tocke */}
+              {dnevi.map((d, i) => (
+                <circle key={d} cx={20 + i * 40} cy={120 - (byDay[d] || 0) / maxDan * 110} r="3.5" fill={T.accent}>
+                  <title>{d} · {eur(byDay[d] || 0)}</title>
+                </circle>
+              ))}
+            </svg>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:T.muted, marginTop:4 }}>
+              <span>{dnevi[0]?.slice(8)}. {dnevi[0]?.slice(5,7)}.</span>
+              <span style={{ color:T.brand }}>— — trend</span>
+              <span>{dnevi[dnevi.length-1]?.slice(8)}. {dnevi[dnevi.length-1]?.slice(5,7)}.</span>
+            </div>
+          </div>
+        )}
+
         {/* Promet po urah */}
         <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:20 }}>
           <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:16 }}>PROMET PO URAH</div>
@@ -11968,6 +12045,18 @@ function CatalogSection({ posData }) {
   }
 
   const realCategories = posData.categories.filter(c=>c.id!=='cat-fav')
+  // PRELET 283: iskanje po artiklih - seznam je bil samo za drsenje, pri vec
+  // kot sto artiklih je bilo iskanje posameznega listanje. Iscemo po imenu,
+  // sifri IN crtni kodi, ker blagajnik pozna eno ali drugo.
+  const [iskanjeArtiklov, setIskanjeArtiklov] = React.useState('')
+  const najdeniArtikli = (() => {
+    const q = iskanjeArtiklov.trim().toLowerCase()
+    if (!q) return posData.items
+    return posData.items.filter((it: any) =>
+      String(it.name || '').toLowerCase().includes(q) ||
+      String(it.code || '').toLowerCase().includes(q) ||
+      String(it.barcode || '').toLowerCase().includes(q))
+  })()
 
   return (
     <div>
@@ -12020,7 +12109,9 @@ function CatalogSection({ posData }) {
       {activeTab==='items' && (
         <div>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
-            <div style={{ fontSize:18, fontWeight:700 }}>Artikli ({posData.items.length})</div>
+            <div style={{ fontSize:18, fontWeight:700 }}>
+              Artikli ({najdeniArtikli.length}{najdeniArtikli.length !== posData.items.length ? ' od ' + posData.items.length : ''})
+            </div>
             <div style={{ display:'flex', gap:8 }}>
               <button onClick={()=>setCenModal(true)} style={{...btnP, background:T.surface2, color:T.ink, border:'1px solid '+T.line}}>💶 Spremeni cene</button>
               <button onClick={()=>setCenikModal(true)} style={{...btnP, background:T.surface2, color:T.ink, border:'1px solid '+T.line}}>📷 Uvozi iz cenika</button>
@@ -12029,7 +12120,24 @@ function CatalogSection({ posData }) {
           </div>
           <ZgodovinaCen posData={posData} T={T}/>
           <div style={{ height:14 }}/>
-          {posData.items.map(it => (
+          {/* PRELET 283: iskanje po imenu ali sifri. */}
+          <div style={{ position:'relative', marginBottom:12 }}>
+            <input value={iskanjeArtiklov} onChange={e=>setIskanjeArtiklov(e.target.value)}
+              placeholder="Išči po imenu ali šifri…"
+              style={{ width:'100%', padding:'10px 34px 10px 12px', borderRadius:9, border:'1px solid '+T.line,
+                       background:T.inputBg, fontFamily:'inherit', fontSize:13, outline:'none', boxSizing:'border-box' }}/>
+            {iskanjeArtiklov && (
+              <button onClick={()=>setIskanjeArtiklov('')} title="Počisti"
+                style={{ position:'absolute', right:8, top:'50%', transform:'translateY(-50%)', border:'none',
+                         background:'transparent', color:T.muted, cursor:'pointer', fontSize:16, lineHeight:1 }}>×</button>
+            )}
+          </div>
+          {najdeniArtikli.length === 0 && (
+            <div style={{ padding:'24px 0', textAlign:'center', color:T.muted, fontSize:13 }}>
+              Ni artikla, ki bi ustrezal iskanju.
+            </div>
+          )}
+          {najdeniArtikli.map(it => (
             <div key={it.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'11px 14px', background:T.surface, borderRadius:10, marginBottom:4, border:'1px solid '+T.line }}>
               <div style={{ flex:1 }}>
                 <div style={{ fontWeight:600, fontSize:13 }}>{it.name} {it.fav?'★':''}</div>
