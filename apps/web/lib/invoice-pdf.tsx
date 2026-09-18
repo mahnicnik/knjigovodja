@@ -115,6 +115,18 @@ export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
           {invoice.client_email && <Text style={styles.buyerSub}>{invoice.client_email}</Text>}
         </View>
 
+        {/* PRELET 284: BESEDILO NAD TABELO SE NI NIKOLI IZPISALO.
+         *
+         * Uporabnik ga vpise v polje "Besedilo nad tabelo (neobvezno)" na
+         * strani za nov racun; shrani se v `header_text` in shranjevanje je
+         * bilo VES CAS pravilno. Ta PDF generator pa polja nikoli ni bral -
+         * bilo je v bazi, na papirju pa se ni nikoli pojavilo. */}
+        {invoice.header_text && (
+          <Text style={{ fontSize: 9, color: '#444', lineHeight: 1.4, marginBottom: 10 }}>
+            {invoice.header_text}
+          </Text>
+        )}
+
         <View style={styles.tableHeader}>
           <Text style={[styles.tableHeaderText, styles.col1]}>Storitev / Blago</Text>
           <Text style={[styles.tableHeaderText, styles.col2]}>Količina</Text>

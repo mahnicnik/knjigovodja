@@ -11066,33 +11066,42 @@ function ReportsScreen({ posData, auth, setScreen }) {
                 </div>
               )}
             </div>
-            <svg viewBox={`0 0 ${Math.max(dnevi.length * 40, 200)} 150`} preserveAspectRatio="none" style={{ width:'100%', height:170, overflow:'visible' }}>
-              {/* vodoravne crte za orientacijo */}
-              {[0, 0.5, 1].map(f => (
-                <line key={f} x1="0" y1={120 - f * 110} x2={Math.max(dnevi.length * 40, 200)} y2={120 - f * 110}
-                  stroke={T.line} strokeWidth="1" />
-              ))}
-              {/* trendna linija */}
-              {trend && (
-                <line x1={20} y1={120 - Math.max(0, Math.min(trend.zacetek, maxDan)) / maxDan * 110}
-                      x2={20 + (dnevi.length - 1) * 40} y2={120 - Math.max(0, Math.min(trend.konec, maxDan)) / maxDan * 110}
-                      stroke={T.brand} strokeWidth="2" strokeDasharray="5 4" />
-              )}
-              {/* crta prometa */}
-              <polyline fill="none" stroke={T.accent} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"
-                points={dnevi.map((d, i) => `${20 + i * 40},${120 - (byDay[d] || 0) / maxDan * 110}`).join(' ')} />
-              {/* tocke */}
-              {dnevi.map((d, i) => (
-                <circle key={d} cx={20 + i * 40} cy={120 - (byDay[d] || 0) / maxDan * 110} r="3.5" fill={T.accent}>
-                  <title>{d} · {eur(byDay[d] || 0)}</title>
-                </circle>
-              ))}
-            </svg>
-            <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:T.muted, marginTop:4 }}>
-              <span>{dnevi[0]?.slice(8)}. {dnevi[0]?.slice(5,7)}.</span>
-              <span style={{ color:T.brand }}>— — trend</span>
-              <span>{dnevi[dnevi.length-1]?.slice(8)}. {dnevi[dnevi.length-1]?.slice(5,7)}.</span>
+            {/* POPRAVLJENO (prelet 284): `preserveAspectRatio="none"` je risbo
+                raztegnil neenakomerno po X in Y, zato so bili krogi videti kot
+                elipse. Zdaj je 1 enota viewBox = 1 slikovna pika (sirina =
+                stevilo dni * razmik) - brez raztezanja. Ce dni ni vec, kot gre
+                v okvir, se ovojnica drsi vodoravno namesto da bi vse stisnila. */}
+            <div style={{ overflowX: dnevi.length > 16 ? 'auto' : 'visible' }}>
+              <svg viewBox={`0 0 ${dnevi.length * 44} 150`} width={dnevi.length * 44} height={170} style={{ display:'block' }}>
+                {[0, 0.5, 1].map(f => (
+                  <line key={f} x1="0" y1={120 - f * 110} x2={dnevi.length * 44} y2={120 - f * 110}
+                    stroke={T.line} strokeWidth="1" />
+                ))}
+                {trend && (
+                  <line x1={22} y1={120 - Math.max(0, Math.min(trend.zacetek, maxDan)) / maxDan * 110}
+                        x2={22 + (dnevi.length - 1) * 44} y2={120 - Math.max(0, Math.min(trend.konec, maxDan)) / maxDan * 110}
+                        stroke={T.brand} strokeWidth="1.5" strokeDasharray="5 4" />
+                )}
+                {/* PRELET 284: tanjsa crta (2.5 → 1.5). */}
+                <polyline fill="none" stroke={T.accent} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"
+                  points={dnevi.map((d, i) => `${22 + i * 44},${120 - (byDay[d] || 0) / maxDan * 110}`).join(' ')} />
+                {dnevi.map((d, i) => (
+                  <g key={d}>
+                    {/* PRELET 284: manjse pike (3.5 → 2.5), zdaj pravilno okrogle. */}
+                    <circle cx={22 + i * 44} cy={120 - (byDay[d] || 0) / maxDan * 110} r="2.5" fill={T.accent}>
+                      <title>{d} · {eur(byDay[d] || 0)}</title>
+                    </circle>
+                    {/* PRELET 284: datum POD VSAKO tocko, ne le pod prvo in zadnjo. */}
+                    <text x={22 + i * 44} y={140} textAnchor="middle" fontSize="9" fill={T.muted}>
+                      {d.slice(8)}.{d.slice(5,7)}.
+                    </text>
+                  </g>
+                ))}
+              </svg>
             </div>
+            {trend && (
+              <div style={{ textAlign:'center', fontSize:10, color:T.brand, marginTop:2 }}>— — trend</div>
+            )}
           </div>
         )}
 
@@ -11102,14 +11111,19 @@ function ReportsScreen({ posData, auth, setScreen }) {
           {hours.length === 0 ? (
             <div style={{ fontSize:13, color:T.muted, padding:'20px 0' }}>Ni podatkov za izbrano obdobje</div>
           ) : (
-            <div style={{ display:'flex', alignItems:'flex-end', gap:6, height:120 }}>
+            // POPRAVLJENO (prelet 284): stolpci so bili flex:1 - pri vec urah
+            // so se ozili, znesek nad stolpcem pa se ni skrcil in je pri
+            // zadnjih urah segal cez rob kartice. Zdaj ima vsak stolpec
+            // fiksno najmanjso sirino; ce vsi skupaj ne gredo v okvir, se
+            // ovojnica drsi vodoravno namesto da bi karkoli uslo izven nje.
+            <div style={{ display:'flex', alignItems:'flex-end', gap:6, height:120, overflowX:'auto' }}>
               {hours.map(h => {
                 const val = byHour[h] || 0
                 const pct = val / maxHour
                 return (
-                  <div key={h} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
-                    <div style={{ fontSize:9, color:T.muted, fontWeight:600, fontVariantNumeric:'tabular-nums' }}>{eur(val)}</div>
-                    <div style={{ width:'100%', background:T.accent, borderRadius:'4px 4px 0 0', height:Math.max(pct*80, 4) }}/>
+                  <div key={h} style={{ flexShrink:0, minWidth:36, display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
+                    <div style={{ fontSize:9, color:T.muted, fontWeight:600, fontVariantNumeric:'tabular-nums', whiteSpace:'nowrap' }}>{eur(val)}</div>
+                    <div style={{ width:24, background:T.accent, borderRadius:'4px 4px 0 0', height:Math.max(pct*80, 4) }}/>
                     <div style={{ fontSize:9, color:T.muted }}>{h}:00</div>
                   </div>
                 )
