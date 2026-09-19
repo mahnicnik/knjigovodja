@@ -118,7 +118,14 @@ export default function ExpensesPage() {
     // POPRAVLJENO (16.8.2026): prej brez preverbe - ce vnos v knjigi ostane,
     // strosek pa se izbrise, ostane osirotel zapis v davcni evidenci.
     const { error: kpoDelErr } = await supabase.from('kpo_entries').delete().eq('receipt_id', id)
-    if (kpoDelErr) { alert('Vnosa v knjigi ni bilo mogoče izbrisati: ' + kpoDelErr.message); return }
+    if (kpoDelErr) {
+      // POPRAVLJENO (prelet 285): manjkal je setSaving(false). Gumb je
+      // disabled={saving} - brez ponastavitve se je ob tej napaki zaklenil
+      // za VES OSTANEK SEJE, ne le za ta poskus, in brez vidne napake.
+      alert('Vnosa v knjigi ni bilo mogoče izbrisati: ' + kpoDelErr.message)
+      setSaving(false)
+      return
+    }
     const { error } = await supabase.from('receipts').delete().eq('id', id)
     if (error) {
       alert('Napaka pri brisanju: ' + error.message)
