@@ -7712,7 +7712,7 @@ async function printCashReceipt(html: string) {
   } catch {}
   // Zadnji fallback: browser popup
   const w = window.open('about:blank', '_blank', 'width=380,height=700')
-  if (!w) { alert('Tiskalnik ni dosegljiv. Preverite ali je Racunko POS app odprta.'); return }
+  if (!w) { alert('Tiskalnik ni dosegljiv. Preverite ali je Računko POS app odprta.'); return }
   w.document.write(html)
   w.document.close()
 }

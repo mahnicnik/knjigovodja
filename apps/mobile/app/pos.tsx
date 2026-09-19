@@ -169,7 +169,7 @@ export default function PosScreen() {
       const org = (auth as any)?.org
       let r = ''
       r += '================================\n'
-      r += center(fixChars(org?.name || auth?.orgName || 'Racunko POS').substring(0,30)) + '\n'
+      r += center(fixChars(org?.name || auth?.orgName || 'Računko POS').substring(0,30)) + '\n'
       if (org?.address) r += center((org.address + (org.post_code ? ', ' + org.post_code : '') + (org.city ? ' ' + org.city : '')).substring(0,32)) + '\n'
       if (org?.tax_number) r += center('ID DDV: ' + org.tax_number) + '\n'
       r += '================================\n'
