@@ -158,6 +158,22 @@ export const REGRES_TAX_FREE_LIMIT = 2606.09
 export const SP_MIN_CONTRIBUTIONS_MONTH = 651.04
 export const SP_MIN_CONTRIBUTIONS_YEAR = 7812.48
 
+/**
+ * DODANO (19.9.2026): minimalni prispevki za POPOLDANSKI s.p. (zavarovan
+ * drugje, plačuje samo PIZ + ZZZS, "zaposlovanje" in "starševstvo" sta 0 €).
+ * To NI isti prag kot za polni s.p. — prej se je uporabnikom, ki so pravilno
+ * vnesli popoldanski znesek (~105–113 €/mes v letu 2026), pokazalo lažno
+ * opozorilo "manjka do zakonskega minimuma", ker se je primerjalo proti
+ * SP_MIN_CONTRIBUTIONS_MONTH (651,04 €, velja samo za polni s.p.).
+ *
+ * Uradni znesek se med viri rahlo razlikuje glede na to, ali je všteta nova
+ * dajatev za dolgotrajno oskrbo (DO): Jan–Mar 2026 ~110,11 €, Apr–Dec 2026
+ * ~113,01 €. Namesto lažno natančnega zakonskega zneska uporabljamo VARNO
+ * spodnjo mejo (sanity check) — dovolj nizko, da pravilno vnesenih zneskov
+ * ne obarva rdeče, a še vedno ujame prazna/pomotoma prenizka polja.
+ */
+export const SP_MIN_CONTRIBUTIONS_MONTH_POPOLDANSKI = 95
+
 /** Maksimalna zavarovalna osnova = 3,5× povprečna plača. */
 export const SP_MAX_BASE = 8876.11
 export const SP_MAX_CONTRIBUTIONS_MONTH = 3607.57

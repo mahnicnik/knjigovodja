@@ -171,6 +171,9 @@ export default function DashboardPage() {
   const supabase = createClient()
 
   const [org, setOrg] = useState<any>(null)
+  // DODANO (19.9.2026): odstevalnik do izteka brezplacnega preizkusa (glej
+  // trialInfo spodaj) - locena state samo za "Nadgradi zdaj" gumb v banerju.
+  const [trialUpgrading, setTrialUpgrading] = useState(false)
   const [pendingRecurringCount, setPendingRecurringCount] = useState(0)
   const [userId, setUserId] = useState<string | null>(null)
   const [userEmail, setUserEmail] = useState<string>('')
@@ -814,6 +817,37 @@ export default function DashboardPage() {
   const todayStr = `${DAYS_LONG[now.getDay()]} · ${dayOfMonth}. ${MONTHS_LONG[month]} ${year}`
   const ownerName = org?.name?.split(' ')[0] || userEmail?.split('@')[0] || ''
 
+  // DODANO (19.9.2026): odstevalnik do izteka brezplacnega preizkusa.
+  // Prej NIKJER v vmesniku ni bilo videti, da je uporabnik na 14-dnevnem
+  // preizkusu Pro+POS (prelet 212, handle_new_user) - "samodejno dobljen
+  // PRO" je delovalo kot napaka. stripe_subscription_id != null pomeni,
+  // da je uporabnik ze placal (organizations.subscription_status ostane
+  // 'pro'/'pro_pos', a trial_ends_at ni vec relevanten).
+  const trialInfo = useMemo(() => {
+    if (!org?.trial_ends_at || org?.stripe_subscription_id) return null
+    const end = new Date(org.trial_ends_at)
+    const diffMs = end.getTime() - now.getTime()
+    const daysLeft = Math.ceil(diffMs / 86400000)
+    if (daysLeft <= 0) return null
+    return { daysLeft, planLabel: org.subscription_status === 'pro' ? 'Pro' : 'Pro + POS' }
+  }, [org, now])
+
+  async function handleTrialUpgrade() {
+    setTrialUpgrading(true)
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: org?.subscription_status === 'pro' ? 'pro' : 'pro_pos', period: 'monthly' }),
+      })
+      const data = await res.json()
+      if (data.url) { window.location.href = data.url; return }
+      setTrialUpgrading(false)
+    } catch {
+      setTrialUpgrading(false)
+    }
+  }
+
   /* ============ RENDER ============ */
   if (loading) {
     return (
@@ -872,6 +906,21 @@ export default function DashboardPage() {
             </button>
           </div>
         </div>
+
+        {/* TRIAL BANNER (19.9.2026) */}
+        {trialInfo && (
+          <div className="rk-trial-banner">
+            <div className="rk-trial-text">
+              <span className="rk-trial-badge">🎁 Preizkušate {trialInfo.planLabel}</span>
+              <span className="rk-trial-days">
+                {trialInfo.daysLeft === 1 ? 'Še 1 dan' : `Še ${trialInfo.daysLeft} dni`} brezplačnega preizkusa
+              </span>
+            </div>
+            <button className="rk-trial-cta" onClick={handleTrialUpgrade} disabled={trialUpgrading}>
+              {trialUpgrading ? 'Preusmerjam…' : 'Nadgradi zdaj'}
+            </button>
+          </div>
+        )}
 
         {/* ONBOARDING CHECKLIST (only if not complete) */}
         {showOnboarding && !onboardingComplete && (
@@ -1692,6 +1741,16 @@ const cssGlobal = `
   .rk-shell[data-theme="dark"] .rk-head-search kbd { background: var(--rule); color: var(--ink2); }
 
   /* ONBOARDING */
+  .rk-trial-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; background: #FDF6E3; border: 1px solid #E8D9A8; border-radius: 14px; padding: 14px 20px; margin-bottom: 18px; }
+  .rk-shell[data-theme="dark"] .rk-trial-banner { background: rgba(184,140,40,0.12); border-color: rgba(184,140,40,0.35); }
+  .rk-trial-text { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .rk-trial-badge { font-weight: 700; font-size: 13px; color: #8a6d1f; }
+  .rk-shell[data-theme="dark"] .rk-trial-badge { color: #e0b84a; }
+  .rk-trial-days { font-size: 13px; color: #8a6d1f; opacity: 0.85; }
+  .rk-shell[data-theme="dark"] .rk-trial-days { color: #e0b84a; }
+  .rk-trial-cta { background: #0d2818; color: #f6f1e8; border: none; border-radius: 8px; padding: 9px 16px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; }
+  .rk-trial-cta:hover { background: #163a24; }
+  .rk-trial-cta:disabled { opacity: 0.6; cursor: default; }
   .rk-onboard { background: #fff; border: 1px solid var(--rule); border-radius: 18px; padding: 22px 26px; margin-bottom: 18px; position: relative; }
   .rk-shell[data-theme="dark"] .rk-onboard { background: var(--panel); }
   .rk-onboard-close { position: absolute; top: 16px; right: 16px; background: none; border: 0; color: var(--ink3); cursor: pointer; padding: 6px; border-radius: 6px; }

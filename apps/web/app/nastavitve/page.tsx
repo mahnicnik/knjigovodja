@@ -20,7 +20,7 @@ import posthog from 'posthog-js'
 import UpgradeButton from '@/components/UpgradeButton'
 import ManageSubscriptionButton from '@/components/ManageSubscriptionButton'
 import { getActiveMembership } from '@/lib/active-org'
-import { SP_MIN_CONTRIBUTIONS_MONTH, veljavnaDavcnaStevilka } from '@/lib/tax-constants'
+import { SP_MIN_CONTRIBUTIONS_MONTH, SP_MIN_CONTRIBUTIONS_MONTH_POPOLDANSKI, veljavnaDavcnaStevilka } from '@/lib/tax-constants'
 
 /**
  * Slovenski zapis zneska: 7.812,48 € (vejica decimalno, pika tisocice, valuta
@@ -460,12 +460,27 @@ export default function NastavitevPage() {
                         </div>
                       )
 
-                      const razlika = SP_MIN_CONTRIBUTIONS_MONTH - vsota
+                      // DODANO (19.9.2026): popoldanski s.p. (zavarovan drugje) ima
+                      // NIZJI zakonski minimum kot polni s.p. Aplikacija ze uci
+                      // uporabnike (PageHelp.tsx), naj pri popoldanskem s.p. nastavijo
+                      // zaposlovanje IN starsevstvo na 0 € - to je edini signal, ki ga
+                      // imamo, zato ga uporabimo tudi tu. Prej se je VEDNO primerjalo
+                      // proti polnemu minimumu (651,04 €), zato je pravilno vnesen
+                      // popoldanski znesek (~105-113 €) dobil lazno rdece opozorilo.
+                      const jePopoldanski = stStevilo(form.contrib_zaposlovanje) === 0 && stStevilo(form.contrib_starsevstvo) === 0
+                      const minimum = jePopoldanski ? SP_MIN_CONTRIBUTIONS_MONTH_POPOLDANSKI : SP_MIN_CONTRIBUTIONS_MONTH
+                      const razlika = minimum - vsota
                       if (razlika > 0.5) return (
                         <div style={{ background: '#FCEBEB', border: '0.5px solid #F7C1C1', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#A32D2D', lineHeight: 1.5 }}>
-                          <b>Vsota prispevkov je nižja od zakonskega minimuma.</b><br/>
-                          Vpisano: {eur(vsota)} · minimum 2026: {eur(SP_MIN_CONTRIBUTIONS_MONTH)} · manjka {eur(razlika)} na mesec ({eur(razlika * 12)} letno).<br/>
+                          <b>Vsota prispevkov je nižja od {jePopoldanski ? 'pričakovanega zneska za popoldanski s.p.' : 'zakonskega minimuma'}.</b><br/>
+                          Vpisano: {eur(vsota)} · {jePopoldanski ? 'okvirni minimum za popoldanski s.p. 2026' : 'minimum 2026'}: {eur(minimum)} · manjka {eur(razlika)} na mesec ({eur(razlika * 12)} letno).<br/>
                           Preverite zneske na plačilnih nalogih FURS — napačna vrednost popači vse davčne napovedi.
+                        </div>
+                      )
+                      if (jePopoldanski) return (
+                        <div style={{ background: '#EAF3DE', border: '0.5px solid #C8E0A8', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#27500A' }}>
+                          ✓ Prispevki skupaj (popoldanski s.p.): <b>{eur(vsota)}</b> na mesec ({eur(vsota * 12)} letno)<br/>
+                          <span style={{ color: '#5a7a45' }}>Zakonski minimum 651,04 € velja samo za polni s.p. — pri popoldanskem s.p. (zavarovani drugje) plačate samo PIZ + ZZZS.</span>
                         </div>
                       )
                       return (
