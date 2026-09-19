@@ -732,7 +732,7 @@ function setupIpcHandlers() {
   ipcMain.handle('print-test', async () => {
     const { app } = require('electron')
     const testHtml = `<!DOCTYPE html><html><body style="font-family:monospace;font-size:12px;max-width:80mm;margin:0;padding:8mm 4mm">
-      <div style="text-align:center;font-weight:700;font-size:14px">RACUNKO POS</div>
+      <div style="text-align:center;font-weight:700;font-size:14px">RAČUNKO POS</div>
       <div style="text-align:center">Test tiskanja</div>
       <hr/>
       <div>Verzija: ${app.getVersion()}</div>
