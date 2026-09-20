@@ -96,7 +96,7 @@ function EmailSkeniranjeContent() {
     const amountTotal = amountNet + vatAmount
     // POPRAVLJENO (16.8.2026): prej brez preverbe - potrjen racun iz e-poste se
     // ni shranil, predlog pa se je oznacil kot obdelan, zato bi bil izgubljen.
-    const { error: rcpErr } = await supabase.from('receipts').insert({
+    const { data: rcpData, error: rcpErr } = await supabase.from('receipts').insert({
       org_id: org.id,
       vendor: d.vendor || '',
       receipt_date: d.date || lokalniDatum(),
@@ -111,8 +111,12 @@ function EmailSkeniranjeContent() {
       // PDF naloz(imo sele tu, ne ze ob prikazu seznama (19.8.2026).
       attachment_base64: (await supabase.from('email_scan_pending').select('pdf_base64').eq('id', item.id).maybeSingle()).data?.pdf_base64 || null,
       attachment_type: 'pdf',
-    })
+    }).select('id').single()
     if (rcpErr) { alert('Računa ni bilo mogoče shraniti: ' + rcpErr.message); return }
+    // POPRAVLJENO (prelet 295): brez receipt_id se je ta vnos na Dashboardu
+    // stel kot LOCEN odhodek poleg zgornjega receipts zapisa - isti strosek
+    // iz e-postnega skeniranja je bil prikazan dvakrat (enaka napaka kot v
+    // scan/page.tsx, popravljena v preletu 294).
     const { error: kpoErr } = await supabase.from('kpo_entries').insert({
       org_id: org.id,
       entry_date: d.date || lokalniDatum(),
@@ -123,6 +127,7 @@ function EmailSkeniranjeContent() {
       vat_in: vatAmount,
       vat_out: 0,
       category: d.category || 'Drugo',
+      receipt_id: rcpData?.id ?? null,
     })
     if (kpoErr) { alert('Vnosa v knjigo ni bilo mogoče shraniti: ' + kpoErr.message); return }
     await supabase.from('email_scan_pending').update({ status: 'confirmed', reviewed_at: new Date().toISOString() }).eq('id', item.id)

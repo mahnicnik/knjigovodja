@@ -362,7 +362,7 @@ export default function DashboardPage() {
         // izkljucno prek POS blagajne, je videl vse stroske in NIC prihodka,
         // torej stalno izgubo. Zdaj beremo obe strani in tudi DDV.
         supabase.from('kpo_entries')
-          .select('income, expense, vat_out, entry_date, invoice_id, receipt_id')
+          .select('income, expense, vat_out, vat_in, entry_date, invoice_id, receipt_id')
           .eq('org_id', o.id)
           .gte('entry_date', yearStart)
           .lte('entry_date', quarterEnd > monthEnd ? quarterEnd : monthEnd),
@@ -419,7 +419,10 @@ export default function DashboardPage() {
         .filter(e => !e.receipt_id)
         .reduce((s: number, e: any) => s + Number(e.expense || 0), 0)
 
-      const kpoReceivedMonth = kpoMesec.reduce((s: number, e: any) => s + Number(e.income || 0), 0)
+      // POPRAVLJENO (prelet 295): manjkal je !e.invoice_id filter (kot pri
+      // kpoPrihodekMesec zgoraj) - ce bi se to polje kdaj prikazalo, bi
+      // dvojno stelo prihodek iz izdanih racunov, poknjizenih v KPO.
+      const kpoReceivedMonth = kpoMesec.filter(e => !e.invoice_id).reduce((s: number, e: any) => s + Number(e.income || 0), 0)
       setPendingRecurringCount(pendingRecurringRes.count || 0)
       const monthInv = invoices.filter((i:any) => i.issue_date >= monthStart && i.issue_date <= monthEnd)
       const yearInv = invoices.filter((i:any) => i.issue_date >= yearStart)
@@ -445,7 +448,12 @@ export default function DashboardPage() {
        *
        * Sestevek je enak `revenue`, zato se skupna stevilka ne spremeni.
        */
-      const jeBlagajna = (e: any) => e.category === 'pos_prodaja' || e.category === 'pos_storitve'
+      // POPRAVLJENO (prelet 295): stara "blagajna" (/blagajna, locena od
+      // glavne POS blagajne) poknjizi prihodek s category:'Blagajna', ki ga
+      // ta filter ni prepoznal - promet je pristal pod "drugo" namesto
+      // "blagajna" (skupna vsota `revenue` je bila pravilna, samo razdelitev
+      // po virih napacna).
+      const jeBlagajna = (e: any) => e.category === 'pos_prodaja' || e.category === 'pos_storitve' || e.category === 'Blagajna'
       const prihodekPortal = monthInv.reduce((s: number, i: any) => s + Number(i.amount_net), 0)
       const prihodekBlagajna = kpoMesec
         .filter((e: any) => !e.invoice_id && jeBlagajna(e))
@@ -477,6 +485,13 @@ export default function DashboardPage() {
       const kpoVatOutQuarter = kpoVsi
         .filter((e:any) => !e.invoice_id && e.entry_date >= quarterStart && e.entry_date <= quarterEnd)
         .reduce((s:number,e:any) => s + Number(e.vat_out || 0), 0)
+      // POPRAVLJENO (prelet 295): simetricno kot pri vatOut zgoraj - vhodni DDV
+      // iz KPO vnosov brez receipt_id (npr. e-postno skeniranje, banka, kartice)
+      // se ni pristeval, zato je bila obveznost za DDV precenjena. Glej isti
+      // vzorec v letni-pregled/page.tsx in porocila/page.tsx.
+      const kpoVatInQuarter = kpoVsi
+        .filter((e:any) => !e.receipt_id && e.entry_date >= quarterStart && e.entry_date <= quarterEnd)
+        .reduce((s:number,e:any) => s + Number(e.vat_in || 0), 0)
 
       const vatOut = invoices
         .filter((i:any) => i.issue_date >= quarterStart && i.issue_date <= quarterEnd)
@@ -485,6 +500,7 @@ export default function DashboardPage() {
       const vatIn = receipts
         .filter((r:any) => r.receipt_date >= quarterStart && r.receipt_date <= quarterEnd)
         .reduce((s:number,r:any) => s + Number(r.vat_amount), 0)
+        + kpoVatInQuarter
       const unpaid = invoices.filter((i:any) => i.status === 'sent')
       const overdue = invoices.filter((i:any) => i.status === 'sent' && i.due_date < today)
       const recent = [...invoices].sort((a:any,b:any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 5)
