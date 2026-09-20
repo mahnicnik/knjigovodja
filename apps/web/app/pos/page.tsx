@@ -658,32 +658,6 @@ const KI = ({ name, size = 18, strokeWidth = 1.7 }) => {
 }
 
 // ================================================================
-// MOBILNI ZASLON (DODANO - prelet 303)
-// ================================================================
-/**
- * `useIsMobile` - zazna ozek (telefonski) zaslon in se odzove na spremembo
- * sirine okna (vrtenje telefona, spremenjena velikost okna). Uporablja se
- * za preklop med namiznim in mobilnim razporedom v prodajnem zaslonu.
- *
- * Meja 860px je izbrana namenoma nad obicajno sirino telefona (375-430px)
- * v pokoncni legi, a pod tablicnimi/prenosniskimi sirinami - tako se
- * mobilni razpored vklopi zanesljivo na telefonu, ne pa po nepotrebnem na
- * vecjih zaslonih.
- */
-function useIsMobile(breakpoint = 860) {
-  const [isMobile, setIsMobile] = React.useState(() =>
-    typeof window !== 'undefined' ? window.innerWidth <= breakpoint : false
-  )
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return
-    const onResize = () => setIsMobile(window.innerWidth <= breakpoint)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [breakpoint])
-  return isMobile
-}
-
-// ================================================================
 // PRVA NASTAVITEV BLAGAJNE
 // ================================================================
 /**
@@ -2614,28 +2588,25 @@ function FloorScreen({ spaces, switchToTable, setScreen }) {
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', minHeight:0 }}>
-      {/* POPRAVLJENO: enak popravek kot pri glavi (overflowX + flexShrink:0
-          na vsakem neposrednem otroku), da imena prostorov ("terasa",
-          "bar", ...) na ozkem zaslonu ne razpadejo v navpicen stolpec crk. */}
-      <div style={{ padding:'12px 18px', background:T.surface, borderBottom:'1px solid '+T.line, display:'flex', alignItems:'center', gap:10, overflowX:'auto' }}>
-        <div style={{ display:'flex', gap:4, background:T.surface3, padding:4, borderRadius:10, flexShrink:0 }}>
+      <div style={{ padding:'12px 18px', background:T.surface, borderBottom:'1px solid '+T.line, display:'flex', alignItems:'center', gap:10 }}>
+        <div style={{ display:'flex', gap:4, background:T.surface3, padding:4, borderRadius:10 }}>
           {spaces.map(s => (
-            <button key={s.id} onClick={() => setSelectedSpace(s.id)} style={{ padding:'8px 14px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', border:'none', fontWeight:700, fontSize:13, background: selectedSpace===s.id ? T.header : 'transparent', color: selectedSpace===s.id ? T.headerInk : T.ink, display:'flex', alignItems:'center', gap:8, whiteSpace:'nowrap' }}>
+            <button key={s.id} onClick={() => setSelectedSpace(s.id)} style={{ padding:'8px 14px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', border:'none', fontWeight:700, fontSize:13, background: selectedSpace===s.id ? T.header : 'transparent', color: selectedSpace===s.id ? T.headerInk : T.ink, display:'flex', alignItems:'center', gap:8 }}>
               <span style={{ width:8, height:8, borderRadius:999, background:s.color }}/>
               {s.name}
               <span style={{ opacity:0.6, fontSize:11 }}>{(s.tables || []).filter(t => t.status==='occupied').length}/{(s.tables || []).length}</span>
             </button>
           ))}
         </div>
-        <div style={{ display:'flex', gap:10, marginLeft:16, flexShrink:0 }}>
+        <div style={{ display:'flex', gap:10, marginLeft:16 }}>
           {Object.entries(T.status).map(([k, st]) => (
-            <div key={k} style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, color:T.muted, fontWeight:600, whiteSpace:'nowrap' }}>
+            <div key={k} style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, color:T.muted, fontWeight:600 }}>
               <span style={{ width:9, height:9, borderRadius:999, background:st.dot }}/>{st.label}
             </div>
           ))}
         </div>
-        <div style={{ marginLeft:'auto', flexShrink:0 }}>
-          <button onClick={() => { switchToTable(null); setScreen('sale') }} style={{ padding:'8px 14px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', background:T.accent, color:'#fff', border:'none', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', gap:6, whiteSpace:'nowrap' }}>
+        <div style={{ marginLeft:'auto' }}>
+          <button onClick={() => { switchToTable(null); setScreen('sale') }} style={{ padding:'8px 14px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', background:T.accent, color:'#fff', border:'none', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', gap:6 }}>
             <KI name="plus" size={14}/> Hitra prodaja
           </button>
         </div>
@@ -2820,13 +2791,6 @@ function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart
   const [search, setSearch] = useState('')
   const [scanModal, setScanModal] = useState(false)
 
-  // DODANO (prelet 303): mobilni razpored - na telefonu kategorije+kosarica
-  // ne gredo vec vsaksebi (tri stolpce so na ozkem zaslonu poteptali drug
-  // drugega). Kosarica se skrije za plavajoc trak na dnu, ki se ob dotiku
-  // razpre cez cel zaslon.
-  const isMobile = useIsMobile()
-  const [cartOpen, setCartOpen] = useState(false)
-
   const items = useMemo(() => {
     if (search) return posData.items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()) || (i.code || '').toLowerCase().includes(search.toLowerCase()))
     return posData.itemsIn(selectedCat)
@@ -2845,24 +2809,11 @@ function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart
   }
 
   return (
-    <div style={{ flex:1, display:'flex', minHeight:0, flexDirection: isMobile ? 'column' : 'row' }}>
-      {/* Kategorije sidebar
-          POPRAVLJENO (prelet 303): na telefonu je bil ta stolpec fiksno
-          sirok 196px in NI se skrcil - skupaj s 340px sirokim stolpcem
-          kosarice (glej SaleCart spodaj) je to na 375px sirokem zaslonu
-          poteptalo prostor za same artikle na manj kot 0, kosarica pa je
-          padla ven iz vidnega obmocja (starsevski vsebovalnik ima
-          `overflow:'hidden'`, torej ni bilo niti drsanja do nje).
-
-          Na mobilnem se sidebar spremeni v vodoraven, vodoravno pomikajoc
-          se trak nad artikli (enak vzorec kot pri glavi blagajne v
-          preletu 302), kosarica pa se seli iz stalnega stolpca v plavajoc
-          trak na dnu (glej konec te komponente). */}
-      <div style={{ width: isMobile ? '100%' : 196, background:T.surface, borderRight: isMobile ? 'none' : '1px solid '+T.line, borderBottom: isMobile ? '1px solid '+T.line : 'none', display:'flex', flexDirection: isMobile ? 'row' : 'column', alignItems: isMobile ? 'center' : 'stretch', flexShrink:0 }}>
-        {!isMobile && <div style={{ padding:'12px 14px', borderBottom:'1px solid '+T.lineSoft, fontSize:11, textTransform:'uppercase', letterSpacing:'0.08em', color:T.muted, fontWeight:700 }}>Kategorije</div>}
-        <div style={ isMobile
-          ? { display:'flex', flexDirection:'row', gap:6, overflowX:'auto', padding:'10px 10px', flex:1, minWidth:0 }
-          : { overflowY:'auto', flex:1, padding:8 } }>
+    <div style={{ flex:1, display:'flex', minHeight:0 }}>
+      {/* Kategorije sidebar */}
+      <div style={{ width:196, background:T.surface, borderRight:'1px solid '+T.line, display:'flex', flexDirection:'column', flexShrink:0 }}>
+        <div style={{ padding:'12px 14px', borderBottom:'1px solid '+T.lineSoft, fontSize:11, textTransform:'uppercase', letterSpacing:'0.08em', color:T.muted, fontWeight:700 }}>Kategorije</div>
+        <div style={{ overflowY:'auto', flex:1, padding:8 }}>
           {posData.categories.map(c => {
             const active = selectedCat === c.id
             const jePriljubljeno = c.id === 'cat-fav'
@@ -2880,15 +2831,9 @@ function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart
                   opacity: vlecemKat === c.id ? 0.4 : 1,
                   outline: nadKat === c.id && vlecemKat && vlecemKat !== c.id ? '2px solid ' + T.accent : 'none',
                   cursor: jePriljubljeno ? 'pointer' : 'grab',
-                  // POPRAVLJENO (prelet 303): na mobilnem je vrstica vodoravna
-                  // (glej starsevski div zgoraj) - `width:'100%'` bi vsak gumb
-                  // raztegnil cez celo vrstico, gumbi bi se prekrivali. Na
-                  // mobilnem zato gumb ne skrci vec svoje vsebine.
-                  width: isMobile ? 'auto' : '100%', flexShrink: isMobile ? 0 : undefined, whiteSpace: isMobile ? 'nowrap' : undefined,
-                  padding:'10px', borderRadius:9, marginBottom: isMobile ? 0 : 2, background: active ? T.accentSoft : 'transparent', color: active ? T.accent : T.ink, border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:13, fontWeight: active ? 700 : 500, display:'flex', alignItems:'center', gap:10, textAlign:'left' }}>
-                <span style={{ width:30, height:30, borderRadius:8, background:c.color||T.accent, display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, flexShrink:0 }}>{c.icon}</span>
-                {!isMobile && <span style={{ flex:1 }}>{c.name}</span>}
-                {isMobile && <span>{c.name}</span>}
+                  width:'100%', padding:'10px', borderRadius:9, marginBottom:2, background: active ? T.accentSoft : 'transparent', color: active ? T.accent : T.ink, border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:13, fontWeight: active ? 700 : 500, display:'flex', alignItems:'center', gap:10, textAlign:'left' }}>
+                <span style={{ width:30, height:30, borderRadius:8, background:c.color||T.accent, display:'flex', alignItems:'center', justifyContent:'center', fontSize:15 }}>{c.icon}</span>
+                <span style={{ flex:1 }}>{c.name}</span>
                 {active && <KI name="chev" size={14}/>}
               </button>
             )
@@ -2952,23 +2897,10 @@ function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart
         </div>
       </div>
 
-      {/* Košarica
-          POPRAVLJENO (prelet 303): na namizju ostaja kot tretji stolpec
-          (nespremenjeno). Na mobilnem je bila prej stisnjena v (dejansko
-          neobstojeci, glej opombo pri sidebaru zgoraj) stolpec - zdaj je
-          SKRITA in dostopna prek plavajocega traku na dnu zaslona (glej
-          konec te komponente); ko jo blagajnik odpre, prekrije cel zaslon
-          namesto da bi tekmovala za prostor z artikli. */}
-      {(!isMobile || cartOpen) && (
-      // POZOR: zIndex NAMERNO nizji od skupne komponente `Modal` (50) - ce bi
-      // bil visji, bi placilno okno (in vsi ostali dialogi, ki uporabljajo
-      // `Modal`) pristalo SKRITO ZA to prekrivko, ko se odpre iz kosarice.
-      <div style={ isMobile ? { position:'fixed', inset:0, zIndex:40, background:T.surface, display:'flex', flexDirection:'column' } : undefined }>
+      {/* Košarica */}
       <SaleCart cart={cart} setCart={setCart} adjustQty={adjustQty} activeTable={activeTable} activeCustomer={activeCustomer} setPaymentOpen={setPaymentOpen} totals={totals} setActiveCustomer={setActiveCustomer} customers={posData.customers} cartDiscount={cartDiscount} setCartDiscount={setCartDiscount} cashSession={cashSession} onNeedOpenCash={onNeedOpenCash}
         auth={auth}
         vatRegistered={posData.org?.vat_registered}
-        mobile={isMobile}
-        onCloseMobile={() => setCartOpen(false)}
         onWriteoff={() => setShowWriteoff(true)}
         onHoldOrder={async () => {
           if (cart.length === 0) return
@@ -3048,19 +2980,6 @@ ${cartDiscount > 0 ? `<div style="text-align:right;color:#666">Popust ${fmtPct(c
           if (w) { w.document.write(html); w.document.close() }
         }}
       />
-      </div>
-      )}
-      {/* DODANO (prelet 303): plavajoc trak na dnu za odpiranje kosarice na
-          mobilnem - brez njega bi bila kosarica na telefonu nedosegljiva,
-          saj ni vec stalno viden stolpec. */}
-      {isMobile && !cartOpen && (
-        <button onClick={() => setCartOpen(true)} style={{ position:'fixed', left:12, right:12, bottom:12, zIndex:40, padding:'14px 18px', borderRadius:14, border:'none', background:T.accent, color:'#fff', cursor:'pointer', fontFamily:'inherit', fontWeight:800, fontSize:14, display:'flex', alignItems:'center', justifyContent:'space-between', boxShadow:'0 8px 24px rgba(0,0,0,0.25)' }}>
-          <span style={{ display:'flex', alignItems:'center', gap:8 }}>
-            <KI name="receipt" size={16}/> {cart.length > 0 ? `${cart.reduce((s,l)=>s+l.qty,0)} kos v košarici` : 'Košarica'}
-          </span>
-          <span style={{ fontSize:16 }}>{cart.length > 0 ? eur(totals.total*(1-(cartDiscount||0)/100)) : '→'}</span>
-        </button>
-      )}
       {showWriteoff && (
         <WriteoffModal
           cart={cart}
@@ -3175,7 +3094,7 @@ ${recipientHtml}
   )
 }
 
-function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPaymentOpen, totals, setActiveCustomer, customers, cartDiscount, setCartDiscount, cashSession, onNeedOpenCash, onHoldOrder, onProforma, onWriteoff, auth, vatRegistered, mobile, onCloseMobile }) {
+function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPaymentOpen, totals, setActiveCustomer, customers, cartDiscount, setCartDiscount, cashSession, onNeedOpenCash, onHoldOrder, onProforma, onWriteoff, auth, vatRegistered }) {
   /**
    * POPRAVLJENO (prelet 202): blagajna se je sesula ob kliku na mizo z
    * "Application error: a client-side exception".
@@ -3207,18 +3126,8 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
   const filteredCustomers = customers.filter(c => !custSearch || c.name.toLowerCase().includes(custSearch.toLowerCase()) || (c.phone || '').includes(custSearch))
 
   return (
-    // POPRAVLJENO (prelet 303): na mobilnem to ni vec ozek 340px stolpec
-    // (na telefonu ga sploh ni prostora prikazati zraven artiklov), ampak
-    // zapolni ves prostor prekrivajocega diva iz SaleScreen (glej tam).
-    <div style={ mobile ? { width:'100%', flex:1, background:T.surface, display:'flex', flexDirection:'column', minHeight:0 } : { width:340, background:T.surface, borderLeft:'1px solid '+T.line, display:'flex', flexDirection:'column', flexShrink:0 } }>
+    <div style={{ width:340, background:T.surface, borderLeft:'1px solid '+T.line, display:'flex', flexDirection:'column', flexShrink:0 }}>
       <div style={{ padding:'12px 16px', borderBottom:'1px solid '+T.line, display:'flex', alignItems:'center', gap:8 }}>
-        {/* DODANO (prelet 303): na mobilnem kosarica prekrije cel zaslon,
-            zato potrebuje svoj gumb za zapiranje nazaj na artikle. */}
-        {mobile && (
-          <button onClick={onCloseMobile} style={{ background:'transparent', border:'1px solid '+T.line, borderRadius:8, cursor:'pointer', color:T.ink, padding:6, display:'flex' }}>
-            <KI name="chevD" size={16}/>
-          </button>
-        )}
         <div style={{ flex:1 }}>
           <div style={{ fontSize:10, textTransform:'uppercase', letterSpacing:'0.08em', color:T.muted, fontWeight:700 }}>Naročilo</div>
           <div style={{ fontWeight:700, fontSize:14, marginTop:2 }}>
@@ -15717,23 +15626,16 @@ function KlasikApp() {
     <div style={{ width:'100%', height:'100%', background:T.bg, color:T.ink, fontFamily:'"Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif', fontSize:13, display:'flex', flexDirection:'column', overflow:'hidden', position:'relative' }}>
 
       {/* HEADER */}
-      {/* POPRAVLJENO: glava ni imela `overflowX` niti `flexShrink:0` na svojih
-          neposrednih otrocih - na ozkem (mobilnem) zaslonu se je vsa vsebina
-          stiskala, dokler besedilo ni bilo prisiljeno v prelom PO VSAKI CRKI
-          (navpicni stolpci crk), glava pa je zato zavzela skoraj celoten
-          zaslon in onemogocila skrolanje do vsebine pod njo. Glava zdaj ne
-          skrci vec svojih otrok - ce ne gre vse v sirino, se vodoravno
-          skrola, namesto da bi se besedilo zlomilo. */}
-      <div style={{ background:T.header, color:T.headerInk, padding:'8px 16px', display:'flex', alignItems:'center', gap:14, flexShrink:0, borderBottom:'1px solid '+T.headerLine, minHeight:56, overflowX:'auto' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
+      <div style={{ background:T.header, color:T.headerInk, padding:'8px 16px', display:'flex', alignItems:'center', gap:14, flexShrink:0, borderBottom:'1px solid '+T.headerLine, minHeight:56 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
           <ZnakRacunko size={32}/>
-          <div style={{ lineHeight:1.1, whiteSpace:'nowrap' }}>
+          <div style={{ lineHeight:1.1 }}>
             <div style={{ fontWeight:700, fontSize:14 }}>{posData.businessName || 'Blagajna'}</div>
             <div style={{ fontSize:11, opacity:0.65, marginTop:2 }}>{profile.name}</div>
           </div>
         </div>
 
-        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:14, flexShrink:0 }}>
+        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:14 }}>
           {auth.permissions?.viewSales && (
             <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', lineHeight:1.1 }}>
               <div style={{ fontSize:10, opacity:0.55, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em' }}>Promet</div>
