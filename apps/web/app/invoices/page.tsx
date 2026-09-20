@@ -715,6 +715,13 @@ export default function InvoicesPage() {
                 </div>
                 {jeRazsirjen && (
                   <div style={{ background: '#FAFAF8', padding: '10px 24px 16px', borderBottom: i < invoices.length-1 ? '1px solid #f3f4f6' : undefined }}>
+                    {/* DODANO (prelet 293): besedilo nad tabelo (inv.header_text) -
+                        prosto besedilo, ki ga uporabnik vpise nad postavke racuna
+                        (npr. sklic, obdobje storitve). Doslej v razsirjeni vrstici
+                        ni bilo vidno, ceprav gre za vsebino racuna. */}
+                    {inv.header_text && (
+                      <div style={{ fontSize: 12, color: '#555', marginBottom: 10, whiteSpace: 'pre-wrap' }}>{inv.header_text}</div>
+                    )}
                     {postavke.length === 0 ? (
                       <div style={{ fontSize: 12, color: '#999' }}>Ni podatkov o postavkah.</div>
                     ) : (
