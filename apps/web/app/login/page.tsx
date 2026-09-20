@@ -9,6 +9,8 @@ import { getActiveMembership } from '@/lib/active-org'
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  // DODANO (prelet 297): gumb za prikaz/skritje vpisanega gesla.
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   // PRELET 229: dokler sta nastavljena, cakamo na kodo iz aplikacije.
@@ -204,14 +206,26 @@ export default function LoginPage() {
           </div>
           <div>
             <label className="text-sm text-gray-600 block mb-1">Geslo</label>
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-11 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(s => !s)}
+                tabIndex={-1}
+                aria-label={showPassword ? 'Skrij geslo' : 'Prikaži geslo'}
+                title={showPassword ? 'Skrij geslo' : 'Prikaži geslo'}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 text-sm"
+              >
+                {showPassword ? '🙈' : '👁️'}
+              </button>
+            </div>
           </div>
 
           {error && (
