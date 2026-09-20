@@ -248,7 +248,7 @@ export default function ScanPage() {
         napakaListine = rez.napaka
       }
 
-      const { error: rcpErr } = await supabase.from('receipts').insert({
+      const { data: rcpData, error: rcpErr } = await supabase.from('receipts').insert({
       org_id: org.id,
       vendor: form.vendor,
       receipt_date: form.receipt_date,
@@ -265,12 +265,16 @@ export default function ScanPage() {
       // shranimo v bazo — da se ne izgubi.
       attachment_base64: potListine ? null : surovaListina,
       attachment_type: jePdf ? 'pdf' : (image ? 'image' : null),
-    })
+    }).select('id').single()
     if (rcpErr) { alert('Računa ni bilo mogoče shraniti: ' + rcpErr.message); return }
     if (napakaListine) {
       alert('Strošek je shranjen, listine pa ni bilo mogoče naložiti v hrambo: ' + napakaListine + '\n\nListina je shranjena v bazi kot rezerva.')
     }
 
+    // POPRAVLJENO (prelet 294): brez receipt_id se je ta vnos na Dashboardu
+    // stel kot LOCEN ("nepovezan") odhodek poleg zgornjega receipts zapisa -
+    // isti strosek je bil prikazan DVAKRAT (glej dashboard/page.tsx: filter
+    // !e.receipt_id). Zdaj se pravilno poveze z ravnokar ustvarjenim racunom.
     const { error: kpoErr } = await supabase.from('kpo_entries').insert({
       org_id: org.id,
       entry_date: form.receipt_date,
@@ -281,6 +285,7 @@ export default function ScanPage() {
       vat_in: vatAmount,
       vat_out: 0,
       category: form.category,
+      receipt_id: rcpData?.id ?? null,
     })
     if (kpoErr) { alert('Vnosa v knjigo ni bilo mogoče shraniti: ' + kpoErr.message); return }
 
@@ -349,7 +354,7 @@ export default function ScanPage() {
         const blobP = base64VBlob(base64, 'application/pdf')
         const rezP = await naloziListino(org.id, 'racuni', blobP, `${receiptDate}-${data.vendor || 'listina'}.pdf`)
 
-        const { error: rcpErr2 } = await supabase.from('receipts').insert({
+        const { data: rcpData2, error: rcpErr2 } = await supabase.from('receipts').insert({
           org_id: org.id,
           vendor: data.vendor,
           receipt_date: receiptDate,
@@ -364,8 +369,11 @@ export default function ScanPage() {
           attachment_path: rezP.path,
           attachment_base64: rezP.path ? null : base64, // rezerva, ce storage odpove
           attachment_type: 'pdf',
-        })
+        }).select('id').single()
         if (rcpErr2) { console.error('Računa ni bilo mogoče shraniti:', rcpErr2); napake.push('Računa ni bilo mogoče shraniti: ' + rcpErr2.message); continue }
+        // POPRAVLJENO (prelet 294): glej opombo pri istem popravku zgoraj v tej
+        // datoteki - brez receipt_id se je paketno uvozen strosek na
+        // Dashboardu stel dvakrat.
         const { error: kpoErr3 } = await supabase.from('kpo_entries').insert({
           org_id: org.id,
           entry_date: receiptDate,
@@ -376,6 +384,7 @@ export default function ScanPage() {
           vat_in: vatAmount,
           vat_out: 0,
           category,
+          receipt_id: rcpData2?.id ?? null,
         })
         if (kpoErr3) { console.error('Vnosa v knjigo ni bilo mogoče shraniti:', kpoErr3); napake.push('Vnosa v knjigo ni bilo mogoče shraniti: ' + kpoErr3.message); continue }
         posthog.capture('receipt_saved', { category, amount_net: amountNet, amount_total: amountTotal, vat_rate: vatRate, ai_scanned: true, batch: true })
