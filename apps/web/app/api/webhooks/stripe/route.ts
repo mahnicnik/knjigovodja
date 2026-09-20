@@ -117,6 +117,15 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
 
     if (!integration) {
+      // DODANO (prelet 296): ce nekdo (pomotoma) izklopi integracijo, je bil
+      // to prej NAJTISJI moznii izpad - webhook je tiho vracal 404, brez
+      // sledi v /integracije. Zdaj se zabelezi tudi to.
+      await supabase.from('integration_logs').insert({
+        org_id: orgId,
+        integration_type: 'stripe',
+        status: 'failed',
+        payload: { reason: 'integration_not_active_or_missing' },
+      }).then(() => {}, () => {})
       return NextResponse.json({ error: 'Stripe integracija ni nastavljena' }, { status: 404 })
     }
 
@@ -143,8 +152,21 @@ export async function POST(req: NextRequest) {
     // (dva razlicna objekta z razlicnima ID-jema za isto placilo), kar je
     // ustvarilo PODVOJENE racune. checkout.session.completed pokrije payment
     // linke/checkout, invoice.paid pokrije narocnine.
+    // POPRAVLJENO (prelet 296): "prezrti"/preskoceni dogodki se prej NISO
+    // beleziti nikamor - ce Stripe posilja tip dogodka, ki ga ne pricakujemo
+    // (ali ce se katera od spodnjih preskocnih poti sprozi), v /integracije
+    // ni bilo NOBENE sledi, da je webhook sploh prispel. Ko racun ni nastal,
+    // ni bilo mogoce locevati "webhook ni prispel" od "webhook je prispel,
+    // a smo ga namenoma preskocili". Zdaj beleximo VSAK prejeti dogodek.
     const handledEvents = ['checkout.session.completed', 'invoice.paid']
     if (!handledEvents.includes(event.type)) {
+      await supabase.from('integration_logs').insert({
+        org_id: orgId,
+        integration_type: 'stripe',
+        external_id: event.data?.object?.id ?? null,
+        status: 'skipped',
+        payload: { reason: 'event_type_not_handled', event_type: event.type },
+      }).then(() => {}, () => {})
       return NextResponse.json({ message: `Event ${event.type} ignoriran` }, { status: 200 })
     }
 
@@ -160,6 +182,13 @@ export async function POST(req: NextRequest) {
     // Za enkratna placila (mode:'payment') checkout.session.completed
     // ostane edini/pravilni dogodek - nespremenjeno.
     if (event.type === 'checkout.session.completed' && obj.mode === 'subscription') {
+      await supabase.from('integration_logs').insert({
+        org_id: orgId,
+        integration_type: 'stripe',
+        external_id: obj.id ?? null,
+        status: 'skipped',
+        payload: { reason: 'subscription_checkout_awaiting_invoice_paid', event_type: event.type },
+      }).then(() => {}, () => {})
       return NextResponse.json({ message: 'Checkout za narocnino - caka se invoice.paid' }, { status: 200 })
     }
 
@@ -173,6 +202,14 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
 
     if (existing) {
+      await supabase.from('integration_logs').insert({
+        org_id: orgId,
+        integration_type: 'stripe',
+        external_id: obj.id ?? null,
+        invoice_id: existing.id,
+        status: 'skipped',
+        payload: { reason: 'invoice_already_exists', event_type: event.type },
+      }).then(() => {}, () => {})
       return NextResponse.json({ message: 'Račun že obstaja', invoiceId: existing.id }, { status: 200 })
     }
 
@@ -189,6 +226,13 @@ export async function POST(req: NextRequest) {
     // Znesek je v Stripe vedno v najmanjši enoti valute (centi)
     const amountTotal = (obj.amount_total ?? obj.amount_paid ?? obj.amount ?? 0) / 100
     if (amountTotal <= 0) {
+      await supabase.from('integration_logs').insert({
+        org_id: orgId,
+        integration_type: 'stripe',
+        external_id: obj.id ?? null,
+        status: 'skipped',
+        payload: { reason: 'amount_zero_or_negative', event_type: event.type },
+      }).then(() => {}, () => {})
       return NextResponse.json({ message: 'Znesek 0 — preskočeno' }, { status: 200 })
     }
 
