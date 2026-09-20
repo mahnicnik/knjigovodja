@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { lokalniDatum } from '@/lib/tax-constants'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
@@ -19,6 +19,10 @@ export default function InvoicesPage() {
   const [org, setOrg] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [actionInv, setActionInv] = useState<any>(null)
+  // DODANO (prelet 291): klik na racun razsiri vrstico s postavkami (opis,
+  // cena, datum) - hiter pregled brez odpiranja PDF-ja. Samo en racun
+  // odprt naenkrat, da seznam ostane pregleden.
+  const [expandedInv, setExpandedInv] = useState<string | null>(null)
 
   // C12 (22.8.2026): meni "Vec" se ni zapiral na Esc, njegove vrstice pa so
   // segale cez sirino kartice - naslednji klik je zadel napacno moznost.
@@ -470,10 +474,21 @@ export default function InvoicesPage() {
           <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
             {invoices.filter(inv => showArchived || !inv.archived).map((inv, i) => {
               const s = statusLabel(inv.status, inv.last_email_sent_at)
+              const jeRazsirjen = expandedInv === inv.id
+              const postavke: any[] = Array.isArray(inv.line_items) ? inv.line_items : []
               return (
-                <div key={inv.id} className={`flex items-center flex-wrap gap-4 px-6 py-4 ${i < invoices.length-1 ? 'border-b border-gray-50' : ''}`}>
-                  <div className="flex-1 min-w-[100px]">
-                    <div className="font-medium text-sm text-gray-900 truncate">{inv.client_name}</div>
+                <Fragment key={inv.id}>
+                <div className={`flex items-center flex-wrap gap-4 px-6 py-4 ${i < invoices.length-1 ? 'border-b border-gray-50' : ''}`}>
+                  <div
+                    className="flex-1 min-w-[100px]"
+                    onClick={() => setExpandedInv(jeRazsirjen ? null : inv.id)}
+                    style={{ cursor: 'pointer' }}
+                    title={jeRazsirjen ? 'Skrij postavke' : 'Prikaži postavke'}
+                  >
+                    <div className="font-medium text-sm text-gray-900 truncate">
+                      <span style={{ display: 'inline-block', marginRight: 6, fontSize: 10, color: '#aaa', transform: jeRazsirjen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▶</span>
+                      {inv.client_name}
+                    </div>
                     <div className="text-xs text-gray-500 mt-0.5">
                       #{inv.invoice_number} · {new Date(inv.issue_date).toLocaleDateString('sl-SI')}
                     </div>
@@ -698,6 +713,38 @@ export default function InvoicesPage() {
                     </div>
                   )}
                 </div>
+                {jeRazsirjen && (
+                  <div style={{ background: '#FAFAF8', padding: '10px 24px 16px', borderBottom: i < invoices.length-1 ? '1px solid #f3f4f6' : undefined }}>
+                    {postavke.length === 0 ? (
+                      <div style={{ fontSize: 12, color: '#999' }}>Ni podatkov o postavkah.</div>
+                    ) : (
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                        <thead>
+                          <tr>
+                            <th style={{ textAlign: 'left', padding: '4px 8px', color: '#999', fontWeight: 600 }}>Opis</th>
+                            <th style={{ textAlign: 'right', padding: '4px 8px', color: '#999', fontWeight: 600 }}>Količina</th>
+                            <th style={{ textAlign: 'right', padding: '4px 8px', color: '#999', fontWeight: 600 }}>Cena/enoto</th>
+                            <th style={{ textAlign: 'right', padding: '4px 8px', color: '#999', fontWeight: 600 }}>Znesek</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {postavke.map((p: any, j: number) => {
+                            const znesek = Number(p.quantity || 0) * Number(p.unit_price || 0) * (1 - Number(p.discount_pct || 0) / 100)
+                            return (
+                              <tr key={j} style={{ borderTop: '1px solid #eee' }}>
+                                <td style={{ padding: '5px 8px' }}>{p.description || '—'}</td>
+                                <td style={{ padding: '5px 8px', textAlign: 'right' }}>{p.quantity ?? '—'}</td>
+                                <td style={{ padding: '5px 8px', textAlign: 'right' }}>€{formatEurNumber(Number(p.unit_price || 0))}</td>
+                                <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600 }}>€{formatEurNumber(znesek)}</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                )}
+                </Fragment>
               )
             })}
           </div>

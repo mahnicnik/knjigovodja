@@ -305,11 +305,22 @@ const POROCILA: Porocilo[] = [
 
   /* ── NADZOR ── */
   { id:'storno', skupina:'Nadzor', ime:'Stornacije in vračila', opis:'Vsa vračila z razlogom, blagajnikom in odobritvijo.',
-    stolpci:[{k:'datum',l:'Datum',tip:'datetime'},{k:'znesek',l:'Znesek',tip:'eur'},{k:'nacin',l:'Način'},{k:'razlog',l:'Razlog'},{k:'blagajnik',l:'Blagajnik'},{k:'odobril',l:'Odobril'}],
+    stolpci:[{k:'datum',l:'Datum',tip:'datetime'},{k:'vrsta',l:'Vrsta'},{k:'znesek',l:'Znesek',tip:'eur'},{k:'nacin',l:'Način'},{k:'razlog',l:'Razlog'},{k:'blagajnik',l:'Blagajnik'},{k:'odobril',l:'Odobril'}],
+    // POPRAVLJENO (prelet 291): porocilo je doslej brali SAMO tabelo `refunds`
+    // (delna vracila), medtem ko dejanski gumb "Storno racuna" v blagajni
+    // pise v `orders` (status='voided', voided_at/voided_by/void_reason) -
+    // stornacije zato niso bile nikoli prikazane. Zdaj zdruzimo oba vira.
     nalozi: async (db, od, do_) => {
-      const [{ data, error }, s] = await Promise.all([db.from('refunds').select('*').eq('business_id', BUSINESS_ID).gte('refunded_at', od).lte('refunded_at', do_ + 'T23:59:59').order('refunded_at', { ascending:false }), osebje(db)])
-      if (error) throw error
-      return (data || []).map((r: any) => ({ datum:r.refunded_at, znesek:n2(r.amount), nacin:r.method || '—', razlog:r.reason || '—', blagajnik:s[r.cashier_id] || '—', odobril:s[r.approved_by] || '—' }))
+      const [{ data: refundsData, error: refundsErr }, { data: vojdData, error: voidErr }, s] = await Promise.all([
+        db.from('refunds').select('*').eq('business_id', BUSINESS_ID).gte('refunded_at', od).lte('refunded_at', do_ + 'T23:59:59').order('refunded_at', { ascending:false }),
+        db.from('orders').select('*').eq('business_id', BUSINESS_ID).eq('status', 'voided').gte('voided_at', od).lte('voided_at', do_ + 'T23:59:59').order('voided_at', { ascending:false }),
+        osebje(db),
+      ])
+      if (refundsErr) throw refundsErr
+      if (voidErr) throw voidErr
+      const vracila = (refundsData || []).map((r: any) => ({ datum:r.refunded_at, vrsta:'Vračilo', znesek:n2(r.amount), nacin:r.method || '—', razlog:r.reason || '—', blagajnik:s[r.cashier_id] || '—', odobril:s[r.approved_by] || '—' }))
+      const stornacije = (vojdData || []).map((o: any) => ({ datum:o.voided_at, vrsta:'Storno', znesek:n2(o.total), nacin:'—', razlog:o.void_reason || '—', blagajnik:s[o.voided_by] || '—', odobril:'—' }))
+      return [...vracila, ...stornacije].sort((a, b) => (a.datum < b.datum ? 1 : -1))
     } },
 ]
 
