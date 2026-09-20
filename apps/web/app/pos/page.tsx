@@ -2588,25 +2588,28 @@ function FloorScreen({ spaces, switchToTable, setScreen }) {
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', minHeight:0 }}>
-      <div style={{ padding:'12px 18px', background:T.surface, borderBottom:'1px solid '+T.line, display:'flex', alignItems:'center', gap:10 }}>
-        <div style={{ display:'flex', gap:4, background:T.surface3, padding:4, borderRadius:10 }}>
+      {/* POPRAVLJENO: enak popravek kot pri glavi (overflowX + flexShrink:0
+          na vsakem neposrednem otroku), da imena prostorov ("terasa",
+          "bar", ...) na ozkem zaslonu ne razpadejo v navpicen stolpec crk. */}
+      <div style={{ padding:'12px 18px', background:T.surface, borderBottom:'1px solid '+T.line, display:'flex', alignItems:'center', gap:10, overflowX:'auto' }}>
+        <div style={{ display:'flex', gap:4, background:T.surface3, padding:4, borderRadius:10, flexShrink:0 }}>
           {spaces.map(s => (
-            <button key={s.id} onClick={() => setSelectedSpace(s.id)} style={{ padding:'8px 14px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', border:'none', fontWeight:700, fontSize:13, background: selectedSpace===s.id ? T.header : 'transparent', color: selectedSpace===s.id ? T.headerInk : T.ink, display:'flex', alignItems:'center', gap:8 }}>
+            <button key={s.id} onClick={() => setSelectedSpace(s.id)} style={{ padding:'8px 14px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', border:'none', fontWeight:700, fontSize:13, background: selectedSpace===s.id ? T.header : 'transparent', color: selectedSpace===s.id ? T.headerInk : T.ink, display:'flex', alignItems:'center', gap:8, whiteSpace:'nowrap' }}>
               <span style={{ width:8, height:8, borderRadius:999, background:s.color }}/>
               {s.name}
               <span style={{ opacity:0.6, fontSize:11 }}>{(s.tables || []).filter(t => t.status==='occupied').length}/{(s.tables || []).length}</span>
             </button>
           ))}
         </div>
-        <div style={{ display:'flex', gap:10, marginLeft:16 }}>
+        <div style={{ display:'flex', gap:10, marginLeft:16, flexShrink:0 }}>
           {Object.entries(T.status).map(([k, st]) => (
-            <div key={k} style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, color:T.muted, fontWeight:600 }}>
+            <div key={k} style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, color:T.muted, fontWeight:600, whiteSpace:'nowrap' }}>
               <span style={{ width:9, height:9, borderRadius:999, background:st.dot }}/>{st.label}
             </div>
           ))}
         </div>
-        <div style={{ marginLeft:'auto' }}>
-          <button onClick={() => { switchToTable(null); setScreen('sale') }} style={{ padding:'8px 14px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', background:T.accent, color:'#fff', border:'none', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', gap:6 }}>
+        <div style={{ marginLeft:'auto', flexShrink:0 }}>
+          <button onClick={() => { switchToTable(null); setScreen('sale') }} style={{ padding:'8px 14px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', background:T.accent, color:'#fff', border:'none', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', gap:6, whiteSpace:'nowrap' }}>
             <KI name="plus" size={14}/> Hitra prodaja
           </button>
         </div>
@@ -15626,16 +15629,23 @@ function KlasikApp() {
     <div style={{ width:'100%', height:'100%', background:T.bg, color:T.ink, fontFamily:'"Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif', fontSize:13, display:'flex', flexDirection:'column', overflow:'hidden', position:'relative' }}>
 
       {/* HEADER */}
-      <div style={{ background:T.header, color:T.headerInk, padding:'8px 16px', display:'flex', alignItems:'center', gap:14, flexShrink:0, borderBottom:'1px solid '+T.headerLine, minHeight:56 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+      {/* POPRAVLJENO: glava ni imela `overflowX` niti `flexShrink:0` na svojih
+          neposrednih otrocih - na ozkem (mobilnem) zaslonu se je vsa vsebina
+          stiskala, dokler besedilo ni bilo prisiljeno v prelom PO VSAKI CRKI
+          (navpicni stolpci crk), glava pa je zato zavzela skoraj celoten
+          zaslon in onemogocila skrolanje do vsebine pod njo. Glava zdaj ne
+          skrci vec svojih otrok - ce ne gre vse v sirino, se vodoravno
+          skrola, namesto da bi se besedilo zlomilo. */}
+      <div style={{ background:T.header, color:T.headerInk, padding:'8px 16px', display:'flex', alignItems:'center', gap:14, flexShrink:0, borderBottom:'1px solid '+T.headerLine, minHeight:56, overflowX:'auto' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
           <ZnakRacunko size={32}/>
-          <div style={{ lineHeight:1.1 }}>
+          <div style={{ lineHeight:1.1, whiteSpace:'nowrap' }}>
             <div style={{ fontWeight:700, fontSize:14 }}>{posData.businessName || 'Blagajna'}</div>
             <div style={{ fontSize:11, opacity:0.65, marginTop:2 }}>{profile.name}</div>
           </div>
         </div>
 
-        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:14 }}>
+        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:14, flexShrink:0 }}>
           {auth.permissions?.viewSales && (
             <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', lineHeight:1.1 }}>
               <div style={{ fontSize:10, opacity:0.55, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em' }}>Promet</div>
