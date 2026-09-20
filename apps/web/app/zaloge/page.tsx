@@ -45,6 +45,7 @@ export default function ZalogePage() {
   const supabase = createClient()
 
   const [orgId, setOrgId] = useState<string | null>(null)
+  const [vatRegistered, setVatRegistered] = useState<boolean>(true)
   // DODANO (26.8.2026): uvoz dobavnice. Blagajna ga je imela, portal pa ne -
   // stranka brez blagajne je morala vsak artikel vnesti rocno.
   const [uvozModal, setUvozModal] = useState<any>(null)
@@ -139,6 +140,7 @@ export default function ZalogePage() {
     if (!member) return
     setOrgId(member.org_id)
     setPosBusinessId(((member as any).organizations?.pos_business_id) ?? null)
+    setVatRegistered(!!((member as any).organizations?.vat_registered))
 
     const [itemRes, movRes] = await Promise.all([
       supabase.from('inventory_items').select('*').eq('org_id', member.org_id).order('name'),
@@ -178,7 +180,7 @@ export default function ZalogePage() {
         const { error: updateError } = await supabase.from('inventory_items').update({
           name: itemModal.name, sku: itemModal.sku || null, category: itemModal.category || null,
           unit: itemModal.unit ?? 'kos', purchase_price: itemModal.purchase_price ?? 0,
-          sale_price: itemModal.sale_price ?? 0, vat_rate: itemModal.vat_rate ?? 22,
+          sale_price: itemModal.sale_price ?? 0, vat_rate: vatRegistered ? (itemModal.vat_rate ?? 22) : 0,
           min_stock: itemModal.min_stock ?? 0,
         }).eq('id', itemModal.id)
         if (updateError) throw updateError
@@ -187,7 +189,7 @@ export default function ZalogePage() {
           org_id: orgId, name: itemModal.name, sku: itemModal.sku || null,
           category: itemModal.category || null, unit: itemModal.unit ?? 'kos',
           purchase_price: itemModal.purchase_price ?? 0, sale_price: itemModal.sale_price ?? 0,
-          vat_rate: itemModal.vat_rate ?? 22, current_stock: itemModal.current_stock ?? 0,
+          vat_rate: vatRegistered ? (itemModal.vat_rate ?? 22) : 0, current_stock: itemModal.current_stock ?? 0,
           min_stock: itemModal.min_stock ?? 0,
         }).select().single()
         if (insertError) throw insertError
@@ -278,7 +280,7 @@ export default function ZalogePage() {
                 Takrat mora obstajati pot naprej, sicer prevzem obstane. */}
             <button onClick={() => setRocnaDobavnica({ dobavitelj:'', stevilka:'', datum:new Date().toISOString().slice(0,10), vrstice:[{ itemId:'', kolicina:0, cena:0 }] })}
               style={{ background: 'rgba(255,255,255,0.12)', color: '#fff', border: 0, padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>✍️ Ročni vnos</button>
-            <button onClick={() => setItemModal({ unit: 'kos', vat_rate: 22, current_stock: 0, min_stock: 0 })} style={{ background: '#1D9E75', color: '#fff', border: 0, padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>+ Nov artikel</button>
+            <button onClick={() => setItemModal({ unit: 'kos', vat_rate: vatRegistered ? 22 : 0, current_stock: 0, min_stock: 0 })} style={{ background: '#1D9E75', color: '#fff', border: 0, padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>+ Nov artikel</button>
           </div>
         </div>
 
@@ -610,14 +612,16 @@ export default function ZalogePage() {
                   <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Prodajna cena (€)</label>
                   <input type="number" onFocus={e => e.target.select()} step="0.01" min="0" value={itemModal.sale_price ?? 0} onChange={e => setItemModal(p => ({ ...p, sale_price: Number(e.target.value) }))} style={inp} />
                 </div>
-                <div>
-                  <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>DDV %</label>
-                  <select value={itemModal.vat_rate ?? 22} onChange={e => setItemModal(p => ({ ...p, vat_rate: Number(e.target.value) }))} style={inp}>
-                    <option value={0}>0%</option>
-                    <option value={9.5}>9.5%</option>
-                    <option value={22}>22%</option>
-                  </select>
-                </div>
+                {vatRegistered && (
+                  <div>
+                    <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>DDV %</label>
+                    <select value={itemModal.vat_rate ?? 22} onChange={e => setItemModal(p => ({ ...p, vat_rate: Number(e.target.value) }))} style={inp}>
+                      <option value={0}>0%</option>
+                      <option value={9.5}>9.5%</option>
+                      <option value={22}>22%</option>
+                    </select>
+                  </div>
+                )}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 {!itemModal.id && (

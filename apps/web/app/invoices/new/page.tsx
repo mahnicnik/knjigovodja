@@ -413,11 +413,15 @@ export default function NewInvoicePage() {
                       </div>
                       <div>
                         <label style={{ fontSize:'10px', color:'#888', display:'block', marginBottom:'3px' }}>DDV</label>
-                        <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none">
-                          <option value={22}>22 %</option>
-                          <option value={9.5}>9,5 %</option>
-                          <option value={0}>0 %</option>
-                        </select>
+                        {org?.vat_registered ? (
+                          <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none">
+                            <option value={22}>22 %</option>
+                            <option value={9.5}>9,5 %</option>
+                            <option value={0}>0 %</option>
+                          </select>
+                        ) : (
+                          <div className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm text-gray-400 bg-gray-50">0 % (ni zavezanec)</div>
+                        )}
                       </div>
                       <div>
                         <label style={{ fontSize:'10px', color:'#888', display:'block', marginBottom:'3px' }}>Popust %</label>
@@ -630,10 +634,14 @@ export default function NewInvoicePage() {
                     </div>
                     <div>
                       <label className="text-xs text-gray-400">DDV</label>
-                      <select value={kalkStopnja} onChange={e => setKalkStopnja(+e.target.value)}
-                        className="w-full border border-gray-200 rounded-xl px-2 py-3 text-sm bg-white focus:outline-none">
-                        <option value={22}>22 %</option><option value={9.5}>9,5 %</option><option value={5}>5 %</option><option value={0}>0 %</option>
-                      </select>
+                      {org?.vat_registered ? (
+                        <select value={kalkStopnja} onChange={e => setKalkStopnja(+e.target.value)}
+                          className="w-full border border-gray-200 rounded-xl px-2 py-3 text-sm bg-white focus:outline-none">
+                          <option value={22}>22 %</option><option value={9.5}>9,5 %</option><option value={5}>5 %</option><option value={0}>0 %</option>
+                        </select>
+                      ) : (
+                        <div className="w-full border border-gray-200 rounded-xl px-2 py-3 text-sm text-gray-400 bg-gray-50 text-center">0 %</div>
+                      )}
                     </div>
                   </div>
 
@@ -652,7 +660,7 @@ export default function NewInvoicePage() {
                       // sta se prepisala in cena se ni vpisala.
                       updateItemFields(kalkulator.vrstica, {
                         unit_price: kalkIzracun.neto,
-                        vat_rate: Number(kalkStopnja),
+                        vat_rate: org?.vat_registered ? Number(kalkStopnja) : 0,
                       })
                       setKalkulator(null)
                     }}
@@ -683,9 +691,13 @@ export default function NewInvoicePage() {
                       className="mt-1 w-full text-[10px] text-gray-400 hover:text-gray-900 transition-colors">iz cene z DDV</button>
                   </div>
                   <div className="col-span-2">
-                    <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-2 py-2 text-sm focus:outline-none bg-white">
-                      <option value={22}>22 %</option><option value={9.5}>9,5 %</option><option value={0}>0 %</option>
-                    </select>
+                    {org?.vat_registered ? (
+                      <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-2 py-2 text-sm focus:outline-none bg-white">
+                        <option value={22}>22 %</option><option value={9.5}>9,5 %</option><option value={0}>0 %</option>
+                      </select>
+                    ) : (
+                      <div className="w-full border border-gray-200 rounded-xl px-2 py-2 text-sm text-gray-400 bg-gray-50 text-center">0 % (ni zavezanec)</div>
+                    )}
                   </div>
                   <div className="col-span-1"><input type="number" onFocus={e => e.target.select()} min={0} max={100} value={item.discount_pct || 0} onChange={e => updateItem(i, 'discount_pct', +e.target.value)} style={{ MozAppearance: 'textfield' as any }} className="w-full border border-gray-200 rounded-xl px-1 py-2 text-sm focus:outline-none text-center [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></div>
                   <div className="col-span-2 flex items-center justify-end gap-1">

@@ -87,9 +87,10 @@ export default function BlagajnaPage() {
     })
   }
 
+  const vatRegistered = !!org?.vat_registered
   const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0)
-  const vat22 = cart.filter(i => i.vat_rate === 22).reduce((s, i) => s + i.price * i.qty * 0.22 / 1.22, 0)
-  const vat95 = cart.filter(i => i.vat_rate === 9.5).reduce((s, i) => s + i.price * i.qty * 0.095 / 1.095, 0)
+  const vat22 = vatRegistered ? cart.filter(i => i.vat_rate === 22).reduce((s, i) => s + i.price * i.qty * 0.22 / 1.22, 0) : 0
+  const vat95 = vatRegistered ? cart.filter(i => i.vat_rate === 9.5).reduce((s, i) => s + i.price * i.qty * 0.095 / 1.095, 0) : 0
   const total = subtotal
   const change = parseFloat(cashGiven) - total
 
@@ -138,7 +139,7 @@ export default function BlagajnaPage() {
       id: Date.now().toString(),
       name: newProduct.name,
       price: parseFloat(newProduct.price),
-      vat_rate: parseFloat(newProduct.vat_rate),
+      vat_rate: vatRegistered ? parseFloat(newProduct.vat_rate) : 0,
       category: newProduct.category,
       color: newProduct.color,
     }
@@ -219,9 +220,9 @@ ${receipt.change > 0 ? `<div class="row"><span>Vračilo</span><span>€${formatE
 <div class="row"><span>Gotovina:</span><span>€${formatEurNumber(todayCash)}</span></div>
 <div class="row"><span>Kartica:</span><span>€${formatEurNumber(todayCard)}</span></div>
 <div class="line"></div>
-<div class="row"><span>Osnova brez DDV:</span><span>€${formatEurNumber(todayNet)}</span></div>
+${vatRegistered ? `<div class="row"><span>Osnova brez DDV:</span><span>€${formatEurNumber(todayNet)}</span></div>
 ${todayVat22 > 0 ? `<div class="row"><span>DDV 22%:</span><span>€${formatEurNumber(todayVat22)}</span></div>` : ''}
-${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${formatEurNumber(todayVat95)}</span></div>` : ''}
+${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${formatEurNumber(todayVat95)}</span></div>` : ''}` : ''}
 <div class="line"></div>
 <div class="row big"><span>SKUPAJ PROMET:</span><span>€${formatEurNumber(todayTotal)}</span></div>
 <div class="line"></div>
@@ -285,14 +286,16 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${formatEurN
                   placeholder="Naziv *"
                   className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none" />
                 <input type="number" onFocus={e => e.target.select()} value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})}
-                  placeholder="Cena z DDV *"
+                  placeholder={vatRegistered ? "Cena z DDV *" : "Cena *"}
                   className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none" />
-                <select value={newProduct.vat_rate} onChange={e => setNewProduct({...newProduct, vat_rate: e.target.value})}
-                  className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none">
-                  <option value="22">DDV 22%</option>
-                  <option value="9.5">DDV 9.5%</option>
-                  <option value="0">Brez DDV</option>
-                </select>
+                {vatRegistered && (
+                  <select value={newProduct.vat_rate} onChange={e => setNewProduct({...newProduct, vat_rate: e.target.value})}
+                    className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none">
+                    <option value="22">DDV 22%</option>
+                    <option value="9.5">DDV 9.5%</option>
+                    <option value="0">Brez DDV</option>
+                  </select>
+                )}
                 <input value={newProduct.category} onChange={e => setNewProduct({...newProduct, category: e.target.value})}
                   placeholder="Kategorija"
                   className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none" />
@@ -312,7 +315,7 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${formatEurN
                   <div key={p.id} className={`${p.color} rounded-2xl p-4 relative`}>
                     <div className="font-medium text-sm">{p.name}</div>
                     <div className="text-lg font-bold mt-1">€{formatEurNumber(p.price)}</div>
-                    <div className="text-xs opacity-75">{p.vat_rate}% DDV</div>
+                    {vatRegistered && <div className="text-xs opacity-75">{p.vat_rate}% DDV</div>}
                     <button onClick={() => saveProducts(products.filter(x => x.id !== p.id))}
                       className="absolute top-2 right-2 text-white opacity-60 hover:opacity-100">✕</button>
                   </div>
@@ -374,7 +377,7 @@ ${todayVat95 > 0 ? `<div class="row"><span>DDV 9.5%:</span><span>€${formatEurN
                       <div className="font-medium text-sm mb-1">{product.name}</div>
                       {product.category && <div className="text-xs opacity-75 mb-2">{product.category}</div>}
                       <div className="text-2xl font-bold">€{formatEurNumber(product.price)}</div>
-                      <div className="text-xs opacity-75 mt-1">DDV {product.vat_rate}%</div>
+                      {vatRegistered && <div className="text-xs opacity-75 mt-1">DDV {product.vat_rate}%</div>}
                     </button>
                   ))}
                 </div>

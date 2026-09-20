@@ -917,7 +917,7 @@ function ModalHeader({ title, onClose }) {
 // ================================================================
 // PAYMENT MODAL — real Supabase order + payment
 // ================================================================
-function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, onCancel, onComplete }) {
+function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, onCancel, onComplete, vatRegistered }) {
   const [method, setMethod] = useState('cash')
   const [tipPct, setTipPct] = useState(0)
   const [given, setGiven] = useState('')
@@ -1855,7 +1855,7 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
           {discount > 0 && <SRow label={`Popust ${discount}%`} v={-total*discount/100}/>}
           {tipPct > 0 && <SRow label={`Napitnina ${tipPct}%`} v={total*tipPct/100}/>}
           <div style={{ marginTop:'auto', paddingTop:12, borderTop:'1px solid rgba(0,0,0,0.08)' }}>
-            <SRow label="DDV" v={vatBreakdownForCart(cart, total > 0 ? finalTotal / total : 1).vat} muted/>
+            {vatRegistered !== false && <SRow label="DDV" v={vatBreakdownForCart(cart, total > 0 ? finalTotal / total : 1).vat} muted/>}
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginTop:6 }}>
               <div style={{ fontWeight:700, fontSize:14 }}>Skupaj</div>
               <div style={{ fontWeight:800, fontSize:26, fontVariantNumeric:'tabular-nums' }}>{eur(finalTotal)}</div>
@@ -1965,7 +1965,7 @@ async function autoPrint(data) {
           name: l.name,
           qty: Number(l.qty),
           unit_price: Number(l.unitPrice||l.unit_price||0),
-          vat_rate: Number(l.vat_rate ?? 22),
+          vat_rate: data.org?.vat_registered ? Number(l.vat_rate ?? 22) : 0,
         })),
         subtotal: Number(data.subtotal||data.total||0),
         discount_pct: data.discount_pct || 0,
@@ -2018,7 +2018,7 @@ async function autoPrint(data) {
           name: l.name,
           qty: Number(l.qty),
           unit_price: Number(l.unitPrice||l.unit_price||0),
-          vat_rate: Number(l.vat_rate ?? 22),
+          vat_rate: data.org?.vat_registered ? Number(l.vat_rate ?? 22) : 0,
         })),
         subtotal: Number(data.subtotal||data.total||0),
         discount_pct: data.discount_pct || 0,
@@ -2645,7 +2645,7 @@ function FloorScreen({ spaces, switchToTable, setScreen }) {
 // ─────────────────────────────────────────────────────────────────
 // ODPIS / LASTNA PORABA / REPREZENTANCA MODAL
 // ─────────────────────────────────────────────────────────────────
-function WriteoffModal({ cart, auth, onClose, onDone }) {
+function WriteoffModal({ cart, auth, onClose, onDone, vatRegistered }) {
   const [reason, setReason] = React.useState('odpis')
   const [note, setNote] = React.useState('')
   const [saving, setSaving] = React.useState(false)
@@ -2675,7 +2675,7 @@ function WriteoffModal({ cart, auth, onClose, onDone }) {
         reason,
         items: cart.map(l => ({ item_id: l.id, name: l.name, qty: l.qty, unit_price: l.price, vat_rate: l.vat_rate ?? 22 })),
         total_cost: totalCost,
-        vat_self_assessed: reason === 'lastna_poraba' ? vatOnCost : 0,
+        vat_self_assessed: (vatRegistered !== false && reason === 'lastna_poraba') ? vatOnCost : 0,
         note: note || null,
         // POPRAVLJENO (16.8.2026): prej identiteta NAPRAVE (na skupnem terminalu
         // vedno ista oseba) - odpis je bil pripisan napacnemu blagajniku.
@@ -2727,7 +2727,7 @@ function WriteoffModal({ cart, auth, onClose, onDone }) {
           <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
             <span>Nabavna vrednost:</span><span style={{ fontWeight:700 }}>€{totalCost.toFixed(2)}</span>
           </div>
-          {reason === 'lastna_poraba' && (
+          {vatRegistered !== false && reason === 'lastna_poraba' && (
             <div style={{ display:'flex', justifyContent:'space-between', color:T.accent }}>
               <span>DDV za samoobdavčitev:</span><span style={{ fontWeight:700 }}>€{vatOnCost.toFixed(2)}</span>
             </div>
@@ -2900,6 +2900,7 @@ function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart
       {/* Košarica */}
       <SaleCart cart={cart} setCart={setCart} adjustQty={adjustQty} activeTable={activeTable} activeCustomer={activeCustomer} setPaymentOpen={setPaymentOpen} totals={totals} setActiveCustomer={setActiveCustomer} customers={posData.customers} cartDiscount={cartDiscount} setCartDiscount={setCartDiscount} cashSession={cashSession} onNeedOpenCash={onNeedOpenCash}
         auth={auth}
+        vatRegistered={posData.org?.vat_registered}
         onWriteoff={() => setShowWriteoff(true)}
         onHoldOrder={async () => {
           if (cart.length === 0) return
@@ -2931,7 +2932,7 @@ function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart
               receipt_number: num,
               cashier: auth?.user?.name || '',
               date: new Date().toLocaleString('sl-SI'),
-              items: cart.map((l:any) => ({ name: l.name, qty: Number(l.qty), unit_price: Number(l.price), vat_rate: Number(l.vat_rate ?? 22) })),
+              items: cart.map((l:any) => ({ name: l.name, qty: Number(l.qty), unit_price: Number(l.price), vat_rate: posData.org?.vat_registered ? Number(l.vat_rate ?? 22) : 0 })),
               subtotal: totals.sub,
               discount_amount: totals.total - total,
               tip: 0, total,
@@ -2983,6 +2984,7 @@ ${cartDiscount > 0 ? `<div style="text-align:right;color:#666">Popust ${fmtPct(c
         <WriteoffModal
           cart={cart}
           auth={auth}
+          vatRegistered={posData.org?.vat_registered}
           onClose={()=>setShowWriteoff(false)}
           onDone={()=>{ setCart([]); posData.refresh() }}
         />
@@ -3049,14 +3051,14 @@ th{background:#f5f5f5;font-weight:bold}.right{text-align:right}
   </div>
 </div>
 ${recipientHtml}
-<table><thead><tr><th>Artikel</th><th class="right">Kol.</th><th class="right">Cena/kos</th><th class="right">DDV%</th><th class="right">Skupaj</th></tr></thead>
-<tbody>${cart.map((l:any) => `<tr><td>${escapeHtml(l.name)}</td><td class="right">${l.qty}</td><td class="right">${eur2(Number(l.price))}</td><td class="right">${l.vat_rate ?? 22}%</td><td class="right">${eur2(Number(l.price)*Number(l.qty))}</td></tr>`).join('')}
+<table><thead><tr><th>Artikel</th><th class="right">Kol.</th><th class="right">Cena/kos</th>${posData.org?.vat_registered !== false ? '<th class="right">DDV%</th>' : ''}<th class="right">Skupaj</th></tr></thead>
+<tbody>${cart.map((l:any) => `<tr><td>${escapeHtml(l.name)}</td><td class="right">${l.qty}</td><td class="right">${eur2(Number(l.price))}</td>${posData.org?.vat_registered !== false ? `<td class="right">${l.vat_rate ?? 22}%</td>` : ''}<td class="right">${eur2(Number(l.price)*Number(l.qty))}</td></tr>`).join('')}
 </tbody></table>
 <div style="display:flex;justify-content:flex-end">
   <div style="min-width:280px">
     ${cartDiscount > 0 ? `<div style="display:flex;justify-content:space-between;color:#666;padding:4px 0"><span>Popust ${fmtPct(cartDiscount)}%:</span><span>-${eur2(totals.total-total)}</span></div>` : ''}
-    <div style="display:flex;justify-content:space-between;color:#666;padding:4px 0;border-top:1px solid #ddd;margin-top:4px"><span>Osnova (brez DDV):</span><span>${eur2(vatBreakdownForCart(cart, totals.total > 0 ? total / totals.total : 1).net)}</span></div>
-    ${vatBreakdownForCart(cart, totals.total > 0 ? total / totals.total : 1).byRate.map(r => `<div style="display:flex;justify-content:space-between;color:#666;padding:4px 0"><span>DDV ${r.rate}%:</span><span>${eur2(r.vat)}</span></div>`).join('')}
+    ${posData.org?.vat_registered !== false ? `<div style="display:flex;justify-content:space-between;color:#666;padding:4px 0;border-top:1px solid #ddd;margin-top:4px"><span>Osnova (brez DDV):</span><span>${eur2(vatBreakdownForCart(cart, totals.total > 0 ? total / totals.total : 1).net)}</span></div>
+    ${vatBreakdownForCart(cart, totals.total > 0 ? total / totals.total : 1).byRate.map(r => `<div style="display:flex;justify-content:space-between;color:#666;padding:4px 0"><span>DDV ${r.rate}%:</span><span>${eur2(r.vat)}</span></div>`).join('')}` : ''}
     <div style="display:flex;justify-content:space-between;font-size:18px;font-weight:bold;border-top:2px solid #000;padding-top:8px;margin-top:4px"><span>SKUPAJ:</span><span>${eur2(total)}</span></div>
   </div>
 </div>
@@ -3092,7 +3094,7 @@ ${recipientHtml}
   )
 }
 
-function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPaymentOpen, totals, setActiveCustomer, customers, cartDiscount, setCartDiscount, cashSession, onNeedOpenCash, onHoldOrder, onProforma, onWriteoff, auth }) {
+function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPaymentOpen, totals, setActiveCustomer, customers, cartDiscount, setCartDiscount, cashSession, onNeedOpenCash, onHoldOrder, onProforma, onWriteoff, auth, vatRegistered }) {
   /**
    * POPRAVLJENO (prelet 202): blagajna se je sesula ob kliku na mizo z
    * "Application error: a client-side exception".
@@ -3286,17 +3288,19 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
         <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:4, color:T.muted }}>
           <span>Vmesna</span><span>{eur(totals.sub)}</span>
         </div>
-        <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:10, color:T.muted }}>
-          {totals.vatByRate && Object.keys(totals.vatByRate).length > 0 ? (
-            Object.entries(totals.vatByRate).map(([rate, amt]) => (
-              <React.Fragment key={rate}>
-                <span>DDV {rate}%</span><span>{eur(amt)}</span>
-              </React.Fragment>
-            ))
-          ) : (
-            <><span>DDV</span><span>{eur(totals.ddv)}</span></>
-          )}
-        </div>
+        {vatRegistered !== false && (
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:10, color:T.muted }}>
+            {totals.vatByRate && Object.keys(totals.vatByRate).length > 0 ? (
+              Object.entries(totals.vatByRate).map(([rate, amt]) => (
+                <React.Fragment key={rate}>
+                  <span>DDV {rate}%</span><span>{eur(amt)}</span>
+                </React.Fragment>
+              ))
+            ) : (
+              <><span>DDV</span><span>{eur(totals.ddv)}</span></>
+            )}
+          </div>
+        )}
         {cartDiscount>0 && (
           <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:4, color:T.accent }}>
             <span>Popust {fmtPct(cartDiscount)}%</span><span>-{eur(totals.total*cartDiscount/100)}</span>
@@ -6653,7 +6657,7 @@ function InventoryScreen({ posData }) {
     if (!itemModal?.name?.trim()) { showInvToast('Ime je obvezno',false); return }
     const itemType = itemModal?.item_type || 'simple'
     if (itemType !== 'ingredient' && (!itemModal.price || Number(itemModal.price)<=0)) { showInvToast('Prodajna cena mora biti > 0',false); return }
-    if (itemModal.vat_rate===undefined || itemModal.vat_rate==='') { showInvToast('DDV stopnja je obvezna',false); return }
+    if (posData.org?.vat_registered && (itemModal.vat_rate===undefined || itemModal.vat_rate==='')) { showInvToast('DDV stopnja je obvezna',false); return }
     // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
     // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
     // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
@@ -6665,7 +6669,7 @@ function InventoryScreen({ posData }) {
         business_id:BUSINESS_ID, category_id:itemModal.category_id||null,
         name:itemModal.name, code:itemModal.code||null,
         price:itemModal.price?Number(itemModal.price):0,
-        unit:itemModal.unit||'kos', vat_rate:Number(itemModal.vat_rate),
+        unit:itemModal.unit||'kos', vat_rate:posData.org?.vat_registered ? Number(itemModal.vat_rate) : 0,
         stock:itemModal.stock!=null&&itemModal.stock!==''?Number(itemModal.stock):null,
         fav:!!itemModal.fav, kitchen:!!itemModal.kitchen, bookable:!!itemModal.bookable,
         duration_min:itemModal.bookable&&itemModal.duration_min?Number(itemModal.duration_min):null,
@@ -7435,24 +7439,28 @@ function InventoryScreen({ posData }) {
                   </select>
                 </Field>
               </div>
-              <VatExemptionPicker
-                vatRate={itemModal?.vat_rate}
-                code={itemModal?.vat_exemption_code}
-                customText={itemModal?.vat_exemption_custom_text}
-                onCodeChange={c => setItemModal(p => ({ ...p, vat_exemption_code: c }))}
-                onCustomTextChange={t => setItemModal(p => ({ ...p, vat_exemption_custom_text: t }))}
-                inputStyle={inp}
-              />
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-                <Field label="DDV stopnja *">
-                  <select value={itemModal?.vat_rate??''} onChange={e=>setItemModal(p=>({...p,vat_rate:e.target.value}))} style={inp}>
-                    <option value="">— izberi DDV —</option>
-                    <option value={0}>0% (oproščeno)</option>
-                    <option value={5}>5% (knjige, časopisi)</option>
-                    <option value={9.5}>9.5% (gostinstvo, šport)</option>
-                    <option value={22}>22% (splošna)</option>
-                  </select>
-                </Field>
+              {posData.org?.vat_registered && (
+                <VatExemptionPicker
+                  vatRate={itemModal?.vat_rate}
+                  code={itemModal?.vat_exemption_code}
+                  customText={itemModal?.vat_exemption_custom_text}
+                  onCodeChange={c => setItemModal(p => ({ ...p, vat_exemption_code: c }))}
+                  onCustomTextChange={t => setItemModal(p => ({ ...p, vat_exemption_custom_text: t }))}
+                  inputStyle={inp}
+                />
+              )}
+              <div style={{ display:'grid', gridTemplateColumns: posData.org?.vat_registered ? '1fr 1fr' : '1fr', gap:10 }}>
+                {posData.org?.vat_registered && (
+                  <Field label="DDV stopnja *">
+                    <select value={itemModal?.vat_rate??''} onChange={e=>setItemModal(p=>({...p,vat_rate:e.target.value}))} style={inp}>
+                      <option value="">— izberi DDV —</option>
+                      <option value={0}>0% (oproščeno)</option>
+                      <option value={5}>5% (knjige, časopisi)</option>
+                      <option value={9.5}>9.5% (gostinstvo, šport)</option>
+                      <option value={22}>22% (splošna)</option>
+                    </select>
+                  </Field>
+                )}
                 <Field label="Šifra (koda)">
                   <input value={itemModal?.code||''} onChange={e=>setItemModal(p=>({...p,code:e.target.value.toUpperCase()}))} placeholder="K01" style={{...inp,fontFamily:'monospace'}}/>
                 </Field>
@@ -8617,7 +8625,7 @@ function ZReportModal({ posData, onClose }) {
                 Z-porocilo tega razdelka doslej SPLOH ni imelo, ceprav je to
                 podatek, ki ga racunovodja za DDV obracun potrebuje najbolj.
                 Brez njega je moral razclenitev iskati po posameznih racunih. */}
-            {(data.ddvPoStopnjah || []).length > 0 && (
+            {posData?.org?.vat_registered && (data.ddvPoStopnjah || []).length > 0 && (
               <div style={{ marginBottom:16 }}>
                 <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>DDV PO STOPNJAH</div>
                 <div style={{ background:T.surface, borderRadius:10, border:'1px solid '+T.line, padding:'4px 14px' }}>
@@ -9385,6 +9393,7 @@ ${lines.map(l => `
 ${(() => {
   // OBRACUN DDV (dodano 25.8.2026): storno je davcni dokument in mora imeti
   // enak davcni del kot original, le z nasprotnim predznakom.
+  if (!org?.vat_registered) return ''
   const poStopnji = new Map()
   for (const l of (lines || [])) {
     const bruto = Number(l.total ?? Number(l.qty || 0) * Number(l.unit_price || 0))
@@ -9401,7 +9410,7 @@ ${(() => {
     .join('')
   return `<div class="s b">OBRAČUN DDV</div>${vrstice}<div class="dl"></div>`
 })()}
-${(vatExemptions || []).length > 0 ? `
+${(org?.vat_registered && (vatExemptions || []).length > 0) ? `
 <div class="s" style="margin-top:4px">${(vatExemptions || []).map(t => escapeHtml(t)).join('<br/>')}</div>
 <div class="dl"></div>` : ''}
 ${voidEor ? `
@@ -10998,7 +11007,7 @@ function ReportsScreen({ posData, auth, setScreen }) {
       </div>
       {pogled === 'knjiznica' && (
         <div style={{ flex:1, minHeight:0, borderRadius:12, border:'1px solid '+T.line, overflow:'hidden', display:'flex' }}>
-          <div style={{ flex:1, minHeight:0 }}><PorocilaKnjiznica /></div>
+          <div style={{ flex:1, minHeight:0 }}><PorocilaKnjiznica vatRegistered={!!org?.vat_registered} /></div>
         </div>
       )}
       {pogled === 'pregled' && (<>
@@ -11454,7 +11463,7 @@ function AdminScreen({ auth, posData }) {
         {section==='rojstni'    && <RojstniDneviSection posData={posData}/>}
         {section==='kuhinja'    && <KuhinjaSection posData={posData}/>}
         {section==='autolock'   && <AutolockSection auth={auth}/>}
-        {section==='furs'       && <FursSection/>}
+        {section==='furs'       && <FursSection posData={posData}/>}
         {section==='akt'        && <InterniAktSection posData={posData}/>}
         {section==='profile'    && <ProfileSection posData={posData}/>}
         {section==='inventura'  && <InventuraScreen posData={posData} auth={auth}/>}
@@ -11754,7 +11763,7 @@ function CenikImportModal({ onClose, posData }) {
         category: it.category || '',
         unit: it.unit || 'kos',
         price: Number(it.price) || 0,
-        vat_rate: Number(it.vat_rate) ?? 22,
+        vat_rate: posData.org?.vat_registered ? (Number(it.vat_rate) ?? 22) : 0,
         selected: true,
       })))
     } catch (e) {
@@ -11880,18 +11889,20 @@ function CenikImportModal({ onClose, posData }) {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: '45vh', overflowY: 'auto' }}>
               {items.map((it, i) => (
-                <div key={i} style={{ display: 'grid', gridTemplateColumns: '20px 2fr 1fr 70px 60px 60px 24px', gap: 6, alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #f5f5f5' }}>
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: posData.org?.vat_registered ? '20px 2fr 1fr 70px 60px 60px 24px' : '20px 2fr 1fr 70px 60px 24px', gap: 6, alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #f5f5f5' }}>
                   <input type="checkbox" checked={it.selected} onChange={e => updateItem(i, 'selected', e.target.checked)} />
                   <input value={it.name} onChange={e => updateItem(i, 'name', e.target.value)} style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '5px 7px', fontSize: 12 }} />
                   <input value={it.category} onChange={e => updateItem(i, 'category', e.target.value)} placeholder="Kategorija" style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '5px 7px', fontSize: 12 }} />
                   <input value={it.unit} onChange={e => updateItem(i, 'unit', e.target.value)} style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '5px 7px', fontSize: 12, textAlign: 'center' }} />
                   <input type="number" onFocus={e => e.target.select()} step="0.01" value={it.price} onChange={e => updateItem(i, 'price', Number(e.target.value))} style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '5px 7px', fontSize: 12, textAlign: 'right' }} />
-                  <select value={it.vat_rate} onChange={e => updateItem(i, 'vat_rate', Number(e.target.value))} style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '4px 2px', fontSize: 12 }}>
-                    <option value={22}>22%</option>
-                    <option value={9.5}>9.5%</option>
-                    <option value={5}>5%</option>
-                    <option value={0}>0%</option>
-                  </select>
+                  {posData.org?.vat_registered && (
+                    <select value={it.vat_rate} onChange={e => updateItem(i, 'vat_rate', Number(e.target.value))} style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '4px 2px', fontSize: 12 }}>
+                      <option value={22}>22%</option>
+                      <option value={9.5}>9.5%</option>
+                      <option value={5}>5%</option>
+                      <option value={0}>0%</option>
+                    </select>
+                  )}
                   <button onClick={() => removeItem(i)} style={{ background: 'none', border: 0, color: '#aaa', cursor: 'pointer', fontSize: 16 }}>×</button>
                 </div>
               ))}
@@ -12006,7 +12017,7 @@ function CatalogSection({ posData }) {
     if (!itemModal?.name?.trim()) { showToast('Ime je obvezno',false); return }
     const itemType = itemModal?.item_type || 'simple'
     if (itemType !== 'ingredient' && (!itemModal.price || Number(itemModal.price)<=0)) { showToast('Prodajna cena mora biti > 0',false); return }
-    if (itemModal.vat_rate===undefined || itemModal.vat_rate==='') { showToast('DDV stopnja je obvezna ★',false); return }
+    if (posData.org?.vat_registered && (itemModal.vat_rate===undefined || itemModal.vat_rate==='')) { showToast('DDV stopnja je obvezna ★',false); return }
     // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
     // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
     // zapisa. Pri stornu, vracilu in prodaji paketa to pomeni podvojen davcni
@@ -12018,7 +12029,7 @@ function CatalogSection({ posData }) {
         business_id:BUSINESS_ID, category_id:itemModal.category_id||null,
         name:itemModal.name, code:itemModal.code||null,
         price:itemModal.price?Number(itemModal.price):0,
-        unit:itemModal.unit||'kos', vat_rate:Number(itemModal.vat_rate),
+        unit:itemModal.unit||'kos', vat_rate:posData.org?.vat_registered ? Number(itemModal.vat_rate) : 0,
         stock:itemModal.stock!=null&&itemModal.stock!==''?Number(itemModal.stock):null,
         fav:!!itemModal.fav, kitchen:!!itemModal.kitchen, bookable:!!itemModal.bookable,
         duration_min:itemModal.bookable&&itemModal.duration_min?Number(itemModal.duration_min):null,
@@ -12155,7 +12166,7 @@ function CatalogSection({ posData }) {
             <div key={it.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'11px 14px', background:T.surface, borderRadius:10, marginBottom:4, border:'1px solid '+T.line }}>
               <div style={{ flex:1 }}>
                 <div style={{ fontWeight:600, fontSize:13 }}>{it.name} {it.fav?'★':''}</div>
-                <div style={{ fontSize:11, color:T.muted, fontFamily:'monospace' }}>{it.code||'—'} · DDV {it.vat_rate}% · {it.unit}</div>
+                <div style={{ fontSize:11, color:T.muted, fontFamily:'monospace' }}>{it.code||'—'}{posData.org?.vat_registered ? ` · DDV ${it.vat_rate}%` : ''} · {it.unit}</div>
               </div>
               <div style={{ fontWeight:700, fontSize:14, minWidth:60, textAlign:'right', fontVariantNumeric:'tabular-nums' }}>{eur(it.price)}</div>
               <button onClick={async()=>{
@@ -12240,25 +12251,29 @@ function CatalogSection({ posData }) {
             </Field>
           </div>
 
-          <VatExemptionPicker
-            vatRate={itemModal?.vat_rate}
-            code={itemModal?.vat_exemption_code}
-            customText={itemModal?.vat_exemption_custom_text}
-            onCodeChange={c => setItemModal(p => ({ ...p, vat_exemption_code: c }))}
-            onCustomTextChange={t => setItemModal(p => ({ ...p, vat_exemption_custom_text: t }))}
-            inputStyle={inp}
-          />
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-            <Field label="DDV stopnja *">
-              <select value={itemModal?.vat_rate??''} onChange={e=>setItemModal(p=>({...p,vat_rate:e.target.value}))}
-                style={{ ...inp, border: (itemModal?.vat_rate===undefined||itemModal?.vat_rate==='')?'1.5px solid '+T.warn:inp.border }}>
-                <option value="">— izberi DDV —</option>
-                <option value={0}>0% (oproščeno)</option>
-                <option value={5}>5% (knjige, časopisi)</option>
-                <option value={9.5}>9.5% (gostinstvo, šport)</option>
-                <option value={22}>22% (splošna)</option>
-              </select>
-            </Field>
+          {posData.org?.vat_registered && (
+            <VatExemptionPicker
+              vatRate={itemModal?.vat_rate}
+              code={itemModal?.vat_exemption_code}
+              customText={itemModal?.vat_exemption_custom_text}
+              onCodeChange={c => setItemModal(p => ({ ...p, vat_exemption_code: c }))}
+              onCustomTextChange={t => setItemModal(p => ({ ...p, vat_exemption_custom_text: t }))}
+              inputStyle={inp}
+            />
+          )}
+          <div style={{ display:'grid', gridTemplateColumns: posData.org?.vat_registered ? '1fr 1fr' : '1fr', gap:10 }}>
+            {posData.org?.vat_registered && (
+              <Field label="DDV stopnja *">
+                <select value={itemModal?.vat_rate??''} onChange={e=>setItemModal(p=>({...p,vat_rate:e.target.value}))}
+                  style={{ ...inp, border: (itemModal?.vat_rate===undefined||itemModal?.vat_rate==='')?'1.5px solid '+T.warn:inp.border }}>
+                  <option value="">— izberi DDV —</option>
+                  <option value={0}>0% (oproščeno)</option>
+                  <option value={5}>5% (knjige, časopisi)</option>
+                  <option value={9.5}>9.5% (gostinstvo, šport)</option>
+                  <option value={22}>22% (splošna)</option>
+                </select>
+              </Field>
+            )}
             <Field label="Šifra (koda)">
               <input value={itemModal?.code||''} onChange={e=>setItemModal(p=>({...p,code:e.target.value.toUpperCase()}))} placeholder="K01" style={{...inp,fontFamily:'monospace'}}/>
             </Field>
@@ -12794,10 +12809,10 @@ function PackagesAdminSection({ posData, modal, setModal }) {
         time_to: modal.time_to||null,
         days_of_week: modal.days_of_week||[],
         auto_renew: !!modal.auto_renew,
-        vat_rate: Number(modal.vat_rate ?? 22),
+        vat_rate: posData.org?.vat_registered ? Number(modal.vat_rate ?? 22) : 0,
         // DODANO (19.8.2026): razlog za neobracunan DDV (pri 0 % obvezen).
-        vat_exemption_code: Number(modal.vat_rate ?? 22) === 0 ? (modal.vat_exemption_code || null) : null,
-        vat_exemption_custom_text: Number(modal.vat_rate ?? 22) === 0 ? (modal.vat_exemption_custom_text || null) : null,
+        vat_exemption_code: (posData.org?.vat_registered && Number(modal.vat_rate ?? 22) === 0) ? (modal.vat_exemption_code || null) : null,
+        vat_exemption_custom_text: (posData.org?.vat_registered && Number(modal.vat_rate ?? 22) === 0) ? (modal.vat_exemption_custom_text || null) : null,
         notify_before_days: Number(modal.notify_before_days||7),
         fixed_start_date: modal.fixed_start_date||null,
         fixed_end_date: modal.fixed_end_date||null,
@@ -12907,28 +12922,32 @@ function PackagesAdminSection({ posData, modal, setModal }) {
             <input value={modal?.name||''} onChange={e=>setModal(p=>({...p,name:e.target.value}))} placeholder="Letna članarain, 10× vstopnica, Darilni bon..." style={inp} autoFocus/>
           </Field>
 
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+          <div style={{ display:'grid', gridTemplateColumns: posData.org?.vat_registered ? '1fr 1fr' : '1fr', gap:10 }}>
             <Field label={ttype==='gift_voucher'?'Vrednost bona (€) *':'Cena (€) *'}>
               <input type="number" onFocus={e => e.target.select()} step="0.01" min="0" value={modal?.price||''} onChange={e=>setModal(p=>({...p,price:e.target.value}))} style={inp}/>
             </Field>
-            <Field label="DDV stopnja *">
-              <select value={modal?.vat_rate??22} onChange={e=>setModal(p=>({...p,vat_rate:e.target.value}))} style={inp}>
-                <option value={0}>0% (oproščeno)</option>
-                <option value={5}>5% (knjige, časopisi)</option>
-                <option value={9.5}>9.5% (gostinstvo, šport)</option>
-                <option value={22}>22% (splošna)</option>
-              </select>
-            </Field>
+            {posData.org?.vat_registered && (
+              <Field label="DDV stopnja *">
+                <select value={modal?.vat_rate??22} onChange={e=>setModal(p=>({...p,vat_rate:e.target.value}))} style={inp}>
+                  <option value={0}>0% (oproščeno)</option>
+                  <option value={5}>5% (knjige, časopisi)</option>
+                  <option value={9.5}>9.5% (gostinstvo, šport)</option>
+                  <option value={22}>22% (splošna)</option>
+                </select>
+              </Field>
+            )}
           </div>
           {/* DODANO (19.8.2026): pri 0 % je po ZDDV-1 obvezna navedba razloga. */}
-          <VatExemptionPicker
-            vatRate={modal?.vat_rate ?? 22}
-            code={modal?.vat_exemption_code}
-            customText={modal?.vat_exemption_custom_text}
-            onCodeChange={c => setModal(p => ({ ...p, vat_exemption_code: c }))}
-            onCustomTextChange={t => setModal(p => ({ ...p, vat_exemption_custom_text: t }))}
-            inputStyle={inp}
-          />
+          {posData.org?.vat_registered && (
+            <VatExemptionPicker
+              vatRate={modal?.vat_rate ?? 22}
+              code={modal?.vat_exemption_code}
+              customText={modal?.vat_exemption_custom_text}
+              onCodeChange={c => setModal(p => ({ ...p, vat_exemption_code: c }))}
+              onCustomTextChange={t => setModal(p => ({ ...p, vat_exemption_custom_text: t }))}
+              inputStyle={inp}
+            />
+          )}
 
           {/* Aktivacija */}
           <Field label="Začetek veljavnosti">
@@ -13226,9 +13245,9 @@ function StoritveCrudSection({ posData, modal, setModal }) {
         // izbira uporabnika v obrazcu za storitev IGNORIRANA - fizioterapija,
         // nastavljena na 0 % (oproscena), je v kosarici vseeno dobila 22 %,
         // racun pa napacen DDV. Zdaj se prenese dejansko izbrana stopnja.
-        vat_rate: Number(modal.vat_rate ?? 22),
-        vat_exemption_code: Number(modal.vat_rate) === 0 ? (modal.vat_exemption_code || null) : null,
-        vat_exemption_custom_text: Number(modal.vat_rate) === 0 ? (modal.vat_exemption_custom_text || null) : null,
+        vat_rate: posData.org?.vat_registered ? Number(modal.vat_rate ?? 22) : 0,
+        vat_exemption_code: (posData.org?.vat_registered && Number(modal.vat_rate) === 0) ? (modal.vat_exemption_code || null) : null,
+        vat_exemption_custom_text: (posData.org?.vat_registered && Number(modal.vat_rate) === 0) ? (modal.vat_exemption_custom_text || null) : null,
         bookable: true,
         duration_min: Number(modal.duration_min),
         item_type: 'simple',
@@ -13253,8 +13272,8 @@ function StoritveCrudSection({ posData, modal, setModal }) {
         active: modal.active !== false,
         linked_item_id: linkedItemId,
         // DODANO (19.8.2026): razlog za neobracunan DDV (pri 0 % obvezen).
-        vat_exemption_code: Number(modal.vat_rate) === 0 ? (modal.vat_exemption_code || null) : null,
-        vat_exemption_custom_text: Number(modal.vat_rate) === 0 ? (modal.vat_exemption_custom_text || null) : null,
+        vat_exemption_code: (posData.org?.vat_registered && Number(modal.vat_rate) === 0) ? (modal.vat_exemption_code || null) : null,
+        vat_exemption_custom_text: (posData.org?.vat_registered && Number(modal.vat_rate) === 0) ? (modal.vat_exemption_custom_text || null) : null,
       }
       if (modal.id) {
         const {error} = await db.from('services').update(payload).eq('id', modal.id)
@@ -13325,23 +13344,27 @@ function StoritveCrudSection({ posData, modal, setModal }) {
               <input type="number" onFocus={e => e.target.select()} min="5" step="5" value={modal?.duration_min||60} onChange={e=>setModal(p=>({...p,duration_min:e.target.value}))} style={inp}/>
             </Field>
           </div>
-          <Field label="DDV stopnja *">
-            <select value={modal?.vat_rate??''} onChange={e=>setModal(p=>({...p,vat_rate:e.target.value}))} style={inp}>
-              <option value="">— izberi DDV —</option>
-              <option value={0}>0% (oproščeno)</option>
-              <option value={9.5}>9.5% (storitve)</option>
-              <option value={22}>22% (splošna)</option>
-            </select>
-          </Field>
+          {posData.org?.vat_registered && (
+            <Field label="DDV stopnja *">
+              <select value={modal?.vat_rate??''} onChange={e=>setModal(p=>({...p,vat_rate:e.target.value}))} style={inp}>
+                <option value="">— izberi DDV —</option>
+                <option value={0}>0% (oproščeno)</option>
+                <option value={9.5}>9.5% (storitve)</option>
+                <option value={22}>22% (splošna)</option>
+              </select>
+            </Field>
+          )}
           {/* DODANO (19.8.2026): pri 0 % je po ZDDV-1 obvezna navedba razloga. */}
-          <VatExemptionPicker
-            vatRate={modal?.vat_rate}
-            code={modal?.vat_exemption_code}
-            customText={modal?.vat_exemption_custom_text}
-            onCodeChange={c => setModal(p => ({ ...p, vat_exemption_code: c }))}
-            onCustomTextChange={t => setModal(p => ({ ...p, vat_exemption_custom_text: t }))}
-            inputStyle={inp}
-          />
+          {posData.org?.vat_registered && (
+            <VatExemptionPicker
+              vatRate={modal?.vat_rate}
+              code={modal?.vat_exemption_code}
+              customText={modal?.vat_exemption_custom_text}
+              onCodeChange={c => setModal(p => ({ ...p, vat_exemption_code: c }))}
+              onCustomTextChange={t => setModal(p => ({ ...p, vat_exemption_custom_text: t }))}
+              inputStyle={inp}
+            />
+          )}
           <Field label="Barva (za prikaz v koledarju)">
             <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
               {SVC_COLORS.map(c=>(
@@ -14017,7 +14040,7 @@ function RojstniDneviSection({ posData }) {
   )
 }
 
-function FursSection() {
+function FursSection({ posData }: any = {}) {
   const [settings, setSettings] = useState({
     autoFurs: true,
     showSkipFurs: true,
@@ -14206,7 +14229,16 @@ function FursSection() {
         ))}
       </div>
 
-      {/* DDV stopnje info */}
+      {/* DDV stopnje info — samo za DDV zavezance. Za nezavezanca je ta
+          referenca zavajajoca, saj artiklov sploh ne sme obdavciti. */}
+      {posData?.org?.vat_registered === false ? (
+        <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:20 }}>
+          <div style={{ fontWeight:700, fontSize:14, marginBottom:6 }}>DDV stopnje (Slovenia)</div>
+          <div style={{ fontSize:12, color:T.muted, lineHeight:1.6 }}>
+            Podjetje ni zavezanec za DDV — na računih in artiklih se DDV ne obračunava.
+          </div>
+        </div>
+      ) : (
       <div style={{ background:T.surface, borderRadius:12, border:'1px solid '+T.line, padding:20 }}>
         <div style={{ fontWeight:700, fontSize:14, marginBottom:14 }}>DDV stopnje (Slovenia)</div>
         {/* POPRAVLJENO (26.8.2026): opisi so bili napacni prav pri dejavnostih,
@@ -14233,6 +14265,7 @@ function FursSection() {
           💡 DDV stopnjo nastavljaš za vsak artikel posebej v <b>Kategorije & Artikli</b>
         </div>
       </div>
+      )}
     </div>
   )
 }
@@ -15909,6 +15942,7 @@ function KlasikApp() {
         </Modal>
       )}
       <PaymentModal open={paymentOpen} total={typeof paymentOpen==='object'&&paymentOpen.splitLines ? paymentOpen.splitLines.reduce((s,l)=>s+l.price*l.qty,0)*(1-(paymentOpen.discount||0)/100) : totals.total} cart={typeof paymentOpen==='object'&&paymentOpen.splitLines ? paymentOpen.splitLines : cart} activeTable={activeTable} activeCustomer={activeCustomer} auth={auth}
+        vatRegistered={posData.org?.vat_registered}
         onCancel={() => setPaymentOpen(false)}
         onComplete={(data) => {
           const po = paymentOpen

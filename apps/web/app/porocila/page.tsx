@@ -156,7 +156,7 @@ export default function PoslovnaPorocila() {
             { label: 'Prihodki', value: fmt(totals.revenue), color: '#6EE7B7' },
             { label: 'Odhodki', value: fmt(totals.expenses), color: '#FCA5A5' },
             { label: 'Dobiček', value: fmtN(totals.profit), color: totals.profit >= 0 ? '#E8B547' : '#FCA5A5' },
-            { label: totals.vatDue >= 0 ? 'DDV dolgovan' : 'DDV za vračilo', value: fmt(Math.abs(totals.vatDue)), color: totals.vatDue >= 0 ? '#FCD34D' : '#86EFAC' },
+            ...(org?.vat_registered ? [{ label: totals.vatDue >= 0 ? 'DDV dolgovan' : 'DDV za vračilo', value: fmt(Math.abs(totals.vatDue)), color: totals.vatDue >= 0 ? '#FCD34D' : '#86EFAC' }] : []),
             { label: 'Marža', value: totals.revenue > 0 ? `${Math.round((totals.profit / totals.revenue) * 100)}%` : '—', color: '#A78BFA' },
           ].map(s => (
             <div key={s.label} style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: '12px 16px', flex: '1 1 140px', minWidth: 140 }}>
@@ -196,14 +196,16 @@ export default function PoslovnaPorocila() {
               </div>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <tbody>
-                  {[
+                  {(org?.vat_registered ? [
                     { label: 'Prihodki od prodaje (neto)', amount: totals.revenue },
                     { label: 'DDV na prihodke', amount: totals.vatOut },
-                    { label: 'Bruto prihodki', amount: totals.revenue + totals.vatOut },
-                  ].map((row, i) => (
-                    <tr key={i} style={{ borderBottom: '0.5px solid rgba(0,0,0,0.05)', background: i === 2 ? '#F7F6F2' : '#fff' }}>
+                    { label: 'Bruto prihodki', amount: totals.revenue + totals.vatOut, bold: true },
+                  ] : [
+                    { label: 'Prihodki od prodaje', amount: totals.revenue, bold: true },
+                  ]).map((row, i) => (
+                    <tr key={i} style={{ borderBottom: '0.5px solid rgba(0,0,0,0.05)', background: row.bold ? '#F7F6F2' : '#fff' }}>
                       <td style={{ padding: '12px 20px', fontSize: 13, color: '#666' }}>{row.label}</td>
-                      <td style={{ padding: '12px 20px', fontSize: 13, fontWeight: i === 2 ? 700 : 400, textAlign: 'right', color: '#0D1F12' }}>{fmt(row.amount)}</td>
+                      <td style={{ padding: '12px 20px', fontSize: 13, fontWeight: row.bold ? 700 : 400, textAlign: 'right', color: '#0D1F12' }}>{fmt(row.amount)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -218,14 +220,16 @@ export default function PoslovnaPorocila() {
               </div>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <tbody>
-                  {[
+                  {(org?.vat_registered ? [
                     { label: 'Poslovni stroški (neto)', amount: totals.expenses },
                     { label: 'DDV na stroške (odbitek)', amount: totals.vatIn },
-                    { label: 'Bruto stroški', amount: totals.expenses + totals.vatIn },
-                  ].map((row, i) => (
-                    <tr key={i} style={{ borderBottom: '0.5px solid rgba(0,0,0,0.05)', background: i === 2 ? '#FEF2F2' : '#fff' }}>
+                    { label: 'Bruto stroški', amount: totals.expenses + totals.vatIn, bold: true },
+                  ] : [
+                    { label: 'Poslovni stroški', amount: totals.expenses, bold: true },
+                  ]).map((row, i) => (
+                    <tr key={i} style={{ borderBottom: '0.5px solid rgba(0,0,0,0.05)', background: row.bold ? '#FEF2F2' : '#fff' }}>
                       <td style={{ padding: '12px 20px', fontSize: 13, color: '#666' }}>{row.label}</td>
-                      <td style={{ padding: '12px 20px', fontSize: 13, fontWeight: i === 2 ? 700 : 400, textAlign: 'right', color: '#0D1F12' }}>{fmt(row.amount)}</td>
+                      <td style={{ padding: '12px 20px', fontSize: 13, fontWeight: row.bold ? 700 : 400, textAlign: 'right', color: '#0D1F12' }}>{fmt(row.amount)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -241,7 +245,7 @@ export default function PoslovnaPorocila() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16 }}>
                 {[
                   { label: 'Marža', value: totals.revenue > 0 ? `${Math.round((totals.profit / totals.revenue) * 100)}%` : '—' },
-                  { label: totals.vatDue >= 0 ? 'DDV dolgovan FURS' : 'DDV za vračilo od FURS', value: fmt(Math.abs(totals.vatDue)) },
+                  ...(org?.vat_registered ? [{ label: totals.vatDue >= 0 ? 'DDV dolgovan FURS' : 'DDV za vračilo od FURS', value: fmt(Math.abs(totals.vatDue)) }] : []),
                   { label: 'Povp. mesečni dobiček', value: fmtN(totals.profit / 12) },
                 ].map(s => (
                   <div key={s.label}>
@@ -283,7 +287,7 @@ export default function PoslovnaPorocila() {
             <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}>
               <thead>
                 <tr style={{ background: '#F7F6F2', borderBottom: '0.5px solid rgba(0,0,0,0.08)' }}>
-                  {['Mesec', 'Prihodki', 'Odhodki', 'Dobiček', 'Marža', 'DDV'].map(h => (
+                  {(org?.vat_registered ? ['Mesec', 'Prihodki', 'Odhodki', 'Dobiček', 'Marža', 'DDV'] : ['Mesec', 'Prihodki', 'Odhodki', 'Dobiček', 'Marža']).map(h => (
                     <th key={h} style={{ padding: '10px 16px', fontSize: 11, fontWeight: 700, color: '#888', textAlign: h === 'Mesec' ? 'left' : 'right', textTransform: 'uppercase', letterSpacing: '.04em' }}>{h}</th>
                   ))}
                 </tr>
@@ -300,9 +304,11 @@ export default function PoslovnaPorocila() {
                     <td style={{ padding: '10px 16px', fontSize: 12, textAlign: 'right', color: '#888' }}>
                       {m.revenue > 0 ? `${Math.round((m.profit / m.revenue) * 100)}%` : '—'}
                     </td>
-                    <td style={{ padding: '10px 16px', fontSize: 12, textAlign: 'right', color: '#888' }}>
-                      {m.vatOut > 0 ? fmt(Math.max(0, m.vatOut - m.vatIn)) : '—'}
-                    </td>
+                    {org?.vat_registered && (
+                      <td style={{ padding: '10px 16px', fontSize: 12, textAlign: 'right', color: '#888' }}>
+                        {m.vatOut > 0 ? fmt(Math.max(0, m.vatOut - m.vatIn)) : '—'}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -315,7 +321,9 @@ export default function PoslovnaPorocila() {
                   <td style={{ padding: '12px 16px', fontSize: 12, textAlign: 'right', color: 'rgba(255,255,255,0.6)' }}>
                     {totals.revenue > 0 ? `${Math.round((totals.profit / totals.revenue) * 100)}%` : '—'}
                   </td>
-                  <td style={{ padding: '12px 16px', fontSize: 12, textAlign: 'right', color: totals.vatDue >= 0 ? '#FCD34D' : '#86EFAC' }}>{totals.vatDue < 0 ? '+' : ''}{fmt(Math.abs(totals.vatDue))}</td>
+                  {org?.vat_registered && (
+                    <td style={{ padding: '12px 16px', fontSize: 12, textAlign: 'right', color: totals.vatDue >= 0 ? '#FCD34D' : '#86EFAC' }}>{totals.vatDue < 0 ? '+' : ''}{fmt(Math.abs(totals.vatDue))}</td>
+                  )}
                 </tr>
               </tfoot>
             </table>

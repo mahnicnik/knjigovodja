@@ -108,7 +108,7 @@ export default function EditInvoicePage() {
     load()
   }, [])
 
-  function addItem() { setItems([...items, { description: '', quantity: 1, unit_price: 0, vat_rate: 22 }]) }
+  function addItem() { setItems([...items, { description: '', quantity: 1, unit_price: 0, vat_rate: org?.vat_registered ? 22 : 0 }]) }
   function removeItem(i: number) { setItems(items.filter((_, idx) => idx !== i)) }
   function updateItem(i: number, field: keyof LineItem, value: any) {
     const updated = [...items]; updated[i] = { ...updated[i], [field]: value }; setItems(updated)
@@ -289,12 +289,16 @@ export default function EditInvoicePage() {
                       </div>
                       <div>
                         <label style={{ fontSize:'10px', color:'#888', display:'block', marginBottom:'3px' }}>DDV</label>
-                        <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', +e.target.value)}
-                          className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none">
-                          <option value={22}>22%</option>
-                          <option value={9.5}>9.5%</option>
-                          <option value={0}>0%</option>
-                        </select>
+                        {org?.vat_registered ? (
+                          <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', +e.target.value)}
+                            className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none">
+                            <option value={22}>22%</option>
+                            <option value={9.5}>9.5%</option>
+                            <option value={0}>0%</option>
+                          </select>
+                        ) : (
+                          <div className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm text-gray-400 bg-gray-50">0% (ni zavezanec)</div>
+                        )}
                       </div>
                       <div>
                         <label style={{ fontSize:'10px', color:'#888', display:'block', marginBottom:'3px' }}>Popust %</label>
@@ -417,9 +421,13 @@ export default function EditInvoicePage() {
             <div className="grid grid-cols-3 gap-2 mb-3">
               <input autoFocus value={kalkZnesek} onChange={e => setKalkZnesek(e.target.value)} placeholder={kalkSmer === 'bruto' ? 'Cena z DDV' : 'Cena brez DDV'}
                 className="col-span-2 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-              <select value={kalkStopnja} onChange={e => setKalkStopnja(+e.target.value)} className="border border-gray-200 rounded-xl px-2 py-3 text-sm focus:outline-none">
-                <option value={22}>22 %</option><option value={9.5}>9,5 %</option><option value={5}>5 %</option><option value={0}>0 %</option>
-              </select>
+              {org?.vat_registered ? (
+                <select value={kalkStopnja} onChange={e => setKalkStopnja(+e.target.value)} className="border border-gray-200 rounded-xl px-2 py-3 text-sm focus:outline-none">
+                  <option value={22}>22 %</option><option value={9.5}>9,5 %</option><option value={5}>5 %</option><option value={0}>0 %</option>
+                </select>
+              ) : (
+                <div className="border border-gray-200 rounded-xl px-2 py-3 text-sm text-gray-400 bg-gray-50 text-center">0 %</div>
+              )}
             </div>
             {kalkIzracun ? (
               <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-1 mb-4">
@@ -429,7 +437,7 @@ export default function EditInvoicePage() {
               </div>
             ) : <div className="text-xs text-gray-400 mb-4">Vpišite znesek.</div>}
             <button disabled={!kalkIzracun}
-              onClick={() => { if (!kalkIzracun) return; const i = kalkulator.vrstica; const u = [...items]; u[i] = { ...u[i], unit_price: kalkIzracun.neto, vat_rate: kalkStopnja }; setItems(u); setKalkulator(null) }}
+              onClick={() => { if (!kalkIzracun) return; const i = kalkulator.vrstica; const u = [...items]; u[i] = { ...u[i], unit_price: kalkIzracun.neto, vat_rate: org?.vat_registered ? kalkStopnja : 0 }; setItems(u); setKalkulator(null) }}
               className="w-full bg-gray-900 text-white rounded-xl py-3 font-medium disabled:bg-gray-200 disabled:text-gray-400">
               Vpiši ceno brez DDV v vrstico
             </button>
@@ -569,9 +577,13 @@ export default function EditInvoicePage() {
                       className="mt-1 w-full text-[10px] text-gray-400 hover:text-gray-900 transition-colors">iz cene z DDV</button>
                   </div>
                   <div className="col-span-2">
-                    <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none">
-                      <option value={22}>22 %</option><option value={9.5}>9,5 %</option><option value={0}>0 %</option>
-                    </select>
+                    {org?.vat_registered ? (
+                      <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none">
+                        <option value={22}>22 %</option><option value={9.5}>9,5 %</option><option value={0}>0 %</option>
+                      </select>
+                    ) : (
+                      <div className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-400 bg-gray-50 text-center">0 % (ni zavezanec)</div>
+                    )}
                   </div>
                   <div className="col-span-1"><input type="number" onFocus={e => e.target.select()} min={0} max={100} value={item.discount_pct || 0} onChange={e => updateItem(i, 'discount_pct', +e.target.value)} title="Popust %" style={{ MozAppearance: 'textfield' as any }} className="w-full border border-gray-200 rounded-xl px-1 py-2 text-sm focus:outline-none text-center [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></div>
                   <div className="col-span-1 flex justify-center">
@@ -677,9 +689,13 @@ export default function EditInvoicePage() {
             <div className="grid grid-cols-3 gap-2 mb-3">
               <input autoFocus value={kalkZnesek} onChange={e => setKalkZnesek(e.target.value)} placeholder={kalkSmer === 'bruto' ? 'Cena z DDV' : 'Cena brez DDV'}
                 className="col-span-2 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-              <select value={kalkStopnja} onChange={e => setKalkStopnja(+e.target.value)} className="border border-gray-200 rounded-xl px-2 py-3 text-sm focus:outline-none">
-                <option value={22}>22 %</option><option value={9.5}>9,5 %</option><option value={5}>5 %</option><option value={0}>0 %</option>
-              </select>
+              {org?.vat_registered ? (
+                <select value={kalkStopnja} onChange={e => setKalkStopnja(+e.target.value)} className="border border-gray-200 rounded-xl px-2 py-3 text-sm focus:outline-none">
+                  <option value={22}>22 %</option><option value={9.5}>9,5 %</option><option value={5}>5 %</option><option value={0}>0 %</option>
+                </select>
+              ) : (
+                <div className="border border-gray-200 rounded-xl px-2 py-3 text-sm text-gray-400 bg-gray-50 text-center">0 %</div>
+              )}
             </div>
             {kalkIzracun ? (
               <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-1 mb-4">
@@ -689,7 +705,7 @@ export default function EditInvoicePage() {
               </div>
             ) : <div className="text-xs text-gray-400 mb-4">Vpišite znesek.</div>}
             <button disabled={!kalkIzracun}
-              onClick={() => { if (!kalkIzracun) return; const i = kalkulator.vrstica; const u = [...items]; u[i] = { ...u[i], unit_price: kalkIzracun.neto, vat_rate: kalkStopnja }; setItems(u); setKalkulator(null) }}
+              onClick={() => { if (!kalkIzracun) return; const i = kalkulator.vrstica; const u = [...items]; u[i] = { ...u[i], unit_price: kalkIzracun.neto, vat_rate: org?.vat_registered ? kalkStopnja : 0 }; setItems(u); setKalkulator(null) }}
               className="w-full bg-gray-900 text-white rounded-xl py-3 font-medium disabled:bg-gray-200 disabled:text-gray-400">
               Vpiši ceno brez DDV v vrstico
             </button>

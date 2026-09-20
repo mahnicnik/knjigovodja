@@ -18,7 +18,7 @@
  * ZDRUZEVANJE poteka v brskalniku: za majhen lokal je vrstic nekaj tisoc,
  * kar je hitro, in poizvedbe ostanejo preproste ter odporne.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { BUSINESS_ID } from '@/lib/pos-client'
 
@@ -223,12 +223,14 @@ const POROCILA: Porocilo[] = [
       if (error) throw error
       return (data || []).map((d: any) => ({ datum:d.document_date, dobavitelj:d.supplier || '—', dokument:(d.document_number || '—') + (d.is_flat_rate ? ' · pavšal' : ''), brez:n2(d.total_ex_vat), ddv:n2(d.total_vat), skupaj:n2(d.total_inc_vat) }))
     } },
-  { id:'odpisi', skupina:'Gostinstvo in zaloga', ime:'Odpisi zaloge', opis:'Odpisi z razlogom in vrednostjo — reprezentanca, lastna poraba, kvar, lom.',
-    stolpci:[{k:'datum',l:'Datum',tip:'datetime'},{k:'razlog',l:'Razlog'},{k:'postavk',l:'Postavk',tip:'int'},{k:'vrednost',l:'Vrednost',tip:'eur'},{k:'opomba',l:'Opomba'}],
+  { id:'odpisi', skupina:'Gostinstvo in zaloga', ime:'Odpisi zaloge', opis:'Odpisi z razlogom in vrednostjo — reprezentanca, lastna poraba, kvar, lom. Klikni vrstico za prikaz odpisanih artiklov.',
+    stolpci:[{k:'datum',l:'Datum',tip:'datetime'},{k:'razlog',l:'Razlog'},{k:'blagajnik',l:'Blagajnik'},{k:'postavk',l:'Postavk',tip:'int'},{k:'vrednost',l:'Vrednost',tip:'eur'},{k:'opomba',l:'Opomba'}],
     nalozi: async (db, od, do_) => {
-      const { data, error } = await db.from('stock_writeoffs').select('*').eq('business_id', BUSINESS_ID).gte('created_at', od).lte('created_at', do_ + 'T23:59:59').order('created_at', { ascending:false })
+      const [{ data, error }, s] = await Promise.all([
+        db.from('stock_writeoffs').select('*').eq('business_id', BUSINESS_ID).gte('created_at', od).lte('created_at', do_ + 'T23:59:59').order('created_at', { ascending:false }),
+        osebje(db)])
       if (error) throw error
-      return (data || []).map((w: any) => ({ datum:w.created_at, razlog:w.reason || '—', postavk:Array.isArray(w.items) ? w.items.length : 0, vrednost:n2(w.total_cost), opomba:w.note || '' }))
+      return (data || []).map((w: any) => ({ id:w.id, datum:w.created_at, razlog:w.reason || '—', blagajnik:s[w.created_by] || 'Neznan', postavk:Array.isArray(w.items) ? w.items.length : 0, vrednost:n2(w.total_cost), opomba:w.note || '', items:Array.isArray(w.items) ? w.items : [] }))
     } },
   { id:'pod-minimumom', skupina:'Gostinstvo in zaloga', ime:'Sestavine pod minimumom', opis:'Kaj je treba naročiti. Obdobje ne vpliva.', brezObdobja:true,
     stolpci:[{k:'sestavina',l:'Sestavina'},{k:'stanje',l:'Stanje',tip:'num'},{k:'min',l:'Minimum',tip:'num'},{k:'enota',l:'Enota'},{k:'dobavitelj',l:'Dobavitelj'}],
@@ -333,7 +335,7 @@ function izvoziCsv(ime: string, stolpci: Stolpec[], vrstice: Vrstica[]) {
 }
 
 /* ── komponenta ────────────────────────────────────────────────── */
-export default function PorocilaKnjiznica() {
+export default function PorocilaKnjiznica({ vatRegistered }: { vatRegistered?: boolean } = {}) {
   const danes = new Date().toISOString().slice(0, 10)
   const zacMeseca = danes.slice(0, 8) + '01'
   const [od, setOd] = useState(zacMeseca)
@@ -346,6 +348,9 @@ export default function PorocilaKnjiznica() {
   // PRELET 274: skupine se odpirajo kot spustni seznam; odprta je le tista
   // z aktivnim porocilom, da seznam ne preplavi zaslona.
   const [odprte, setOdprte] = useState<Record<string, boolean>>({ [POROCILA[0].skupina]: true })
+  // Razsirjena vrstica v porocilu 'odpisi' (prikaz odpisanih postavk) - loceno
+  // od `odprte` zgoraj, ki upravlja drevo skupin na levi.
+  const [odpisRazsirjen, setOdpisRazsirjen] = useState<Set<any>>(new Set())
 
   const porocilo = useMemo(() => POROCILA.find(p => p.id === aktivno)!, [aktivno])
   const skupine = useMemo<string[]>(() => [...new Set(POROCILA.map(p => p.skupina))], [])
@@ -440,11 +445,54 @@ export default function PorocilaKnjiznica() {
                   {porocilo.stolpci.map(s => <th key={s.k} style={{ textAlign: ['eur','int','num','pct'].includes(s.tip || '') ? 'right' : 'left', padding:'9px 12px', fontSize:10.5, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.06em', whiteSpace:'nowrap' }}>{s.l}</th>)}
                 </tr></thead>
                 <tbody>
-                  {prikazane.map((r, i) => (
-                    <tr key={i} style={{ borderTop:'1px solid '+T.line }}>
-                      {porocilo.stolpci.map(s => <td key={s.k} style={{ padding:'8px 12px', textAlign: ['eur','int','num','pct'].includes(s.tip || '') ? 'right' : 'left', fontVariantNumeric:'tabular-nums', whiteSpace:'nowrap' }}>{fmt(r[s.k], s.tip)}</td>)}
-                    </tr>
-                  ))}
+                  {prikazane.map((r, i) => {
+                    const jeOdpis = porocilo.id === 'odpisi'
+                    const kljucVrstice = r.id ?? i
+                    const razsirjena = jeOdpis && odpisRazsirjen.has(kljucVrstice)
+                    const postavke: any[] = jeOdpis && Array.isArray(r.items) ? r.items : []
+                    return (
+                    <Fragment key={kljucVrstice}>
+                      <tr onClick={jeOdpis ? () => {
+                        setOdpisRazsirjen((prej: Set<any>) => {
+                          const nasl = new Set(prej)
+                          if (nasl.has(kljucVrstice)) nasl.delete(kljucVrstice); else nasl.add(kljucVrstice)
+                          return nasl
+                        })
+                      } : undefined}
+                        style={{ borderTop:'1px solid '+T.line, cursor: jeOdpis ? 'pointer' : undefined, background: razsirjena ? T.surface2 : undefined }}>
+                        {porocilo.stolpci.map(s => <td key={s.k} style={{ padding:'8px 12px', textAlign: ['eur','int','num','pct'].includes(s.tip || '') ? 'right' : 'left', fontVariantNumeric:'tabular-nums', whiteSpace:'nowrap' }}>{fmt(r[s.k], s.tip)}</td>)}
+                      </tr>
+                      {razsirjena && (
+                        <tr style={{ borderTop:'1px solid '+T.line, background:T.bg }}>
+                          <td colSpan={porocilo.stolpci.length} style={{ padding:'10px 16px' }}>
+                            {postavke.length === 0 ? (
+                              <div style={{ fontSize:12, color:T.muted }}>Ni podatkov o postavkah.</div>
+                            ) : (
+                              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                                <thead><tr>
+                                  <th style={{ textAlign:'left', padding:'4px 10px', color:T.muted, fontWeight:700 }}>Artikel</th>
+                                  <th style={{ textAlign:'right', padding:'4px 10px', color:T.muted, fontWeight:700 }}>Količina</th>
+                                  <th style={{ textAlign:'right', padding:'4px 10px', color:T.muted, fontWeight:700 }}>Cena</th>
+                                  {vatRegistered && <th style={{ textAlign:'right', padding:'4px 10px', color:T.muted, fontWeight:700 }}>DDV%</th>}
+                                </tr></thead>
+                                <tbody>
+                                  {postavke.map((p: any, j: number) => (
+                                    <tr key={j} style={{ borderTop:'1px solid '+T.line }}>
+                                      <td style={{ padding:'4px 10px' }}>{p.name || '—'}</td>
+                                      <td style={{ padding:'4px 10px', textAlign:'right', fontVariantNumeric:'tabular-nums' }}>{fmt(p.qty, 'num')}</td>
+                                      <td style={{ padding:'4px 10px', textAlign:'right', fontVariantNumeric:'tabular-nums' }}>{fmt(p.unit_price, 'eur')}</td>
+                                      {vatRegistered && <td style={{ padding:'4px 10px', textAlign:'right', fontVariantNumeric:'tabular-nums' }}>{fmt(p.vat_rate, 'pct')}</td>}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                    )
+                  })}
                 </tbody>
                 {Object.keys(sestevki).length > 0 && (
                   <tfoot><tr style={{ borderTop:'2px solid '+T.line, background:T.surface2, fontWeight:700 }}>

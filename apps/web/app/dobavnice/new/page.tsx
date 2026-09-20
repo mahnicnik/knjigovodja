@@ -58,6 +58,9 @@ export default function NewDobavnicaPage() {
       if (member) {
         const o = (member as any).organizations
         setOrg(o)
+        if (!o?.vat_registered) {
+          setItems(prev => prev.map(it => ({ ...it, vat_rate: 0 })))
+        }
         const { count } = await supabase.from('issued_invoices').select('*', { count: 'exact', head: true }).eq('org_id', o.id)
         const num = String((count || 0) + 1).padStart(3, '0')
         setInvoiceNumber(`D-${new Date().getFullYear()}-${num}`)
@@ -127,14 +130,16 @@ export default function NewDobavnicaPage() {
     }
   }
 
-  function addItem() { setItems([...items, { description: '', quantity: 1, unit_price: 0, vat_rate: 22 }]) }
+  function addItem() { setItems([...items, { description: '', quantity: 1, unit_price: 0, vat_rate: org?.vat_registered ? 22 : 0 }]) }
   function removeItem(i: number) { setItems(items.filter((_, idx) => idx !== i)) }
   function updateItem(i: number, field: keyof LineItem, value: any) {
     const updated = [...items]; updated[i] = { ...updated[i], [field]: value }; setItems(updated)
   }
 
   const subtotal = items.reduce((s, item) => s + item.quantity * item.unit_price, 0)
-  const vatAmount = items.reduce((s, item) => s + item.quantity * item.unit_price * (item.vat_rate / 100), 0)
+  const vatAmount = org?.vat_registered
+    ? items.reduce((s, item) => s + item.quantity * item.unit_price * (item.vat_rate / 100), 0)
+    : 0
   const total = subtotal + vatAmount
 
   async function handleSave(status: 'draft' | 'sent') {
@@ -263,7 +268,7 @@ export default function NewDobavnicaPage() {
                   </div>
                   <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
                     <input value={item.description} onChange={e => updateItem(i, 'description', e.target.value)} placeholder="Opis storitve" className={inp} />
-                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'8px' }}>
+                    <div style={{ display:'grid', gridTemplateColumns: org?.vat_registered ? '1fr 1fr 1fr' : '1fr 1fr', gap:'8px' }}>
                       <div>
                         <label style={{ fontSize:'10px', color:'#888', display:'block', marginBottom:'3px' }}>Količina</label>
                         <input type="number" onFocus={e => e.target.select()} value={item.quantity} onChange={e => updateItem(i, 'quantity', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none text-center" />
@@ -272,14 +277,16 @@ export default function NewDobavnicaPage() {
                         <label style={{ fontSize:'10px', color:'#888', display:'block', marginBottom:'3px' }}>Cena (€)</label>
                         <input type="number" onFocus={e => e.target.select()} value={item.unit_price} onChange={e => updateItem(i, 'unit_price', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none text-right" />
                       </div>
-                      <div>
-                        <label style={{ fontSize:'10px', color:'#888', display:'block', marginBottom:'3px' }}>DDV</label>
-                        <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none">
-                          <option value={22}>22%</option>
-                          <option value={9.5}>9.5%</option>
-                          <option value={0}>0%</option>
-                        </select>
-                      </div>
+                      {org?.vat_registered && (
+                        <div>
+                          <label style={{ fontSize:'10px', color:'#888', display:'block', marginBottom:'3px' }}>DDV</label>
+                          <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none">
+                            <option value={22}>22%</option>
+                            <option value={9.5}>9.5%</option>
+                            <option value={0}>0%</option>
+                          </select>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -355,23 +362,25 @@ export default function NewDobavnicaPage() {
             </div>
             <h3 className="font-medium text-gray-900 mb-4">Storitve in blago</h3>
             <div className="grid grid-cols-12 gap-2 mb-2 px-1">
-              <div className="col-span-5 text-xs font-medium text-gray-400">Storitev</div>
+              <div className={org?.vat_registered ? "col-span-5 text-xs font-medium text-gray-400" : "col-span-7 text-xs font-medium text-gray-400"}>Storitev</div>
               <div className="col-span-2 text-xs font-medium text-gray-400 text-center">Količina</div>
               <div className="col-span-2 text-xs font-medium text-gray-400 text-right">Cena (€)</div>
-              <div className="col-span-2 text-xs font-medium text-gray-400 text-center">DDV</div>
+              {org?.vat_registered && <div className="col-span-2 text-xs font-medium text-gray-400 text-center">DDV</div>}
               <div className="col-span-1"></div>
             </div>
             <div className="space-y-2 mb-4">
               {items.map((item, i) => (
                 <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                  <div className="col-span-5"><input value={item.description} onChange={e => updateItem(i, 'description', e.target.value)} placeholder="Opis storitve" className={inp} /></div>
+                  <div className={org?.vat_registered ? "col-span-5" : "col-span-7"}><input value={item.description} onChange={e => updateItem(i, 'description', e.target.value)} placeholder="Opis storitve" className={inp} /></div>
                   <div className="col-span-2"><input type="number" onFocus={e => e.target.select()} value={item.quantity} onChange={e => updateItem(i, 'quantity', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none text-center" /></div>
                   <div className="col-span-2"><input type="number" onFocus={e => e.target.select()} value={item.unit_price} onChange={e => updateItem(i, 'unit_price', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none text-right" /></div>
-                  <div className="col-span-2">
-                    <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none">
-                      <option value={22}>22 %</option><option value={9.5}>9,5 %</option><option value={0}>0 %</option>
-                    </select>
-                  </div>
+                  {org?.vat_registered && (
+                    <div className="col-span-2">
+                      <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none">
+                        <option value={22}>22 %</option><option value={9.5}>9,5 %</option><option value={0}>0 %</option>
+                      </select>
+                    </div>
+                  )}
                   <div className="col-span-1 flex justify-center">
                     {items.length > 1 && <button onClick={() => removeItem(i)} className="text-gray-300 hover:text-red-500 text-xl">×</button>}
                   </div>
@@ -390,8 +399,8 @@ export default function NewDobavnicaPage() {
             <h3 className="font-medium text-gray-900 mb-4">Povzetek</h3>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between text-gray-500"><span>Št. računa</span><span className="font-mono">{invoiceNumber}</span></div>
-              <div className="flex justify-between text-gray-500"><span>Osnova</span><span>€{formatEurNumber(subtotal)}</span></div>
-              <div className="flex justify-between text-gray-500"><span>DDV</span><span>€{formatEurNumber(vatAmount)}</span></div>
+              {org?.vat_registered && <div className="flex justify-between text-gray-500"><span>Osnova</span><span>€{formatEurNumber(subtotal)}</span></div>}
+              {org?.vat_registered && <div className="flex justify-between text-gray-500"><span>DDV</span><span>€{formatEurNumber(vatAmount)}</span></div>}
               <div className="border-t border-gray-100 pt-2 mt-2 flex justify-between font-semibold text-gray-900"><span>Skupaj</span><span>€{formatEurNumber(total)}</span></div>
             </div>
             <div className="mt-4 pt-4 border-t border-gray-100">

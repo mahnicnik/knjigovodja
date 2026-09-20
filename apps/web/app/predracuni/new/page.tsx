@@ -178,16 +178,18 @@ export default function NewQuotePage() {
           <div style={{ fontSize: 13, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 14 }}>Postavke</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {items.map((item, i) => (
-              <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 70px 90px 70px 70px 90px 32px', gap: 8, alignItems: 'center' }}>
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: isVatRegistered ? '2fr 70px 90px 70px 70px 90px 32px' : '2fr 70px 90px 70px 90px 32px', gap: 8, alignItems: 'center' }}>
                 <input value={item.description} onChange={e => updateItem(i, 'description', e.target.value)} placeholder="Opis storitve" style={{ ...inp, fontSize: 12 }} />
                 <input type="number" onFocus={e => e.target.select()} value={item.quantity} onChange={e => updateItem(i, 'quantity', Number(e.target.value))} style={{ ...inp, fontSize: 12, textAlign: 'right' }} />
                 <input type="number" onFocus={e => e.target.select()} step="0.01" value={item.unit_price} onChange={e => updateItem(i, 'unit_price', Number(e.target.value))} placeholder="0.00" style={{ ...inp, fontSize: 12, textAlign: 'right' }} />
                 <input type="number" onFocus={e => e.target.select()} min={0} max={100} value={item.discount_pct || 0} onChange={e => updateItem(i, 'discount_pct', Number(e.target.value))} placeholder="0%" style={{ ...inp, fontSize: 12, textAlign: 'right' }} title="Popust %" />
-                <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', Number(e.target.value))} style={{ ...inp, fontSize: 12 }}>
-                  <option value={0}>0%</option>
-                  <option value={9.5}>9.5%</option>
-                  <option value={22}>22%</option>
-                </select>
+                {isVatRegistered && (
+                  <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', Number(e.target.value))} style={{ ...inp, fontSize: 12 }}>
+                    <option value={0}>0%</option>
+                    <option value={9.5}>9.5%</option>
+                    <option value={22}>22%</option>
+                  </select>
+                )}
                 <div style={{ fontSize: 13, fontWeight: 600, textAlign: 'right', color: '#0D1F12' }}>€{formatEurNumber((item.amount_net + item.vat_amount))}</div>
                 <button onClick={() => removeItem(i)} style={{ background: 'none', border: 0, color: '#aaa', cursor: 'pointer', fontSize: 18, padding: 4 }}>×</button>
               </div>
@@ -197,7 +199,7 @@ export default function NewQuotePage() {
             <span style={{ flex: 2 }}>Opis</span>
             <span style={{ width: 80, textAlign: 'right' }}>Kol.</span>
             <span style={{ width: 100, textAlign: 'right' }}>Cena/enoto</span>
-            <span style={{ width: 80, textAlign: 'right' }}>DDV</span>
+            {isVatRegistered && <span style={{ width: 80, textAlign: 'right' }}>DDV</span>}
             <span style={{ width: 100, textAlign: 'right' }}>Skupaj</span>
             <span style={{ width: 32 }} />
           </div>

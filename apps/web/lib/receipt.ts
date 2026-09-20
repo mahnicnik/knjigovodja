@@ -145,7 +145,7 @@ export async function buildReceiptHTML(d: ReceiptData): Promise<string> {
     const lbl = vatLabel(Number(l.vat_rate ?? 22))
     return `
       <div class="row">
-        <span class="lname">${escapeHtml(l.name)} <span class="vatlbl">${lbl}</span></span>
+        <span class="lname">${escapeHtml(l.name)}${d.org.vat_registered ? ` <span class="vatlbl">${lbl}</span>` : ''}</span>
         <span class="lsum">${eur(lineTotal)}</span>
       </div>
       <div class="row sub">
@@ -158,7 +158,7 @@ export async function buildReceiptHTML(d: ReceiptData): Promise<string> {
   const totalVat = vatGroups.reduce((s, g) => s + g.vat, 0)
   const totalBruto = vatGroups.reduce((s, g) => s + g.bruto, 0)
 
-  const vatHtml = vatGroups.length > 0 ? `
+  const vatHtml = (d.org.vat_registered && vatGroups.length > 0) ? `
     <div class="line"></div>
     <div class="sectitle">OBRAČUN DDV</div>
     <table class="vattable">
@@ -191,7 +191,7 @@ export async function buildReceiptHTML(d: ReceiptData): Promise<string> {
 
   // KLAVZULE O NEOBRACUNANEM DDV (19.8.2026)
   const klavzule = (d.vatExemptions || []).filter(Boolean)
-  const vatExemptionHtml = klavzule.length > 0 ? `
+  const vatExemptionHtml = (d.org.vat_registered && klavzule.length > 0) ? `
     <div class="line" style="margin-top:6px"></div>
     ${klavzule.map(k => `<div class="small" style="margin-top:4px">${escapeHtml(k)}</div>`).join('')}
   ` : ''

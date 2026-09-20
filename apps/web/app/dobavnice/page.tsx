@@ -86,7 +86,9 @@ export default function DobavnicePage() {
     // Združi vse postavke
     const allItems = clientDocs.flatMap((d: any) => d.line_items || [])
     const subtotal = allItems.reduce((s: number, i: any) => s + i.quantity * i.unit_price, 0)
-    const vatAmount = allItems.reduce((s: number, i: any) => s + i.quantity * i.unit_price * (i.vat_rate / 100), 0)
+    const vatAmount = org?.vat_registered
+      ? allItems.reduce((s: number, i: any) => s + i.quantity * i.unit_price * (i.vat_rate / 100), 0)
+      : 0
     const total = subtotal + vatAmount
 
     // Pridobi naslednjo številko računa
