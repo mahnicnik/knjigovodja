@@ -11007,7 +11007,7 @@ function ReportsScreen({ posData, auth, setScreen }) {
       </div>
       {pogled === 'knjiznica' && (
         <div style={{ flex:1, minHeight:0, borderRadius:12, border:'1px solid '+T.line, overflow:'hidden', display:'flex' }}>
-          <div style={{ flex:1, minHeight:0 }}><PorocilaKnjiznica vatRegistered={!!org?.vat_registered} /></div>
+          <div style={{ flex:1, minHeight:0 }}><PorocilaKnjiznica vatRegistered={!!posData.org?.vat_registered} /></div>
         </div>
       )}
       {pogled === 'pregled' && (<>
