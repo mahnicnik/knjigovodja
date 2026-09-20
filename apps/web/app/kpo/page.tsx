@@ -9,6 +9,16 @@ import { formatEurNumber } from '@/lib/format'
 
 const MONTHS = ['Januar', 'Februar', 'Marec', 'April', 'Maj', 'Junij', 'Julij', 'Avgust', 'September', 'Oktober', 'November', 'December']
 
+// Ponedeljek tedna, v katerem lezi dani datum (teden ISO, Pon-Ned).
+function ponedeljekTedna(d: Date): Date {
+  const dan = d.getDay() // 0=Ned..6=Sob
+  const razlika = dan === 0 ? -6 : 1 - dan
+  const p = new Date(d)
+  p.setDate(d.getDate() + razlika)
+  p.setHours(0, 0, 0, 0)
+  return p
+}
+
 export default function KPOPage() {
   const [entries, setEntries] = useState<any[]>([])
   const [org, setOrg] = useState<any>(null)
@@ -18,12 +28,51 @@ export default function KPOPage() {
   const now = new Date()
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth())
   const [selectedYear, setSelectedYear] = useState(now.getFullYear())
-  const [customRange, setCustomRange] = useState(false)
+  // DODANO: hitri filtri obdobja - prej je bil na voljo samo mesec/leto ali
+  // rocno izbran interval. "mesec" ohranja privzeto obnasanje.
+  const [obdobjeTip, setObdobjeTip] = useState<'teden' | 'mesec' | 'cetrtletje' | 'leto' | 'ytd' | 'interval'>('mesec')
+  const [selectedQuarter, setSelectedQuarter] = useState(Math.floor(now.getMonth() / 3)) // 0-3
+  const [weekStart, setWeekStart] = useState(ponedeljekTedna(now))
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  // Zdruzljivost s prejsnjim imenom - uporabljeno spodaj v JSX.
+  const customRange = obdobjeTip === 'interval'
+
+  function fmtYMD(d: Date) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+  function fmtSl(d: Date) {
+    return `${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}`
+  }
 
   function getEffectiveRange() {
-    if (customRange && dateFrom && dateTo) return { from: dateFrom, to: dateTo }
+    if (obdobjeTip === 'interval') {
+      if (dateFrom && dateTo) return { from: dateFrom, to: dateTo }
+      // Se ni izbran interval - obnasaj se kot "leto do danes", da ni prazno.
+      return { from: `${now.getFullYear()}-01-01`, to: fmtYMD(now) }
+    }
+    if (obdobjeTip === 'teden') {
+      const konec = new Date(weekStart)
+      konec.setDate(weekStart.getDate() + 6)
+      return { from: fmtYMD(weekStart), to: fmtYMD(konec) }
+    }
+    if (obdobjeTip === 'cetrtletje') {
+      const zacetniMesec = selectedQuarter * 3
+      const from = `${selectedYear}-${String(zacetniMesec + 1).padStart(2, '0')}-01`
+      const koncniMesec = zacetniMesec + 2
+      const to = `${selectedYear}-${String(koncniMesec + 1).padStart(2, '0')}-${new Date(selectedYear, koncniMesec + 1, 0).getDate()}`
+      return { from, to }
+    }
+    if (obdobjeTip === 'leto') {
+      return { from: `${selectedYear}-01-01`, to: `${selectedYear}-12-31` }
+    }
+    if (obdobjeTip === 'ytd') {
+      // Za pretekla leta primerjamo do ISTEGA dne v letu (smiselna
+      // primerjava "enako obdobje lani"), za tekoce leto do danes.
+      const doDatuma = selectedYear === now.getFullYear() ? now : new Date(selectedYear, now.getMonth(), now.getDate())
+      return { from: `${selectedYear}-01-01`, to: fmtYMD(doDatuma) }
+    }
+    // "mesec" (privzeto, nespremenjeno obnasanje)
     const from = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-01`
     const to = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${new Date(selectedYear, selectedMonth + 1, 0).getDate()}`
     return { from, to }
@@ -43,7 +92,7 @@ export default function KPOPage() {
   useEffect(() => {
     if (!org) return
     loadEntries()
-  }, [org, selectedMonth, selectedYear, customRange, dateFrom, dateTo])
+  }, [org, selectedMonth, selectedYear, obdobjeTip, selectedQuarter, weekStart, dateFrom, dateTo])
 
   async function loadEntries() {
     setLoading(true)
@@ -142,32 +191,79 @@ export default function KPOPage() {
         <div>
           <h1 className="font-semibold text-gray-900 mt-0.5">KPO knjiga</h1>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {!customRange ? (
-            <>
-              <select value={selectedMonth} onChange={e => setSelectedMonth(Number(e.target.value))} className="border border-gray-200 rounded-xl px-3 py-2 text-sm">
-                {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
-              </select>
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {/* DODANO: hitri zavihki za obdobje - "mesec" je privzet in se
+                obnasa enako kot prej. */}
+            <div className="flex items-center bg-gray-100 rounded-xl p-1 gap-0.5">
+              {([
+                ['teden', 'Teden'], ['mesec', 'Mesec'], ['cetrtletje', 'Četrtletje'],
+                ['leto', 'Leto'], ['ytd', 'YTD'], ['interval', 'Interval'],
+              ] as const).map(([tip, oznaka]) => (
+                <button key={tip} onClick={() => setObdobjeTip(tip)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${obdobjeTip === tip ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}>
+                  {oznaka}
+                </button>
+              ))}
+            </div>
+            <button className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium">
+              Izvozi PDF
+            </button>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {obdobjeTip === 'teden' && (
+              <div className="flex items-center gap-2">
+                <button onClick={() => setWeekStart(d => { const n = new Date(d); n.setDate(d.getDate() - 7); return n })}
+                  className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-50">←</button>
+                <span className="text-sm text-gray-700 tabular-nums">
+                  {fmtSl(weekStart)} – {fmtSl((() => { const d = new Date(weekStart); d.setDate(weekStart.getDate() + 6); return d })())}
+                </span>
+                <button onClick={() => setWeekStart(d => { const n = new Date(d); n.setDate(d.getDate() + 7); return n })}
+                  className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-50">→</button>
+                <button onClick={() => setWeekStart(ponedeljekTedna(now))}
+                  className="text-xs text-gray-500 hover:text-gray-900 underline">danes</button>
+              </div>
+            )}
+            {obdobjeTip === 'mesec' && (
+              <>
+                <select value={selectedMonth} onChange={e => setSelectedMonth(Number(e.target.value))} className="border border-gray-200 rounded-xl px-3 py-2 text-sm">
+                  {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                </select>
+                <select value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))} className="border border-gray-200 rounded-xl px-3 py-2 text-sm">
+                  {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2].map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </>
+            )}
+            {obdobjeTip === 'cetrtletje' && (
+              <>
+                <select value={selectedQuarter} onChange={e => setSelectedQuarter(Number(e.target.value))} className="border border-gray-200 rounded-xl px-3 py-2 text-sm">
+                  {[0, 1, 2, 3].map(q => <option key={q} value={q}>Q{q + 1}</option>)}
+                </select>
+                <select value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))} className="border border-gray-200 rounded-xl px-3 py-2 text-sm">
+                  {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2].map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </>
+            )}
+            {(obdobjeTip === 'leto' || obdobjeTip === 'ytd') && (
               <select value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))} className="border border-gray-200 rounded-xl px-3 py-2 text-sm">
                 {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2].map(y => <option key={y} value={y}>{y}</option>)}
               </select>
-            </>
-          ) : (
-            <>
-              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border border-gray-200 rounded-xl px-3 py-2 text-sm" />
-              <span className="text-gray-400 text-sm">–</span>
-              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border border-gray-200 rounded-xl px-3 py-2 text-sm" />
-            </>
-          )}
-          <button
-            onClick={() => setCustomRange(!customRange)}
-            className="text-xs text-gray-500 hover:text-gray-900 underline"
-          >
-            {customRange ? 'Nazaj na mesec/leto' : 'Izberi interval →'}
-          </button>
-          <button className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium">
-            Izvozi PDF
-          </button>
+            )}
+            {obdobjeTip === 'interval' && (
+              <>
+                <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border border-gray-200 rounded-xl px-3 py-2 text-sm" />
+                <span className="text-gray-400 text-sm">–</span>
+                <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border border-gray-200 rounded-xl px-3 py-2 text-sm" />
+              </>
+            )}
+            {/* Jasen izpis dejanskega obdobja, ki se posilja na streznik -
+                zlasti koristno pri YTD in cetrtletju, kjer meje niso ocitne. */}
+            {obdobjeTip !== 'interval' && (
+              <span className="text-xs text-gray-400">
+                {(() => { const { from, to } = getEffectiveRange(); return `${fmtSl(new Date(from))} – ${fmtSl(new Date(to))}` })()}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
