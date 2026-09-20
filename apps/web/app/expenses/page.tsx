@@ -150,7 +150,11 @@ export default function ExpensesPage() {
     if (saving) return
     setSaving(true)
     const amountNet = parseFloat(form.amount_net)
-    const vatRate = parseFloat(form.vat_rate)
+    // POPRAVLJENO (20.9.2026): ce organizacija NI DDV zavezanec, DDV stopnja
+    // ne sme biti shranjena, tudi ce je form.vat_rate ostal na stari vrednosti
+    // (npr. po preklopu iz DDV zavezanca nazaj). Brez DDV zavezanosti se DDV
+    // ne obracunava in ne vraca - celoten bruto znesek je strosek.
+    const vatRate = org?.vat_registered ? parseFloat(form.vat_rate) : 0
     const vatAmount = amountNet * (vatRate / 100)
     const amountTotal = amountNet + vatAmount
 
@@ -358,7 +362,7 @@ export default function ExpensesPage() {
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Znesek brez DDV (€) *</label>
+                <label className="text-xs text-gray-500 block mb-1">{org?.vat_registered ? 'Znesek brez DDV (€) *' : 'Znesek stroška (€) *'}</label>
                 <input
                   type="number" onFocus={e => e.target.select()}
                   value={form.amount_net}
@@ -367,18 +371,33 @@ export default function ExpensesPage() {
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
                 />
               </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">DDV stopnja</label>
-                <select
-                  value={form.vat_rate}
-                  onChange={e => setForm({...form, vat_rate: e.target.value})}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none"
-                >
-                  <option value="22">22%</option>
-                  <option value="9.5">9.5%</option>
-                  <option value="0">0% (brez DDV)</option>
-                </select>
-              </div>
+              {/* POPRAVLJENO (20.9.2026): DDV stopnja se prikaze SAMO DDV zavezancem.
+                  Za nezavezance (vkljucno s popoldanskim s.p., ki ni DDV zavezanec)
+                  DDV ni relevanten - vsak nakup je strosek v celotnem (bruto) znesku,
+                  ker ga ni mogoce odbiti. Prej se je stopnja vedno ponujala in
+                  privzeto racunala "DDV vracilo", tudi ce ga zavezanec sploh ni
+                  mogel uveljavljati. */}
+              {org?.vat_registered ? (
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">DDV stopnja</label>
+                  <select
+                    value={form.vat_rate}
+                    onChange={e => setForm({...form, vat_rate: e.target.value})}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none"
+                  >
+                    <option value="22">22%</option>
+                    <option value="9.5">9.5%</option>
+                    <option value="0">0% (brez DDV)</option>
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">DDV stopnja</label>
+                  <div className="w-full border border-gray-100 bg-gray-50 rounded-xl px-4 py-2.5 text-sm text-gray-400">
+                    Niste DDV zavezanec — se ne obračunava
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Kategorija</label>
                 <select
@@ -402,12 +421,18 @@ export default function ExpensesPage() {
 
             {/* Predogled izračuna */}
             {form.amount_net && (
-              <div className="bg-gray-50 rounded-xl p-3 mb-4 flex gap-6 text-sm">
-                <div><span className="text-gray-500">Osnova: </span><span className="font-medium">€{formatEurNumber(parseFloat(form.amount_net))}</span></div>
-                <div><span className="text-gray-500">DDV: </span><span className="font-medium">€{formatEurNumber((parseFloat(form.amount_net) * parseFloat(form.vat_rate) / 100))}</span></div>
-                <div><span className="text-gray-500">Skupaj: </span><span className="font-semibold">€{formatEurNumber((parseFloat(form.amount_net) * (1 + parseFloat(form.vat_rate)/100)))}</span></div>
-                <div><span className="text-gray-500">DDV vračilo: </span><span className="font-medium text-green-600">€{formatEurNumber((parseFloat(form.amount_net) * parseFloat(form.vat_rate) / 100))}</span></div>
-              </div>
+              org?.vat_registered ? (
+                <div className="bg-gray-50 rounded-xl p-3 mb-4 flex gap-6 text-sm">
+                  <div><span className="text-gray-500">Osnova: </span><span className="font-medium">€{formatEurNumber(parseFloat(form.amount_net))}</span></div>
+                  <div><span className="text-gray-500">DDV: </span><span className="font-medium">€{formatEurNumber((parseFloat(form.amount_net) * parseFloat(form.vat_rate) / 100))}</span></div>
+                  <div><span className="text-gray-500">Skupaj: </span><span className="font-semibold">€{formatEurNumber((parseFloat(form.amount_net) * (1 + parseFloat(form.vat_rate)/100)))}</span></div>
+                  <div><span className="text-gray-500">DDV vračilo: </span><span className="font-medium text-green-600">€{formatEurNumber((parseFloat(form.amount_net) * parseFloat(form.vat_rate) / 100))}</span></div>
+                </div>
+              ) : (
+                <div className="bg-gray-50 rounded-xl p-3 mb-4 flex gap-6 text-sm">
+                  <div><span className="text-gray-500">Znesek stroška: </span><span className="font-semibold">€{formatEurNumber(parseFloat(form.amount_net))}</span></div>
+                </div>
+              )
             )}
 
             <div className="flex gap-3">
@@ -438,16 +463,21 @@ export default function ExpensesPage() {
         )}
 
         {/* Povzetek */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        {/* POPRAVLJENO (20.9.2026): kartica "DDV vhod (vračilo)" se prikaze SAMO
+            DDV zavezancem - nezavezanec DDV-ja ne more uveljavljati, zato bi bila
+            kartica vedno zavajajoca (celo pri 0,00 € je videti kot da koncept velja). */}
+        <div className={org?.vat_registered ? 'grid grid-cols-3 gap-4 mb-6' : 'grid grid-cols-2 gap-4 mb-6'}>
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-xs text-gray-500 mb-1">Skupaj odhodki</div>
             <div className="text-xl font-semibold text-red-500">€{formatEurNumber(totalNet)}</div>
           </div>
-          <div className="bg-white rounded-2xl border border-gray-100 p-5">
-            <div className="text-xs text-gray-500 mb-1">DDV vhod (vračilo)</div>
-            <div className="text-xl font-semibold text-green-600">€{formatEurNumber(totalVat)}</div>
-            <div className="text-xs text-gray-400 mt-1">Odšteje se od DDV dolga</div>
-          </div>
+          {org?.vat_registered && (
+            <div className="bg-white rounded-2xl border border-gray-100 p-5">
+              <div className="text-xs text-gray-500 mb-1">DDV vhod (vračilo)</div>
+              <div className="text-xl font-semibold text-green-600">€{formatEurNumber(totalVat)}</div>
+              <div className="text-xs text-gray-400 mt-1">Odšteje se od DDV dolga</div>
+            </div>
+          )}
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-xs text-gray-500 mb-1">Skupaj plačano</div>
             <div className="text-xl font-semibold">€{formatEurNumber(totalGross)}</div>
@@ -472,31 +502,33 @@ export default function ExpensesPage() {
             {/* DODANO (30.7.2026): horizontalno drsenje na mobilnih napravah. */}
             <div className="overflow-x-auto">
             <div className="min-w-[640px]">
+            {/* POPRAVLJENO (20.9.2026): stolpec "DDV vhod" se prikaze SAMO DDV
+                zavezancem - glej opombo pri kartici povzetka zgoraj. */}
             <div className="grid grid-cols-12 gap-2 px-6 py-3 bg-gray-50 border-b border-gray-100">
               <div className="col-span-2 text-xs font-medium text-gray-500">Datum</div>
-              <div className="col-span-3 text-xs font-medium text-gray-500">Dobavitelj</div>
+              <div className={org?.vat_registered ? 'col-span-3 text-xs font-medium text-gray-500' : 'col-span-5 text-xs font-medium text-gray-500'}>Dobavitelj</div>
               <div className="col-span-2 text-xs font-medium text-gray-500">Kategorija</div>
-              <div className="col-span-2 text-xs font-medium text-gray-500 text-right">Osnova</div>
-              <div className="col-span-2 text-xs font-medium text-gray-500 text-right">DDV vhod</div>
-              <div className="col-span-1 text-xs font-medium text-gray-500 text-right">Skupaj</div>
+              <div className="col-span-2 text-xs font-medium text-gray-500 text-right">{org?.vat_registered ? 'Osnova' : 'Znesek'}</div>
+              {org?.vat_registered && <div className="col-span-2 text-xs font-medium text-gray-500 text-right">DDV vhod</div>}
+              {org?.vat_registered && <div className="col-span-1 text-xs font-medium text-gray-500 text-right">Skupaj</div>}
             </div>
             {expenses.map((exp, i) => (
               <div key={exp.id} onClick={() => openEdit(exp)} className={`grid grid-cols-12 gap-2 px-6 py-3 items-center cursor-pointer hover:bg-gray-50 transition-colors ${i < expenses.length-1 ? 'border-b border-gray-50' : ''}`}>
                 <div className="col-span-2 text-xs text-gray-500">
                   {(exp.receipt_date ? (exp.receipt_date ? (exp.receipt_date ? new Date(exp.receipt_date).toLocaleDateString('sl-SI') : '—') : '—') : '—')}
                 </div>
-                <div className="col-span-3 text-xs font-medium text-gray-900 truncate">{exp.vendor}</div>
+                <div className={org?.vat_registered ? 'col-span-3 text-xs font-medium text-gray-900 truncate' : 'col-span-5 text-xs font-medium text-gray-900 truncate'}>{exp.vendor}</div>
                 <div className="col-span-2 text-xs text-gray-500 truncate">{exp.category}</div>
-                <div className="col-span-2 text-xs text-right text-red-500">€{formatEurNumber(Number(exp.amount_net))}</div>
-                <div className="col-span-2 text-xs text-right text-green-600">€{formatEurNumber(Number(exp.vat_amount))}</div>
-                <div className="col-span-1 text-xs text-right font-medium">€{formatEurNumber(Number(exp.amount_total))}</div>
+                <div className="col-span-2 text-xs text-right text-red-500">€{formatEurNumber(Number(org?.vat_registered ? exp.amount_net : exp.amount_total))}</div>
+                {org?.vat_registered && <div className="col-span-2 text-xs text-right text-green-600">€{formatEurNumber(Number(exp.vat_amount))}</div>}
+                {org?.vat_registered && <div className="col-span-1 text-xs text-right font-medium">€{formatEurNumber(Number(exp.amount_total))}</div>}
               </div>
             ))}
             <div className="grid grid-cols-12 gap-2 px-6 py-3 bg-gray-50 border-t border-gray-200">
-              <div className="col-span-7 text-xs font-medium text-gray-700">SKUPAJ</div>
-              <div className="col-span-2 text-xs text-right font-semibold text-red-500">€{formatEurNumber(totalNet)}</div>
-              <div className="col-span-2 text-xs text-right font-semibold text-green-600">€{formatEurNumber(totalVat)}</div>
-              <div className="col-span-1 text-xs text-right font-semibold">€{formatEurNumber(totalGross)}</div>
+              <div className={org?.vat_registered ? 'col-span-7 text-xs font-medium text-gray-700' : 'col-span-9 text-xs font-medium text-gray-700'}>SKUPAJ</div>
+              <div className="col-span-2 text-xs text-right font-semibold text-red-500">€{formatEurNumber(org?.vat_registered ? totalNet : totalGross)}</div>
+              {org?.vat_registered && <div className="col-span-2 text-xs text-right font-semibold text-green-600">€{formatEurNumber(totalVat)}</div>}
+              {org?.vat_registered && <div className="col-span-1 text-xs text-right font-semibold">€{formatEurNumber(totalGross)}</div>}
             </div>
             </div>
             </div>

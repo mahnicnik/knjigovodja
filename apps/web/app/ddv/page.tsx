@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 import { formatEurNumber } from '@/lib/format'
+import { VAT_REGISTRATION_THRESHOLD, lokalniDatum } from '@/lib/tax-constants'
 
 // POPRAVLJENO (29.7.2026, audit portala):
 //  1. VHODNI DDV: prej trdo kodiran na €0.00 (s komentarjem "za zdaj brez
@@ -38,6 +39,15 @@ export default function DDVPage() {
   // DODANO (16.8.2026): izstopni DDV iz knjige (POS blagajna, banka, kartice)
   const [kpoIncome, setKpoIncome] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  // DODANO (20.9.2026): drseči 12-mesečni promet za nezavezance, da vidijo,
+  // koliko manjka do zakonske meje za OBVEZNO registracijo v sistem DDV
+  // (60.000 € prometa v zadnjih 12 mesecih). NE preklopi vat_registered
+  // samodejno - registracija je pri FURS aktivno dejanje z rokom (prijava
+  // najkasneje v roku, ki ga zakon doloca po prekoracitvi praga), zavezanec
+  // pa lahko zaracunava DDV šele, ko mu FURS dodeli ID za DDV. Samodejni
+  // preklop bi torej lahko povzrocil zaracunavanje DDV, preden je podjetje
+  // sploh registrirano - to je bolj tvegano kot prepozna registracija.
+  const [rollingRevenue, setRollingRevenue] = useState<number | null>(null)
   const supabase = createClient()
 
   const now = new Date()
@@ -59,6 +69,44 @@ export default function DDVPage() {
     if (!org) return
     loadPeriod()
   }, [org, quarter, year])
+
+  useEffect(() => {
+    // DODANO (20.9.2026): samo za nezavezance racunamo drsece 12-mesecno
+    // obdavcljivo osnovo (za DDV zavezanca to ni vec relevantno).
+    if (!org || org.vat_registered) return
+    loadRollingRevenue()
+  }, [org])
+
+  async function loadRollingRevenue() {
+    const to = lokalniDatum(now)
+    const fromD = new Date(now)
+    fromD.setFullYear(fromD.getFullYear() - 1)
+    fromD.setDate(fromD.getDate() + 1) // vkljucno z danasnjim dnem = natanko 12 mesecev
+    const from = lokalniDatum(fromD)
+
+    const [invRes, kpoIncRes] = await Promise.all([
+      supabase
+        .from('issued_invoices')
+        .select('amount_net')
+        .eq('org_id', org.id)
+        .neq('status', 'draft').or('zoi.is.null,zoi.not.like.DEMO-%')
+        .gte('issue_date', from)
+        .lte('issue_date', to),
+      // invoice_id IS NULL: ista varovalka pred dvojnim stetjem kot loadPeriod().
+      supabase
+        .from('kpo_entries')
+        .select('income, vat_out')
+        .eq('org_id', org.id)
+        .eq('entry_type', 'income')
+        .is('invoice_id', null)
+        .gte('entry_date', from)
+        .lte('entry_date', to),
+    ])
+
+    const invNet = (invRes.data || []).reduce((s, i: any) => s + Number(i.amount_net || 0), 0)
+    const kpoNet = (kpoIncRes.data || []).reduce((s, e: any) => s + (Number(e.income || 0) - Number(e.vat_out || 0)), 0)
+    setRollingRevenue(invNet + kpoNet)
+  }
 
   async function loadPeriod() {
     setLoading(true)
@@ -150,10 +198,50 @@ export default function DDVPage() {
       <div className="max-w-2xl mx-auto px-6 py-8">
 
         {!org?.vat_registered ? (
-          <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
-            <div className="text-4xl mb-4">ℹ️</div>
-            <h3 className="font-semibold text-gray-900 mb-2">Niste DDV zavezanec</h3>
-            <p className="text-gray-500 text-sm">DDV obračun velja samo za DDV zavezance.</p>
+          <div className="bg-white rounded-2xl border border-gray-100 p-8">
+            <div className="text-center mb-6">
+              <div className="text-4xl mb-4">ℹ️</div>
+              <h3 className="font-semibold text-gray-900 mb-2">Niste DDV zavezanec</h3>
+              <p className="text-gray-500 text-sm">DDV obračun velja samo za DDV zavezance.</p>
+            </div>
+
+            {/* DODANO (20.9.2026): drseči 12-mesečni promet proti zakonski meji.
+                Registracija ni samodejna - je aktivno dejanje pri FURS. */}
+            {rollingRevenue !== null && (() => {
+              const delez = Math.min(100, Math.round((rollingRevenue / VAT_REGISTRATION_THRESHOLD) * 100))
+              const presezen = rollingRevenue >= VAT_REGISTRATION_THRESHOLD
+              const blizu = !presezen && rollingRevenue >= VAT_REGISTRATION_THRESHOLD * 0.8
+              return (
+                <div className={`rounded-xl p-4 border ${presezen ? 'bg-red-50 border-red-100' : blizu ? 'bg-orange-50 border-orange-100' : 'bg-gray-50 border-gray-100'}`}>
+                  <div className="flex justify-between items-baseline mb-2">
+                    <span className="text-xs font-medium text-gray-600">Promet zadnjih 12 mesecev</span>
+                    <span className="text-sm font-semibold text-gray-900">€{formatEurNumber(rollingRevenue)} / €{formatEurNumber(VAT_REGISTRATION_THRESHOLD)}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-gray-200 overflow-hidden mb-3">
+                    <div
+                      className={`h-full rounded-full ${presezen ? 'bg-red-500' : blizu ? 'bg-orange-400' : 'bg-gray-400'}`}
+                      style={{ width: `${delez}%` }}
+                    />
+                  </div>
+                  {presezen ? (
+                    <p className="text-xs text-red-700 leading-relaxed">
+                      Promet je presegel 60.000 € v zadnjih 12 mesecih — po zakonu ste dolžni se registrirati za DDV pri FURS
+                      (eDavki → Vstop v sistem DDV). Sami ne obračunavajte DDV, dokler vam FURS ne dodeli ID za DDV — šele
+                      takrat v Nastavitvah vklopite &quot;DDV zavezanec&quot;.
+                    </p>
+                  ) : blizu ? (
+                    <p className="text-xs text-orange-700 leading-relaxed">
+                      Bližate se zakonski meji 60.000 €. Dobro je začeti spremljati promet in se pozanimati o postopku
+                      registracije, da vas prag ne preseneti.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-500 leading-relaxed">
+                      Ko promet zadnjih 12 mesecev preseže 60.000 €, ste po zakonu dolžni se registrirati za DDV.
+                    </p>
+                  )}
+                </div>
+              )
+            })()}
           </div>
         ) : (
           <>
