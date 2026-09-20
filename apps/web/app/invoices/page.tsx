@@ -387,8 +387,16 @@ export default function InvoicesPage() {
   return (
     <AppLayout org={org}>
     <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
-        <div>
+      {/* POPRAVLJENO: vrstica ni imela flex-wrap. Ko je opozorilo o vrzeli v
+          stevilcenju dolgo (vec manjkajocih stevilk, kot pri strankah z vec
+          preskoki), je na ozkem (mobilnem) zaslonu leva stran "pojedla" ves
+          prostor, gumbi na desni pa so se stisnili na skoraj 0 sirine - ker
+          nista imela `whitespace-nowrap`, se je njihovo besedilo prelomilo
+          po vsaki crki (navpican stolpec crk namesto gumba). Zdaj se vrstica
+          na ozkem zaslonu prelomi v dve, gumbi pa nikoli ne padejo pod svojo
+          naravno sirino. */}
+      <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-start flex-wrap gap-3">
+        <div style={{ flex: '1 1 260px', minWidth: 0 }}>
           <h1 className="font-semibold text-gray-900 mt-0.5">Izdani računi</h1>
           {vrzeli.length > 0 && (
             <div style={{ fontSize: 12, color: '#8a6d1f', background: '#FDF6E3', border: '0.5px solid #E8D9A8', borderRadius: 8, padding: '6px 10px', marginTop: 6, lineHeight: 1.5 }}>
@@ -399,23 +407,23 @@ export default function InvoicesPage() {
             </div>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0, flexWrap: 'wrap' }}>
           {isFree && (
-            <div style={{ fontSize: 12, color: atLimit ? '#dc2626' : '#888', background: atLimit ? '#fef2f2' : '#f3f4f6', padding: '4px 10px', borderRadius: 20, fontWeight: 600 }}>
+            <div style={{ fontSize: 12, color: atLimit ? '#dc2626' : '#888', background: atLimit ? '#fef2f2' : '#f3f4f6', padding: '4px 10px', borderRadius: 20, fontWeight: 600, whiteSpace: 'nowrap' }}>
               {invoiceCount}/5 računov
             </div>
           )}
           {atLimit ? (
-            <a href="/nastavitve#narocnina" style={{ background: '#1D9E75', color: '#fff', padding: '8px 16px', borderRadius: 12, fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>
+            <a href="/nastavitve#narocnina" style={{ background: '#1D9E75', color: '#fff', padding: '8px 16px', borderRadius: 12, fontSize: 14, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}>
               Nadgradi →
             </a>
           ) : (
-            <div style={{ display: 'flex', gap: 8 }}>
-              <Link href="/invoices/import" className="border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium">
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Link href="/invoices/import" className="border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap">
                 Uvozi iz PDF
               </Link>
               {canCreate && (
-                <Link href="/invoices/new" className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium">
+                <Link href="/invoices/new" className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap">
                   + Nov račun
                 </Link>
               )}
