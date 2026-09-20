@@ -128,6 +128,8 @@ export default function NastavitevPage() {
     phone: '', email: '', contribution_class: 8,
     contrib_piz: '' as string, contrib_zzzs: '' as string, contrib_zaposlovanje: '' as string,
     contrib_starsevstvo: '' as string, contrib_akontacija: '' as string,
+    // DODANO: izbira, ali se mesecni prispevki samodejno dodajo med stroske.
+    auto_prispevki_strosek: false,
   })
   const supabase = createClient()
 
@@ -159,6 +161,7 @@ export default function NastavitevPage() {
         post_code: o.post_code || '', city: o.city || '',
         phone: o.phone || '', email: o.email || '',
         contribution_class: o.contribution_class || 8, contrib_piz: String(o.contrib_piz ?? ''), contrib_zzzs: String(o.contrib_zzzs ?? ''), contrib_zaposlovanje: String(o.contrib_zaposlovanje ?? ''), contrib_starsevstvo: String(o.contrib_starsevstvo ?? ''), contrib_akontacija: String(o.contrib_akontacija ?? ''),
+        auto_prispevki_strosek: !!o.auto_prispevki_strosek,
       })
     }
     setLoading(false)
@@ -182,6 +185,7 @@ export default function NastavitevPage() {
       // pretvorba ob vsakem znaku poje decimalno piko ("274.45" -> "27445").
       // V stevilo pretvorimo sele tu; sprejmemo tudi vejico kot decimalno locilo.
       contrib_piz: stStevilo(form.contrib_piz), contrib_zzzs: stStevilo(form.contrib_zzzs), contrib_zaposlovanje: stStevilo(form.contrib_zaposlovanje), contrib_starsevstvo: stStevilo(form.contrib_starsevstvo), contrib_akontacija: stStevilo(form.contrib_akontacija),
+      auto_prispevki_strosek: form.auto_prispevki_strosek,
     }).eq('id', org.id)
     // POPRAVLJENO (30.7.2026, KRITICNA najdba): prej se ob napaki ni
     // zgodilo NICESAR - shranjevanje je lahko tiho spodletelo (npr.
@@ -498,6 +502,25 @@ export default function NastavitevPage() {
                     <div style={{ fontSize: 12, color: '#555' }}>
                       Skupaj: <strong>€{(Number(form.contrib_piz || 0) + Number(form.contrib_zzzs || 0) + Number(form.contrib_zaposlovanje || 0) + Number(form.contrib_starsevstvo || 0) + Number(form.contrib_akontacija || 0)).toFixed(2)}/mes</strong>
                     </div>
+                  </div>
+                  {/* DODANO: izbira, ali se zgornji prispevki (PIZ+ZZZS+zaposlovanje+
+                      starsevstvo, BREZ akontacije dohodnine) samodejno zabelezijo
+                      med stroske na dan zapadlosti (20. v mesecu). Privzeto izklopljeno -
+                      prej se prispevki NISO nikoli samodejno steli med stroske, na
+                      strani /prispevki so bili samo opomnik in UPN QR koda. */}
+                  <div style={{ gridColumn: '1 / -1', marginTop: 4 }}>
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 14px' }}>
+                      <input type="checkbox" checked={form.auto_prispevki_strosek}
+                        onChange={e => setForm({ ...form, auto_prispevki_strosek: e.target.checked })}
+                        style={{ marginTop: 2 }} />
+                      <span>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>Samodejno dodaj prispevke med stroške</span><br/>
+                        <span style={{ fontSize: 12, color: '#666', lineHeight: 1.5 }}>
+                          Vsak mesec, na dan zapadlosti (20.), se zgornja vsota (brez akontacije dohodnine)
+                          samodejno zabeleži kot strošek — brez tega jih morate po plačilu vnesti ročno v Stroških.
+                        </span>
+                      </span>
+                    </label>
                   </div>
                 </div>
               </div>

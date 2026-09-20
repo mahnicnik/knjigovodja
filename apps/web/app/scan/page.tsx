@@ -194,11 +194,17 @@ export default function ScanPage() {
         category: data.category,
       })
       setResult(data)
+      // DODANO (prelet 298): AI vedno vrne razcep na DDV, tudi ce
+      // organizacija NI davcni zavezanec in DDV-ja ne sme uveljavljati - v tem
+      // primeru je celoten placan (bruto) znesek strosek, stopnja pa 0 %.
+      // Prej se je AI-jev razcep prevzel dobesedno in je bil "strosek" prikazan
+      // in shranjen NIZJI od dejansko placanega zneska (glej tudi handleSave).
+      const jeZavezanec = !!org?.vat_registered
       setForm({
         vendor: data.vendor || '',
         receipt_date: data.date || lokalniDatum(),
-        amount_net: data.amount_net?.toString() || '',
-        vat_rate: data.vat_rate?.toString() || '0',
+        amount_net: (jeZavezanec ? data.amount_net : (data.amount_total ?? data.amount_net))?.toString() || '',
+        vat_rate: jeZavezanec ? (data.vat_rate?.toString() || '0') : '0',
         category: data.category || 'Marketing',
         description: data.description || '',
       })
@@ -216,8 +222,11 @@ export default function ScanPage() {
     // dokument oziroma dvakrat odsteto stanje.
     if (saving) return
     setSaving(true)
+    // DODANO (prelet 298): varovalka tudi ob shranjevanju, ne samo pri
+    // predizpolnitvi - za nezavezance DDV stopnja ne sme biti > 0, karkoli je
+    // ze v polju (npr. star osnutek pred menjavo organizacije).
     const amountNet = parseFloat(form.amount_net)
-    const vatRate = parseFloat(form.vat_rate)
+    const vatRate = org?.vat_registered ? parseFloat(form.vat_rate) : 0
     const vatAmount = amountNet * (vatRate / 100)
     const amountTotal = amountNet + vatAmount
 
@@ -340,8 +349,11 @@ export default function ScanPage() {
           setBatchFiles(prev => prev.map((f, idx) => idx === i ? { ...f, status: 'error', error: data.error || 'AI ni prepoznal podatkov na računu' } : f))
           continue
         }
-        const amountNet = parseFloat(data.amount_net)
-        const vatRate = parseFloat(data.vat_rate ?? '0')
+        // DODANO (prelet 298): enaka varovalka kot pri posameznem skeniranju
+        // zgoraj - nezavezanec ne sme dobiti AI-jevega razcepa DDV.
+        const jeZavezanec = !!org?.vat_registered
+        const vatRate = jeZavezanec ? parseFloat(data.vat_rate ?? '0') : 0
+        const amountNet = jeZavezanec ? parseFloat(data.amount_net) : parseFloat(data.amount_total ?? data.amount_net)
         const vatAmount = amountNet * (vatRate / 100)
         const amountTotal = amountNet + vatAmount
         const receiptDate = data.date || lokalniDatum()
@@ -574,8 +586,8 @@ export default function ScanPage() {
               {[
                 { label: 'Dobavitelj', value: result.vendor },
                 { label: 'Datum', value: result.date },
-                { label: 'Znesek brez DDV', value: result.amount_net ? `€${result.amount_net}` : '—' },
-                { label: 'DDV', value: result.vat_rate !== undefined ? `${result.vat_rate}%` : '—' },
+                { label: org?.vat_registered ? 'Znesek brez DDV' : 'Znesek stroška', value: form.amount_net ? `€${form.amount_net}` : '—' },
+                { label: 'DDV', value: org?.vat_registered ? (result.vat_rate !== undefined ? `${result.vat_rate}%` : '—') : 'ni zavezanec' },
               ].map(item => (
                 <div key={item.label} className="bg-white rounded-xl p-3">
                   <div className="text-xs text-gray-500 mb-0.5">{item.label}</div>
@@ -622,7 +634,7 @@ export default function ScanPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">Znesek brez DDV (€) *</label>
+                  <label className="text-xs text-gray-500 block mb-1">{org?.vat_registered ? 'Znesek brez DDV (€) *' : 'Znesek stroška (€) *'}</label>
                   <input
                     type="number" onFocus={e => e.target.select()}
                     value={form.amount_net}
@@ -631,31 +643,52 @@ export default function ScanPage() {
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
                   />
                 </div>
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">DDV stopnja</label>
-                  <select
-                    value={form.vat_rate}
-                    onChange={e => setForm({...form, vat_rate: e.target.value})}
-                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none"
-                  >
-                    <option value="22">22%</option>
-                    <option value="9.5">9.5%</option>
-                    <option value="0">0% (brez DDV)</option>
-                  </select>
-                </div>
+                {/* DODANO (prelet 298): DDV stopnja se prikaze SAMO zavezancem -
+                    ista sprememba kot v expenses/page.tsx (prelet 289). Tu je bila
+                    prej spregledana, zato je AI-jev razcep ostal neopazen. */}
+                {org?.vat_registered ? (
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">DDV stopnja</label>
+                    <select
+                      value={form.vat_rate}
+                      onChange={e => setForm({...form, vat_rate: e.target.value})}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none"
+                    >
+                      <option value="22">22%</option>
+                      <option value="9.5">9.5%</option>
+                      <option value="0">0% (brez DDV)</option>
+                    </select>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">DDV stopnja</label>
+                    <div className="w-full border border-gray-100 bg-gray-50 rounded-xl px-4 py-2.5 text-sm text-gray-400">
+                      Niste DDV zavezanec — se ne obračunava
+                    </div>
+                  </div>
+                )}
               </div>
 
               {form.amount_net && (
-                <div className="bg-gray-50 rounded-xl p-3 flex gap-6 text-sm">
-                  <div>
-                    <span className="text-gray-500">DDV: </span>
-                    <span className="font-medium">€{(parseFloat(form.amount_net||'0') * parseFloat(form.vat_rate) / 100).toFixed(2)}</span>
+                org?.vat_registered ? (
+                  <div className="bg-gray-50 rounded-xl p-3 flex gap-6 text-sm">
+                    <div>
+                      <span className="text-gray-500">DDV: </span>
+                      <span className="font-medium">€{(parseFloat(form.amount_net||'0') * parseFloat(form.vat_rate) / 100).toFixed(2)}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Skupaj: </span>
+                      <span className="font-semibold">€{(parseFloat(form.amount_net||'0') * (1 + parseFloat(form.vat_rate)/100)).toFixed(2)}</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-gray-500">Skupaj: </span>
-                    <span className="font-semibold">€{(parseFloat(form.amount_net||'0') * (1 + parseFloat(form.vat_rate)/100)).toFixed(2)}</span>
+                ) : (
+                  <div className="bg-gray-50 rounded-xl p-3 flex gap-6 text-sm">
+                    <div>
+                      <span className="text-gray-500">Znesek stroška: </span>
+                      <span className="font-semibold">€{parseFloat(form.amount_net||'0').toFixed(2)}</span>
+                    </div>
                   </div>
-                </div>
+                )
               )}
 
               <button

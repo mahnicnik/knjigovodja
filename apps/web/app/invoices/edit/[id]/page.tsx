@@ -136,7 +136,11 @@ export default function EditInvoicePage() {
     const ddv = Math.round(neto * s * 100) / 100
     return { neto, ddv, bruto: Math.round((neto + ddv) * 100) / 100 }
   })()
-  const odpriKalkulator = (i: number) => { setKalkulator({ vrstica: i }); setKalkStopnja(Number(items[i]?.vat_rate) || 22); setKalkSmer('bruto'); setKalkZnesek('') }
+  // POPRAVLJENO (prelet 298): glej isti popravek v invoices/new/page.tsx -
+  // `|| 22` je pri nezavezancu (vat_rate vedno 0) tiho vrnil 22 %, kalkulator
+  // pa je iz vpisanega bruto zneska posledicno odstel 22 % DDV, cetudi je
+  // koncna stopnja v vrstici ostala 0 %.
+  const odpriKalkulator = (i: number) => { setKalkulator({ vrstica: i }); setKalkStopnja(org?.vat_registered ? (Number(items[i]?.vat_rate) || 22) : 0); setKalkSmer('bruto'); setKalkZnesek('') }
   const total = subtotal + vatAmount
 
   async function handleSave(status: 'draft' | 'sent') {

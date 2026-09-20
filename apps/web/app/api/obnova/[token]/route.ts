@@ -255,7 +255,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     console.error('Predracun ni ustvarjen: paket nima cene (zahtevek ' + z.id + ')')
     return NextResponse.json({ napaka: 'paket_brez_cene' }, { status: 409 })
   }
-  const stopnja = Number(tmpl?.vat_rate ?? 22)
+  // POPRAVLJENO (prelet 298): `?? 22` privzame 22 % DDV, ce paketu vat_rate
+  // manjka (npr. star zapis izpred uvedbe polja). Za nezavezanca to NIKOLI
+  // ne sme veljati - org.vat_registered je tu ze na voljo, zato ga
+  // uporabimo kot dokoncno varovalko, ne glede na to, kaj je (ali ni)
+  // shranjeno na predlogi paketa.
+  const stopnja = org.vat_registered ? Number(tmpl?.vat_rate ?? 22) : 0
   const osnova = stopnja > 0 ? cena / (1 + stopnja / 100) : cena
   const ddv = cena - osnova
 

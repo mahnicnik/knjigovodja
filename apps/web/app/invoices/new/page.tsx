@@ -269,6 +269,14 @@ export default function NewInvoicePage() {
    *
    * Kalkulator racuna v obe smeri in zna izracunano ceno brez DDV vpisati
    * naravnost v vrstico racuna - da je ni treba prepisovati.
+   *
+   * POPRAVLJENO (prelet 298): odpiranje kalkulatorja je stopnjo bralo z
+   * `item.vat_rate || 22` - pri nezavezancu je vat_rate VEDNO 0, ki je v
+   * JavaScriptu neresnicna vrednost, zato je `0 || 22` tiho vrnil 22 %.
+   * Kalkulator (privzeta smer "iz cene z DDV") je zato iz vpisanega BRUTO
+   * zneska izracunal ceno, zmanjsano za 22 %, cetudi je bila v vrstico na
+   * koncu zapisana stopnja 0 % - DDV je bil torej dejansko odstet od cene,
+   * ne da bi to bilo kjerkoli razvidno.
    */
   const [kalkulator, setKalkulator] = useState<{ vrstica: number } | null>(null)
   const [kalkZnesek, setKalkZnesek] = useState('')
@@ -407,7 +415,7 @@ export default function NewInvoicePage() {
                         <label style={{ fontSize:'10px', color:'#888', display:'block', marginBottom:'3px' }}>Cena (€)</label>
                         <input type="number" onFocus={e => e.target.select()} value={item.unit_price} onChange={e => updateItem(i, 'unit_price', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none text-right" />
                         {/* PRELET 279: kalkulator DDV je bil samo v namiznem razporedu. */}
-                        <button onClick={() => { setKalkulator({ vrstica: i }); setKalkStopnja(Number(item.vat_rate) || 22); setKalkSmer('bruto'); setKalkZnesek('') }}
+                        <button onClick={() => { setKalkulator({ vrstica: i }); setKalkStopnja(org?.vat_registered ? (Number(item.vat_rate) || 22) : 0); setKalkSmer('bruto'); setKalkZnesek('') }}
                           title="Preračunaj iz cene z DDV"
                           className="mt-1 w-full text-[10px] text-gray-400">iz cene z DDV</button>
                       </div>
@@ -686,7 +694,7 @@ export default function NewInvoicePage() {
                       Zdaj je pod poljem za ceno, kjer je prostor prost. */}
                   <div className="col-span-2">
                     <input type="number" onFocus={e => e.target.select()} value={item.unit_price} onChange={e => updateItem(i, 'unit_price', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none text-right" />
-                    <button onClick={() => { setKalkulator({ vrstica: i }); setKalkStopnja(Number(item.vat_rate) || 22); setKalkSmer('bruto'); setKalkZnesek('') }}
+                    <button onClick={() => { setKalkulator({ vrstica: i }); setKalkStopnja(org?.vat_registered ? (Number(item.vat_rate) || 22) : 0); setKalkSmer('bruto'); setKalkZnesek('') }}
                       title="Preračunaj iz cene z DDV"
                       className="mt-1 w-full text-[10px] text-gray-400 hover:text-gray-900 transition-colors">iz cene z DDV</button>
                   </div>
@@ -714,7 +722,7 @@ export default function NewInvoicePage() {
                 cene se v praksi dogovorijo Z DDV, na racun pa gre cena BREZ. */}
             <div className="flex gap-2">
               <button onClick={addItem} className="flex-1 text-sm text-gray-500 hover:text-gray-900 border border-dashed border-gray-200 rounded-xl px-4 py-2 hover:border-gray-400 transition-colors">+ Dodaj postavko</button>
-              <button onClick={() => { const i = items.length - 1; setKalkulator({ vrstica: i }); setKalkStopnja(Number(items[i]?.vat_rate) || 22); setKalkSmer('bruto'); setKalkZnesek('') }}
+              <button onClick={() => { const i = items.length - 1; setKalkulator({ vrstica: i }); setKalkStopnja(org?.vat_registered ? (Number(items[i]?.vat_rate) || 22) : 0); setKalkSmer('bruto'); setKalkZnesek('') }}
                 title="Iz cene z DDV izracunaj ceno brez DDV"
                 className="text-sm text-gray-500 hover:text-gray-900 border border-gray-200 rounded-xl px-4 py-2 hover:border-gray-400 transition-colors whitespace-nowrap">Kalkulator DDV</button>
             </div>

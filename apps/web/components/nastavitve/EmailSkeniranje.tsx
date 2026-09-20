@@ -90,8 +90,13 @@ function EmailSkeniranjeContent() {
 
   async function confirmPending(item: any) {
     const d = item.extracted
-    const amountNet = Number(d.amount_net || 0)
-    const vatRate = Number(d.vat_rate || 0)
+    // DODANO (prelet 298): AI pri e-postnem skeniranju vedno vrne razcep na
+    // DDV, tudi ce organizacija NI davcni zavezanec - takrat DDV-ja ne sme
+    // uveljavljati in je celoten placan (bruto) znesek strosek. Enak popravek
+    // kot v scan/page.tsx (rocno in paketno skeniranje).
+    const jeZavezanec = !!org?.vat_registered
+    const vatRate = jeZavezanec ? Number(d.vat_rate || 0) : 0
+    const amountNet = jeZavezanec ? Number(d.amount_net || 0) : Number(d.amount_total ?? d.amount_net ?? 0)
     const vatAmount = amountNet * (vatRate / 100)
     const amountTotal = amountNet + vatAmount
     // POPRAVLJENO (16.8.2026): prej brez preverbe - potrjen racun iz e-poste se
