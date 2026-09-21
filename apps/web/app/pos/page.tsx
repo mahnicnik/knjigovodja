@@ -2965,7 +2965,7 @@ th{background:#f5f5f5;font-weight:bold}.right{text-align:right}.total-row{font-s
 ${cartDiscount > 0 ? `<div style="text-align:right;color:#666">Popust ${fmtPct(cartDiscount)}%: -${eur2(totals.total-total)}</div>` : ''}
 <div class="total-row" style="text-align:right;font-size:18px;margin:12px 0">SKUPAJ: ${eur2(total)}</div>
 <div class="stamp">Predracun ni davčno potrjen. Velja do: ${new Date(Date.now()+7*86400000).toLocaleDateString('sl-SI')}</div>
-<div class="footer">${escapeHtml(pp.ime)} · www.računko.si<br>Predracun izdan s sistemom RACUNKO</div>
+<div class="footer">${escapeHtml(pp.ime)} · www.računko.si<br>Predracun izdan s sistemom Računko</div>
 <!-- SPREMENJENO (21.8.2026): samodejni window.print() je odprl MODALNO okno
      operacijskega sistema, ki blokira cel brskalnik, dokler ga uporabnik ne
      zapre. Pri vsakem racunu je bil to odvecen klik, pri strankah brez

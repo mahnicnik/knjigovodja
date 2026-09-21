@@ -16,7 +16,7 @@ import crypto from 'crypto'
  * Shopify Admin → Nastavitve → Obvestila → Webhooks → Ustvari webhook
  * - Dogodek: Naročilo plačano (orders/paid)
  * - Format: JSON
- * - URL: https://racunko.si/api/webhooks/shopify?org_id=VAŠ_ORG_ID
+ * - URL: https://xn--raunko-j2a.si/api/webhooks/shopify?org_id=VAŠ_ORG_ID
  */
 
 async function getSupabase() {

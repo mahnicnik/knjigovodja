@@ -262,7 +262,7 @@ const DEFAULT_HELP: PageHelpContent = {
     { icon: '💸', title: 'Stroški', desc: 'Evidentirajte prejete račune in stroške.' },
     { icon: '📅', title: 'Davki', desc: 'DDV, prispevki, dohodnina — vse na enem mestu.' },
   ],
-  tip: 'Za pomoč pišite na support@racunko.si',
+  tip: 'Za pomoč pišite na support@računko.si',
 }
 
 export default function PageHelp() {
@@ -430,7 +430,7 @@ export default function PageHelp() {
 
             {/* Footer */}
             <div style={{ marginTop: 16, paddingTop: 12, borderTop: '0.5px solid #f0f0f0', fontSize: 11, color: '#bbb', textAlign: 'center' }}>
-              Potrebujete dodatno pomoč? <a href="mailto:support@racunko.si" style={{ color: '#1D9E75' }}>support@racunko.si</a>
+              Potrebujete dodatno pomoč? <a href="mailto:support@xn--raunko-j2a.si" style={{ color: '#1D9E75' }}>support@računko.si</a>
             </div>
           </div>
         </div>

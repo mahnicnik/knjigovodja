@@ -165,7 +165,7 @@ export default function IntegracijeSekcija() {
 
   const webhookBaseUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/api/webhooks`
-    : 'https://racunko.si/api/webhooks'
+    : 'https://xn--raunko-j2a.si/api/webhooks'
 
   const wcIntegration = integrations.find(i => i.type === 'woocommerce')
   const shIntegration = integrations.find(i => i.type === 'shopify')

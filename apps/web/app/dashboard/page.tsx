@@ -771,6 +771,26 @@ export default function DashboardPage() {
     if (org?.id) localStorage.setItem(`rk_dismissed_steps_${org.id}`, JSON.stringify(next))
   }
 
+  // DODANO: klik na "Skrij" pri celotnem sklopu "Začetni koraki" je samo
+  // nastavil `showOnboarding` na `false` v stanju te strani - ob naslednjem
+  // obisku (ali osvezitvi) se je sklop VEDNO znova prikazal, ker se nikamor
+  // ni shranilo. Obvestilo ob skritju je pri tem se trdilo, da uporabnik
+  // korake "najde kasneje v Nastavitvah", cetudi taka moznost ne obstaja.
+  //
+  // Zdaj se skritje shrani v localStorage (vezano na organizacijo, enako kot
+  // `dismissedSteps` zgoraj), zato ostane skrito tudi po osvezitvi strani.
+  useEffect(() => {
+    if (!org?.id) return
+    try {
+      setShowOnboarding(localStorage.getItem(`rk_hide_onboarding_${org.id}`) !== '1')
+    } catch { /* privzeto ostane prikazano */ }
+  }, [org?.id])
+
+  function hideOnboarding() {
+    setShowOnboarding(false)
+    if (org?.id) { try { localStorage.setItem(`rk_hide_onboarding_${org.id}`, '1') } catch {} }
+  }
+
   const onboardingSteps = useMemo(() => {
     // POPRAVLJENO (16.8.2026): korak je zahteval tudi IBAN, ki pa ni nujen -
     // s.p. lahko posluje brez izdajanja racunov s placilom na TRR. Uporabnik je
@@ -941,7 +961,7 @@ export default function DashboardPage() {
         {/* ONBOARDING CHECKLIST (only if not complete) */}
         {showOnboarding && !onboardingComplete && (
           <section className="rk-onboard">
-            <button className="rk-onboard-close" onClick={() => { setShowOnboarding(false); showToast('Najdete jih kasneje v Nastavitvah') }} title="Skrij">
+            <button className="rk-onboard-close" onClick={() => { hideOnboarding(); showToast('Skrito na tej napravi') }} title="Skrij">
               <Icon name="close" size={14} />
             </button>
             <div className="rk-onboard-head">

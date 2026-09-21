@@ -18,7 +18,7 @@ import crypto from 'crypto'
  * - Ime: Računko
  * - Status: Aktiven
  * - Tema: Naročilo ustvarjeno (ali Naročilo zaključeno)
- * - URL: https://racunko.si/api/webhooks/woocommerce?org_id=VAŠ_ORG_ID
+ * - URL: https://xn--raunko-j2a.si/api/webhooks/woocommerce?org_id=VAŠ_ORG_ID
  * - Skrivnost: (generirano v Računko nastavitvah)
  */
 

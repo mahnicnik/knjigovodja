@@ -206,7 +206,7 @@ export default function ApiKljuciSekcija() {
 
           <div style={{ fontSize: 12, color: '#888', marginBottom: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em' }}>Base URL</div>
           <code style={{ display: 'block', fontSize: 12, background: '#F7F6F2', padding: '8px 12px', borderRadius: 8, marginBottom: 20, fontFamily: 'monospace' }}>
-            https://racunko.si/api/v1
+            https://xn--raunko-j2a.si/api/v1
           </code>
 
           <div style={{ fontSize: 12, color: '#888', marginBottom: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em' }}>Avtentikacija</div>
@@ -254,7 +254,7 @@ export default function ApiKljuciSekcija() {
           title="Kako uporabim API?"
           steps={[
             { icon: '🔑', title: 'Generirajte API ključ', desc: 'Kliknite "+ Generiraj" zgoraj, vnesite ime in shranite ključ — prikaže se samo enkrat.' },
-            { icon: '📡', title: 'Pošljite HTTP request', desc: 'Dodajte ključ v Authorization header vsakega klica.', code: 'curl https://racunko.si/api/v1/stats -H "Authorization: Bearer rk_live_..."', copyable: true },
+            { icon: '📡', title: 'Pošljite HTTP request', desc: 'Dodajte ključ v Authorization header vsakega klica.', code: 'curl https://xn--raunko-j2a.si/api/v1/stats -H "Authorization: Bearer rk_live_..."', copyable: true },
             { icon: '📄', title: 'Prejmete JSON odgovor', desc: 'Vsak odgovor ima format: { success: true, data: [...], meta: { page, total } }' },
             { icon: '🔒', title: 'Varnost', desc: 'Ključa nikoli ne delite javno. Če je kompromitiran, ga takoj deaktivirajte in generirajte novega.' },
           ]}

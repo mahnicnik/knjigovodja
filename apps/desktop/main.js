@@ -587,24 +587,40 @@ function setupIpcHandlers() {
       const ESC = 0x1B, GS = 0x1D
       const out = []
       const b = (...x) => out.push(...x)
-      // Isti nabor znakov kot pri racunih (Windows-1252), da sumniki ne razpadejo.
-      const sl = (s) => String(s == null ? '' : s)
-        .replace(/[čć]/g,'c').replace(/[ČĆ]/g,'C')
-        .replace(/š/g,'s').replace(/Š/g,'S')
-        .replace(/ž/g,'z').replace(/Ž/g,'Z')
-        .replace(/đ/g,'d').replace(/Đ/g,'D')
-      // Evro je v Windows-1252 bajt 0x80 - brez tega bi se izpisal kot vprasaj.
-      const txt = (s) => {
-        const t = sl(s)
-        for (let i = 0; i < t.length; i++) {
-          const c = t.charCodeAt(i)
-          b(c === 0x20AC ? 0x80 : (c > 0xFF ? 0x3F : c))
+      /**
+       * POPRAVLJENO: sumniki so tu VEDNO padli na ASCII (c/s/z), zato je
+       * otvoritev/X/Z izpis vedno pisal "racunko.si" namesto "računko.si"
+       * - ceprav so navadni RACUNI (buildEscPos zgoraj) ze od preleta 189
+       * pravilni. Ta izpis je namrec imel svojo, LOCENO in starejso
+       * cistilno funkcijo, ki sumnikov sploh ni poznala - popravek
+       * preleta 189 je zato veljal samo za racune, ne za te tri izpise.
+       *
+       * Zdaj uporablja ISTO kodno stran (CP852, na tem tiskalniku ze
+       * potrjena s preizkusom sumnikov) kot navadni racuni.
+       */
+      const CP852 = { 'č':0x9F, 'Č':0xAC, 'š':0xE7, 'Š':0xE6,
+                      'ž':0xA7, 'Ž':0xA6, 'ć':0x86, 'Ć':0x8F,
+                      'đ':0xD0, 'Đ':0xD1 }
+      let stranZdaj = 0x10
+      const nastaviStran = (n) => { if (stranZdaj !== n) { b(ESC, 0x74, n); stranZdaj = n } }
+      const sl = (s) => (String(s == null ? '' : s))
+        .replace(/é/g,'e').replace(/è/g,'e')
+        .replace(/[^\x20-\x7EčČšŠžŽćĆđĐ€\u0080]/g,'?')
+      const zapisi = (s) => {
+        for (const c of String(s == null ? '' : s)) {
+          const k = c.charCodeAt(0)
+          if (k >= 0x20 && k <= 0x7E) { b(k); continue }
+          if (c === '€' || k === 0x80) { nastaviStran(0x10); b(0x80); continue }
+          const cp = CP852[c]
+          if (cp !== undefined) { nastaviStran(0x12); b(cp); continue }
+          b(0x3F)
         }
       }
+      const txt = (s) => zapisi(sl(s))
       const lf = () => b(0x0A)
 
       b(ESC, 0x40)          // init
-      b(ESC, 0x74, 0x10)    // kodna stran Windows-1252
+      b(ESC, 0x74, 0x10)    // zacetna kodna stran Windows-1252 (evro, ASCII)
 
       for (const v of vrstice) {
         const besedilo = typeof v === 'string' ? v : (v?.t ?? '')

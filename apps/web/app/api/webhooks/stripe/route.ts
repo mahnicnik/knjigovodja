@@ -19,7 +19,7 @@ import { resend, FROM_EMAIL, posiljateljZa } from '@/lib/resend'
  *
  * Nastavitev v Stripe dashboardu uporabnika:
  * Stripe → Developers → Webhooks → Add endpoint
- * - URL: https://racunko.si/api/webhooks/stripe?org_id=VAŠ_ORG_ID
+ * - URL: https://xn--raunko-j2a.si/api/webhooks/stripe?org_id=VAŠ_ORG_ID
  * - Events: checkout.session.completed, invoice.paid
  * - Signing secret: (vnesi v Računko nastavitve → Integracije → Stripe)
  *

@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
     // ── Zgradi SIMULIRAN Stripe objekt (checkout.session.completed, mode:payment) ──
     const fakeStripeId = `sim_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     const amountTotal = 1.00 // majhen, ocitno testen znesek
-    const customerEmail = user.email ?? 'test@racunko.si'
+    const customerEmail = user.email ?? 'test@xn--raunko-j2a.si'
     const customerName = 'TEST Simulacija (Računko sandbox)'
 
     const amountNet = amountTotal / (org.vat_registered ? 1.22 : 1)
