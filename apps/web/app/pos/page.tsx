@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { escapeHtml } from '@/lib/html-escape'
-import { zesekVrstice, razclenitevDdv, popustEurVOdstotek, jeStoritevVrstica } from '@/lib/pos-calc'
+import { zesekVrstice, razclenitevDdv, popustEurVOdstotek } from '@/lib/pos-calc'
 import { predlagajUjemanje } from '@/lib/ujemanje-artiklov'
 import { SLOG_AKTA } from '@/lib/interni-akt'
 import VatExemptionPicker from '@/components/VatExemptionPicker'
@@ -10883,12 +10883,17 @@ function ReportsScreen({ posData, auth, setScreen }) {
        * PRELET 268: BAR ALI STORITEV.
        * POPRAVLJENO (prelet 306): prejsnja locnica "ima item_id → bar" je
        * spregledala storitve, ki so vpisane kot navaden artikel v ceniku in
-       * samo oznacene s kljukico "Storitev" (`bookable`) - te ZDAJ TUDI
-       * imajo `item_id`, zato so se stele pod "bar". Prava locnica je ista
-       * kot povsod drugod v blagajni (glej `jeStoritevVrstica`): karta,
-       * paket ALI artikel, oznacen kot storitev.
+       * samo oznacene s kljukico "Storitev" (`bookable`) - te so imele
+       * `item_id`, zato so se stele pod "bar".
+       * POPRAVLJENO (prelet 307): popravek preleta 306 (`jeStoritevVrstica`)
+       * je pri tem prelomil karte in pakete - ti NIMAJO ne `item_id` ne
+       * `service_id` ne `items.bookable` (imajo `customer_package_id`), zato
+       * jih je `jeStoritevVrstica` spregledala in so padle pod "bar".
+       * Prava locnica ostaja preprosta: "bar" je SAMO artikel iz cenika, ki
+       * NI oznacen kot storitev - vse ostalo (karta, paket, storitev) je
+       * "storitev", ne glede na to, prek katerega polja je povezano.
        */
-      const vrsta = jeStoritevVrstica(l as any) ? 'storitev' : 'bar'
+      const vrsta = ((l as any).item_id && !(l as any).items?.bookable) ? 'bar' : 'storitev'
       if (!itemMap[k]) itemMap[k] = { name:k, qty:0, total:0, vrsta }
       itemMap[k].qty += Number(l.qty || 1)
       if (!sKartico) {

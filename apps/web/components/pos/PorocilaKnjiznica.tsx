@@ -21,7 +21,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { BUSINESS_ID } from '@/lib/pos-client'
-import { jeStoritevVrstica } from '@/lib/pos-calc'
 
 type Tip = 'text' | 'eur' | 'int' | 'num' | 'date' | 'datetime' | 'pct'
 type Stolpec = { k: string; l: string; tip?: Tip; w?: number }
@@ -101,8 +100,12 @@ const POROCILA: Porocilo[] = [
         // POPRAVLJENO (prelet 306): "ima item_id → bar" je spregledalo
         // artikle iz cenika, oznacene s kljukico "Storitev" (`bookable`) -
         // ti so imeli item_id, zato so se steli pod Bar namesto Storitve.
+        // POPRAVLJENO (prelet 307): prelet 306 je pri tem prelomil karte in
+        // pakete (nimajo ne item_id ne service_id ne items.bookable) - zdaj
+        // je "bar" samo artikel iz cenika, ki NI oznacen kot storitev; vse
+        // ostalo (karta, paket, storitev) je "storitev".
         let bar = 0, st = 0
-        for (const o of v as any[]) for (const l of o.order_lines || []) { const z = Number(l.qty) * Number(l.unit_price); if (jeStoritevVrstica(l)) st += z; else bar += z }
+        for (const o of v as any[]) for (const l of o.order_lines || []) { const z = Number(l.qty) * Number(l.unit_price); if (l.item_id && !l.items?.bookable) bar += z; else st += z }
         return { mesec:m, bar:n2(bar), storitve:n2(st), skupaj:n2(bar + st), racunov:v.length }
       }).sort((a, b) => b.mesec.localeCompare(a.mesec))
     } },
@@ -112,7 +115,9 @@ const POROCILA: Porocilo[] = [
       const [r, c] = await Promise.all([placaniRacuni(db, od, do_), stranke(db)])
       // POPRAVLJENO (prelet 306): "!item_id" je spregledalo artikle iz
       // cenika, oznacene s kljukico "Storitev" (`bookable`).
-      return r.flatMap((o: any) => (o.order_lines || []).filter((l: any) => jeStoritevVrstica(l)).map((l: any) => ({
+      // POPRAVLJENO (prelet 307): popravek preleta 306 je prelomil karte in
+      // pakete - glej pojasnilo pri "mesecni-promet" zgoraj.
+      return r.flatMap((o: any) => (o.order_lines || []).filter((l: any) => !(l.item_id && !l.items?.bookable)).map((l: any) => ({
         datum:o.closed_at, stranka:c[o.customer_id]?.name || 'Brez stranke', storitev:l.name, znesek:n2(Number(l.qty) * Number(l.unit_price)) })))
     } },
   { id:'placila-po-dnevih', skupina:'Prodaja', ime:'Prodaja po načinih plačila po dnevih', opis:'Gotovina, kartica in ostalo za vsak dan posebej — za primerjavo z bančnim izpiskom.',
