@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { escapeHtml } from '@/lib/html-escape'
-import { zesekVrstice, razclenitevDdv, popustEurVOdstotek } from '@/lib/pos-calc'
+import { zesekVrstice, razclenitevDdv, popustEurVOdstotek, jeStoritevVrstica } from '@/lib/pos-calc'
 import { predlagajUjemanje } from '@/lib/ujemanje-artiklov'
 import { SLOG_AKTA } from '@/lib/interni-akt'
 import VatExemptionPicker from '@/components/VatExemptionPicker'
@@ -10869,7 +10869,7 @@ function ReportsScreen({ posData, auth, setScreen }) {
     // POPRAVLJENO (prelet 181): dodana `subtotal` in `discount_amount`.
     // Brez njiju iz vrstice ni bilo mogoce vedeti, ali je bil na racunu popust.
     const linesRes = await db.from('order_lines')
-      .select('name, qty, unit_price, item_id, orders!inner(closed_at, status, business_id, subtotal, discount_amount, payments(method))')
+      .select('name, qty, unit_price, item_id, service_id, items(bookable), orders!inner(closed_at, status, business_id, subtotal, discount_amount, payments(method))')
       .eq('orders.business_id', BUSINESS_ID)
       .eq('orders.status', 'paid')
       .gte('orders.closed_at', fromStr)
@@ -10881,17 +10881,14 @@ function ReportsScreen({ posData, auth, setScreen }) {
       const sKartico = ((l as any).orders?.payments || []).some((p: any) => p.method === 'pkg')
       /**
        * PRELET 268: BAR ALI STORITEV.
-       *
-       * Storitve - clanske karte, treniranje, paketi - se prodajo BREZ
-       * `item_id`, ker niso artikli iz cenika, ampak paketi. Bar (pijaca,
-       * hrana) ima `item_id` vedno. Locnica je v podatkih ze cista; tu jo
-       * le uporabimo.
-       *
-       * V septembru: bar 1.029 kosov za 2.537 EUR, storitve 6 kosov za
-       * 1.143 EUR. Brez locitve je paket za 480 EUR z enim kosom prehitel
-       * kavo s 109 kosi - in lastnik ni videl, kaj se v lokalu res prodaja.
+       * POPRAVLJENO (prelet 306): prejsnja locnica "ima item_id → bar" je
+       * spregledala storitve, ki so vpisane kot navaden artikel v ceniku in
+       * samo oznacene s kljukico "Storitev" (`bookable`) - te ZDAJ TUDI
+       * imajo `item_id`, zato so se stele pod "bar". Prava locnica je ista
+       * kot povsod drugod v blagajni (glej `jeStoritevVrstica`): karta,
+       * paket ALI artikel, oznacen kot storitev.
        */
-      const vrsta = (l as any).item_id ? 'bar' : 'storitev'
+      const vrsta = jeStoritevVrstica(l as any) ? 'storitev' : 'bar'
       if (!itemMap[k]) itemMap[k] = { name:k, qty:0, total:0, vrsta }
       itemMap[k].qty += Number(l.qty || 1)
       if (!sKartico) {

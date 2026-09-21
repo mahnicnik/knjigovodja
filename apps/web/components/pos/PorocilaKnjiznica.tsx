@@ -21,6 +21,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { BUSINESS_ID } from '@/lib/pos-client'
+import { jeStoritevVrstica } from '@/lib/pos-calc'
 
 type Tip = 'text' | 'eur' | 'int' | 'num' | 'date' | 'datetime' | 'pct'
 type Stolpec = { k: string; l: string; tip?: Tip; w?: number }
@@ -42,7 +43,7 @@ const DNEVI = ['Nedelja','Ponedeljek','Torek','Sreda','Četrtek','Petek','Sobota
 
 async function placaniRacuni(db: any, od: string, do_: string) {
   const { data, error } = await db.from('orders')
-    .select('id, invoice_number, closed_at, subtotal, discount_amount, discount_pct, total, cashier_id, customer_id, order_lines(name, qty, unit_price, vat_rate, item_id), payments(method, amount)')
+    .select('id, invoice_number, closed_at, subtotal, discount_amount, discount_pct, total, cashier_id, customer_id, order_lines(name, qty, unit_price, vat_rate, item_id, service_id, items(bookable)), payments(method, amount)')
     .eq('business_id', BUSINESS_ID).eq('status', 'paid')
     .gte('closed_at', od + 'T00:00:00').lte('closed_at', do_ + 'T23:59:59')
     .order('closed_at', { ascending: false })
@@ -92,21 +93,26 @@ const POROCILA: Porocilo[] = [
         dan:k.split('|')[0], artikel:k.split('|')[1], kosov:n2(v.reduce((s: number, l: any) => s + Number(l.qty), 0)),
         skupaj:n2(v.reduce((s: number, l: any) => s + Number(l.qty) * Number(l.unit_price), 0)) })).sort((a, b) => b.dan.localeCompare(a.dan) || b.skupaj - a.skupaj)
     } },
-  { id:'mesecni-promet', skupina:'Prodaja', ime:'Mesečni promet po dejavnostih', opis:'Bar (artikli iz cenika) in storitve (karte, paketi) po mesecih.',
+  { id:'mesecni-promet', skupina:'Prodaja', ime:'Mesečni promet po dejavnostih', opis:'Bar (navadni artikli) in storitve (karte, paketi ter artikli, označeni s kljukico "Storitev") po mesecih.',
     stolpci:[{k:'mesec',l:'Mesec'},{k:'bar',l:'Bar',tip:'eur'},{k:'storitve',l:'Storitve',tip:'eur'},{k:'skupaj',l:'Skupaj',tip:'eur'},{k:'racunov',l:'Računov',tip:'int'}],
     nalozi: async (db, od, do_) => {
       const r = await placaniRacuni(db, od, do_)
       return [...grupiraj(r, (o: any) => mesec(o.closed_at))].map(([m, v]) => {
+        // POPRAVLJENO (prelet 306): "ima item_id → bar" je spregledalo
+        // artikle iz cenika, oznacene s kljukico "Storitev" (`bookable`) -
+        // ti so imeli item_id, zato so se steli pod Bar namesto Storitve.
         let bar = 0, st = 0
-        for (const o of v as any[]) for (const l of o.order_lines || []) { const z = Number(l.qty) * Number(l.unit_price); if (l.item_id) bar += z; else st += z }
+        for (const o of v as any[]) for (const l of o.order_lines || []) { const z = Number(l.qty) * Number(l.unit_price); if (jeStoritevVrstica(l)) st += z; else bar += z }
         return { mesec:m, bar:n2(bar), storitve:n2(st), skupaj:n2(bar + st), racunov:v.length }
       }).sort((a, b) => b.mesec.localeCompare(a.mesec))
     } },
-  { id:'storitve-po-stranki', skupina:'Prodaja', ime:'Prodaja storitev po stranki', opis:'Karte in paketi, ki jih je kupila posamezna stranka.',
+  { id:'storitve-po-stranki', skupina:'Prodaja', ime:'Prodaja storitev po stranki', opis:'Karte, paketi in artikli, označeni s kljukico "Storitev", ki jih je kupila posamezna stranka.',
     stolpci:[{k:'datum',l:'Datum',tip:'datetime'},{k:'stranka',l:'Stranka'},{k:'storitev',l:'Storitev'},{k:'znesek',l:'Znesek',tip:'eur'}],
     nalozi: async (db, od, do_) => {
       const [r, c] = await Promise.all([placaniRacuni(db, od, do_), stranke(db)])
-      return r.flatMap((o: any) => (o.order_lines || []).filter((l: any) => !l.item_id).map((l: any) => ({
+      // POPRAVLJENO (prelet 306): "!item_id" je spregledalo artikle iz
+      // cenika, oznacene s kljukico "Storitev" (`bookable`).
+      return r.flatMap((o: any) => (o.order_lines || []).filter((l: any) => jeStoritevVrstica(l)).map((l: any) => ({
         datum:o.closed_at, stranka:c[o.customer_id]?.name || 'Brez stranke', storitev:l.name, znesek:n2(Number(l.qty) * Number(l.unit_price)) })))
     } },
   { id:'placila-po-dnevih', skupina:'Prodaja', ime:'Prodaja po načinih plačila po dnevih', opis:'Gotovina, kartica in ostalo za vsak dan posebej — za primerjavo z bančnim izpiskom.',
