@@ -32,11 +32,16 @@ export default function PoslovnaPorocila() {
   const [org, setOrg] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [year, setYear] = useState(new Date().getFullYear())
-  const [tab, setTab] = useState<'izkaz'|'mesecno'|'stranke'|'kategorije'>('izkaz')
+  const [tab, setTab] = useState<'izkaz'|'mesecno'|'stranke'|'kategorije'|'ddv-pos'>('izkaz')
 
   const [monthlyData, setMonthlyData] = useState<MonthData[]>([])
   const [clientData, setClientData] = useState<{ name: string; revenue: number; invoices: number }[]>([])
   const [categoryData, setCategoryData] = useState<{ category: string; amount: number; count: number }[]>([])
+  // PRELET 313: DDV po kategorijah POS ARTIKLOV (za razliko od zgornje
+  // "categoryData", ki so kategorije STROŠKOV). "stopnje" hrani vse DDV
+  // stopnje, ki se pojavijo znotraj kategorije (obicajno ena, a ne vedno -
+  // npr. bar s hrano 9,5% in pijaco 22% v isti kategoriji "Pult").
+  const [posVatData, setPosVatData] = useState<{ kategorija: string; bruto: number; net: number; vat: number; stopnje: number[]; count: number }[]>([])
   const [totals, setTotals] = useState({ revenue: 0, expenses: 0, profit: 0, vatOut: 0, vatIn: 0, vatDue: 0 })
 
   useEffect(() => {
@@ -123,6 +128,48 @@ export default function PoslovnaPorocila() {
       })
       setCategoryData(Object.entries(catMap).map(([category, d]) => ({ category, ...d })).sort((a, b) => b.amount - a.amount))
 
+      // PRELET 313: DDV po kategorijah POS artiklov. Ista poizvedba (business_id
+      // + status='paid' + closed_at) kot pri Z-poročilu v blagajni - tako je
+      // vsota tu vedno skladna z dejanskim blagajniškim prometom. Samo za
+      // organizacije, ki imajo povezano POS blagajno (pos_business_id).
+      if (orgData?.pos_business_id) {
+        const { data: posOrders } = await supabase
+          .from('orders')
+          .select('id, closed_at, order_lines(total, vat_rate, voided, item_id, service_id, items(category_id, categories(name)))')
+          .eq('business_id', orgData.pos_business_id)
+          .eq('status', 'paid')
+          .gte('closed_at', `${yearStart}T00:00:00`)
+          .lte('closed_at', `${yearEnd}T23:59:59`)
+
+        const posCatMap: Record<string, { bruto: number; net: number; vat: number; stopnje: Set<number>; count: number }> = {}
+        ;(posOrders ?? []).forEach((o: any) => {
+          ;(o.order_lines ?? []).forEach((l: any) => {
+            if (l.voided) return
+            const bruto = Number(l.total) || 0
+            if (bruto === 0) return
+            // OPOMBA: `?? 22`, NE `|| 22` - oproščena postavka (0%) bi bila
+            // sicer napacno prestejeta med 22% (glej razclenitevDdv v pos-calc.ts).
+            const stopnja = Number(l.vat_rate ?? 22)
+            const net = bruto / (1 + stopnja / 100)
+            const vat = bruto - net
+            const ime = l.items?.categories?.name ?? (l.service_id ? 'Storitve' : 'Ostalo')
+            if (!posCatMap[ime]) posCatMap[ime] = { bruto: 0, net: 0, vat: 0, stopnje: new Set(), count: 0 }
+            posCatMap[ime].bruto += bruto
+            posCatMap[ime].net += net
+            posCatMap[ime].vat += vat
+            posCatMap[ime].stopnje.add(stopnja)
+            posCatMap[ime].count += 1
+          })
+        })
+        setPosVatData(
+          Object.entries(posCatMap)
+            .map(([kategorija, d]) => ({ kategorija, bruto: d.bruto, net: d.net, vat: d.vat, stopnje: Array.from(d.stopnje).sort((a, b) => b - a), count: d.count }))
+            .sort((a, b) => b.vat - a.vat)
+        )
+      } else {
+        setPosVatData([])
+      }
+
       setLoading(false)
     }
     load()
@@ -180,6 +227,14 @@ export default function PoslovnaPorocila() {
               {t.label}
             </button>
           ))}
+          {/* PRELET 313: samostojen gumb (ne del zgornjega seznama), da ni
+              treba spreminjati tipa polja "id" v "as const" seznamu zgoraj -
+              ta zavihek je na voljo samo pogojno (POS blagajna + DDV zavezanec). */}
+          {org?.pos_business_id && org?.vat_registered && (
+            <button onClick={() => setTab('ddv-pos')} style={{ background: 'none', border: 0, borderBottom: tab === 'ddv-pos' ? '2.5px solid #0D1F12' : '2.5px solid transparent', padding: '14px 20px', fontSize: 13, fontWeight: tab === 'ddv-pos' ? 600 : 400, color: tab === 'ddv-pos' ? '#0D1F12' : '#888', cursor: 'pointer' }}>
+              🧾 DDV po kategorijah (POS)
+            </button>
+          )}
         </div>
       </div>
 
@@ -421,6 +476,63 @@ export default function PoslovnaPorocila() {
             )}
           </div>
         )}
+
+        {/* PRELET 313: DDV PO KATEGORIJAH POS ARTIKLOV */}
+        {tab === 'ddv-pos' && (() => {
+          const skupajVat = posVatData.reduce((s, c) => s + c.vat, 0)
+          return (
+            <div style={{ background: '#fff', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+              {posVatData.length === 0 ? (
+                <div style={{ padding: 48, textAlign: 'center', color: '#aaa', fontSize: 14 }}>Ni POS prodaje za {year}</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: '#F7F6F2', borderBottom: '0.5px solid rgba(0,0,0,0.08)' }}>
+                      {['Kategorija', 'DDV stopnja', 'Bruto promet', 'Osnova (neto)', 'DDV', 'Delež DDV izhoda'].map(h => (
+                        <th key={h} style={{ padding: '10px 16px', fontSize: 11, fontWeight: 700, color: '#888', textAlign: h === 'Kategorija' || h === 'DDV stopnja' ? 'left' : 'right', textTransform: 'uppercase', letterSpacing: '.04em' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {posVatData.map((c, i) => {
+                      const pct = skupajVat > 0 ? (c.vat / skupajVat) * 100 : 0
+                      return (
+                        <tr key={i} style={{ borderBottom: '0.5px solid rgba(0,0,0,0.05)' }}>
+                          <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 500, color: '#0D1F12' }}>{c.kategorija}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 12, color: '#666' }}>{c.stopnje.map(s => `${s}%`).join(' + ')}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 13, textAlign: 'right', color: '#666' }}>{fmt(c.bruto)}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 13, textAlign: 'right', color: '#666' }}>{fmt(c.net)}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: '#0D1F12' }}>{fmt(c.vat)}</td>
+                          <td style={{ padding: '12px 16px', minWidth: 160 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={{ flex: 1, height: 6, background: '#F7F6F2', borderRadius: 3, overflow: 'hidden' }}>
+                                <div style={{ width: `${pct}%`, height: '100%', background: '#E8B547', borderRadius: 3 }} />
+                              </div>
+                              <span style={{ fontSize: 12, color: '#888', width: 36, textAlign: 'right' }}>{pct.toFixed(0)}%</span>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ background: '#0D1F12', color: '#fff' }}>
+                      <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 700, color: '#fff' }}>SKUPAJ</td>
+                      <td />
+                      <td style={{ padding: '12px 16px', fontSize: 13, textAlign: 'right', color: 'rgba(255,255,255,0.7)' }}>{fmt(posVatData.reduce((s, c) => s + c.bruto, 0))}</td>
+                      <td style={{ padding: '12px 16px', fontSize: 13, textAlign: 'right', color: 'rgba(255,255,255,0.7)' }}>{fmt(posVatData.reduce((s, c) => s + c.net, 0))}</td>
+                      <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: '#E8B547' }}>{fmt(skupajVat)}</td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+              <div style={{ padding: '12px 20px', fontSize: 11, color: '#aaa', borderTop: '0.5px solid rgba(0,0,0,0.05)' }}>
+                Samo plačani (zaključeni) POS računi za {year}. Kategorija izhaja iz kategorije artikla v Nastavitve → Kategorije & Artikli; postavke brez artikla (storitve) so združene pod "Storitve".
+              </div>
+            </div>
+          )
+        })()}
       </div>
     </div>
     </AppLayout>

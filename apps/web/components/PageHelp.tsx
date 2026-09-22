@@ -379,6 +379,37 @@ export default function PageHelp() {
         }
         /* PRELET 309: "tipka" animacija med cakanjem na odgovor klepeta */
         @keyframes pageHelpBounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+
+        /* PRELET 312: na mobilnih brskalnikih (predvsem iOS Safari) enota
+           "vh" meri NAJVECJI mozni izgled zaslona (kot da je naslovna
+           vrstica brskalnika skrita), ne dejansko vidno visino. Ker je
+           okno pomoci "position:fixed" in prisidno na dno (alignItems:
+           flex-end), je bil spodnji del okna (vnosno polje klepeta) zato
+           pogosto POD dejansko vidnim delom zaslona - uporabnik je moral
+           premakniti/scrollati stran, da je naslovna vrstica izginila in
+           se je vnosno polje sploh prikazalo.
+           POPRAVEK: "dvh" (dynamic viewport height) se samodejno prilagaja
+           dejansko vidnemu delu zaslona. Vrstica z "vh" ostane kot varnostna
+           mreza za stare brskalnike, ki "dvh" se ne poznajo - ti neveljavno
+           vrstico preprosto prezrejo in obveljala je "vh" vrednost nad njo. */
+        .pagehelp-modalica {
+          max-height: 80vh;
+          max-height: 80dvh;
+        }
+        /* PRELET 312: enako kot pri "pagehelp-msgs" spodaj - padding je tu
+           namesto kot inline slog, da ga mobilna medijska poizvedba lahko
+           prevozi (inline slog bi jo sicer vedno prekril). */
+        .pagehelp-overlay { padding: 24px; }
+        /* PRELET 312: min-height je tu (ne kot inline slog na elementu),
+           ker mora mobilna medijska poizvedba spodaj lahko prevozi to
+           vrednost - inline slog bi jo vedno prekril, ne glede na
+           specificnost CSS pravila. */
+        .pagehelp-msgs { min-height: 220px; }
+        @media (max-width: 480px) {
+          .pagehelp-overlay { padding: 12px; }
+          .pagehelp-modalica { max-height: 88vh; max-height: 88dvh; }
+          .pagehelp-msgs { min-height: 140px; }
+        }
       `}</style>
       {/* POPRAVLJENO (prelet 237): PLAVAJOCI GUMB JE ODSTRANJEN.
           Bil je pritrjen cez vsebino in so ga ze dvakrat premikali, ker je
@@ -431,21 +462,23 @@ export default function PageHelp() {
       {/* Modal overlay */}
       {open && (
         <div
+          className="pagehelp-overlay"
           onClick={e => { if (e.target === e.currentTarget) setOpen(false) }}
           style={{
             position: 'fixed', inset: 0,
             background: 'rgba(0,0,0,0.45)',
             display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-start',
-            padding: 24, zIndex: 2000,
+            zIndex: 2000,
           }}
         >
-          <div style={{
+          <div className="pagehelp-modalica" style={{
             background: '#fff',
             borderRadius: 16,
             width: '100%',
             // PRELET 309: zavihek klepeta je nekoliko sirsi od staticnih navodil.
             maxWidth: tab === 'klepet' ? 480 : 420,
-            maxHeight: '80vh',
+            // PRELET 312: maxHeight (80vh/80dvh) je zdaj v razredu
+            // "pagehelp-modalica" zgoraj - glej opombo ob @media pravilih.
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
@@ -520,7 +553,7 @@ export default function PageHelp() {
             ) : (
               <>
                 {/* Sporočila klepeta */}
-                <div style={{ flex: 1, overflowY: 'auto', padding: '0 28px', minHeight: 220 }}>
+                <div className="pagehelp-msgs" style={{ flex: 1, overflowY: 'auto', padding: '0 28px' }}>
                   {chatMessages.map((msg, i) => (
                     <div key={i} style={{ marginBottom: 12, display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
                       <div style={{
