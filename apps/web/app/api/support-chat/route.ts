@@ -29,99 +29,175 @@ const PRODUCT_KNOWLEDGE = `
 RAČUNKO — kaj aplikacija je:
 Slovenska SaaS aplikacija za s.p. (samostojne podjetnike): računovodstvo/fakturiranje (portal) IN gostinska/prodajna davčna blagajna (POS), v enem programu. Ciljna skupina: slovenski s.p.-ji, tudi normiranci. Izvoz podatkov za računovodjo (Vasco, Pantheon).
 
-NAROČNINSKI PAKETI:
-- Brezplačen paket: osnovno fakturiranje in KPO knjiga, omejeno število računov/mesec, brez AI funkcij (skeniranje računov, AI uvoz cenika), brez pošiljanja računov po e-pošti.
-- Pro (12,99 €/mesec ali 129,90 €/leto): neomejeno fakturiranje, AI skeniranje prejetih računov, pošiljanje računov po e-pošti, AI računovodja (/ai).
-- Pro + POS (29,99 €/mesec): vse iz Pro, plus polna POS blagajna (mize, prodaja, FURS davčno potrjevanje, poročila, zaposleni s PIN kodami).
-Nadgradnja/zamenjava paketa: Nastavitve → Naročnina.
+NAROČNINSKI PAKETI: "🆓 Free" (0 €, neomejeni računi, FURS fiskalizacija, PDF, prispevki/UPN QR, a brez AI funkcij in brez pošiljanja po e-pošti), "💼 Pro" (12,99 €/mes ali 129,90 €/leto — doda e-mail pošiljanje, AI skeniranje računov, dobavnice, AI računovodja), "🖥️ Pro + POS" (29,99 €/mes ali 299,90 €/leto — doda celotno POS blagajno, koledar/termine, člane/pakete, inventar). Nadgradnja: Nastavitve → Naročnina, gumb "Upravljaj naročnino" (Stripe).
 
 ═══════════════════════════════════════
-PORTAL — RAČUNOVODSTVO IN FAKTURIRANJE
+PORTAL — FAKTURIRANJE
 ═══════════════════════════════════════
 
-IZDANI RAČUNI (/invoices): Pregled izdanih računov, status plačil. Nov račun: vnesi stranko (davčna št. → samodejno izpolni iz AJPES), postavke, datum izdaje in rok plačila (privzeto 15 dni). DDV se izračuna samodejno glede na DDV registracijo podjetja. Pošiljanje po e-pošti stranki je samo Pro. Ko stranka plača, račun se ročno označi kot plačan → samodejno se posodobi KPO knjiga. Zapadli (rdeči) računi = treba poslati opomin.
+IZDANI RAČUNI (/invoices): Seznam vseh izdanih računov s statistiko "Skupaj fakturirano", "Plačano", "Neplačano". Gumb "+ Nov račun" (na free planu prikazan števec "n/5 računov", nato "Nadgradi →"). Vsak račun ima gumbe "⬇ PDF", "📧 Pošlji" (samo Pro), in meni "··· Več": "✅ Označi kot plačano", "💶 Zabeleži delno plačilo", "↩ Razveljavi plačilo", "✏️ Uredi", "📋 Podvoji", "🧾 Prenesi e-račun (XML)" (eSLOG), "📝 Izdaj dobropis", "🚫 Storniraj račun" (ustvari kreditni zapis s pripono "-S"), "📥 Arhiviraj"/"📤 Obnovi". Brisanje je mogoče SAMO pri osnutkih in nefiskaliziranih storno zapisih — FURS-potrjenega računa ni mogoče izbrisati (10-letna zakonska hramba). Statusi: Osnutek, Izdano, Poslano, Zamuda, Plačano, Storno.
 
-PREDRAČUNI (/predracuni): Ponudba pred izdajo računa - ni davčni dokument. Ko stranka potrdi, se s klikom pretvori v pravi račun.
+NOV RAČUN (/invoices/new): Stranka iz shranjenih partnerjev ali ročno; polje Davčna številka + gumb "Poišči" ob 8 vnesenih številkah samodejno izpolni ime/naslov/IBAN prek AJPES; "💾 Shrani stranko za prihodnjič". Postavke prek "+ Dodaj postavko" (Opis, Količina, Cena, DDV 22/9,5/0 %, Popust %); vgrajen kalkulator DDV. Pri 0 % DDV je obvezen izbirnik "Razlog za neobračunan DDV". Shranjevanje: "Shrani osnutek" ali "Izdaj račun". Pošiljanje po e-pošti (samo Pro) doda tudi eSLOG XML, če ima kupec davčno številko.
 
-AVANSNI RAČUNI (/avansni-racuni): Za predplačilo pred opravljeno storitvijo. Vnese se skupna vrednost pogodbe in delež avansa (%). Ob zaključku storitve se izda finalni račun, ki avans samodejno odšteje.
+PREDRAČUNI (/predracuni): "+ Nov predračun", status (Osnutek/Poslano/Sprejeto/Zavrnjeno/Poteklo) v spustnem seznamu. Gumb "→ Račun" pretvori v osnutek računa; predračun dobi status "accepted" s povezavo na nastali račun.
 
-PONAVLJAJOČI RAČUNI (/ponavljajoci-racuni): Avtomatsko periodično izdajanje istega računa (naročnine, najemnine ipd.).
+AVANSNI RAČUNI (/avansni-racuni): "+ Nov avansni račun" — Stranka, Opis storitve, Skupna vrednost (€), Delež avansa % (10–100), oblika AVA-LETO-NNN. Po opravljeni storitvi gumb "→ Finalni račun" izda končni račun z odbitkom že plačanega avansa.
 
-DOBAVNICE (/dobavnice): Dokazilo o dobavi blaga, ni davčni dokument - za zaračunavanje je potreben ločen račun.
+PONAVLJAJOČI RAČUNI (/ponavljajoci-racuni): "+ Nov ponavljajoč račun" — Stranka, Cena, Pogostost (Tedensko/Mesečno/Četrtletno/Letno), Naslednja izdaja, Datum konca. Ob zapadlem datumu se prikaže "⏰ Za izdati danes" in gumb "→ Izdaj zdaj" (samodejno premakne naslednji datum). Mogoče je "Pavzirati"/"Aktivirati".
 
-E-RAČUN (/e-racun): Pošiljanje/prejemanje računov v eSLOG formatu (za posle z javnim sektorjem in večjimi podjetji).
+DOBAVNICE (/dobavnice): "+ Nova dobavnica". Neobračunane ("Čaka na račun") so grupirane po stranki; "📄 Izstavi račun" združi vse dobavnice stranke v en nov osnutek računa.
 
-STROŠKI (/expenses): Evidenca prejetih računov/stroškov. Ročni vnos (dobavitelj, znesek, kategorija) ali "Skeniraj račun" (/scan) - AI (Claude) prebere fotografijo/PDF računa in izpolni podatke samodejno (samo Pro; podprto JPG/PNG/PDF/HEIC). Pravilna kategorija strošku vpliva na DDV obračun in poročila.
+E-RAČUN (/e-racun): Informativna stran o obveznosti eSLOG e-računov med podjetji od 1.1.2028. V praksi: gumb "🧾 Prenesi e-račun (XML)" na seznamu računov in samodejna XML priloga ob pošiljanju poslovni stranki.
 
-BANČNI UVOZ (/banka): Uvoz izpiska (CSV za vse, PDF z AI ekstrakcijo samo Pro) - aplikacija samodejno poišče ujemajoče račune po znesku/datumu, uporabnik potrdi ujemanje → računi se označijo kot plačani.
-KARTIČNI IZPISKI (/kartice): Podobno za izpiske kartičnega poslovanja.
+═══════════════════════════════════════
+PORTAL — STROŠKI, BANKA, ZALOGA
+═══════════════════════════════════════
 
-KPO KNJIGA (/kpo): Knjiga prihodkov in odhodkov - zakonsko obvezna za normirance/s.p. Vodi se SAMODEJNO (prihodki ob izdaji računa, odhodki ob vnosu stroška, promet POS blagajne). Filtriranje po mesecu/letu/vrsti, izvoz v XLSX za računovodjo.
+STROŠKI (/expenses): "📷 Skeniraj z AI" in "+ Dodaj strošek". Obrazec: Dobavitelj*, Datum, Znesek brez DDV (€)* (pri nezavezancih "Znesek stroška (€)*", DDV se sploh ne prikaže), DDV stopnja 22/9,5/0 %, Kategorija (Pisarniški material, Komunikacije, Programska oprema, Transport, Prehrana, Izobraževanje, Marketing, Oprema, Storitve, Drugo — vpliva na KPO in poročila). Vsak strošek se zapiše tudi v KPO knjigo.
 
-DDV OBRAČUN (/ddv): Mesečni/trimesečni DDV-O obrazec. DDV izhod (iz izdanih računov) minus DDV vhod (iz stroškov) = obveznost/vračilo. Rok oddaje: zadnji dan v mesecu za preteklo obdobje. DDV registracija je obvezna nad 60.000 € prometa v zadnjih 12 mesecih.
+SKENIRANJE RAČUNOV (/scan, samo Pro): "📷 Fotografiraj" ali "Izberi datoteko" (JPG/PNG/PDF/HEIC, PDF do 4MB). AI (Claude) prebere vendor/datum/znesek/DDV/kategorijo, uporabnik potrdi v kartici "✓ AI je prebral podatke" → "✓ Shrani v stroške". Obstaja tudi paketni način za več PDF-jev hkrati (samodejno shrani brez potrditve).
 
-DOHODNINA (/dohodnina): Kalkulator akontacije dohodnine in ocena letne obveznosti - vnese se prihodki/odhodki YTD, vzdrževani družinski člani. To je OCENA, dejanski znesek določi FURS z odločbo.
+BANKA (/banka): Izbira banke (NLB, SKB, Sparkasse, Nova KBM, Addiko ...) ali "🔍 Samodejno zaznaj", uvoz CSV/TXT/XML/camt.053 (brez omejitev) ali PDF (samo Pro). Prilivi se samodejno ujemajo z neplačanimi računi po znesku/datumu/referenci; uporabnik s kljukicami potrdi in "✓ Poknjiži N transakcij" — ujeti računi se označijo kot plačani.
 
-PRISPEVKI S.P. (/prispevki): Mesečni prispevki za socialno varnost (ZPIZ, ZZZS, zaposlovanje, starševstvo) + akontacija dohodnine, rok plačila do 20. v mesecu za pretekli mesec. Vsaka postavka ima UPN QR kodo za plačilo v mobilni banki. Popoldanski s.p. (zaposlen tudi drugje): zaposlovanje in starševstvo se v nastavitvah nastavita na 0 €.
+KARTICE (/kartice): Usklajevanje izplačil kartičnih procesorjev (SumUp, Wordline, NLB POS, SKB POS, Stripe...). "📄 Uvozi iz PDF/slike" (samo Pro) ali "+ Nov obračun" (ročno: obdobje, bruto prodaja, provizija %). "✓ Poknjiži obračun v KPO" zabeleži bruto prodajo kot prihodek in provizijo kot strošek ločeno.
 
-NORMIRANI S.P. (/normirani): Pregled/nastavitve za normirano ugotavljanje davčne osnove (pavšalni odhodki namesto dejanskih stroškov).
+ZALOGE (/zaloge — stara pot /zaloga zdaj preusmerja sem): "📄 Uvozi dobavnico" (AI, ni Pro-gated), "✍️ Ročni vnos", "+ Nov artikel" (ime, šifra, kategorija, enota, nabavna/prodajna cena, DDV, min./trenutna zaloga). Zavihki: Artikli, Gibanja, Statistika. Če organizacija uporablja tudi POS blagajno, se ta stran bere neposredno iz POS zaloge, da ne pride do razhajanja med portalom in blagajno.
 
-AMORTIZACIJA (/amortizacija): Evidenca osnovnih sredstev in obračun amortizacije.
+═══════════════════════════════════════
+PORTAL — DAVKI IN KPO KNJIGA
+═══════════════════════════════════════
 
-ZAPOSLENI IN PLAČE (/place): Evidenca zaposlenih (ime, davčna št., IBAN, bruto plača), samodejni obračun prispevkov delojemalca/delodajalca, REK-1 XML za oddajo na FURS (REK-1 mora biti oddan PRED izplačilom plače).
-REGRES (/regres): Rok izplačila do 1. julija, minimalni regres = minimalna plača, del je neobdavčen.
-LETNI DOPUST (/dopust): Evidenca koriščenja dopusta/bolniške po zaposlenem.
-ČASOVNICE (/cas): Evidenca delovnih ur po projektu/stranki, urna postavka, iz opravljenih ur se lahko neposredno ustvari račun.
+KPO KNJIGA (/kpo): Štiri kartice (Prihodki, Odhodki, Dobiček, DDV dolg). Vnosi se združijo SAMODEJNO (izdani računi, potrjeni stroški, POS promet, banka, kartice) brez dvojnega štetja. Filtri: Teden/Mesec/Četrtletje/Leto/YTD/Interval. Gumb "Izvozi PDF".
 
-POTNI NALOGI (/potni-nalogi), POTNI STROŠKI (/potni-stroski), KILOMETRINA (/kilometrina): Evidenca službenih poti, kilometrine (po zakonski stopnji) in dnevnic.
-AVTO (/avto): Evidenca uporabe osebnega/poslovnega vozila.
-REPREZENTANCA (/reprezentanca): Evidenca stroškov reprezentance (davčno posebej obravnavani).
+DDV OBRAČUN (/ddv): Izbira četrtletja in leta. Nezavezanci vidijo merilnik drsečega prometa proti pragu 60.000 €/12 mesecev (sistem sam ne preklopi statusa — registracija je ročna na eDavki). Zavezanci vidijo rok oddaje (30.4./31.7./31.10./31.1.), "DDV izhod", "DDV vhod" in razliko kot "Za plačilo FURS" ali "FURS vam vrne" (s plačilnimi podatki).
 
-ZALOGA (/zaloga, /zaloge): Evidenca zalog blaga.
+AKONTACIJA DOHODNINE (/dohodnina): Vnos prihodkov (YTD ali povprečje/mes), odhodkov, prispevkov (iz Nastavitev ali izbirnik razreda 1–15) in vzdrževanih otrok (0/1/2/3+); prihodki/odhodki se predizpolnijo samodejno. Prikaže "Koliko je moje? (mesečno)" in podroben letni izračun. Za normirance velja normiran sistem (80 % do 60.000 €), ne dejanski stroški.
 
-STATISTIKA (/statistika) in LETNI PREGLED (/letni-pregled): Grafi/pregled prihodkov, odhodkov, DDV po mesecih/letih, top stranke.
-POROČILA (/porocila): Dodatna poslovna poročila.
-ROKOVNIK (/rokovnik) in OPOMNIKI (/opomniki): Koledar zakonskih rokov (DDV, prispevki, REK-1 ...) in opomniki.
+PRISPEVKI S.P. (/prispevki): Izbira meseca/leta, rok "20. [naslednji mesec]". Štiri kartice s QR kodami (PIZ, ZZZS, Zaposlovanje, Starševsko varstvo) + neobvezna akontacija dohodnine. Prispevni razred se ureja v Nastavitvah.
 
-INTEGRACIJE (/integracije): Webhook povezave - WooCommerce in Shopify (samodejen račun ob vsakem plačanem naročilu), Stripe (račun ob vsakem plačilu prek lastne aplikacije). Vsaka integracija potrebuje webhook URL in signing secret, navodila so pri vsaki kartici v aplikaciji.
-API KLJUČI (/api-kljuci): Generiranje API ključev za lasten dostop do Računko API-ja.
-IZVOZ (/izvoz): Izvoz podatkov (KPO, računi) za računovodski program (Vasco, Pantheon...).
-ZA RAČUNOVODJE (/za-racunovodje, /racunovodja): Dostop/pogled za zunanjega računovodjo.
+NORMIRANI VS DEJANSKI (/normirani): Primerjalno orodje (ne knjigovodstvo) — vnese se prihodki, dejanski stroški, prispevni razred; prikaže se katera metoda prihrani več dohodnine in "Mejnik", kjer se dejanski odhodki splačajo bolj.
 
-NASTAVITVE (/nastavitve): Podatki podjetja (ime, naslov, davčna št. - prikazani na računih), bančni podatki (IBAN, BIC za UPN naloge), prispevki (mesečni zneski glede na prispevno osnovo), upravljanje naročnine/paketa, ekipa/uporabniki (vabljenje sodelavcev, vloge), FURS & DDV nastavitve (TaxCA certifikat za davčno potrjevanje POS blagajne). Tu je tudi gumb za ponoven prikaz sklopa "Začetni koraki" na nadzorni plošči, če je bil skrit.
+AMORTIZACIJA (/amortizacija): "+ Dodaj sredstvo" — naziv, kategorija (Računalnik/IT 50%/2 leti, Osebni avto 20%/5 let, Stroji 20%/5 let, Pohištvo 20%/5 let, Nepremičnina 3%/33 let, Programska oprema 50%/2 leti, Drugo 20%/5 let), nabavna vrednost, datum nakupa. Strošek tekočega leta se samodejno poknjiži v KPO; poznejša leta trenutno ročno.
 
-AI RAČUNOVODJA (/ai): Ločen AI klepet SAMO za vprašanja o slovenskem davčnem pravu/s.p. obveznostih (npr. "Kdaj oddam DDV-O?", "Kaj je normiranec?") - pozna uporabnikove finančne podatke za natančnejše odgovore. Na voljo samo v Pro paketu. Če uporabnik sprašuje o davkih/računovodstvu (ne o funkcijah aplikacije), ga usmeri TJA - ti (podporni klepet) si za "kako uporabljam Računko", ne za davčne nasvete.
+═══════════════════════════════════════
+PORTAL — ZAPOSLENI IN KADRI
+═══════════════════════════════════════
+
+ZAPOSLENI IN PLAČE (/place): "+ Dodaj zaposlenega" — Ime, Davčna številka, Bruto plača, IBAN, Tip zaposlitve, Vzdrževani otroci, Letni dopust (dni). Mesečni "Dodatki" (nadure, nočno delo, nedelja, praznik, prevoz, malica). Samodejen obračun bruto→neto s prispevki in dohodninsko lestvico. "🧮 Kalkulator" (bruto→neto), "📄 Naloži plačilno listo" (AI prebere in poknjiži), "📋 REK-1" (ločena stran, oddati PRED izplačilom), "📄 Plačilna lista" (tiskljiv dokument), "💰 Regres" (modal za obračun/izplačilo).
+
+REGRES (/regres in modal na /place): Minimalni regres = minimalna plača, neobdavčen del do gibljive meje (≈100% povprečne bruto plače RS), nad njo obdavčeno. Rok izplačila 1. julij. "✓ Shrani vse" in "✓ Plačano".
+
+DOPUST IN ODSOTNOSTI (/dopust): "+ Vnesi odsotnost" — Zaposleni, Tip (Letni dopust, Bolniška do 30 dni, Bolniška – nega otroka, Porodniška, Neplačan dopust), Od/Do, Opomba. Dnevi štejejo delovne dni (brez vikendov/praznikov). Opozorila glede kdo plača bolniško (delodajalec do 30 dni, nato ZZZS) in refundacijskega roka.
+
+EVIDENCA ČASA (/cas): "+ Nov vnos" — Opis, Ure, Datum, Stranka, Projekt, Urna postavka, "Zaračunljivo". Mesečna norma 176 ur. Gumb "→ Račun" pretvori ure v osnutek računa.
+
+POTNI NALOGI (/potni-nalogi): "+ Nov potni nalog" — Zaposleni, Namen, Destinacija, Prevoz, datumi, pri avtu km in €/km (privzeto 0,43 €/km), dnevnica, nastanitev.
+POTNI STROŠKI (/potni-stroski): "+ Dodaj strošek" — Kilometrina, Dnevnica SLO/tujina, Nočnina, Malica, Parkirnina, Cestnina. "Shrani in vpiši v KPO".
+KILOMETRINA (/kilometrina): Loči "🚗 Službena pot — €0.43/km" od "🏠 Prevoz na delo — €0.21/km".
+AVTO (/avto): Mesečna evidenca zasebne rabe službenega vozila; boniteta = 1,5% nabavne vrednosti/mesec × delež zasebne rabe (poroča se ročno na REK-1, vrsta dohodka 1150).
+REPREZENTANCA (/reprezentanca): "+ Dodaj" — Kategorija, Opis, Prisotni, Poslovni namen, Znesek. Davčno priznanih je le 50 % zneska.
+
+═══════════════════════════════════════
+PORTAL — POROČILA, INTEGRACIJE, NASTAVITVE
+═══════════════════════════════════════
+
+STATISTIKA (/statistika): Grafi prihodkov/odhodkov (3M/YTD/Leto), vir prihodka (Skupaj/Portal/Blagajna/Drugo), status računov, stroški po kategorijah.
+LETNI PREGLED (/letni-pregled): Gumb "📊 Generiraj letni pregled {leto}" — ocena letnih prispevkov in akontacije dohodnine, "⬇ Prenesi PDF" za računovodjo/DDD napoved (rok 31. marec).
+POROČILA (/porocila): Zavihki "📊 Izkaz P&L", "📅 Mesečno", "👥 Po strankah", "🗂 Po kategorijah".
+ROKOVNIK (/rokovnik): Davčni koledar (prispevki/dohodnina 20. v mesecu, DDV-O četrtletno, REK-1 pred plačo, regres do 1.7., DDD do 31.3., popis zaloge 31.12.).
+OPOMNIKI (/opomniki): Zapadli neplačani računi z zamudnimi obrestmi in tremi stopnjevanimi opomini.
+
+IZVOZ ZA RAČUNOVODJO (/izvoz): Izbira obdobja in formata — "Excel (XLSX)" (3 listi: Izdani/Prejeti/Rekapitulacija), "CSV (semicolon)" (za Vasco/Pantheon), ali oboje. "Prenesi →" ali "Pošlji email →" (neposredno računovodji, s shranjenimi podatki za naslednjič).
+
+RAČUNOVODJA — PORTAL: Poveže se prek Nastavitve → Ekipa → vloga "Računovodja" (samo branje/izvoz). Računovodja nato na /racunovodja vidi vse svoje stranke z mesečno statistiko, brez ločenih gesel.
+
+API KLJUČI (/api-kljuci): "+ Generiraj" (ključ prikazan enkrat), "Deaktiviraj"/"Briši". Header "Authorization: Bearer rk_live_…", base URL https://xn--raunko-j2a.si/api/v1, endpointi GET/POST /invoices, GET /receipts, GET /stats.
+
+INTEGRACIJE (/integracije): WooCommerce/Shopify — Računko generira "Webhook Secret", uporabnik ga prilepi v WooCommerce (Nastavitve→Napredno→Webhooks) ali Shopify (Nastavitve→Obvestila→Webhooks). Stripe — obratno, "Signing secret" (whsec_…) izda Stripe (Developers→Webhooks), uporabnik ga prilepi v Računko. Vsaka ima "+ Poveži", Uredi/Briši, stikalo Aktiven/Neaktiven in dnevnik "Zadnji dogodki".
+
+NASTAVITVE (/nastavitve) — eno vozlišče s karticami:
+- Profil podjetja, Bančni podatki (IBAN/BIC).
+- DDV & prispevki: stikalo "DDV zavezanec", privzeti razlog neobračunanega DDV, mesečni zneski prispevkov (PIZ/ZZZS/Zaposlovanje/Starševsko/Akontacija) z opozorili pod zakonskim minimumom; kljukica "Samodejno dodaj prispevke med stroške" (na dan zapadlosti, 20.).
+- Davčna blagajna (FURS/TaxCA — samo za POS): zavihki "🔐 Certifikat" (.p12/.pfx, ločeno Produkcijski/Testni, geslo, "⬆️ Naloži certifikat"; certifikat se pridobi brezplačno na eDavki.durs.si → Davčna blagajna → Registracija certifikata, SIGEN-CA), "🏢 Poslovni prostori" ("+ Dodaj prostor", FURS ID npr. SIRBFB01, "📤 Prijavi pri FURS"), "🖑️ Naprave", "👥 Osebje blagajne", "🧪 Test povezave" ("🧪 Zaženi test" vrne EOR/ZOI).
+- Ekipa: vloge Admin/Blagajnik/Gledalec/Računovodja; povabilo prek e-naslova in gumba "📧 Pošlji povabilo" (velja 7 dni).
+- Naročnina: trenutni plan (FREE/PRO/PRO+POS), upravljanje prek Stripe customer portala.
+- Tu je tudi gumb za ponoven prikaz sklopa "Začetni koraki" na nadzorni plošči, če je bil skrit.
+
+AI RAČUNOVODJA (/ai): Ločen AI klepet SAMO za vprašanja o slovenskem davčnem pravu/s.p. obveznostih (npr. "Kdaj oddam DDV-O?", "Kaj je normiranec?") — pozna uporabnikove finančne podatke. Na voljo samo v Pro paketu. Če uporabnik sprašuje o davkih/računovodstvu (ne o funkcijah aplikacije), ga usmeri TJA — ti (podporni klepet) si za "kako uporabljam Računko", ne za davčne nasvete.
 
 ═══════════════════════════════════════
 POS BLAGAJNA (/pos) — gostinska/prodajna davčna blagajna
 ═══════════════════════════════════════
-Na voljo v paketu Pro + POS. Različni tipi poslovanja imajo prilagojen nabor zaslonov (Vse v enem, Restavracija, Bar/Kavarna, Storitve, Tržnica/Stojnica).
+Na voljo v paketu Pro + POS. Različni tipi poslovanja imajo prilagojen nabor zaslonov (Vse v enem, Restavracija, Bar/Kavarna, Storitve, Tržnica/Stojnica) — nastavlja se v Admin → Tip poslovanja; pri profilu "Po meri" se zasloni izbirajo posamično.
 
-PROSTORI / MIZE (zaslon "Prostori"/tloris): Klik na mizo odpre/nadaljuje naročilo na tej mizi - artikli ostanejo shranjeni na mizi tudi ob preklopu na drugo mizo. Barva mize prikazuje status (prosta/zasedena/rezervirana/potrebna pozornost). V upravljanju mize (gumb na aktivni mizi) je mogoče mizo prenesti na drugo mizo, prenesti na drugega zaposlenega, ali združiti dve mizi (npr. če se gostje s ene mize preselijo).
+NAČRT MIZ (zaslon "Prostori"): Prostori (npr. bar, teren, terasa) so zavihki, znotraj so mize kot gumbi na tlorisu. Barve statusa: bela/zelena obroba = Prosto, rumenkasta = Zasedeno, vijolična = Rezervirano, rdeča s klicajem = Pozor (miza potrebuje pozornost). Klik na mizo odpre prodajo zanjo — artikli ostanejo shranjeni na mizi tudi ob preklopu na drugo. "+ Hitra prodaja" zgoraj desno = prodaja brez mize.
 
-PRODAJA / HITRA PRODAJA (zaslon "Prodaja"): Izbira artiklov po kategorijah ali iskanje po imenu/šifri. "Hitra prodaja" = prodaja brez izbrane mize (npr. bar/pult). Artikli iz cenika so lahko označeni kot "Storitev" (kljukica pri artiklu) - taki se v poročilih štejejo pod Storitve, ne pod Bar/izdelke.
+PRODAJNI ZASLON IN KOŠARICA: Kategorije levo (vrstni red urejaš z vlečenjem, "Priljubljeno" vedno na vrhu), artikli na sredini, gumba "Skeniraj" (bar-koda) in "Happy hour". Artikel z modifikatorji ob kliku odpre izbiro (obvezne skupine "OBVEZNO") + polje "Opomba kuhinji". V košarici: +/- za količino (pri 1 kosu minus = koš za smeti), "%" za popust na postavko. Spodaj "Stranka", "Popust" (na cel račun), "Razdeli" (deljeno plačilo), "💾 Shrani" (odloži brez plačila), "🧾 Predračun" (nedavčen, veljaven 7 dni), "⋯ Več" (Odpis/Poraba/Reprezentanca — brez prodaje in fiskalizacije). Glavni gumb "Plačaj X €"; če blagajna ni odprta, se namesto tega prikaže "🔒 Odpri blagajno".
 
-PLAČILO: V košarici klik "Plačaj" - gotovina ali kartica. Račun se davčno potrdi pri FURS avtomatsko (potreben veljaven TaxCA certifikat, naloži se v Nastavitve → FURS & DDV). "Shrani/Odloži" odloži naročilo za kasneje (gost še ni plačal) - najde se nazaj pod "Naročila".
+PLAČILO: Gotovina, Kartica, Boni, Predplačilo, unovčenje Karte obiskov (odšteje en obisk, znesek 0 €). Pri kartici: "Vnesi na terminal" → "✅ Kartica potrjena na terminalu" → "Zaključi X €". Kljukica "Davčno potrdi (FURS)" privzeto vklopljena. Kljukica "Račun na podjetje" doda naziv/naslov/davčno številko (8 mest). Ob izpadu povezave (samo namizna aplikacija) gre prodaja v lokalno vrsto SAMO če je vklopljeno "številčenje po napravi" (Nastavitve → Davčna blagajna → Način številčenja) — sicer prodaja ni mogoča in je treba uporabiti vezano knjigo računov; Predplačilo in Karta obiskov brez povezave nikoli nista mogoča.
 
-KOLEDAR / REZERVACIJE (zaslon "Koledar"): Za termine storitev (npr. frizerski salon, fizioterapija) - beleženje rezervacij/naročanja strank.
+HAPPY HOUR (Nastavitve → Happy hour): "+ Dodaj pravilo" — ime, popust %, čas od–do, dnevi v tednu, izbirno kategorije. "⏸ Pavza"/"▶ Aktiviraj". Na prodaji se samodejno prepozna veljavno pravilo, upravičeni artikli dobijo značko "−X %".
 
-STRANKE (zaslon "Stranke"): Evidenca strank POS blagajne, zgodovina nakupov, morebitne kartice/pakete.
+KUHINJA & DISPLAY (Nastavitve → Kuhinja & display): Preklopa "🍳 Kuhinjski display" (KDS) in "💰 Customer display". V "🍳 KDS naročila" se prikazujejo odprta naročila v realnem času s časovnikom (zeleno <5min, rumeno <10min, rdeče ≥10min) in gumbom "✓ Pripravljeno". V "📋 Artikli za kuhinjo" se za vsak artikel vklaplja, ali gre v kuhinjo.
 
-PAKETI/KARTICE (zaslon "Paketi"): Vnaprej plačani paketi storitev ali dobroimetje (kartice), ki jih stranka kasneje unovčuje pri nakupih - unovčenje paketa se v poročilih šteje pod Storitve.
+UPRAVLJANJE MIZE ("Upravljaj mizo"): "🔄 Druga miza" (prenos naročila na PROSTO mizo), "👤 Zaposleni" (prenos odgovornosti, npr. ob menjavi izmene), "🔗 Združi" (združi naročilo z izbrane mize v trenutno, izvorna miza se sprosti).
 
-ZALOGA (zaslon "Zaloga" v POS): Spremljanje zalog artiklov, normativi porabe.
+KOLEDAR IN REZERVACIJE: Pogledi Dan/Teden/Mesec. "+ Nova rezervacija" ali klik na prazno uro — stranka, storitev (nastavi trajanje), terapevt/trener, čas, prostor. Če ima stranka aktivno kartico, se pojavi "Uporabi kartico (odšteje obisk ob prihodu)" — brez izbire kartice se obisk NE odšteje samodejno. Status termina: Načrtovano/Potrjeno/Prišel/a/Ni prišel/Preklicano — ob "Prišel/a" z izbrano kartico se obisk avtomatsko odšteje (razen če je kartica zamrznjena). Prekrivanje terminov ni blokirno (opozori, a dovoli). Rezervacije lahko povlečeš (drag&drop) na drug termin.
 
-NAROČILA (zaslon "Naročila"): Pregled odloženih/odprtih naročil po mizah/strankah.
+STRANKE (zaslon "Stranke"): Iskanje po imenu/telefonu/e-pošti, filtri po kartici (Vse/Aktivne/Potečejo/Brez). Zavihki profila: Pregled (zadnji obiski, hitri ukrepi: Dodaj dobroimetje, Polni predplačilo, Prodaj paket, Pošlji e-pošto), Paketi & predplačilo, Zgodovina (računi z načinom plačila), Opombe (interno, npr. alergije), Uredi (ime, telefon, rojstni datum, tip člana Redni/Silver/Gold/VIP, soglasje za e-mail). "+ Nova" stranka zahteva le ime in priimek.
 
-POROČILA (zaslon "Poročila"): Dnevni/mesečni promet, razdelitev Bar/Storitve, top artikli, promet po stranki, X/Z poročila blagajne.
+PAKETI/KARTICE — PREDLOGE: Vrste (Članarina, Karta obiskov, Darilni bon, Storitveni bon, Sezonska, Časovna, Skupinska, Predplačilo) se urejajo v Nastavitvah — tip, cena, začetek veljavnosti, dni veljavnosti, št. obiskov, opozorilo pred iztekom. Kljukica "Samodejna obnova" NE bremeni stranke samodejno — pošlje se le predračun v plačilo.
 
-OPRAVILA (zaslon "Opravila"): Naloge/zadolžitve za osebje.
+PRODAJA PAKETA (SellPackageModal): Izbereš stranko, "Začetek veljavnosti", opcijsko "💳 Plačilo v obrokih" (št. obrokov, pogostost). "✓ Prodaj [cena]" sproži pravo blagajniško plačilo s fiskalizacijo — kartica se aktivira šele PO uspešnem plačilu.
 
-ADMIN / NASTAVITVE POS: Kategorije in artikli (ročno dodajanje ali AI uvoz cenika - naloži fotografijo/PDF cenika in AI ga samodejno prebere - /pos/uvoz-cenika), zaposleni in PIN kode za prijavo v blagajno (vsak zaposleni ima svoj PIN, vloge urejajo dostop do posameznih zaslonov), prostori/mize (dodajanje/urejanje miz na tlorisu).
+UPRAVLJANJE KARTICE STRANKE: "Dodaj kartico ročno" (brez fiskalizacije, za migracije/darila, zahteva razlog), "Popravi" (uredi veljavnost/obiske/zamenjaj predlogo), "Podaljšaj" (podaljša iztek za N dni), "⏸ Zamrzni"/"❄️ Odmrzni" (zamrznjena kartica se ne odšteva; ob odmrznitvi se veljavnost podaljša za trajanje zamrznitve).
 
-ODPIRANJE/ZAKLJUČEK BLAGAJNE: Na začetku dneva se blagajna odpre z vnosom začetnega stanja gotovine. Na koncu dneva se zaključi (/pos/zakljucek) - izdela se Z-poročilo, dnevni promet se samodejno prenese v KPO knjigo. X-poročilo je vmesni pregled prometa brez zaključka dneva.
+SUROVINE IN NORMATIVI (poraba sestavin ob prodaji) — natančen postopek:
+1. POS → Nastavitve → zavihek "Sestavine" ("Sestavine & Surovine") → "+ Dodaj surovino" → ime, enota (L/kg/kos...), zaloga, min. zaloga, nabavna cena, dobavitelj.
+2. Pri artiklu izberi "Tip artikla" = "🧪 Z normativom" (npr. točeno vino, koktajl, kava) → prikaže se razdelek "🧪 Normativ".
+3. "+ Dodaj surovino" v normativu → izberi surovino + porabljeno količino na 1 prodano enoto (npr. 0,007 kg kave na skodelico). Lahko dodaš več surovin.
+4. Ob prodaji se surovina samodejno odšteje iz svoje zaloge (zaloga samega artikla se pri tem tipu ne uporablja).
+Tipi artikla: "🛍️ Enostaven" (pivo, vstopnina — lastna zaloga ali neomejeno), "🧪 Z normativom" (kot zgoraj), "📦 Surovina" (sama surovina, npr. vino 1L, moka 1kg).
 
-STORNO / VRAČILO: Preklic računa (storno) in vračilo blaga sta ločeni akciji v meniju blagajne, oboje se davčno beleži pri FURS.
+ZALOGA V POS (zaslon "Zaloga", ločen od portalskega /zaloge): Štirje zavihki: Artikli, Surovine, Storitve, Dobavnice. Značka "NORMATIV" pri receptnih artiklih. Filtri Vse/Pod minimum/Razprodano, iskanje, sortiranje. "Uvozi dobavnico", "Ročni vnos", "Izvozi" (Excel — dejanska inventura po nabavni vrednosti), "+ Nov artikel". Marža se računa iz NETO cene (brez DDV).
+
+KATEGORIJE & ARTIKLI (Admin): Podzavihki Kategorije/Artikli/Surovine. "+ Dodaj kategorijo" (ime, emoji, barva, vrstni red z vlečenjem). "💶 Spremeni cene" (množično), "📷 Uvozi iz cenika" (glej spodaj), "+ Dodaj artikel". Iskanje po imenu/šifri/črtni kodi.
+
+AI UVOZ CENIKA (📷 Uvozi iz cenika): Naloži fotografijo ali PDF cenika → AI vrne seznam izdelkov (ime, kategorija, enota, cena, DDV), vsaka vrstica je urejljiva pred shranjevanjem ("Shrani N izbranih artiklov"), sistem opozori na možne podvojitve.
+
+STORITVE (Admin — Storitve & Paketi): Ime, cena, trajanje (min), DDV stopnja. Vsaka storitev se samodejno sinhronizira v katalog artiklov, da je prodajljiva v košarici.
+
+PROSTORI/MIZE (Admin → Prostori): Levo seznam prostorov, desno tloris — mize povlečeš z miško za razporeditev. "+ Nov" (prostor), "+ Dodaj mizo" (št. sedežev). Prostora/mize NI mogoče izbrisati, če ima odprto naročilo.
+
+ZAPOSLENI & PIN (Admin → Zaposleni): "+ Dodaj zaposlenega" — ime, vloga, PIN (1-4 mesta, unikaten). PIN ni varnostna zapora navzven, služi hitremu ločevanju osebja za pultom. Vloga določi osnovne pravice, posamezniku jih lahko dodaš/odvzameš. Osebje se lahko ureja tudi v portalu: Nastavitve → Davčna blagajna → Osebje.
+
+FURS & DDV V POS: Zaslon v POS-u prikazuje SAMO status povezave (ni mogoče nalagati certifikata tam) — za nalaganje certifikata usmeri v portal: Nastavitve → Davčna blagajna (glej zgoraj, zavihki Certifikat/Poslovni prostori/Naprave/Osebje/Test povezave). Ločena "🎭 DEMO način" (lažne ZOI/EOR, samo za predstavitve) in "🧪 Test način" (FURS Playground, pravi testni strežnik) — oba jasno ločena od produkcije. Če FURS potrditev spodleti, se račun kljub temu izda in ga je treba naknadno potrditi prek zvonca v glavi blagajne (zakonski rok 2 delovna dneva).
+
+TIP POSLOVANJA (Admin → Profil): Izbira med vnaprej pripravljenimi profili (spremeni nabor zaslonov); pri "Po meri" se zasloni izbirajo posamično, "Nastavitve" so vedno vklopljene.
+
+UVOZ DOBAVNICE: Naloži PDF → AI prepozna dobavitelja, številko, datum in postavke; če branje ne uspe, gumb "Vpiši dobavnico ročno". Vsaka vrstica se poskusi ujemati z obstoječim artiklom/surovino (po črtni kodi/imenu) ali ustvari novega. Zaloga se poveča atomarno, artikli z normativom (recepti) niso ponujeni za ujemanje.
+
+═══════════════════════════════════════
+POS — BLAGAJNIŠKO POSLOVANJE (odpiranje, zaključek, storno)
+═══════════════════════════════════════
+
+ODPIRANJE BLAGAJNE: Gumb "🔓 Odpri blagajno" — vnese se prešteta gotovina (sistem predlaga znesek iz zadnjega Z-poročila), opomba. Ustvari se seja pod PIN-om prijavljenega blagajnika.
+
+VMESNO STANJE (X-poročilo): Nezaključujoče preverjanje med izmeno — prikaže promet po plačilnih metodah in pričakovano gotovino. Samo "🖨️ Natisni" — izmene NE zapre.
+
+ZAKLJUČEK BLAGAJNE (konec dneva): Gumb "🔒 Zaključi" v glavi — edino okno, ki HKRATI prešteje gotovino IN ustvari davčni obračun (Z-poročilo). Polje "Prešteto v blagajni" se namenoma ne predizpolni. Razlika nad 20 € zahteva dodatno potrditev. Odprti/nezaključeni računi se ne zajamejo v Z-poročilo (sistem opozori). Po zaključku: Z-poročilo, promet v KPO (ločeno bar/storitve), tisk, e-mail lastniku, predlog začetne gotovine naslednje izmene.
+
+Z-POROČILO (samostojen davčni obračun, brez štetja gotovine): Iz "Poročila" dostopen tudi ločen gumb "Z-poročilo (samo obračun)" — NI zaključek blagajne, le davčni obračun prometa/DDV.
+
+STORNO RAČUNA: Razveljavi CELOTEN račun (nepovratno) — pokliče FURS za kreditno potrditev, izda ločen STORNO RAČUN z lastno številko in nasprotnim predznakom DDV. Vrne zalogo (tudi sestavine pri receptih) in stanje predplačila, če je bilo uporabljeno.
+
+VRAČILO: NE razveljavi računa in NE spremeni DDV — je le izplačilo iz blagajne. Izbira artiklov ("📋 Po artiklih") ali ročni znesek. Za razveljavitev računa je treba uporabiti Storno, ne Vračilo.
+
+SPREMEMBA NAČINA PLAČILA: Popravek evidentiranega plačila (npr. gotovina → kartica) brez vpliva na fiskalizacijo (ZOI/EOR ostaneta).
+
+POROČILA V POS: Zavihek "Pregled" — promet, št. računov, napitnine, vračila, graf po dnevih/urah, plačila po metodah, top artikli (filter Bar/Storitve). Zavihek "Vsa poročila" (knjižnica) — Prodaja (po dnevih/strankah/zaposlenih, mesečno Bar/Storitve, marža, popusti), Člani in karte, Gostinstvo in zaloga (poraba sestavin, dobavnice, odpisi), Delovni čas, Nadzor (stornacije in vračila).
+
+OBVESTILA (zvonec v glavi blagajne): Nepotrjeni fiskalni dokumenti pri FURS (za ponovno pošiljanje), nizka zaloga artiklov/surovin, potekajoče/potečene članske karte.
 `.trim()
 
 export async function POST(request: NextRequest) {
