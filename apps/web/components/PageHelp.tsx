@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { usePathname } from 'next/navigation'
 
 interface HelpStep {
@@ -14,6 +14,13 @@ interface PageHelpContent {
   description: string
   steps: HelpStep[]
   tip?: string
+}
+
+// PRELET 309: zavihek "Vprašaj Računko" - klepet z AI, ki pozna funkcije
+// aplikacije (za razliko od "AI računovodja" na /ai, ki svetuje pri davkih).
+interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
 }
 
 const PAGE_HELP: Record<string, PageHelpContent> = {
@@ -265,9 +272,66 @@ const DEFAULT_HELP: PageHelpContent = {
   tip: 'Za pomoč pišite na support@računko.si',
 }
 
+const CHAT_GREETING = 'Pozdravljeni! Sem pomočnik za uporabo Računka - vprašajte me karkoli o nastavitvah, računih, POS blagajni ali drugih funkcijah aplikacije.'
+
 export default function PageHelp() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
+  // PRELET 309: zavihek "Navodila" (obstoječa statična pomoč) vs "Vprašaj
+  // Računko" (nov AI klepet o funkcijah aplikacije).
+  const [tab, setTab] = useState<'navodila' | 'klepet'>('navodila')
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([{ role: 'assistant', content: CHAT_GREETING }])
+  const [chatInput, setChatInput] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
+  const [eskalacija, setEskalacija] = useState<'idle' | 'posiljam' | 'poslano' | 'napaka'>('idle')
+  const chatBottomRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages, tab])
+
+  async function posljiSporocilo(besedilo?: string) {
+    const sporocilo = (besedilo ?? chatInput).trim()
+    if (!sporocilo || chatLoading) return
+    setChatInput('')
+    setEskalacija('idle')
+    const novaZgodovina = [...chatMessages, { role: 'user' as const, content: sporocilo }]
+    setChatMessages(novaZgodovina)
+    setChatLoading(true)
+    try {
+      const res = await fetch('/api/support-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // Prvo (lokalno generirano) pozdravno sporočilo ni pravi del
+        // pogovora z modelom - izpustimo ga, tako kot na strani /ai.
+        body: JSON.stringify({ messages: novaZgodovina.slice(1), currentPath: pathname }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: data.error || 'Prišlo je do napake. Poskusite znova.' }])
+      } else {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: data.response }])
+      }
+    } catch {
+      setChatMessages(prev => [...prev, { role: 'assistant', content: 'Oprostite, prišlo je do napake. Poskusite znova.' }])
+    }
+    setChatLoading(false)
+  }
+
+  async function posljiPodpori() {
+    if (eskalacija === 'posiljam') return
+    setEskalacija('posiljam')
+    try {
+      const res = await fetch('/api/support-chat/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: chatMessages.slice(1), currentPath: pathname }),
+      })
+      setEskalacija(res.ok ? 'poslano' : 'napaka')
+    } catch {
+      setEskalacija('napaka')
+    }
+  }
 
   /**
    * PRELET 237: pomoc odpre postavka v meniju.
@@ -313,6 +377,8 @@ export default function PageHelp() {
             height: 40px !important;
           }
         }
+        /* PRELET 309: "tipka" animacija med cakanjem na odgovor klepeta */
+        @keyframes pageHelpBounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
       `}</style>
       {/* POPRAVLJENO (prelet 237): PLAVAJOCI GUMB JE ODSTRANJEN.
           Bil je pritrjen cez vsebino in so ga ze dvakrat premikali, ker je
@@ -377,61 +443,150 @@ export default function PageHelp() {
             background: '#fff',
             borderRadius: 16,
             width: '100%',
-            maxWidth: 420,
+            // PRELET 309: zavihek klepeta je nekoliko sirsi od staticnih navodil.
+            maxWidth: tab === 'klepet' ? 480 : 420,
             maxHeight: '80vh',
-            overflowY: 'auto',
-            padding: 28,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
             boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
           }}>
             {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-              <div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#0D1F12' }}>{help.title}</div>
-                <div style={{ fontSize: 13, color: '#888', marginTop: 4, lineHeight: 1.5 }}>{help.description}</div>
+            <div style={{ padding: '28px 28px 0 28px', flexShrink: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: '#0D1F12' }}>{tab === 'klepet' ? '💬 Vprašaj Računko' : help.title}</div>
+                  <div style={{ fontSize: 13, color: '#888', marginTop: 4, lineHeight: 1.5 }}>{tab === 'klepet' ? 'AI pomočnik, ki pozna vse funkcije aplikacije.' : help.description}</div>
+                </div>
+                <button
+                  onClick={() => setOpen(false)}
+                  style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#aaa', padding: '0 0 0 12px', flexShrink: 0 }}
+                >×</button>
               </div>
-              <button
-                onClick={() => setOpen(false)}
-                style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#aaa', padding: '0 0 0 12px', flexShrink: 0 }}
-              >×</button>
+
+              {/* PRELET 309: zavihka Navodila / Vprašaj Računko */}
+              <div style={{ display: 'flex', gap: 4, background: '#F7F6F2', padding: 4, borderRadius: 10, marginBottom: 16 }}>
+                <button
+                  onClick={() => setTab('navodila')}
+                  style={{ flex: 1, padding: '7px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700, background: tab === 'navodila' ? '#0D1F12' : 'transparent', color: tab === 'navodila' ? '#fff' : '#666' }}
+                >📖 Navodila</button>
+                <button
+                  onClick={() => setTab('klepet')}
+                  style={{ flex: 1, padding: '7px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700, background: tab === 'klepet' ? '#0D1F12' : 'transparent', color: tab === 'klepet' ? '#fff' : '#666' }}
+                >💬 Vprašaj Računko</button>
+              </div>
             </div>
 
-            {/* Koraki */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {help.steps.map((step, i) => (
-                <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                  <div style={{
-                    width: 28, height: 28, borderRadius: '50%',
-                    background: '#0D1F12', color: '#E8B547',
-                    display: 'grid', placeItems: 'center',
-                    fontSize: 12, fontWeight: 700, flexShrink: 0, marginTop: 1,
-                  }}>
-                    {i + 1}
-                  </div>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                      <span style={{ fontSize: 15 }}>{step.icon}</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#0D1F12' }}>{step.title}</span>
+            {tab === 'navodila' ? (
+              <div style={{ padding: '0 28px 28px 28px', overflowY: 'auto' }}>
+                {/* Koraki */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {help.steps.map((step, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                      <div style={{
+                        width: 28, height: 28, borderRadius: '50%',
+                        background: '#0D1F12', color: '#E8B547',
+                        display: 'grid', placeItems: 'center',
+                        fontSize: 12, fontWeight: 700, flexShrink: 0, marginTop: 1,
+                      }}>
+                        {i + 1}
+                      </div>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                          <span style={{ fontSize: 15 }}>{step.icon}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: '#0D1F12' }}>{step.title}</span>
+                        </div>
+                        <div style={{ fontSize: 12, color: '#666', lineHeight: 1.6 }}>{step.desc}</div>
+                      </div>
                     </div>
-                    <div style={{ fontSize: 12, color: '#666', lineHeight: 1.6 }}>{step.desc}</div>
+                  ))}
+                </div>
+
+                {/* Tip */}
+                {help.tip && (
+                  <div style={{
+                    marginTop: 16, background: '#E1F5EE', borderRadius: 8,
+                    padding: '10px 14px', fontSize: 12, color: '#0E5E3B', lineHeight: 1.6,
+                  }}>
+                    💡 {help.tip}
+                  </div>
+                )}
+
+                {/* Footer */}
+                <div style={{ marginTop: 16, paddingTop: 12, borderTop: '0.5px solid #f0f0f0', fontSize: 11, color: '#bbb', textAlign: 'center' }}>
+                  Potrebujete dodatno pomoč? <a href="mailto:support@xn--raunko-j2a.si" style={{ color: '#1D9E75' }}>support@računko.si</a>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Sporočila klepeta */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: '0 28px', minHeight: 220 }}>
+                  {chatMessages.map((msg, i) => (
+                    <div key={i} style={{ marginBottom: 12, display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                      <div style={{
+                        maxWidth: '85%',
+                        borderRadius: 12,
+                        padding: '9px 13px',
+                        fontSize: 13,
+                        lineHeight: 1.55,
+                        background: msg.role === 'user' ? '#0D1F12' : '#F7F6F2',
+                        color: msg.role === 'user' ? '#fff' : '#0D1F12',
+                        whiteSpace: 'pre-wrap',
+                      }}>
+                        {msg.content}
+                      </div>
+                    </div>
+                  ))}
+                  {chatLoading && (
+                    <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'flex-start' }}>
+                      <div style={{ background: '#F7F6F2', borderRadius: 12, padding: '9px 13px', display: 'flex', gap: 4 }}>
+                        {[0, 150, 300].map(d => (
+                          <div key={d} style={{ width: 6, height: 6, background: '#bbb', borderRadius: 999, animation: 'pageHelpBounce 1s infinite', animationDelay: `${d}ms` }} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatBottomRef} />
+                </div>
+
+                {/* Eskalacija na pravega cloveka po e-posti */}
+                {chatMessages.length > 1 && (
+                  <div style={{ padding: '10px 28px 0 28px', flexShrink: 0 }}>
+                    {eskalacija === 'poslano' ? (
+                      <div style={{ fontSize: 12, color: '#1D9E75', fontWeight: 600, textAlign: 'center' }}>✅ Poslano razvijalcu — odgovor boste prejeli na svoj e-mail.</div>
+                    ) : (
+                      <button
+                        onClick={posljiPodpori}
+                        disabled={eskalacija === 'posiljam'}
+                        style={{ width: '100%', padding: 8, borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', color: '#666', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                      >
+                        {eskalacija === 'posiljam' ? 'Pošiljam...' : eskalacija === 'napaka' ? '⚠️ Ni uspelo — poskusite znova' : '❓ Ni pomagalo? Pošlji vprašanje podpori'}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Vnosno polje */}
+                <div style={{ padding: 28, paddingTop: 14, flexShrink: 0 }}>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input
+                      value={chatInput}
+                      onChange={e => setChatInput(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && !e.shiftKey && posljiSporocilo()}
+                      placeholder="Vprašajte karkoli o uporabi Računka..."
+                      style={{ flex: 1, border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 10, padding: '9px 12px', fontSize: 13, outline: 'none', color: '#0D1F12', fontFamily: 'inherit' }}
+                    />
+                    <button
+                      onClick={() => posljiSporocilo()}
+                      disabled={chatLoading || !chatInput.trim()}
+                      style={{ background: '#0D1F12', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', opacity: (chatLoading || !chatInput.trim()) ? 0.4 : 1 }}
+                    >
+                      Pošlji
+                    </button>
                   </div>
                 </div>
-              ))}
-            </div>
-
-            {/* Tip */}
-            {help.tip && (
-              <div style={{
-                marginTop: 16, background: '#E1F5EE', borderRadius: 8,
-                padding: '10px 14px', fontSize: 12, color: '#0E5E3B', lineHeight: 1.6,
-              }}>
-                💡 {help.tip}
-              </div>
+              </>
             )}
-
-            {/* Footer */}
-            <div style={{ marginTop: 16, paddingTop: 12, borderTop: '0.5px solid #f0f0f0', fontSize: 11, color: '#bbb', textAlign: 'center' }}>
-              Potrebujete dodatno pomoč? <a href="mailto:support@xn--raunko-j2a.si" style={{ color: '#1D9E75' }}>support@računko.si</a>
-            </div>
           </div>
         </div>
       )}
