@@ -15490,9 +15490,17 @@ function KlasikApp() {
           await pos.spaces.updateTableStatus(activeTable.id, 'occupied')
           posData.refresh()
         } else if (existing) {
-          // Cart je prazen - izbrišemo prazno naročilo če obstaja
-          await pos.orders.closeOrderEmpty(existing.id)
-          await pos.spaces.updateTableStatus(activeTable.id, 'free')
+          // Cart je prazen - izbrišemo prazno naročilo če obstaja.
+          //
+          // POPRAVEK (prelet 308): closeOrderEmpty ima varovalko - ce
+          // narocilo v BAZI vendarle ni prazno (npr. zastarela/prazna
+          // kosarica v Reactu ob hitrem preklopu med mizami, medtem ko
+          // je narocilo v bazi ze dobilo artikle), brisanje zavrne in
+          // vrne false, brez napake. Prej smo mizo KLJUB TEMU oznacili
+          // kot 'free' - zato so artikli ostali v narocilu, miza pa se
+          // je na tlorisu kazala kot prosta ("Kot"/"Sredina" napaka).
+          const izbrisano = await pos.orders.closeOrderEmpty(existing.id)
+          await pos.spaces.updateTableStatus(activeTable.id, izbrisano ? 'free' : 'occupied')
           posData.refresh()
         }
       }

@@ -615,13 +615,21 @@ export const pos = {
       // kosarica v Reactu prazna, narocilo v bazi pa ne (npr. tik po
       // zdruzitvi miz), so artikli izginili. Kosarica v brskalniku ni
       // dokaz o stanju v bazi.
+      //
+      // VRACA boolean (prelet 308): true = narocilo je bilo RES prazno in
+      // izbrisano; false = narocilo NI bilo prazno, brisanje je bilo
+      // preklicano. Klicatelj MORA to preveriti, preden mizo oznaci kot
+      // prosto - sicer miza obvelja za prosto, artikli pa ostanejo v bazi
+      // (natanko to je povzrocilo napako "artikli na mizi kljub temu, da
+      // ni oznacena kot zasedena").
       const { data: vrstice } = await sb().from('order_lines').select('id').eq('order_id', orderId).limit(1)
       if (vrstice && vrstice.length > 0) {
         console.warn('closeOrderEmpty: narocilo ' + orderId + ' ni prazno - brisanje preklicano')
-        return
+        return false
       }
       const { error } = await sb().from('orders').delete().eq('id', orderId)
       if (error) throw error
+      return true
     },
     async replaceLines(orderId: string, lines: Array<{
       itemId?: string
