@@ -607,7 +607,7 @@ export const pos = {
 
       return { productIncome: productNet, serviceIncome: serviceNet }
     },
-    async closeOrderEmpty(orderId: string) {
+    async closeOrderEmpty(orderId: string, opts?: { prepricanoPrazno?: boolean }) {
       // Izbriše prazno naročilo (brez vrstic) - uporabljeno ko uporabnik zapusti mizo brez artiklov
       //
       // VAROVALKA (prelet 165): preverimo, da je narocilo RES prazno.
@@ -622,10 +622,22 @@ export const pos = {
       // prosto - sicer miza obvelja za prosto, artikli pa ostanejo v bazi
       // (natanko to je povzrocilo napako "artikli na mizi kljub temu, da
       // ni oznacena kot zasedena").
-      const { data: vrstice } = await sb().from('order_lines').select('id').eq('order_id', orderId).limit(1)
-      if (vrstice && vrstice.length > 0) {
-        console.warn('closeOrderEmpty: narocilo ' + orderId + ' ni prazno - brisanje preklicano')
-        return false
+      //
+      // `opts.prepricanoPrazno` (prelet 315): obide zgornje preverjanje
+      // baze. Uporabi SAMO klicatelj, ki je pravkar sam - na tej isti
+      // napravi - nalozil narocilo iz baze in ga od takrat samo se
+      // uredjal (glej `shraniKosarico` v pos/page.tsx). Brez tega je
+      // vsak izbris ZADNJEGA artikla z mize spodletel: baza je do tega
+      // klica se vedno kazala "stari" artikel (saj ga ta klic sele
+      // pravkar zbrise), varovalka zgoraj pa je zato VEDNO zavrnila
+      // brisanje - miza je ostala "zasedena" z artiklom, ki ga ni bilo
+      // vec mogoce odstraniti. To je bila prijavljena napaka.
+      if (!opts?.prepricanoPrazno) {
+        const { data: vrstice } = await sb().from('order_lines').select('id').eq('order_id', orderId).limit(1)
+        if (vrstice && vrstice.length > 0) {
+          console.warn('closeOrderEmpty: narocilo ' + orderId + ' ni prazno - brisanje preklicano')
+          return false
+        }
       }
       const { error } = await sb().from('orders').delete().eq('id', orderId)
       if (error) throw error

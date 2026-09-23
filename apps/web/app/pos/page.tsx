@@ -15418,6 +15418,62 @@ function KlasikApp() {
   const [activeCustomer, setActiveCustomer] = useState(null)
   const [cart, setCart] = useState([])
   const [tableSwitching, setTableSwitching] = useState(false)
+  /**
+   * SAMODEJNO SHRANJEVANJE KOŠARICE (prelet 315)
+   * ═══════════════════════════════════════════
+   *
+   * NAPAKA, KI JO TO ODPRAVLJA — izbrisan artikel se je "sam vrnil".
+   *
+   * Sprememba košarice (dodajanje, brisanje, sprememba količine) se je
+   * prej zapisala v bazo ŠELE ob preklopu mize, preklopu zaslona ali
+   * zaključku plačila (glej `shraniKosarico` spodaj). Do takrat je bila
+   * sprememba samo lokalna - v brskalniku na TEJ napravi. Če uporabnik po
+   * brisanju artikla ni preklopil mize (aplikacija se je osvežila,
+   * naprava izgubila povezavo, obtičala na istem zaslonu ...), se izbris
+   * ni nikoli zapisal v bazo - ob naslednjem odprtju te mize se je
+   * košarica znova naložila iz baze, kjer je bil artikel še vedno
+   * prisoten. Zgledalo je, kot da se je artikel "sam vrnil".
+   *
+   * `kosaricaZanesljivaRef`: ali trenutna košarica ZANESLJIVO zrcali
+   * bazo za `activeTable` (torej je bila nazadnje NALOŽENA iz baze na tej
+   * napravi, ne le podedovana ali privzeto prazna). Ko je to res in
+   * uporabnik izprazni košarico do zadnjega artikla, vemo, da je "prazno"
+   * pravi odgovor - ne le zastarelo lokalno stanje - zato lahko
+   * `closeOrderEmpty` varno obidemo (glej `pos-client.ts`).
+   *
+   * `shranjevanjeTimerRef`: časovnik za spodnji učinek, ki shrani košarico
+   * ~900 ms po zadnji spremembi, dokler je miza aktivna - torej precej
+   * prej, kot bi uporabnik sploh utegnil zapustiti mizo.
+   */
+  const kosaricaZanesljivaRef = useRef(false)
+  const shranjevanjeTimerRef = useRef(null)
+
+  /**
+   * Shrani trenutno košarico na dano mizo v bazo (PRELET 315 - izvleček iz
+   * prejšnjega dela `switchToTable`, saj ga zdaj kliče tudi samodejno
+   * shranjevanje spodaj).
+   *
+   * `zanesljivaPrazna`: glej `kosaricaZanesljivaRef` zgoraj - posreduje se
+   * naprej v `closeOrderEmpty`.
+   */
+  async function shraniKosarico(tabela, kosarica, zanesljivaPrazna) {
+    if (!tabela) return
+    const existing = await pos.orders.getOpenOnTable(tabela.id)
+    if (kosarica.length > 0) {
+      const cashierId = auth?.user?.id || null
+      const orderId = existing ? existing.id : await pos.orders.openOrder({ tableId: tabela.id, customerId: activeCustomer?.id, cashierId })
+      await pos.orders.replaceLines(orderId, kosarica.map(line => ({
+        itemId: line.id, name: line.name, qty: line.qty, unitPrice: line.price,
+        vatRate: line.vat_rate ?? 22, mods: line.mods || [], note: line.note || null,
+      })))
+      await pos.spaces.updateTableStatus(tabela.id, 'occupied')
+      posData.refresh()
+    } else if (existing) {
+      const izbrisano = await pos.orders.closeOrderEmpty(existing.id, { prepricanoPrazno: zanesljivaPrazna })
+      await pos.spaces.updateTableStatus(tabela.id, izbrisano ? 'free' : 'occupied')
+      posData.refresh()
+    }
+  }
 
   /**
    * OSVEŽITEV PO POSEGU V NAROČILO (prelet 165)
@@ -15447,6 +15503,10 @@ function KlasikApp() {
     // Kosarica v Reactu je po posegu zastarela - najprej jo razveljavimo,
     // da je nobena pot ne more zapisati nazaj cez svezo stanje v bazi.
     setCart([])
+    // PRELET 315: dokler ni znova prebrana iz baze spodaj, kosarica ni
+    // zanesljiva - samodejno shranjevanje je med tem ne sme obravnavati
+    // kot potrjeno prazno.
+    kosaricaZanesljivaRef.current = false
     try {
       if (nacin === 'move') {
         // Narocilo je odslo na drugo mizo - tu ni vec nicesar.
@@ -15466,6 +15526,10 @@ function KlasikApp() {
             }
           }))
         }
+        // PRELET 315: bazo za to mizo smo pravkar prebrali na tej napravi -
+        // kosarica je odslej zanesljivo zrcalo, ne glede na to, ali je
+        // narocilo obstajalo.
+        kosaricaZanesljivaRef.current = true
       }
     } catch (e) {
       console.error('Osvezitev mize po posegu ni uspela:', e)
@@ -15476,35 +15540,24 @@ function KlasikApp() {
   async function switchToTable(newTable) {
     if (tableSwitching) return
     setTableSwitching(true)
+    // PRELET 315: ce je samodejno shranjevanje ravno cakalo na svoj
+    // casovnik, ga prekinemo - spodaj bomo isto kosarico shranili takoj,
+    // podvojen/zastarel klic med preklopom mize ni potreben.
+    if (shranjevanjeTimerRef.current) { clearTimeout(shranjevanjeTimerRef.current); shranjevanjeTimerRef.current = null }
     try {
       // 1. Shrani trenutni cart za prejšnjo mizo (če je bila izbrana in ima artikle)
+      //
+      // POPRAVEK (prelet 308): closeOrderEmpty ima varovalko - ce narocilo
+      // v BAZI vendarle ni prazno (npr. zastarela/prazna kosarica v
+      // Reactu ob hitrem preklopu med mizami, medtem ko je narocilo v
+      // bazi ze dobilo artikle), brisanje zavrne, da artikli ne izginejo.
+      // `kosaricaZanesljivaRef` (prelet 315) pove, kdaj to preverjanje NI
+      // potrebno - glej `shraniKosarico` in komentar ob ref-u zgoraj.
       if (activeTable) {
-        const existing = await pos.orders.getOpenOnTable(activeTable.id)
-        if (cart.length > 0) {
-          const cashierId = auth?.user?.id || null
-          const orderId = existing ? existing.id : await pos.orders.openOrder({ tableId: activeTable.id, customerId: activeCustomer?.id, cashierId })
-          await pos.orders.replaceLines(orderId, cart.map(line => ({
-            itemId: line.id, name: line.name, qty: line.qty, unitPrice: line.price,
-            vatRate: line.vat_rate ?? 22, mods: line.mods || [], note: line.note || null,
-          })))
-          await pos.spaces.updateTableStatus(activeTable.id, 'occupied')
-          posData.refresh()
-        } else if (existing) {
-          // Cart je prazen - izbrišemo prazno naročilo če obstaja.
-          //
-          // POPRAVEK (prelet 308): closeOrderEmpty ima varovalko - ce
-          // narocilo v BAZI vendarle ni prazno (npr. zastarela/prazna
-          // kosarica v Reactu ob hitrem preklopu med mizami, medtem ko
-          // je narocilo v bazi ze dobilo artikle), brisanje zavrne in
-          // vrne false, brez napake. Prej smo mizo KLJUB TEMU oznacili
-          // kot 'free' - zato so artikli ostali v narocilu, miza pa se
-          // je na tlorisu kazala kot prosta ("Kot"/"Sredina" napaka).
-          const izbrisano = await pos.orders.closeOrderEmpty(existing.id)
-          await pos.spaces.updateTableStatus(activeTable.id, izbrisano ? 'free' : 'occupied')
-          posData.refresh()
-        }
+        await shraniKosarico(activeTable, cart, kosaricaZanesljivaRef.current)
       }
       // 2. Naloži naročilo nove mize (če obstaja)
+      kosaricaZanesljivaRef.current = false
       if (newTable) {
         const existing = await pos.orders.getOpenOnTable(newTable.id)
         if (existing && existing.order_lines) {
@@ -15522,6 +15575,8 @@ function KlasikApp() {
         } else {
           setCart([])
         }
+        // PRELET 315: bazo za novo mizo smo pravkar prebrali na tej napravi.
+        kosaricaZanesljivaRef.current = true
       } else {
         setCart([])
       }
@@ -15532,6 +15587,29 @@ function KlasikApp() {
     }
     setTableSwitching(false)
   }
+
+  /**
+   * Samodejno shranjevanje košarice ~900 ms po zadnji spremembi, dokler je
+   * miza aktivna (PRELET 315) - glej obsežen komentar ob
+   * `kosaricaZanesljivaRef` zgoraj. Med samim preklopom mize se učinek NE
+   * sproži (`tableSwitching`), ker `switchToTable` takrat že sam poskrbi
+   * za shranjevanje prejšnje mize in zgoraj počisti morebiten čakajoč
+   * časovnik - brez tega bi lahko podvojeno/zastarelo shranjevanje
+   * poteklo sredi preklopa.
+   */
+  useEffect(() => {
+    if (!activeTable || tableSwitching) return
+    if (shranjevanjeTimerRef.current) clearTimeout(shranjevanjeTimerRef.current)
+    shranjevanjeTimerRef.current = setTimeout(() => {
+      shranjevanjeTimerRef.current = null
+      shraniKosarico(activeTable, cart, kosaricaZanesljivaRef.current).catch((e) => {
+        console.error('Samodejno shranjevanje kosarice ni uspelo:', e)
+      })
+    }, 900)
+    return () => {
+      if (shranjevanjeTimerRef.current) { clearTimeout(shranjevanjeTimerRef.current); shranjevanjeTimerRef.current = null }
+    }
+  }, [cart, activeTable, tableSwitching])
   const [happyHourActive, setHappyHourActive] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [modifierPickModal, setModifierPickModal] = useState<any>(null)
@@ -15928,6 +16006,9 @@ function KlasikApp() {
                       // KLJUCNO: nastavi activeTable na mizo tega narocila, sicer open_order()
                       // ne najde obstojecega 'open' narocila in ustvari podvojeno narocilo pri placilu
                       setActiveTable(o.table_id ? { id: o.table_id, name: o.tables?.name || label } : null)
+                      // PRELET 315: `newCart` je pravkar prebran neposredno iz vrstic tega
+                      // narocila - zanesljivo zrcali bazo za to mizo.
+                      kosaricaZanesljivaRef.current = true
                       const updated = await pos.orders.getHeldOrders()
                       setHeldOrders(updated)
                       setHeldOrdersOpen(false)
