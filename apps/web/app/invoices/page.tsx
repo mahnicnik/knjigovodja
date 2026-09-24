@@ -41,12 +41,15 @@ export default function InvoicesPage() {
 
   // DODANO (Prelet 17, 17.8.2026): izbirnik obdobja za hitrejsi pregled,
   // ko racunov postane veliko. Glej lib/period-filter.ts.
-  // POMEMBNO: privzeto 'all' (kot doslej) - NE 'month'. Zgornji seznam
-  // sesteva "Neplacano" iz vseh racunov s statusom sent/overdue; ce bi bil
-  // privzet ozji filter, bi stari neplacan racun tiho izginil iz pogleda
-  // in bi ostal brez opomina. Filter je na voljo za hiter pregled, a ga
-  // mora oseba izbrati sama.
-  const [periodMode, setPeriodMode] = useState<PeriodMode>('all')
+  //
+  // PRELET 316 (23.9.2026): privzeto je zdaj 'month' ("Ta mesec") namesto
+  // 'all' ("Vse") - seznam ob vsakem odprtju strani ne kaze vec racunov
+  // vseh let. Prvotni razlog za 'all' (glej spodaj `load()`) ostaja
+  // resen: NEPLACANI/ZAPADLI racuni (status sent/overdue) se v seznamu
+  // VEDNO prikazejo, ne glede na izbrano obdobje - torej star neplacan
+  // racun ne more tiho izginiti iz pogleda, tudi ko je privzet filter
+  // ozji. Glej komentar v `load()`.
+  const [periodMode, setPeriodMode] = useState<PeriodMode>('month')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
 
@@ -69,7 +72,27 @@ export default function InvoicesPage() {
       if (from) query = query.gte('issue_date', from)
       if (to) query = query.lte('issue_date', to)
       const { data: inv } = await query.order('issue_date', { ascending: false })
-      setInvoices(inv || [])
+      let vsi = inv || []
+      // PRELET 316: ce je izbrano obdobje OZJE od "Vse" (torej `from`/`to`
+      // dejansko omejujeta poizvedbo), poleg tega obdobja vedno dodatno
+      // povlecemo SE VSE NEPLACANE/ZAPADLE racune ne glede na datum izdaje.
+      // Zgornji seznam ("Neplacano" v glavi strani) sesteva racune s
+      // statusom sent/overdue - ce bi ostali izven privzetega ozjega
+      // filtra, bi star neplacan racun tiho izginil iz pogleda in ostal
+      // brez opomina (natanko razlog, zaradi katerega je privzeto obdobje
+      // prej moralo ostati "Vse").
+      if (from || to) {
+        const { data: nepl } = await supabase.from('issued_invoices').select('*')
+          .eq('org_id', o.id).in('status', ['sent', 'overdue'])
+        if (nepl && nepl.length > 0) {
+          const znaniIdji = new Set(vsi.map((x: any) => x.id))
+          const dodatni = nepl.filter((x: any) => !znaniIdji.has(x.id))
+          if (dodatni.length > 0) {
+            vsi = [...vsi, ...dodatni].sort((a: any, b: any) => (b.issue_date || '').localeCompare(a.issue_date || ''))
+          }
+        }
+      }
+      setInvoices(vsi)
     }
     setLoading(false)
   }
