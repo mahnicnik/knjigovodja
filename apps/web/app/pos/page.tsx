@@ -310,6 +310,34 @@ function usePosData() {
   const refresh = useCallback(() => setReloadKey(k => k + 1), [])
 
   /**
+   * OZKA OSVEŽITEV SAMO MIZ/PROSTOROV (prelet 317)
+   * ═══════════════════════════════════════════════
+   *
+   * `refresh()` zgoraj povleče CEL katalog (artikli, kategorije, stranke,
+   * osebje, paketi, storitve, dnevna statistika, surovine, obvestila,
+   * happy hour pravila, profil poslovanja - ~10 poizvedb) in med tem
+   * postavi `loading` na true, kar zamenja prodajni zaslon z "Nalagam
+   * cenik...". To je bilo v redu, dokler se je klicalo redko (ob preklopu
+   * mize). Odkar samodejno shranjevanje košarice (prelet 315) kliče
+   * shranjevanje po SKORAJ VSAKEM dodanem artiklu, bi enak poln refresh
+   * ob vsakem koraku za trenutek prekril celoten zaslon z nalagalnikom.
+   *
+   * Edini razlog, da shranjevanje košarice sploh kliče kak refresh, je
+   * OBARVATI MIZO na tlorisu glede na zasedenost - `updateTableStatus()`
+   * zapiše status samo v bazo, `posData.spaces` (od koder tloris bere
+   * barvo) pa se sam od sebe ne posodobi. Za to zadostuje osvežiti SAMO
+   * seznam prostorov/miz, brez cesarkoli drugega in brez `loading`.
+   */
+  const refreshSpaces = useCallback(async () => {
+    try {
+      const sps = await pos.spaces.list()
+      setSpaces(sps)
+    } catch (e) {
+      console.error('refreshSpaces napaka:', e)
+    }
+  }, [])
+
+  /**
    * OSVEŽITEV OB VRNITVI V OKNO (prelet 197)
    * ════════════════════════════════════════
    *
@@ -462,7 +490,7 @@ function usePosData() {
     return [{ id: 'cat-fav', name: 'Priljubljeno', icon: '★', color: '#E9B949' }, ...categories]
   }, [categories])
 
-  return { categories: categoriesWithFav, items, spaces, customers, staffList, packageTemplates, services, ingredients, notifications, setNotifications, todayStats, businessProfile, setBusinessProfile, customNav, happyHourRules, loading, itemsIn, refresh, bizNapaka, businessName, org, fursTestMode, potrebujePrvoNastavitev, setPotrebujePrvoNastavitev }
+  return { categories: categoriesWithFav, items, spaces, customers, staffList, packageTemplates, services, ingredients, notifications, setNotifications, todayStats, businessProfile, setBusinessProfile, customNav, happyHourRules, loading, itemsIn, refresh, refreshSpaces, bizNapaka, businessName, org, fursTestMode, potrebujePrvoNastavitev, setPotrebujePrvoNastavitev }
 }
 
 // ================================================================
@@ -15455,6 +15483,13 @@ function KlasikApp() {
    *
    * `zanesljivaPrazna`: glej `kosaricaZanesljivaRef` zgoraj - posreduje se
    * naprej v `closeOrderEmpty`.
+   *
+   * PRELET 317: po shranjevanju osvežimo SAMO seznam miz/prostorov
+   * (`posData.refreshSpaces()`), ne celotnega kataloga (`posData.refresh()`)
+   * - edino, kar tu potrebujemo, je da se tloris takoj obarva glede na
+   * zasedenost. Poln refresh bi ob vsakem klicu (torej skoraj po vsakem
+   * dodanem artiklu) za trenutek prekril prodajni zaslon z "Nalagam
+   * cenik...".
    */
   async function shraniKosarico(tabela, kosarica, zanesljivaPrazna) {
     if (!tabela) return
@@ -15467,11 +15502,11 @@ function KlasikApp() {
         vatRate: line.vat_rate ?? 22, mods: line.mods || [], note: line.note || null,
       })))
       await pos.spaces.updateTableStatus(tabela.id, 'occupied')
-      posData.refresh()
+      posData.refreshSpaces()
     } else if (existing) {
       const izbrisano = await pos.orders.closeOrderEmpty(existing.id, { prepricanoPrazno: zanesljivaPrazna })
       await pos.spaces.updateTableStatus(tabela.id, izbrisano ? 'free' : 'occupied')
-      posData.refresh()
+      posData.refreshSpaces()
     }
   }
 
