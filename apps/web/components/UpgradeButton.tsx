@@ -8,6 +8,17 @@ interface UpgradeButtonProps {
   variant?: 'primary' | 'inline'
   /** PRELET 213: mesecno ali letno. Privzeto mesecno. */
   period?: 'monthly' | 'yearly'
+  /**
+   * PRELET 319: `subscriptionStatus` je 'pro'/'pro_pos' TUDI med brezplacnim
+   * preizkusom (trial), se preden je karkoli placano. Spodnji "ze ima ta
+   * plan" izhod je zato prej gumb skril tudi stranki, ki je samo v
+   * preizkusu in bi rada dejansko placala - stran ji ni ponudila NOBENEGA
+   * nacina za placilo, ne mesecnega ne letnega. Privzeto `true`, da se
+   * obnasanje za vse dosedanje klicatelje ne spremeni; klicatelj, ki pozna
+   * dejansko stanje placila (npr. `!!org?.stripe_subscription_id`), posreduje
+   * `false` za trial stranko, da gumb ostane viden.
+   */
+  jePlacano?: boolean
 }
 
 /**
@@ -33,6 +44,7 @@ export default function UpgradeButton({
   className = '',
   variant = 'primary',
   period = 'monthly',
+  jePlacano = true,
 }: UpgradeButtonProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -60,9 +72,9 @@ export default function UpgradeButton({
     }
   }
 
-  // Že ima ta plan ali višji
-  if (subscriptionStatus === 'pro_pos') return null
-  if (subscriptionStatus === 'pro' && targetPlan === 'pro') return null
+  // Že ima ta plan ali višji - a samo, ce ga je dejansko placala (prelet 319)
+  if (subscriptionStatus === 'pro_pos' && jePlacano) return null
+  if (subscriptionStatus === 'pro' && targetPlan === 'pro' && jePlacano) return null
 
   // PRELET 213: cena se bere iz CENE, ne iz zapisanega besedila.
   const cena = CENE[targetPlan][period]

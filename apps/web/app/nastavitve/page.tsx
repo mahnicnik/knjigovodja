@@ -222,6 +222,17 @@ export default function NastavitevPage() {
 
   const isPro = org?.subscription_status === 'pro' || org?.subscription_status === 'pro_pos'
   const isProPos = org?.subscription_status === 'pro_pos'
+  /**
+   * PRELET 319: `subscription_status` se na 'pro'/'pro_pos' postavi TUDI ob
+   * zacetku brezplacnega preizkusa (trial), se preden je karkoli placano -
+   * `stripe_subscription_id` pa ostane prazen, dokler stranka dejansko ne
+   * placa. Spodaj so gumbi za nadgradnjo/placilo prej skriti takoj, ko je
+   * `isPro`/`isProPos` resnicen - kar je stranko v preizkusni dobi (brez
+   * placila) popolnoma odrezalo od kakrsnegakoli nacina, da bi dejansko
+   * placala: stran ji ni pokazala niti mesecne niti letne cene z gumbom.
+   * `jeDejanskoPlacano` loci "ima placan plan" od "samo preizkusa plan".
+   */
+  const jeDejanskoPlacano = !!org?.stripe_subscription_id
   const inp = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
 
   return (
@@ -732,13 +743,16 @@ export default function NastavitevPage() {
                     <span style={{ color: '#16a34a' }}>✓</span> {f}
                   </div>
                 ))}
-                {!isPro && (
+                {(!isPro || !jeDejanskoPlacano) && (
                   <div style={{ marginTop: 16 }}>
                     {/* PRELET 213: mesecno in letno. Letno je oznaceno s
-                        prihrankom, ker sicer nihce ne racuna sam. */}
+                        prihrankom, ker sicer nihce ne racuna sam.
+                        PRELET 319: pogoj razsirjen z `!jeDejanskoPlacano`, da
+                        gumbe (in s tem letno ceno) vidi tudi stranka, ki je
+                        samo v preizkusni dobi. */}
                     <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                      <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} targetPlan="pro" period="monthly" />
-                      <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} targetPlan="pro" period="yearly" variant="inline" />
+                      <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} targetPlan="pro" period="monthly" jePlacano={jeDejanskoPlacano} />
+                      <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} targetPlan="pro" period="yearly" variant="inline" jePlacano={jeDejanskoPlacano} />
                       {(org?.subscription_status || 'free') === 'free' && (
                         <p style={{ fontSize:11, color:'#888', margin:0 }}>Letno = 2 meseca brezplačno (prihranite 25,98 €).</p>
                       )}
@@ -757,11 +771,15 @@ export default function NastavitevPage() {
                     <span style={{ color: '#16a34a' }}>✓</span> {f}
                   </div>
                 ))}
-                {!isProPos && (
+                {(!isProPos || !jeDejanskoPlacano) && (
                   <div style={{ marginTop: 16 }}>
+                    {/* PRELET 319: pogoj razsirjen z `!jeDejanskoPlacano`, da
+                        stranka v preizkusu Pro+POS vidi tako mesecno kot
+                        letno ceno in gumb, s katerim preizkus dejansko
+                        spremeni v placano narocnino. */}
                     <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                      <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} targetPlan="pro_pos" period="monthly" />
-                      <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} targetPlan="pro_pos" period="yearly" variant="inline" />
+                      <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} targetPlan="pro_pos" period="monthly" jePlacano={jeDejanskoPlacano} />
+                      <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} targetPlan="pro_pos" period="yearly" variant="inline" jePlacano={jeDejanskoPlacano} />
                       {(org?.subscription_status || 'free') !== 'pro_pos' && (
                         <p style={{ fontSize:11, color:'#888', margin:0 }}>Letno = 2 meseca brezplačno (prihranite 59,98 €).</p>
                       )}
