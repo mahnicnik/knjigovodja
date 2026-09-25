@@ -174,6 +174,14 @@ export default function DashboardPage() {
   // DODANO (19.9.2026): odstevalnik do izteka brezplacnega preizkusa (glej
   // trialInfo spodaj) - locena state samo za "Nadgradi zdaj" gumb v banerju.
   const [trialUpgrading, setTrialUpgrading] = useState(false)
+  /**
+   * PRELET 318: ce /api/stripe/checkout vrne napako (npr. neveljaven Stripe
+   * price ID), se je gumb prej tiho vrnil v prvotno stanje - uporabnik je
+   * videl samo kratek utrip "Preusmerjam..." in nato spet "Nadgradi zdaj",
+   * brez kakrsnegakoli pojasnila, zakaj nic ni naredilo. Ta niz drzi sporocilo
+   * napake, da ga lahko pokazemo neposredno pod gumbom.
+   */
+  const [trialUpgradeError, setTrialUpgradeError] = useState<string | null>(null)
   const [pendingRecurringCount, setPendingRecurringCount] = useState(0)
   const [userId, setUserId] = useState<string | null>(null)
   const [userEmail, setUserEmail] = useState<string>('')
@@ -870,6 +878,7 @@ export default function DashboardPage() {
 
   async function handleTrialUpgrade() {
     setTrialUpgrading(true)
+    setTrialUpgradeError(null)
     try {
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
@@ -878,8 +887,13 @@ export default function DashboardPage() {
       })
       const data = await res.json()
       if (data.url) { window.location.href = data.url; return }
+      // PRELET 318: prej je tu ostalo samo `setTrialUpgrading(false)` - ce
+      // API ni vrnil `url` (npr. napaka pri Stripu), je gumb obmiroval brez
+      // sledu, zakaj. Zdaj pokazemo sporocilo, ki ga je API poslal nazaj.
+      setTrialUpgradeError(data.error || 'Plačila trenutno ni bilo mogoče začeti. Poskusite znova ali nas kontaktirajte na support@računko.si.')
       setTrialUpgrading(false)
     } catch {
+      setTrialUpgradeError('Napaka pri povezavi. Poskusite znova ali nas kontaktirajte na support@računko.si.')
       setTrialUpgrading(false)
     }
   }
@@ -955,6 +969,7 @@ export default function DashboardPage() {
             <button className="rk-trial-cta" onClick={handleTrialUpgrade} disabled={trialUpgrading}>
               {trialUpgrading ? 'Preusmerjam…' : 'Nadgradi zdaj'}
             </button>
+            {trialUpgradeError && <span className="rk-trial-error">⚠️ {trialUpgradeError}</span>}
           </div>
         )}
 
@@ -1787,6 +1802,8 @@ const cssGlobal = `
   .rk-trial-cta { background: #0d2818; color: #f6f1e8; border: none; border-radius: 8px; padding: 9px 16px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; }
   .rk-trial-cta:hover { background: #163a24; }
   .rk-trial-cta:disabled { opacity: 0.6; cursor: default; }
+  .rk-trial-error { flex-basis: 100%; font-size: 12px; color: #b3261e; }
+  .rk-shell[data-theme="dark"] .rk-trial-error { color: #f2b8b5; }
   .rk-onboard { background: #fff; border: 1px solid var(--rule); border-radius: 18px; padding: 22px 26px; margin-bottom: 18px; position: relative; }
   .rk-shell[data-theme="dark"] .rk-onboard { background: var(--panel); }
   .rk-onboard-close { position: absolute; top: 16px; right: 16px; background: none; border: 0; color: var(--ink3); cursor: pointer; padding: 6px; border-radius: 6px; }

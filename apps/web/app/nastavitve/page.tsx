@@ -253,25 +253,35 @@ export default function NastavitevPage() {
           </div>
         )}
 
-        {/* Hub kartic */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: 10, marginBottom: 28 }}>
+        {/* Hub kartic
+            PRELET 318: kartice so bile prevelike - preden je uporabnik sploh
+            prisel do vsebine spodaj (npr. "Profil podjetja"), je moral
+            scrollati mimo cele mreze ikon. Ikone in napisi OSTANEJO (stranka
+            jih izrecno noce odstranjenih) - namesto tega je vsaka kartica
+            manjsa: manjsa ikona, tanjse odmiki, gostejsa mreza (vec stolpcev
+            na isto sirino), opis pa je omejen na ENO vrstico namesto dveh, kar
+            je bil glavni razlog za visino kartic. */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 8, marginBottom: 18 }}>
           {SECTIONS.map(s => (
             <button key={s.id} onClick={() => (s as any).href ? router.push((s as any).href) : setActiveSection(s.id)}
               style={{
                 background: activeSection === s.id ? '#0D1F12' : '#fff',
                 color: activeSection === s.id ? '#fff' : '#333',
                 border: `1.5px solid ${activeSection === s.id ? '#0D1F12' : '#e5e7eb'}`,
-                borderRadius: 14, padding: '14px 10px', cursor: 'pointer',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                borderRadius: 12, padding: '9px 7px', cursor: 'pointer',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
                 transition: 'all 0.15s', fontFamily: 'inherit',
               }}>
-              <span style={{ fontSize: 24 }}>{s.icon}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, textAlign: 'center', lineHeight: 1.3 }}>
+              <span style={{ fontSize: 18 }}>{s.icon}</span>
+              <span style={{ fontSize: 10, fontWeight: 700, textAlign: 'center', lineHeight: 1.25 }}>
                 {s.label}
                 {/* Pušcica pove, da kartica odpre SVOJO stran, ne razdelka tu. */}
                 {(s as any).href && <span style={{ opacity: 0.5, marginLeft: 3 }}>↗</span>}
               </span>
-              <span style={{ fontSize: 10, opacity: 0.6, textAlign: 'center', lineHeight: 1.3 }}>{s.desc}</span>
+              <span style={{
+                fontSize: 9, opacity: 0.6, textAlign: 'center', lineHeight: 1.25,
+                maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>{s.desc}</span>
             </button>
           ))}
         </div>
