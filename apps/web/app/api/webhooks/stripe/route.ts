@@ -65,6 +65,59 @@ function verifyStripeSignature(payload: string, sigHeader: string, secret: strin
   }
 }
 
+/**
+ * PRELET 320: zapis v integration_logs, ki napake NE pogoltne tiho.
+ *
+ * Prej so bili VSI zapisi s statusom 'failed'/'skipped' zavrnjeni zaradi
+ * omejitve integration_logs_status_check (dovoljevala je samo
+ * success/error/pending), napaka pa se je zavrgla z `.then(() => {}, () => {})`.
+ * Posledica: od 30.7.2026 ni bil zabelezen NOBEN neuspeh ali preskok - ko
+ * racun ni nastal (primer Domen Kocjan, 20.9.2026), v /integracije ni bilo
+ * nobene sledi. Omejitev je razsirjena v migraciji 159, tu pa vsak neuspel
+ * zapis vsaj izpisemo v streznisko dnevnik, da se tiha izguba ne ponovi.
+ */
+async function zapisiLog(supabase: any, vrstica: Record<string, any>): Promise<void> {
+  try {
+    const { error } = await supabase.from('integration_logs').insert({ integration_type: 'stripe', ...vrstica })
+    if (error) console.error('Stripe webhook: zapis v integration_logs ni uspel:', error.message, vrstica)
+  } catch (e: any) {
+    console.error('Stripe webhook: zapis v integration_logs je vrgel napako:', e?.message, vrstica)
+  }
+}
+
+/**
+ * PRELET 320: znesek placila v centih.
+ *
+ * Prej: `obj.amount_total ?? obj.amount_paid ?? obj.amount`. Stripe racun
+ * (invoice) polja amount_total NIMA, zato se je vzel amount_paid. Ta je 0,
+ * kadar je racun poravnan iz dobroimetja stranke ali ga je prodajalec v
+ * Stripe oznacil kot "placan izven Stripe" (paid out of band) - vrednost
+ * prodaje (`total`) pa je vec kot 0. Webhook je tak racun preskocil kot
+ * "znesek 0" in vrnil 200, zato ga Stripe ni nikoli ponovil. Tako je
+ * 20.9.2026 izpadel racun za enkratno prodajo (masterclass) pri Domnu.
+ *
+ * Zdaj je za racun merodajen `total` (vrednost prodaje po popustih). Pri
+ * brezplacnem preizkusu ali 100 % kuponu je total 0 in dogodek se se vedno
+ * pravilno preskoci.
+ */
+function izracunajZnesek(obj: any): { centi: number; opomba: string } {
+  if (obj?.object === 'invoice') {
+    const total = Number(obj.total ?? 0)
+    const placano = Number(obj.amount_paid ?? 0)
+    if (total > 0) {
+      let opomba = ''
+      if (placano <= 0) {
+        opomba = obj.paid_out_of_band
+          ? ' Račun je v Stripe označen kot plačan izven Stripe.'
+          : ' Poravnano iz dobroimetja stranke v Stripe.'
+      }
+      return { centi: total, opomba }
+    }
+    return { centi: placano > 0 ? placano : 0, opomba: '' }
+  }
+  return { centi: Number(obj?.amount_total ?? obj?.amount_received ?? obj?.amount ?? 0), opomba: '' }
+}
+
 async function generateInvoiceNumber(supabase: any, orgId: string): Promise<string> {
   const year = new Date().getFullYear()
   // POPRAVLJENO (16.8.2026): stevilka se je dolocala s STETJEM obstojecih
@@ -120,12 +173,11 @@ export async function POST(req: NextRequest) {
       // DODANO (prelet 296): ce nekdo (pomotoma) izklopi integracijo, je bil
       // to prej NAJTISJI moznii izpad - webhook je tiho vracal 404, brez
       // sledi v /integracije. Zdaj se zabelezi tudi to.
-      await supabase.from('integration_logs').insert({
+      await zapisiLog(supabase, {
         org_id: orgId,
-        integration_type: 'stripe',
         status: 'failed',
         payload: { reason: 'integration_not_active_or_missing' },
-      }).then(() => {}, () => {})
+      })
       return NextResponse.json({ error: 'Stripe integracija ni nastavljena' }, { status: 404 })
     }
 
@@ -134,9 +186,8 @@ export async function POST(req: NextRequest) {
       if (!isValid) {
         // DODANO (30.7.2026): beleži neveljaven podpis - prej se je
         // tiho zavrnilo brez sledi v /integracije.
-        await supabase.from('integration_logs').insert({
+        await zapisiLog(supabase, {
           org_id: orgId,
-          integration_type: 'stripe',
           status: 'failed',
           payload: { error: 'invalid_signature' },
         })
@@ -160,13 +211,12 @@ export async function POST(req: NextRequest) {
     // a smo ga namenoma preskocili". Zdaj beleximo VSAK prejeti dogodek.
     const handledEvents = ['checkout.session.completed', 'invoice.paid']
     if (!handledEvents.includes(event.type)) {
-      await supabase.from('integration_logs').insert({
+      await zapisiLog(supabase, {
         org_id: orgId,
-        integration_type: 'stripe',
         external_id: event.data?.object?.id ?? null,
         status: 'skipped',
-        payload: { reason: 'event_type_not_handled', event_type: event.type },
-      }).then(() => {}, () => {})
+        payload: { reason: 'event_type_not_handled', event_type: event.type, event_id: event.id },
+      })
       return NextResponse.json({ message: `Event ${event.type} ignoriran` }, { status: 200 })
     }
 
@@ -182,14 +232,28 @@ export async function POST(req: NextRequest) {
     // Za enkratna placila (mode:'payment') checkout.session.completed
     // ostane edini/pravilni dogodek - nespremenjeno.
     if (event.type === 'checkout.session.completed' && obj.mode === 'subscription') {
-      await supabase.from('integration_logs').insert({
+      await zapisiLog(supabase, {
         org_id: orgId,
-        integration_type: 'stripe',
         external_id: obj.id ?? null,
         status: 'skipped',
-        payload: { reason: 'subscription_checkout_awaiting_invoice_paid', event_type: event.type },
-      }).then(() => {}, () => {})
+        payload: { reason: 'subscription_checkout_awaiting_invoice_paid', event_type: event.type, event_id: event.id },
+      })
       return NextResponse.json({ message: 'Checkout za narocnino - caka se invoice.paid' }, { status: 200 })
+    }
+
+    // PRELET 320: ista past kot zgoraj, le pri ENKRATNEM placilu. Ce ima
+    // Payment Link / Checkout vklopljeno "Create an invoice" (invoice_creation),
+    // Stripe za isti nakup poslje checkout.session.completed (cs_) IN
+    // invoice.paid (in_) - dva razlicna ID-ja, dedup ju ne bi povezal in
+    // nastala bi DVA racuna. V tem primeru je vir resnice invoice.paid.
+    if (event.type === 'checkout.session.completed' && obj.invoice) {
+      await zapisiLog(supabase, {
+        org_id: orgId,
+        external_id: obj.id ?? null,
+        status: 'skipped',
+        payload: { reason: 'checkout_with_invoice_awaiting_invoice_paid', event_type: event.type, event_id: event.id, invoice: obj.invoice },
+      })
+      return NextResponse.json({ message: 'Checkout z racunom - caka se invoice.paid' }, { status: 200 })
     }
 
     // Preveri ali račun za ta Stripe objekt že obstaja
@@ -202,14 +266,13 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
 
     if (existing) {
-      await supabase.from('integration_logs').insert({
+      await zapisiLog(supabase, {
         org_id: orgId,
-        integration_type: 'stripe',
         external_id: obj.id ?? null,
         invoice_id: existing.id,
         status: 'skipped',
-        payload: { reason: 'invoice_already_exists', event_type: event.type },
-      }).then(() => {}, () => {})
+        payload: { reason: 'invoice_already_exists', event_type: event.type, event_id: event.id },
+      })
       return NextResponse.json({ message: 'Račun že obstaja', invoiceId: existing.id }, { status: 200 })
     }
 
@@ -220,19 +283,37 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (!org) {
+      await zapisiLog(supabase, {
+        org_id: orgId,
+        external_id: obj.id ?? null,
+        status: 'failed',
+        payload: { reason: 'org_not_found', event_type: event.type, event_id: event.id },
+      })
       return NextResponse.json({ error: 'Org ni najdena' }, { status: 404 })
     }
 
-    // Znesek je v Stripe vedno v najmanjši enoti valute (centi)
-    const amountTotal = (obj.amount_total ?? obj.amount_paid ?? obj.amount ?? 0) / 100
+    // Znesek je v Stripe vedno v najmanjši enoti valute (centi).
+    // PRELET 320: glej izracunajZnesek() - pri racunu je merodajen `total`.
+    const { centi: znesekCenti, opomba: znesekOpomba } = izracunajZnesek(obj)
+    const amountTotal = znesekCenti / 100
     if (amountTotal <= 0) {
-      await supabase.from('integration_logs').insert({
+      await zapisiLog(supabase, {
         org_id: orgId,
-        integration_type: 'stripe',
         external_id: obj.id ?? null,
         status: 'skipped',
-        payload: { reason: 'amount_zero_or_negative', event_type: event.type },
-      }).then(() => {}, () => {})
+        payload: {
+          reason: 'amount_zero_or_negative',
+          event_type: event.type,
+          event_id: event.id,
+          // za diagnostiko: vsa znesek-polja, kot jih je poslal Stripe
+          total: obj.total ?? null,
+          amount_paid: obj.amount_paid ?? null,
+          amount_due: obj.amount_due ?? null,
+          amount_total: obj.amount_total ?? null,
+          paid_out_of_band: obj.paid_out_of_band ?? null,
+          billing_reason: obj.billing_reason ?? null,
+        },
+      })
       return NextResponse.json({ message: 'Znesek 0 — preskočeno' }, { status: 200 })
     }
 
@@ -243,7 +324,13 @@ export async function POST(req: NextRequest) {
     const customerEmail = obj.customer_details?.email ?? obj.customer_email ?? null
     const customerName = obj.customer_details?.name ?? obj.customer_name ?? customerEmail ?? 'Stranka iz Stripe'
 
-    const description = obj.description ?? `Stripe plačilo #${obj.id}`
+    // PRELET 320: Stripe racun (invoice) ima opis prodaje v postavkah
+    // (lines), ne v `description` - prej je na racunu pisalo samo
+    // "Stripe plačilo #in_...". Zdaj vzamemo opise postavk (npr. "Masterclass").
+    const opisPostavk = Array.isArray(obj.lines?.data)
+      ? obj.lines.data.map((l: any) => l?.description).filter(Boolean).join(', ')
+      : ''
+    const description = (obj.description || opisPostavk || `Stripe plačilo #${obj.id}`).slice(0, 300)
 
     const lineItems = [{
       description,
@@ -257,6 +344,13 @@ export async function POST(req: NextRequest) {
     const invoiceNumber = await generateInvoiceNumber(supabase, orgId)
     const issueDate = lokalniDatum()
 
+    // PRELET 320: dejanski trenutek placila (ne trenutek obdelave). Pomembno,
+    // ko se zamujen dogodek v Stripe rocno ponovno poslje ("Resend") - racun
+    // se izda danes, datum opravljene storitve in placila pa ostaneta pravilna.
+    const placanoSek = Number(obj.status_transitions?.paid_at ?? obj.created ?? event.created ?? 0)
+    const placanoOb = placanoSek > 0 ? new Date(placanoSek * 1000) : new Date()
+    const datumPlacila = lokalniDatum(placanoOb)
+
     const { data: invoice, error: invErr } = await supabase
       .from('issued_invoices')
       .insert({
@@ -267,20 +361,41 @@ export async function POST(req: NextRequest) {
         client_email: customerEmail,
         issue_date: issueDate,
         due_date: issueDate,
-        service_date_from: issueDate,
-        service_date_to: issueDate,
+        service_date_from: datumPlacila,
+        service_date_to: datumPlacila,
         line_items: lineItems,
         amount_net: Math.round(amountNet * 100) / 100,
         vat_amount: Math.round(vatAmount * 100) / 100,
         amount_total: Math.round(amountTotal * 100) / 100,
         status: 'paid',
-        paid_at: new Date().toISOString(),
+        paid_at: placanoOb.toISOString(),
         paid_amount: amountTotal,
-        notes: `Stripe plačilo — ${event.type} (${obj.id})`,
+        notes: `Stripe plačilo — ${event.type} (${obj.id}).${znesekOpomba}`,
         external_reference: externalRef,
       })
       .select('id')
       .single()
+
+    // PRELET 320: ce Stripe isti dogodek poslje dvakrat hkrati (ponovni
+    // poskus med se tekoco obdelavo), sta prej obe obdelavi presli preverbo
+    // "ze obstaja" in nastala sta DVA racuna. Unikatni indeks iz migracije
+    // 159 drugi vpis zavrne (23505) - to ni napaka, ampak pravilen dvojnik.
+    if (invErr?.code === '23505') {
+      const { data: obstojeci } = await supabase
+        .from('issued_invoices')
+        .select('id')
+        .eq('org_id', orgId)
+        .eq('external_reference', externalRef)
+        .maybeSingle()
+      await zapisiLog(supabase, {
+        org_id: orgId,
+        external_id: obj.id ?? null,
+        invoice_id: obstojeci?.id ?? null,
+        status: 'skipped',
+        payload: { reason: 'invoice_already_exists_concurrent', event_type: event.type, event_id: event.id },
+      })
+      return NextResponse.json({ message: 'Račun že obstaja', invoiceId: obstojeci?.id ?? null }, { status: 200 })
+    }
 
     if (invErr || !invoice) {
       throw new Error(`Napaka pri ustvarjanju računa: ${invErr?.message}`)
@@ -303,9 +418,10 @@ export async function POST(req: NextRequest) {
     })
     if (kpoErr) {
       console.error('Stripe webhook: racun', invoiceNumber, 'je nastal, vnos v KPO knjigo pa NI uspel:', kpoErr)
-      await supabase.from('integration_logs').insert({
+      await zapisiLog(supabase, {
         org_id: orgId,
-        integration_type: 'stripe',
+        external_id: obj.id ?? null,
+        invoice_id: invoice.id,
         status: 'failed',
         payload: {
           error: 'kpo_entry_failed',
@@ -366,7 +482,7 @@ export async function POST(req: NextRequest) {
           vat_amount: Math.round(vatAmount * 100) / 100,
           amount_total: Math.round(amountTotal * 100) / 100,
           status: 'paid',
-          paid_at: new Date().toISOString(),
+          paid_at: placanoOb.toISOString(),
           zoi: fursResult?.zoi ?? null,
           eor: fursResult?.eor ?? null,
           organizations: org,
@@ -412,13 +528,12 @@ export async function POST(req: NextRequest) {
       console.warn('Stripe placilo brez e-maila stranke - racun ni bil poslan po posti:', invoice.id)
     }
 
-    await supabase.from('integration_logs').insert({
+    await zapisiLog(supabase, {
       org_id: orgId,
-      integration_type: 'stripe',
       external_id: obj.id,
       invoice_id: invoice.id,
       status: 'success',
-      payload: { event_type: event.type, amount_total: amountTotal },
+      payload: { event_type: event.type, event_id: event.id, amount_total: amountTotal },
     })
 
     return NextResponse.json({
@@ -436,12 +551,11 @@ export async function POST(req: NextRequest) {
     // lahko podrla brez sledi v /integracije ("zakaj se ni poknjižilo").
     // orgId/supabase sta zdaj dosegljiva tudi tu (dvignjena pred try).
     if (orgId && supabase) {
-      await supabase.from('integration_logs').insert({
+      await zapisiLog(supabase, {
         org_id: orgId,
-        integration_type: 'stripe',
         status: 'failed',
         payload: { error: String(e?.message || e) },
-      }).then(() => {}, () => {})
+      })
     }
     return NextResponse.json({ error: e.message }, { status: 500 })
   }

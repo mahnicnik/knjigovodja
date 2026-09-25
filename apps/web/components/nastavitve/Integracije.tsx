@@ -500,6 +500,30 @@ export default function IntegracijeSekcija() {
   )
 }
 
+// PRELET 320: razlog v berljivi obliki. Do prelet 320 se zapisi 'skipped'
+// in 'failed' zaradi omejitve v bazi sploh niso shranili, zdaj pa bi se
+// vsi prikazali kot ❌ brez pojasnila - tudi povsem pravilni preskoki
+// (npr. brezplacni preizkus za 0 €), kar bi uporabnika po nepotrebnem skrbelo.
+const RAZLOGI_DOGODKOV: Record<string, string> = {
+  amount_zero_or_negative: 'Znesek 0 € (npr. brezplačni preizkus) — račun ni potreben',
+  invoice_already_exists: 'Račun za to plačilo že obstaja',
+  invoice_already_exists_concurrent: 'Račun za to plačilo že obstaja',
+  subscription_checkout_awaiting_invoice_paid: 'Naročnina — račun se izda ob dogodku invoice.paid',
+  checkout_with_invoice_awaiting_invoice_paid: 'Plačilo z računom — račun se izda ob dogodku invoice.paid',
+  event_type_not_handled: 'Vrsta dogodka se ne obdeluje',
+  integration_not_active_or_missing: 'Integracija ni aktivna',
+  org_not_found: 'Organizacija ni najdena',
+  invalid_signature: 'Neveljaven podpis — preverite Signing secret',
+  kpo_entry_failed: 'Račun izdan, vnos v knjigo prihodkov ni uspel',
+}
+
+function opisDogodka(log: any): string | null {
+  const p = log?.payload ?? {}
+  const kljuc = p.reason ?? p.error
+  if (!kljuc) return null
+  return RAZLOGI_DOGODKOV[kljuc] ?? String(kljuc)
+}
+
 // Logs komponenta
 function IntegrationLogs({ orgId, supabase }: { orgId: string | null; supabase: any }) {
   const [logs, setLogs] = useState<any[]>([])
@@ -527,13 +551,14 @@ function IntegrationLogs({ orgId, supabase }: { orgId: string | null; supabase: 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {logs.map(log => (
           <div key={log.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', background: '#F7F6F2', borderRadius: 8 }}>
-            <span style={{ fontSize: 14 }}>{log.status === 'success' ? '✅' : '❌'}</span>
+            <span style={{ fontSize: 14 }}>{log.status === 'success' ? '✅' : log.status === 'skipped' ? '⏭️' : '❌'}</span>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 12, fontWeight: 500, color: '#0D1F12' }}>
-                {log.integration_type === 'woocommerce' ? '🛒 WooCommerce' : log.integration_type === 'shopify' ? '🏪 Shopify' : '💳 Stripe'} · #{log.external_id}
+                {log.integration_type === 'woocommerce' ? '🛒 WooCommerce' : log.integration_type === 'shopify' ? '🏪 Shopify' : '💳 Stripe'}{log.external_id ? ` · #${log.external_id}` : ''}
               </div>
               <div style={{ fontSize: 11, color: '#888' }}>
                 {new Date(log.created_at).toLocaleString('sl-SI')}
+                {log.status !== 'success' && opisDogodka(log) ? ` · ${opisDogodka(log)}` : ''}
               </div>
             </div>
             {log.invoice_id && (
