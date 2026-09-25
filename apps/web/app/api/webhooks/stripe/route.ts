@@ -20,7 +20,7 @@ import { resend, FROM_EMAIL, posiljateljZa } from '@/lib/resend'
  * Nastavitev v Stripe dashboardu uporabnika:
  * Stripe → Developers → Webhooks → Add endpoint
  * - URL: https://xn--raunko-j2a.si/api/webhooks/stripe?org_id=VAŠ_ORG_ID
- * - Events: checkout.session.completed, invoice.paid
+ * - Events: checkout.session.completed, invoice.paid, payment_intent.succeeded
  * - Signing secret: (vnesi v Računko nastavitve → Integracije → Stripe)
  *
  * POMEMBNO: To je webhook za UPORABNIKOV lasten Stripe account (npr. za
@@ -209,7 +209,17 @@ export async function POST(req: NextRequest) {
     // ni bilo NOBENE sledi, da je webhook sploh prispel. Ko racun ni nastal,
     // ni bilo mogoce locevati "webhook ni prispel" od "webhook je prispel,
     // a smo ga namenoma preskocili". Zdaj beleximo VSAK prejeti dogodek.
-    const handledEvents = ['checkout.session.completed', 'invoice.paid']
+    //
+    // PRELET 324: payment_intent.succeeded je spet obdelan - a BREZ dvojnikov.
+    // Brez njega je izpadlo vsako placilo, ki ni slo prek Checkouta ali
+    // Stripe racuna (placilo, ustvarjeno v Stripe nadzorni plosci, placilo
+    // prek zunanje platforme ...). Tako je 18.9.2026 pri Domnu Kocjanu
+    // izpadel racun za masterclass (289 EUR, pi_3UGut6...): Stripe je poslal
+    // samo payment_intent.succeeded, ki ga webhook ni poslusal.
+    // Zascita pred dvojniki (glej `kljucPlacila` spodaj): checkout in
+    // payment_intent istega nakupa imata ZDAJ ISTI kljuc (ID placila pi_),
+    // placilo za Stripe racun pa pokrije invoice.paid.
+    const handledEvents = ['checkout.session.completed', 'invoice.paid', 'payment_intent.succeeded']
     if (!handledEvents.includes(event.type)) {
       await zapisiLog(supabase, {
         org_id: orgId,
@@ -256,14 +266,52 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'Checkout z racunom - caka se invoice.paid' }, { status: 200 })
     }
 
-    // Preveri ali račun za ta Stripe objekt že obstaja
-    const externalRef = `stripe-${obj.id}`
-    const { data: existing } = await supabase
+    // PRELET 324: placilo za Stripe RACUN (narocnina ali poslan racun) sprozi
+    // tudi payment_intent.succeeded - racun zanj izda invoice.paid, zato ga
+    // tu preskocimo (sicer dva racuna za isto placilo).
+    if (event.type === 'payment_intent.succeeded' && obj.invoice) {
+      await zapisiLog(supabase, {
+        org_id: orgId,
+        external_id: obj.id ?? null,
+        status: 'skipped',
+        payload: { reason: 'payment_intent_for_invoice_awaiting_invoice_paid', event_type: event.type, event_id: event.id, invoice: obj.invoice },
+      })
+      return NextResponse.json({ message: 'Placilo Stripe racuna - racun izda invoice.paid' }, { status: 200 })
+    }
+    // Novejse razlicice Stripe API (od 2025-03-31) v placilu NIMAJO vec polja
+    // `invoice`, zato iz dogodka ni mogoce vedeti, ali placilo pripada Stripe
+    // racunu. Da ne tvegamo dvojnika, takega placila NE obdelamo in to
+    // zabelezimo (resitev: API verzija webhooka 2025-02-24 ali starejsa).
+    if (event.type === 'payment_intent.succeeded' && !('invoice' in obj)) {
+      await zapisiLog(supabase, {
+        org_id: orgId,
+        external_id: obj.id ?? null,
+        status: 'skipped',
+        payload: { reason: 'payment_intent_api_version_unsupported', event_type: event.type, event_id: event.id, api_version: event.api_version ?? null },
+      })
+      return NextResponse.json({ message: 'API verzija ne omogoca locevanja placil' }, { status: 200 })
+    }
+
+    // PRELET 324: KLJUC PLACILA za zascito pred dvojniki. En nakup prek
+    // Checkouta sprozi checkout.session.completed (cs_) IN
+    // payment_intent.succeeded (pi_) - zato se je 22.7.2026 payment_intent
+    // odstranil. Zdaj oba zapiseta ISTI kljuc: ID placila (pi_). Kateri koli
+    // pride prvi, ustvari racun; drugi najde obstojecega (ali ga zavrne
+    // unikatni indeks iz migracije 159, ce prideta hkrati).
+    const kljucPlacila = event.type === 'payment_intent.succeeded'
+      ? obj.id
+      : (event.type === 'checkout.session.completed' && typeof obj.payment_intent === 'string' ? obj.payment_intent : obj.id)
+    const externalRef = `stripe-${kljucPlacila}`
+    // Racuni, ustvarjeni pred preletom 324, imajo pri checkoutu kljuc cs_ -
+    // preverimo oba, da ponovno poslan star dogodek ne ustvari dvojnika.
+    const kandidati = Array.from(new Set([externalRef, `stripe-${obj.id}`]))
+    const { data: obstojeciRacuni } = await supabase
       .from('issued_invoices')
       .select('id')
       .eq('org_id', orgId)
-      .eq('external_reference', externalRef)
-      .maybeSingle()
+      .in('external_reference', kandidati)
+      .limit(1)
+    const existing = (obstojeciRacuni || [])[0] ?? null
 
     if (existing) {
       await zapisiLog(supabase, {
@@ -321,8 +369,11 @@ export async function POST(req: NextRequest) {
     const vatAmount = org.vat_registered ? amountTotal - amountNet : 0
 
     // Stranka — Stripe checkout session ima customer_details, invoice ima customer_email
-    const customerEmail = obj.customer_details?.email ?? obj.customer_email ?? null
-    const customerName = obj.customer_details?.name ?? obj.customer_name ?? customerEmail ?? 'Stranka iz Stripe'
+    // PRELET 324: samostojno placilo (payment_intent) ima podatke o kupcu v
+    // receipt_email in v podatkih bremenitve (charges), ne v customer_details.
+    const bremenitev = obj.charges?.data?.[0]?.billing_details ?? {}
+    const customerEmail = obj.customer_details?.email ?? obj.customer_email ?? obj.receipt_email ?? bremenitev.email ?? null
+    const customerName = obj.customer_details?.name ?? obj.customer_name ?? bremenitev.name ?? obj.shipping?.name ?? customerEmail ?? 'Stranka iz Stripe'
 
     // PRELET 320: Stripe racun (invoice) ima opis prodaje v postavkah
     // (lines), ne v `description` - prej je na racunu pisalo samo
@@ -347,7 +398,10 @@ export async function POST(req: NextRequest) {
     // PRELET 320: dejanski trenutek placila (ne trenutek obdelave). Pomembno,
     // ko se zamujen dogodek v Stripe rocno ponovno poslje ("Resend") - racun
     // se izda danes, datum opravljene storitve in placila pa ostaneta pravilna.
-    const placanoSek = Number(obj.status_transitions?.paid_at ?? obj.created ?? event.created ?? 0)
+    // PRELET 324: pri racunu je trenutek placila status_transitions.paid_at;
+    // pri checkoutu/placilu je to trenutek dogodka (obj.created je trenutek
+    // ZACETKA placila - pri 3-D Secure lahko minut prej ali celo drug dan).
+    const placanoSek = Number(obj.status_transitions?.paid_at ?? event.created ?? obj.created ?? 0)
     const placanoOb = placanoSek > 0 ? new Date(placanoSek * 1000) : new Date()
     const datumPlacila = lokalniDatum(placanoOb)
 

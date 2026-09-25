@@ -358,7 +358,7 @@ export default function IntegracijeSekcija() {
   steps={[
     { icon: '🔑', title: 'Kopirajte Webhook URL', desc: 'Ta URL boste vnesli v Stripe nastavitve.', code: `${webhookBaseUrl}/stripe?org_id=${orgId}`, copyable: true },
     { icon: '💳', title: 'Odprite Stripe Dashboard', desc: 'Pojdite na: Developers → Webhooks → Add endpoint' },
-    { icon: '📋', title: 'Izpolnite podatke', desc: 'Events: checkout.session.completed, invoice.paid · URL: (iz koraka 1)' },
+    { icon: '📋', title: 'Izpolnite podatke', desc: 'Events: checkout.session.completed, invoice.paid, payment_intent.succeeded · URL: (iz koraka 1)' },
     { icon: '✅', title: 'Kopirajte Signing secret', desc: 'Stripe vam ob ustvarjanju webhooka pokaže "Signing secret" — kopirajte ga spodaj v polje Webhook Secret.' },
   ]}
   tip="Uporabite vaš LASTEN Stripe webhook (za vašo aplikacijo/produkt) — ne za Računko naročnino."
@@ -380,7 +380,7 @@ export default function IntegracijeSekcija() {
               </div>
               <div style={{ fontSize: 12, color: '#888', marginTop: 10, lineHeight: 1.5 }}>
                 V Stripe: <strong>Developers → Webhooks → Add endpoint</strong><br />
-                Events: <strong>checkout.session.completed, invoice.paid</strong> · URL: (zgoraj)
+                Events: <strong>checkout.session.completed, invoice.paid, payment_intent.succeeded</strong> · URL: (zgoraj)
               </div>
             </div>
           )}
@@ -510,6 +510,8 @@ const RAZLOGI_DOGODKOV: Record<string, string> = {
   invoice_already_exists_concurrent: 'Račun za to plačilo že obstaja',
   subscription_checkout_awaiting_invoice_paid: 'Naročnina — račun se izda ob dogodku invoice.paid',
   checkout_with_invoice_awaiting_invoice_paid: 'Plačilo z računom — račun se izda ob dogodku invoice.paid',
+  payment_intent_for_invoice_awaiting_invoice_paid: 'Plačilo Stripe računa — račun se izda ob dogodku invoice.paid',
+  payment_intent_api_version_unsupported: 'API verzija webhooka je preveč nova — v Stripe nastavite 2025-02-24 ali starejšo',
   event_type_not_handled: 'Vrsta dogodka se ne obdeluje',
   integration_not_active_or_missing: 'Integracija ni aktivna',
   org_not_found: 'Organizacija ni najdena',
