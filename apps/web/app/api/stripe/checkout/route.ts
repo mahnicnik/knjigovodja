@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Pridobi org preko org_members (ne preko owner_id)
-    const member = await resolveActiveOrg(supabase, user.id, getRequestedOrgId(request), 'id, name, stripe_customer_id, subscription_status') // vec-org podpora (30.7.2026)
+    const member = await resolveActiveOrg(supabase, user.id, getRequestedOrgId(request), 'id, name, stripe_customer_id, stripe_subscription_id, subscription_status') // vec-org podpora (30.7.2026)
     const memberErr = null
 
     if (memberErr || !member || !(member as any).organizations) {
@@ -47,50 +47,84 @@ export async function POST(request: NextRequest) {
 
     const org = (member as any).organizations
 
-    // Preveri da uporabnik še nima Pro
-    if (org.subscription_status === 'pro') {
-      return NextResponse.json({ error: 'Že imate Pro plan' }, { status: 400 })
+    // PRELET 321: prej `subscription_status === 'pro'` -> "Že imate Pro plan".
+    // subscription_status pa je 'pro'/'pro_pos' ze MED BREZPLACNIM
+    // PREIZKUSOM, ko se ni nic placano - stranka na preizkusu Pro zato Pro
+    // sploh ni mogla placati (prelet 319 je gumbe prikazal, ta preverba pa
+    // jih je zavrnila). Merodajno je, ali obstaja PLACANA naročnina.
+    // Ce obstaja, druge ne odpiramo (bila bi dvojna bremenitev) - menjava
+    // paketa gre prek "Upravljaj naročnino" (Stripe portal).
+    if (org.stripe_subscription_id) {
+      return NextResponse.json({
+        error: 'Že imate aktivno plačano naročnino. Paket spremenite v Nastavitve → Naročnina → Upravljaj naročnino.',
+      }, { status: 400 })
+    }
+
+    async function novaStripeStranka(): Promise<string> {
+      const customer = await stripe.customers.create({
+        email: user!.email,
+        name: org.name,
+        metadata: { org_id: org.id, user_id: user!.id },
+      })
+      const { error: shraniErr } = await supabase
+        .from('organizations')
+        .update({ stripe_customer_id: customer.id })
+        .eq('id', org.id)
+      if (shraniErr) console.error(`Stripe stranka ${customer.id} ustvarjena, shranitev k org ${org.id} ni uspela:`, shraniErr.message)
+      return customer.id
+    }
+
+    function ustvariSejo(customerId: string) {
+      return stripe.checkout.sessions.create({
+        customer: customerId,
+        mode: 'subscription',
+        payment_method_types: ['card'],
+        line_items: [{
+          price: priceId,
+          quantity: 1,
+        }],
+        success_url: `${process.env.NEXT_PUBLIC_APP_URL}/nastavitve?success=true`,
+        cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/nastavitve?cancelled=true`,
+        metadata: { org_id: org.id },
+        subscription_data: {
+          metadata: { org_id: org.id },
+        },
+        locale: 'sl',
+      })
     }
 
     // Ustvari ali pridobi Stripe customer
-    let customerId = org.stripe_customer_id
+    let customerId: string = org.stripe_customer_id || await novaStripeStranka()
 
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: user.email,
-        name: org.name,
-        metadata: { org_id: org.id, user_id: user.id },
-      })
-      customerId = customer.id
-
-      await supabase
-        .from('organizations')
-        .update({ stripe_customer_id: customerId })
-        .eq('id', org.id)
+    // PRELET 321: shranjena Stripe stranka lahko v Stripu ne obstaja vec -
+    // 25.9.2026 se je izkazalo, da je bil STRIPE_SECRET_KEY vezan na DRUG
+    // Stripe racun kot cene; po zamenjavi kljuca so vse prej ustvarjene
+    // stranke (cus_...) postale neveljavne in placilo je padlo z "No such
+    // customer". Enako se zgodi po prehodu iz testnega v produkcijski nacin.
+    // Stranka nima placane narocnine (preverjeno zgoraj), zato je varno
+    // ustvariti novo in poskusiti znova - enak vzorec kot api/stripe/portal.
+    let session
+    try {
+      session = await ustvariSejo(customerId)
+    } catch (e: any) {
+      const neveljavnaStranka = e?.code === 'resource_missing' && e?.param === 'customer'
+      if (!neveljavnaStranka) throw e
+      console.log(`Neveljavna Stripe stranka ${customerId} za org ${org.id} - ustvarjam novo`)
+      customerId = await novaStripeStranka()
+      session = await ustvariSejo(customerId)
     }
-
-    // Ustvari checkout session
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      mode: 'subscription',
-      payment_method_types: ['card'],
-      line_items: [{
-        price: priceId,
-        quantity: 1,
-      }],
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/nastavitve?success=true`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/nastavitve?cancelled=true`,
-      metadata: { org_id: org.id },
-      subscription_data: {
-        metadata: { org_id: org.id },
-      },
-      locale: 'sl',
-    })
 
     return NextResponse.json({ url: session.url })
 
   } catch (error: any) {
     console.error('Stripe checkout error:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    // PRELET 321: stranki je bilo prikazano surovo angleško sporočilo Stripa
+    // ("No such price: ...", "No such customer: ..."). Celotna napaka je v
+    // strežniškem dnevniku (Vercel), stranka pa dobi razumljivo sporočilo s
+    // kratko kodo, po kateri jo lahko podpora najde.
+    const koda = error?.code || error?.type || 'neznano'
+    return NextResponse.json({
+      error: `Plačila trenutno ni bilo mogoče začeti. Poskusite znova čez nekaj minut ali nam pišite na support@računko.si (koda: ${koda}).`,
+    }, { status: 500 })
   }
 }
