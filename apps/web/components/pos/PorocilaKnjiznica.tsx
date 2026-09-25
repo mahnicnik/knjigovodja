@@ -68,6 +68,25 @@ function grupiraj<T>(vrstice: T[], kljuc: (v: T) => string) {
   return m
 }
 
+/**
+ * PRELET 323: POPUST NA RACUNU, RAZDELJEN MED POSTAVKE.
+ *
+ * Popust je zapisan na RACUNU (`discount_amount`), cena pa na POSTAVKI.
+ * Porocila so sestevala `kolicina × cena` in popusta niso poznala - za
+ * september 2026 je "Mesecni promet po dejavnostih" pokazal 9.209,67 EUR,
+ * placano (in prijavljeno FURS) pa je bilo 9.132,37 EUR; razlika 77,30 EUR
+ * so bili popusti na 8 racunih.
+ *
+ * Stolpci "pred popusti" ostajajo, kot so bili; dodani so stolpci "po
+ * popustih". Popust se razdeli med postavke SORAZMERNO z njihovo vrednostjo
+ * - enako kot na zavihku Pregled (prelet 181) in pri izracunu DDV v bazi.
+ */
+function faktorPopusta(o: any): number {
+  const osnova = Number(o?.subtotal || 0)
+  const popust = Number(o?.discount_amount || 0)
+  return osnova > 0 ? Math.max(0, (osnova - popust) / osnova) : 1
+}
+
 /* ── definicije porocil ────────────────────────────────────────── */
 const POROCILA: Porocilo[] = [
   /* ── PRODAJA ── */
@@ -89,16 +108,17 @@ const POROCILA: Porocilo[] = [
         povp:n2(v.reduce((s: number, o: any) => s + Number(o.total), 0) / v.length) })).sort((a, b) => b.skupaj - a.skupaj)
     } },
   { id:'artikli-po-dnevih', skupina:'Prodaja', ime:'Prodaja po artiklih po dnevih', opis:'Koliko kosov vsakega artikla se je prodalo na posamezen dan.',
-    stolpci:[{k:'dan',l:'Dan',tip:'date'},{k:'artikel',l:'Artikel'},{k:'kosov',l:'Kosov',tip:'num'},{k:'skupaj',l:'Prihodek',tip:'eur'}],
+    stolpci:[{k:'dan',l:'Dan',tip:'date'},{k:'artikel',l:'Artikel'},{k:'kosov',l:'Kosov',tip:'num'},{k:'skupaj',l:'Prihodek pred popusti',tip:'eur'},{k:'poPopustih',l:'Prihodek po popustih',tip:'eur'}],
     nalozi: async (db, od, do_) => {
       const r = await placaniRacuni(db, od, do_)
-      const vrstice = r.flatMap((o: any) => (o.order_lines || []).map((l: any) => ({ ...l, dan: dan(o.closed_at) })))
+      const vrstice = r.flatMap((o: any) => (o.order_lines || []).map((l: any) => ({ ...l, dan: dan(o.closed_at), faktor: faktorPopusta(o) })))
       return [...grupiraj(vrstice, (l: any) => l.dan + '|' + l.name)].map(([k, v]) => ({
         dan:k.split('|')[0], artikel:k.split('|')[1], kosov:n2(v.reduce((s: number, l: any) => s + Number(l.qty), 0)),
-        skupaj:n2(v.reduce((s: number, l: any) => s + Number(l.qty) * Number(l.unit_price), 0)) })).sort((a, b) => b.dan.localeCompare(a.dan) || b.skupaj - a.skupaj)
+        skupaj:n2(v.reduce((s: number, l: any) => s + Number(l.qty) * Number(l.unit_price), 0)),
+        poPopustih:n2(v.reduce((s: number, l: any) => s + Number(l.qty) * Number(l.unit_price) * l.faktor, 0)) })).sort((a, b) => b.dan.localeCompare(a.dan) || b.skupaj - a.skupaj)
     } },
   { id:'mesecni-promet', skupina:'Prodaja', ime:'Mesečni promet po dejavnostih', opis:'Bar (navadni artikli) in storitve (karte, paketi ter artikli, označeni s kljukico "Storitev") po mesecih.',
-    stolpci:[{k:'mesec',l:'Mesec'},{k:'bar',l:'Bar',tip:'eur'},{k:'storitve',l:'Storitve',tip:'eur'},{k:'skupaj',l:'Skupaj',tip:'eur'},{k:'racunov',l:'Računov',tip:'int'}],
+    stolpci:[{k:'mesec',l:'Mesec'},{k:'bar',l:'Bar',tip:'eur'},{k:'storitve',l:'Storitve',tip:'eur'},{k:'skupaj',l:'Skupaj pred popusti',tip:'eur'},{k:'popusti',l:'Popusti',tip:'eur'},{k:'barPo',l:'Bar po popustih',tip:'eur'},{k:'storitvePo',l:'Storitve po popustih',tip:'eur'},{k:'skupajPo',l:'Skupaj po popustih',tip:'eur'},{k:'racunov',l:'Računov',tip:'int'}],
     nalozi: async (db, od, do_) => {
       const r = await placaniRacuni(db, od, do_)
       return [...grupiraj(r, (o: any) => mesec(o.closed_at))].map(([m, v]) => {
@@ -109,13 +129,21 @@ const POROCILA: Porocilo[] = [
         // pakete (nimajo ne item_id ne service_id ne items.bookable) - zdaj
         // je "bar" samo artikel iz cenika, ki NI oznacen kot storitev; vse
         // ostalo (karta, paket, storitev) je "storitev".
-        let bar = 0, st = 0
-        for (const o of v as any[]) for (const l of o.order_lines || []) { const z = Number(l.qty) * Number(l.unit_price); if (l.item_id && !l.items?.bookable) bar += z; else st += z }
-        return { mesec:m, bar:n2(bar), storitve:n2(st), skupaj:n2(bar + st), racunov:v.length }
+        let bar = 0, st = 0, barPo = 0, stPo = 0
+        for (const o of v as any[]) {
+          const f = faktorPopusta(o)
+          for (const l of o.order_lines || []) {
+            const z = Number(l.qty) * Number(l.unit_price)
+            if (l.item_id && !l.items?.bookable) { bar += z; barPo += z * f } else { st += z; stPo += z * f }
+          }
+        }
+        return { mesec:m, bar:n2(bar), storitve:n2(st), skupaj:n2(bar + st),
+          popusti:n2((bar + st) - (barPo + stPo)),
+          barPo:n2(barPo), storitvePo:n2(stPo), skupajPo:n2(barPo + stPo), racunov:v.length }
       }).sort((a, b) => b.mesec.localeCompare(a.mesec))
     } },
   { id:'storitve-po-stranki', skupina:'Prodaja', ime:'Prodaja storitev po stranki', opis:'Karte, paketi in artikli, označeni s kljukico "Storitev", ki jih je kupila posamezna stranka.',
-    stolpci:[{k:'datum',l:'Datum',tip:'datetime'},{k:'stranka',l:'Stranka'},{k:'storitev',l:'Storitev'},{k:'znesek',l:'Znesek',tip:'eur'}],
+    stolpci:[{k:'datum',l:'Datum',tip:'datetime'},{k:'stranka',l:'Stranka'},{k:'storitev',l:'Storitev'},{k:'znesek',l:'Znesek pred popusti',tip:'eur'},{k:'poPopustih',l:'Znesek po popustih',tip:'eur'}],
     nalozi: async (db, od, do_) => {
       const [r, c] = await Promise.all([placaniRacuni(db, od, do_), stranke(db)])
       // POPRAVLJENO (prelet 306): "!item_id" je spregledalo artikle iz
@@ -123,7 +151,8 @@ const POROCILA: Porocilo[] = [
       // POPRAVLJENO (prelet 307): popravek preleta 306 je prelomil karte in
       // pakete - glej pojasnilo pri "mesecni-promet" zgoraj.
       return r.flatMap((o: any) => (o.order_lines || []).filter((l: any) => !(l.item_id && !l.items?.bookable)).map((l: any) => ({
-        datum:o.closed_at, stranka:c[o.customer_id]?.name || 'Brez stranke', storitev:l.name, znesek:n2(Number(l.qty) * Number(l.unit_price)) })))
+        datum:o.closed_at, stranka:c[o.customer_id]?.name || 'Brez stranke', storitev:l.name, znesek:n2(Number(l.qty) * Number(l.unit_price)),
+        poPopustih:n2(Number(l.qty) * Number(l.unit_price) * faktorPopusta(o)) })))
     } },
   { id:'placila-po-dnevih', skupina:'Prodaja', ime:'Prodaja po načinih plačila po dnevih', opis:'Gotovina, kartica in ostalo za vsak dan posebej — za primerjavo z bančnim izpiskom.',
     stolpci:[{k:'dan',l:'Dan',tip:'date'},{k:'cash',l:'Gotovina',tip:'eur'},{k:'card',l:'Kartica',tip:'eur'},{k:'ostalo',l:'Ostalo',tip:'eur'},{k:'skupaj',l:'Skupaj',tip:'eur'}],
@@ -146,16 +175,20 @@ const POROCILA: Porocilo[] = [
         popusti:n2(v.reduce((a: number, o: any) => a + Number(o.discount_amount || 0), 0)) })).sort((a, b) => b.skupaj - a.skupaj)
     } },
   { id:'prodaja-rvc', skupina:'Prodaja', ime:'Prodaja z razliko v ceni (RVC)', opis:'Prodajna in nabavna vrednost po artiklu ter marža. Nabavna cena je iz šifranta artiklov — kjer je ni, je marža enaka prodaji.',
-    stolpci:[{k:'artikel',l:'Artikel'},{k:'kosov',l:'Kosov',tip:'num'},{k:'prodaja',l:'Prodaja',tip:'eur'},{k:'nabava',l:'Nabava',tip:'eur'},{k:'rvc',l:'RVC',tip:'eur'},{k:'marza',l:'Marža %',tip:'pct'}],
+    stolpci:[{k:'artikel',l:'Artikel'},{k:'kosov',l:'Kosov',tip:'num'},{k:'prodaja',l:'Prodaja pred popusti',tip:'eur'},{k:'prodajaPo',l:'Prodaja po popustih',tip:'eur'},{k:'nabava',l:'Nabava',tip:'eur'},{k:'rvc',l:'RVC pred popusti',tip:'eur'},{k:'rvcPo',l:'RVC po popustih',tip:'eur'},{k:'marza',l:'Marža % pred popusti',tip:'pct'},{k:'marzaPo',l:'Marža % po popustih',tip:'pct'}],
     nalozi: async (db, od, do_) => {
       const [r, { data: items }] = await Promise.all([placaniRacuni(db, od, do_), db.from('items').select('id, cost_price').eq('business_id', BUSINESS_ID)])
       const cena = Object.fromEntries((items || []).map((i: any) => [i.id, Number(i.cost_price || 0)]))
-      const vrstice = r.flatMap((o: any) => (o.order_lines || []).filter((l: any) => l.item_id))
+      const vrstice = r.flatMap((o: any) => (o.order_lines || []).filter((l: any) => l.item_id).map((l: any) => ({ ...l, faktor: faktorPopusta(o) })))
       return [...grupiraj(vrstice, (l: any) => l.name)].map(([ime, v]) => {
         const kosov = v.reduce((s: number, l: any) => s + Number(l.qty), 0)
         const prodaja = v.reduce((s: number, l: any) => s + Number(l.qty) * Number(l.unit_price), 0)
+        const prodajaPo = v.reduce((s: number, l: any) => s + Number(l.qty) * Number(l.unit_price) * l.faktor, 0)
         const nabava = v.reduce((s: number, l: any) => s + Number(l.qty) * (cena[l.item_id] || 0), 0)
-        return { artikel:ime, kosov:n2(kosov), prodaja:n2(prodaja), nabava:n2(nabava), rvc:n2(prodaja - nabava), marza: prodaja > 0 ? Math.round((prodaja - nabava) / prodaja * 100) : 0 }
+        return { artikel:ime, kosov:n2(kosov), prodaja:n2(prodaja), prodajaPo:n2(prodajaPo), nabava:n2(nabava),
+          rvc:n2(prodaja - nabava), rvcPo:n2(prodajaPo - nabava),
+          marza: prodaja > 0 ? Math.round((prodaja - nabava) / prodaja * 100) : 0,
+          marzaPo: prodajaPo > 0 ? Math.round((prodajaPo - nabava) / prodajaPo * 100) : 0 }
       }).sort((a, b) => b.rvc - a.rvc)
     } },
 
