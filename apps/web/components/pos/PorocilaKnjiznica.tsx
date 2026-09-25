@@ -21,6 +21,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { BUSINESS_ID } from '@/lib/pos-client'
+import { naloziVseStrani } from '@/lib/supabase-strani'
 
 type Tip = 'text' | 'eur' | 'int' | 'num' | 'date' | 'datetime' | 'pct'
 type Stolpec = { k: string; l: string; tip?: Tip; w?: number }
@@ -40,12 +41,16 @@ const dan = (iso: string) => String(iso || '').slice(0, 10)
 const mesec = (iso: string) => String(iso || '').slice(0, 7)
 const DNEVI = ['Nedelja','Ponedeljek','Torek','Sreda','Četrtek','Petek','Sobota']
 
+// PRELET 322: PO STRANEH - gola poizvedba vrne najvec 1000 racunov, zato bi
+// vsa porocila nad daljsim obdobjem (npr. leto) tiho sestela le del prometa.
+// Napaka se vrze naprej, da porocilo pokaze napako namesto nepopolnih stevilk.
 async function placaniRacuni(db: any, od: string, do_: string) {
-  const { data, error } = await db.from('orders')
+  const { data, error } = await naloziVseStrani(() => db.from('orders')
     .select('id, invoice_number, closed_at, subtotal, discount_amount, discount_pct, total, cashier_id, customer_id, order_lines(name, qty, unit_price, vat_rate, item_id, service_id, items(bookable)), payments(method, amount)')
     .eq('business_id', BUSINESS_ID).eq('status', 'paid')
     .gte('closed_at', od + 'T00:00:00').lte('closed_at', do_ + 'T23:59:59')
     .order('closed_at', { ascending: false })
+    .order('id', { ascending: false }))
   if (error) throw error
   return data || []
 }
@@ -158,10 +163,12 @@ const POROCILA: Porocilo[] = [
   { id:'ddv-po-kategorijah', skupina:'DDV', ime:'DDV po kategorijah artiklov', opis:'Razčlenitev DDV izhoda po kategoriji artikla (npr. Hrana 9,5 %, Pijača 22 %) — bruto promet, davčna osnova in znesek DDV. Postavke brez artikla (karte, paketi, storitve) so združene pod "Storitve".',
     stolpci:[{k:'kategorija',l:'Kategorija'},{k:'stopnje',l:'DDV stopnja'},{k:'bruto',l:'Bruto promet',tip:'eur'},{k:'osnova',l:'Osnova (neto)',tip:'eur'},{k:'ddv',l:'DDV',tip:'eur'}],
     nalozi: async (db, od, do_) => {
-      const { data, error } = await db.from('orders')
+      // PRELET 322: po straneh (glej placaniRacuni).
+      const { data, error } = await naloziVseStrani(() => db.from('orders')
         .select('id, closed_at, order_lines(total, vat_rate, voided, item_id, service_id, items(category_id, categories(name)))')
         .eq('business_id', BUSINESS_ID).eq('status', 'paid')
         .gte('closed_at', od + 'T00:00:00').lte('closed_at', do_ + 'T23:59:59')
+        .order('id', { ascending: true }))
       if (error) throw error
       const m: Record<string, { bruto: number; osnova: number; ddv: number; stopnje: Set<number> }> = {}
       for (const o of data || []) for (const l of o.order_lines || []) {
@@ -215,14 +222,14 @@ const POROCILA: Porocilo[] = [
   { id:'obiski-po-stranki', skupina:'Člani in karte', ime:'Obiski po stranki', opis:'Število obiskov (odštetih s karte) v obdobju po stranki.',
     stolpci:[{k:'stranka',l:'Stranka'},{k:'obiskov',l:'Obiskov',tip:'int'},{k:'zadnji',l:'Zadnji obisk',tip:'date'}],
     nalozi: async (db, od, do_) => {
-      const [{ data }, c] = await Promise.all([db.from('bookings').select('customer_id, visit_deducted_at, start_at').eq('business_id', BUSINESS_ID).not('visit_deducted_at', 'is', null).gte('start_at', od).lte('start_at', do_ + 'T23:59:59'), stranke(db)])
+      const [{ data }, c] = await Promise.all([naloziVseStrani(() => db.from('bookings').select('id, customer_id, visit_deducted_at, start_at').eq('business_id', BUSINESS_ID).not('visit_deducted_at', 'is', null).gte('start_at', od).lte('start_at', do_ + 'T23:59:59').order('id', { ascending: true })), stranke(db)])
       return [...grupiraj(data || [], (b: any) => b.customer_id || '')].map(([k, v]) => ({
         stranka:c[k]?.name || '—', obiskov:v.length, zadnji:(v as any[]).map(b => b.start_at).sort().at(-1) })).sort((a, b) => b.obiskov - a.obiskov)
     } },
   { id:'obisk-dnevi-v-tednu', skupina:'Člani in karte', ime:'Obisk po dnevih v tednu', opis:'Kateri dnevi so najbolj obiskani — za razpored osebja in urnik.',
     stolpci:[{k:'dan',l:'Dan'},{k:'obiskov',l:'Obiskov',tip:'int'},{k:'delez',l:'Delež %',tip:'pct'}],
     nalozi: async (db, od, do_) => {
-      const { data } = await db.from('bookings').select('start_at').eq('business_id', BUSINESS_ID).not('visit_deducted_at', 'is', null).gte('start_at', od).lte('start_at', do_ + 'T23:59:59')
+      const { data } = await naloziVseStrani(() => db.from('bookings').select('id, start_at').eq('business_id', BUSINESS_ID).not('visit_deducted_at', 'is', null).gte('start_at', od).lte('start_at', do_ + 'T23:59:59').order('id', { ascending: true })) // PRELET 322: po straneh
       const st = new Array(7).fill(0); for (const b of data || []) st[new Date(b.start_at).getDay()]++
       const vseh = st.reduce((a, b) => a + b, 0) || 1
       return [1,2,3,4,5,6,0].map(d => ({ dan:DNEVI[d], obiskov:st[d], delez:Math.round(st[d] / vseh * 100) }))
@@ -230,7 +237,7 @@ const POROCILA: Porocilo[] = [
   { id:'zasedenost-po-urah', skupina:'Člani in karte', ime:'Zasedenost po urah', opis:'Obiski po uri dneva — kdaj je gneča in kdaj prazno.',
     stolpci:[{k:'ura',l:'Ura'},{k:'obiskov',l:'Obiskov',tip:'int'},{k:'delez',l:'Delež %',tip:'pct'}],
     nalozi: async (db, od, do_) => {
-      const { data } = await db.from('bookings').select('start_at').eq('business_id', BUSINESS_ID).not('visit_deducted_at', 'is', null).gte('start_at', od).lte('start_at', do_ + 'T23:59:59')
+      const { data } = await naloziVseStrani(() => db.from('bookings').select('id, start_at').eq('business_id', BUSINESS_ID).not('visit_deducted_at', 'is', null).gte('start_at', od).lte('start_at', do_ + 'T23:59:59').order('id', { ascending: true })) // PRELET 322: po straneh
       const st = new Array(24).fill(0); for (const b of data || []) st[new Date(b.start_at).getHours()]++
       const vseh = st.reduce((a, b) => a + b, 0) || 1
       return st.map((n, h) => ({ ura:`${String(h).padStart(2,'0')}:00`, obiskov:n, delez:Math.round(n / vseh * 100) })).filter(r => r.obiskov > 0)

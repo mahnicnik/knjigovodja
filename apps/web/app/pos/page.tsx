@@ -15,6 +15,7 @@ import { createClient } from '@/lib/supabase'
 import PorocilaKnjiznica from '@/components/pos/PorocilaKnjiznica'
 import { pos, BUSINESS_ID, resolveBusinessId, imaOsebje, ustvariPrvegaUporabnika } from '@/lib/pos-client'
 import { lokalniDatum } from '@/lib/tax-constants'
+import { naloziVseStrani, naloziPoSkupinah } from '@/lib/supabase-strani'
 import { buildReceiptHTML } from '@/lib/receipt'
 import { WorkStatusBar, ClockInModal } from '@/lib/work-session-components'
 import { getCurrentSession, openSession, getSessionStats, closeSession, getLastCarryOver, type CashSession, type SessionStats } from '@/lib/cash-session'
@@ -6560,14 +6561,19 @@ function InventoryScreen({ posData }) {
   useEffect(() => {
     async function loadSales() {
       const from = new Date(); from.setDate(from.getDate()-30)
-      const { data } = await createClient()
+      // PRELET 322: po straneh - 30 dni prodaje ima vec kot 1000 postavk,
+      // gola poizvedba je vrnila le prvih 1000 in razvrstitev "najbolj
+      // prodajani" je temeljila na delu podatkov.
+      const { data, error: salesErr } = await naloziVseStrani(() => createClient()
         .from('order_lines')
         // POPRAVLJENO (19.8.2026): `orders.created_at` NE OBSTAJA (stolpci so
         // opened_at, closed_at, voided_at) - poizvedba je tiho odpovedala in
         // priporocila artiklov so ostala prazna.
-        .select('name, qty, orders!inner(closed_at, status)')
+        .select('id, name, qty, orders!inner(closed_at, status)')
         .eq('orders.status', 'paid')
         .gte('orders.closed_at', from.toISOString())
+        .order('id', { ascending: true }))
+      if (salesErr) console.error('Prodajni podatki za razvrscanje niso nalozeni v celoti:', salesErr)
       if (!data) return
       const map = {}
       data.forEach(l => {
@@ -10803,13 +10809,20 @@ function ReportsScreen({ posData, auth, setScreen }) {
     // Staff filter — za trenerje/terapevte
     const staffFilter = selectedStaffId !== 'all' ? selectedStaffId : null
 
+    // PRELET 322: racuni se nalagajo PO STRANEH (lib/supabase-strani). Gola
+    // poizvedba vrne najvec 1000 vrstic - pri daljsem obdobju bi promet tiho
+    // manjkal. Napake zberemo in jih na zaslonu PRIKAZEMO, namesto da bi
+    // porocilo pokazalo nepopolne stevilke kot da so pravilne.
+    const napakeNalaganja: string[] = []
     const [ordersRes, refundsRes, bookingsRes] = await Promise.all([
-      db.from('orders')
+      naloziVseStrani(() => db.from('orders')
         .select('id, closed_at, total, tip_amount, discount_amount')
         .eq('business_id', BUSINESS_ID)
         .eq('status', 'paid')
         .gte('closed_at', fromStr)
-        .lte('closed_at', toStr),
+        .lte('closed_at', toStr)
+        .order('closed_at', { ascending: true })
+        .order('id', { ascending: true })),
       db.from('refunds')
         // POPRAVLJENO (19.8.2026): `created_at` v tabeli `refunds` ne obstaja,
         // pravi stolpec je `refunded_at`. Poizvedba je odpovedala, zato je
@@ -10828,6 +10841,10 @@ function ReportsScreen({ posData, auth, setScreen }) {
     ])
     const staffBookings = (staffFilter ? bookingsRes.data : []) || []
 
+    if (ordersRes.error) {
+      console.error('Porocilo: racunov ni bilo mogoce v celoti naloziti:', ordersRes.error)
+      napakeNalaganja.push('računi')
+    }
     const orders = ordersRes.data || []
     const refunds = refundsRes.data || []
 
@@ -10847,10 +10864,19 @@ function ReportsScreen({ posData, auth, setScreen }) {
       // kartično plačilo se je v poročilu prikazalo kot GOTOVINA, napitnine pa
       // vedno kot 0. Znesek prometa je bil pravilen (iz orders.total), zato
       // napaka ni bila očitna.
-      const { data: pd, error: pErr } = await db.from('payments')
-        .select('order_id, amount, method')
-        .in('order_id', orderIds)
-      if (pErr) console.error('Napaka pri branju plačil za poročilo:', pErr.message)
+      // PRELET 322: prej `.in('order_id', orderIds)` z VSEMI ID-ji naenkrat.
+      // Pri 787 racunih (september 2026) je URL presegel omejitev, poizvedba
+      // je odpovedala in porocilo je vse prikazalo kot gotovino (dejansko
+      // 3.793,83 EUR s kartico). Zdaj v skupinah po 100 ID-jev.
+      const { data: pd, error: pErr } = await naloziPoSkupinah(orderIds, (skupina) =>
+        db.from('payments')
+          .select('id, order_id, amount, method')
+          .in('order_id', skupina)
+          .order('id', { ascending: true }))
+      if (pErr) {
+        console.error('Napaka pri branju plačil za poročilo:', pErr.message || pErr)
+        napakeNalaganja.push('plačila')
+      }
       paymentsData = pd || []
     }
     const paymentsByOrder = {}
@@ -10876,12 +10902,20 @@ function ReportsScreen({ posData, auth, setScreen }) {
       const d = new Date(o.closed_at)
       const dan = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
       byDay[dan] = (byDay[dan] || 0) + amt
-      const method = payments[0]?.method || 'cash'
-      if (method === 'cash') byMethod.cash += amt
-      else if (method === 'card') byMethod.card += amt
-      else if (method === 'bon') byMethod.bon += amt
-      else if (method === 'prep') byMethod.prep += amt
-      else byMethod.other += amt
+      // PRELET 322: vsako placilo steje pod SVOJO metodo. Prej je celoten
+      // racun sel pod metodo PRVEGA placila (deljen racun gotovina + kartica
+      // je bil v celoti "gotovina"), racun BREZ zapisa o placilu pa je bil
+      // privzeto gotovina - zato je odpovedano nalaganje placil pokazalo
+      // 100 % gotovine. Brez podatka o placilu zdaj "Ostalo", ne gotovina.
+      const dodajMetodo = (method: string, znesek: number) => {
+        if (method === 'cash') byMethod.cash += znesek
+        else if (method === 'card') byMethod.card += znesek
+        else if (method === 'bon') byMethod.bon += znesek
+        else if (method === 'prep') byMethod.prep += znesek
+        else byMethod.other += znesek
+      }
+      if (payments.length > 0) payments.forEach(p => dodajMetodo(p.method, Number(p.amount || 0)))
+      else dodajMetodo('neznano', amt)
     })
 
     refunds.forEach(r => { vracila += Number(r.amount || 0) })
@@ -10896,12 +10930,20 @@ function ReportsScreen({ posData, auth, setScreen }) {
     // unovcen obisk enako pomemben kot placan.
     // POPRAVLJENO (prelet 181): dodana `subtotal` in `discount_amount`.
     // Brez njiju iz vrstice ni bilo mogoce vedeti, ali je bil na racunu popust.
-    const linesRes = await db.from('order_lines')
-      .select('name, qty, unit_price, item_id, service_id, items(bookable), orders!inner(closed_at, status, business_id, subtotal, discount_amount, payments(method))')
+    // PRELET 322: PO STRANEH. Gola poizvedba je vrnila le prvih 1000 postavk
+    // (september 2026: 1000 od 1601) - razdelitev Bar + Storitve je bila
+    // 5.626,23 EUR namesto 9.132,37 EUR, brez kakrsnegakoli opozorila.
+    const linesRes = await naloziVseStrani(() => db.from('order_lines')
+      .select('id, name, qty, unit_price, item_id, service_id, items(bookable), orders!inner(closed_at, status, business_id, subtotal, discount_amount, payments(method))')
       .eq('orders.business_id', BUSINESS_ID)
       .eq('orders.status', 'paid')
       .gte('orders.closed_at', fromStr)
       .lte('orders.closed_at', toStr)
+      .order('id', { ascending: true }))
+    if (linesRes.error) {
+      console.error('Porocilo: postavk ni bilo mogoce v celoti naloziti:', linesRes.error)
+      napakeNalaganja.push('postavke')
+    }
 
     const itemMap = {}
     ;(linesRes.data || []).forEach(l => {
@@ -10974,6 +11016,7 @@ function ReportsScreen({ posData, auth, setScreen }) {
       byHour, byDay, byMethod, topItems, refunds, from, to, poVrsti,
       staffBookings, staffTotalMin, staffTotalRevenue,
       isStaffFiltered: !!staffFilter,
+      napakeNalaganja,
     })
     setLoading(false)
   }
@@ -11041,6 +11084,13 @@ function ReportsScreen({ posData, auth, setScreen }) {
         </div>
       )}
       {pogled === 'pregled' && (<>
+      {/* PRELET 322: ce se del podatkov ni nalozil, to POVEMO - nepopolne
+          stevilke se ne smejo prikazati, kot da so pravilne. */}
+      {((reportData as any).napakeNalaganja || []).length > 0 && (
+        <div style={{ marginBottom:16, padding:'10px 14px', borderRadius:10, background:'#fdecea', border:'1px solid #f5c2bd', color:'#8a1f11', fontSize:13 }}>
+          ⚠️ Poročilo ni popolno — ni bilo mogoče naložiti: {((reportData as any).napakeNalaganja as string[]).join(', ')}. Osvežite stran ali poskusite znova čez nekaj trenutkov.
+        </div>
+      )}
       {/* Header */}
       <div style={{ display:'flex', alignItems:'center', marginBottom:20 }}>
         <div>
