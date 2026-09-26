@@ -123,7 +123,19 @@ export async function POST(req: NextRequest) {
     }
 
     // Preveri podpis (če je secret nastavljen)
-    if (integration.webhook_secret && signature) {
+    // PRELET 325 (VARNOST): brez secreta ali brez podpisa ni obdelave - prej
+    // je zahteva brez glave s podpisom sla mimo preverbe in lahko ustvarila
+    // izmisljen placan racun (org_id je v URL-ju).
+    if (!integration.webhook_secret || !signature) {
+      await supabase.from('integration_logs').insert({
+        org_id: orgId,
+        integration_type: 'woocommerce',
+        status: 'failed',
+        payload: { error: !integration.webhook_secret ? 'missing_webhook_secret' : 'missing_signature' },
+      }).then(() => {}, () => {})
+      return NextResponse.json({ error: 'Manjka podpis ali Signing secret' }, { status: 401 })
+    }
+    {
       const isValid = verifyWooCommerceSignature(rawBody, signature, integration.webhook_secret)
       if (!isValid) {
         // DODANO (30.7.2026): beleži neveljaven podpis - prej se je

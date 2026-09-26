@@ -43,23 +43,39 @@ async function getSupabase() {
 
 /**
  * Preveri Stripe webhook podpis (HMAC-SHA256 po Stripe specifikaciji).
- * Stripe pošlje header: t=timestamp,v1=signature
+ * Stripe pošlje header: t=timestamp,v1=signature[,v1=signature2]
+ *
+ * PRELET 325:
+ *  - sprejmemo KATERIKOLI v1 podpis (med zamenjavo secreta Stripe poslje
+ *    dva - prej je veljal samo zadnji, pravilno podpisan dogodek je lahko
+ *    padel);
+ *  - casovna toleranca 5 minut (kot uradna Stripe knjiznica), da prestrezen
+ *    star dogodek ni mogoce poslati znova.
  */
+const STRIPE_TOLERANCA_SEK = 300
+
 function verifyStripeSignature(payload: string, sigHeader: string, secret: string): boolean {
   try {
-    const parts = sigHeader.split(',').reduce((acc: Record<string, string>, part) => {
-      const [k, v] = part.split('=')
-      acc[k] = v
-      return acc
-    }, {})
-    const timestamp = parts['t']
-    const signature = parts['v1']
-    if (!timestamp || !signature) return false
+    let timestamp = ''
+    const podpisi: string[] = []
+    for (const del of sigHeader.split(',')) {
+      const i = del.indexOf('=')
+      if (i < 0) continue
+      const k = del.slice(0, i).trim()
+      const v = del.slice(i + 1).trim()
+      if (k === 't') timestamp = v
+      else if (k === 'v1') podpisi.push(v)
+    }
+    if (!timestamp || podpisi.length === 0) return false
+    const t = Number(timestamp)
+    if (!Number.isFinite(t) || Math.abs(Date.now() / 1000 - t) > STRIPE_TOLERANCA_SEK) return false
 
     const signedPayload = `${timestamp}.${payload}`
-    const computed = crypto.createHmac('sha256', secret).update(signedPayload, 'utf8').digest('hex')
-
-    return crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(signature))
+    const computed = Buffer.from(crypto.createHmac('sha256', secret).update(signedPayload, 'utf8').digest('hex'))
+    return podpisi.some(p => {
+      const b = Buffer.from(p)
+      return b.length === computed.length && crypto.timingSafeEqual(computed, b)
+    })
   } catch {
     return false
   }
@@ -181,7 +197,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Stripe integracija ni nastavljena' }, { status: 404 })
     }
 
-    if (integration.webhook_secret && signature) {
+    // PRELET 325 (VARNOST): prej se je podpis preverjal SAMO, ce je bil
+    // secret nastavljen IN je zahteva imela glavo stripe-signature. Zahteva
+    // BREZ glave je sla mimo preverbe - kdor je poznal org_id (je v URL-ju),
+    // je lahko poslal izmisljeno "placilo" in Racunko bi izdal, fiskaliziral
+    // in po e-posti poslal racun. Zdaj brez veljavnega podpisa ni obdelave.
+    if (!integration.webhook_secret || !signature) {
+      await zapisiLog(supabase, {
+        org_id: orgId,
+        status: 'failed',
+        payload: { error: !integration.webhook_secret ? 'missing_webhook_secret' : 'missing_signature' },
+      })
+      return NextResponse.json({ error: 'Manjka podpis ali Signing secret' }, { status: 401 })
+    }
+    {
       const isValid = verifyStripeSignature(rawBody, signature, integration.webhook_secret)
       if (!isValid) {
         // DODANO (30.7.2026): beleži neveljaven podpis - prej se je
@@ -292,6 +321,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'API verzija ne omogoca locevanja placil' }, { status: 200 })
     }
 
+    // PRELET 325: WooCommerce trgovina, ki placila pobira prek Stripa
+    // (vticnik WooCommerce Stripe Gateway), v placilo zapise metadata
+    // `order_id` in `site_url`. Ce ima organizacija AKTIVNO WooCommerce
+    // integracijo za isto trgovino, racun izda WooCommerce webhook (z vsemi
+    // postavkami) - brez te zapore bi za isti nakup nastala DVA racuna
+    // (WC-... in STR-...). Ce WooCommerce integracije ni, racun izda Stripe.
+    const wooSite = obj.metadata?.site_url
+    if (obj.metadata?.order_id && wooSite) {
+      const { data: wooInt } = await supabase
+        .from('integrations')
+        .select('settings')
+        .eq('org_id', orgId)
+        .eq('type', 'woocommerce')
+        .eq('is_active', true)
+        .maybeSingle()
+      const gostitelj = (u: any) => { try { return new URL(String(u)).host.replace(/^www\./, '').toLowerCase() } catch { return '' } }
+      if (wooInt && gostitelj(wooInt.settings?.shop_url) && gostitelj(wooInt.settings?.shop_url) === gostitelj(wooSite)) {
+        await zapisiLog(supabase, {
+          org_id: orgId,
+          external_id: obj.id ?? null,
+          status: 'skipped',
+          payload: { reason: 'woocommerce_order_invoiced_by_woocommerce', event_type: event.type, event_id: event.id, woo_order_id: obj.metadata.order_id },
+        })
+        return NextResponse.json({ message: 'Placilo WooCommerce narocila - racun izda WooCommerce' }, { status: 200 })
+      }
+    }
+
     // PRELET 324: KLJUC PLACILA za zascito pred dvojniki. En nakup prek
     // Checkouta sprozi checkout.session.completed (cs_) IN
     // payment_intent.succeeded (pi_) - zato se je 22.7.2026 payment_intent
@@ -392,7 +448,7 @@ export async function POST(req: NextRequest) {
       vat_amount: Math.round(vatAmount * 100) / 100,
     }]
 
-    const invoiceNumber = await generateInvoiceNumber(supabase, orgId)
+    let invoiceNumber = ''
     const issueDate = lokalniDatum()
 
     // PRELET 320: dejanski trenutek placila (ne trenutek obdelave). Pomembno,
@@ -405,11 +461,17 @@ export async function POST(req: NextRequest) {
     const placanoOb = placanoSek > 0 ? new Date(placanoSek * 1000) : new Date()
     const datumPlacila = lokalniDatum(placanoOb)
 
-    const { data: invoice, error: invErr } = await supabase
+    // PRELET 325: do 3 poskusi. Stevilka STR-LLLL-NNNN je "najvisja + 1" brez
+    // zaklepa - dve hkratni placili lahko dobita isto stevilko. Prej je koda
+    // VSAK 23505 razumela kot "racun za to placilo ze obstaja" in vrnila 200:
+    // drugo placilo je tiho izginilo. Zdaj locimo, KATERA omejitev je padla:
+    //  - issued_invoices_org_webhook_ref_uniq  -> res isto placilo (dvojnik)
+    //  - karkoli drugega (stevilka racuna)       -> nova stevilka, nov poskus
+    const vpisiRacun = (stevilka: string) => supabase
       .from('issued_invoices')
       .insert({
         org_id: orgId,
-        invoice_number: invoiceNumber,
+        invoice_number: stevilka,
         invoice_type: 'invoice',
         client_name: customerName,
         client_email: customerEmail,
@@ -430,11 +492,38 @@ export async function POST(req: NextRequest) {
       .select('id')
       .single()
 
+    let invoice: any = null
+    let invErr: any = null
+    let jeDvojnikPlacila = false
+    for (let poskus = 0; poskus < 3; poskus++) {
+      invoiceNumber = await generateInvoiceNumber(supabase, orgId)
+      const rez = await vpisiRacun(invoiceNumber)
+      invoice = rez.data
+      invErr = rez.error
+      if (!invErr || invErr.code !== '23505') break
+      const besedilo = `${invErr.message || ''} ${invErr.details || ''}`
+      jeDvojnikPlacila = /issued_invoices_org_webhook_ref_uniq|external_reference/.test(besedilo)
+      if (jeDvojnikPlacila) break
+      console.warn(`Stripe webhook: trk stevilke racuna ${invoiceNumber} (poskus ${poskus + 1}/3) - poskusam z novo stevilko`)
+    }
+
+    // Trk stevilke tudi po treh poskusih: vrnemo 500, da Stripe dogodek
+    // PONOVI (ne 200 - sicer bi placilo ostalo brez racuna za vedno).
+    if (invErr?.code === '23505' && !jeDvojnikPlacila) {
+      await zapisiLog(supabase, {
+        org_id: orgId,
+        external_id: obj.id ?? null,
+        status: 'failed',
+        payload: { reason: 'invoice_number_conflict', event_type: event.type, event_id: event.id, message: invErr.message },
+      })
+      return NextResponse.json({ error: 'Trk številke računa - poskusite znova' }, { status: 500 })
+    }
+
     // PRELET 320: ce Stripe isti dogodek poslje dvakrat hkrati (ponovni
     // poskus med se tekoco obdelavo), sta prej obe obdelavi presli preverbo
     // "ze obstaja" in nastala sta DVA racuna. Unikatni indeks iz migracije
     // 159 drugi vpis zavrne (23505) - to ni napaka, ampak pravilen dvojnik.
-    if (invErr?.code === '23505') {
+    if (invErr?.code === '23505' && jeDvojnikPlacila) {
       const { data: obstojeci } = await supabase
         .from('issued_invoices')
         .select('id')

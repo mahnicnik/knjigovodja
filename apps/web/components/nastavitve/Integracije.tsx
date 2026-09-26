@@ -102,6 +102,10 @@ export default function IntegracijeSekcija() {
   async function saveIntegration(type: 'woocommerce' | 'shopify' | 'stripe', shopUrl: string, secret: string) {
     if (!orgId) return
     if (type !== 'stripe' && !shopUrl.trim()) { showToast('error', 'URL trgovine je obvezen'); return }
+    // PRELET 325: brez secreta webhook zdaj zavrne vse zahteve (varnost), zato
+    // ga zahtevamo ze tu - sicer bi se integracija shranila, a nikoli delovala.
+    if (!secret.trim()) { showToast('error', type === 'stripe' ? 'Signing secret (whsec_…) je obvezen' : 'Webhook secret je obvezen'); return }
+    if (type === 'stripe' && !secret.trim().startsWith('whsec_')) { showToast('error', 'Stripe Signing secret se začne z whsec_ — preverite, da niste kopirali drugega ključa'); return }
 
     // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
     // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
@@ -516,6 +520,10 @@ const RAZLOGI_DOGODKOV: Record<string, string> = {
   integration_not_active_or_missing: 'Integracija ni aktivna',
   org_not_found: 'Organizacija ni najdena',
   invalid_signature: 'Neveljaven podpis — preverite Signing secret',
+  missing_signature: 'Zahteva brez podpisa — zavrnjena',
+  missing_webhook_secret: 'Signing secret ni vpisan — vpišite ga v nastavitvah integracije',
+  woocommerce_order_invoiced_by_woocommerce: 'Plačilo WooCommerce naročila — račun izda WooCommerce integracija',
+  invoice_number_conflict: 'Trk številke računa — Stripe bo dogodek poslal znova',
   kpo_entry_failed: 'Račun izdan, vnos v knjigo prihodkov ni uspel',
 }
 
