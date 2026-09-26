@@ -177,10 +177,17 @@ export async function confirmIssuedInvoiceWithFurs(
     }
     // Sorazmerna uskladitev, ce se vsota postavk ne ujema s skupnim zneskom
     // (zaokrozevanje, popust na celoten racun).
-    const faktor = vsotaPostavk > 0 ? Math.abs(znesekSkupaj) / vsotaPostavk : 1
+    // PRELET 326: dobropisi imajo postavke lahko z negativno ALI pozitivno
+    // ceno (skupni znesek je vedno negativen). Prej je negativna vsota
+    // postavk skupaj z negativnim predznakom dala POZITIVEN DDV za dobropis.
+    // Zdaj postavke najprej normaliziramo na pozitivno smer, predznak pa
+    // doloci izkljucno skupni znesek racuna.
+    const smerPostavk = vsotaPostavk < 0 ? -1 : 1
+    const vsotaAbs = Math.abs(vsotaPostavk)
+    const faktor = vsotaAbs > 0 ? Math.abs(znesekSkupaj) / vsotaAbs : 1
     const predznak = znesekSkupaj < 0 ? -1 : 1
     vatBreakdown = Array.from(poStopnji.entries()).map(([rate, bruto]) => {
-      const b = bruto * faktor
+      const b = bruto * smerPostavk * faktor
       const net = rate > 0 ? b / (1 + rate / 100) : b
       return {
         rate,

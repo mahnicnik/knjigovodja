@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import HowTo from '@/components/HowTo'
 import { getActiveMembership } from '@/lib/active-org'
+import StripePlacila from '@/components/nastavitve/StripePlacila'
 
 interface Integration {
   id: string
@@ -89,7 +90,8 @@ export default function IntegracijeSekcija() {
 
       const { data } = await supabase
         .from('integrations')
-        .select('*')
+        // Brez api_key_enc: sifriran kljuc ne sme v brskalnik (pregled 326).
+        .select('id, org_id, type, is_active, settings, webhook_secret, created_at, api_key_zadnji4, zadnja_uskladitev, samodejno_od')
         .eq('org_id', member.org_id)
         .order('created_at')
 
@@ -139,7 +141,7 @@ export default function IntegracijeSekcija() {
       }
 
       const { data } = await supabase
-        .from('integrations').select('*').eq('org_id', orgId).order('created_at')
+        .from('integrations').select('id, org_id, type, is_active, settings, webhook_secret, created_at, api_key_zadnji4, zadnja_uskladitev, samodejno_od').eq('org_id', orgId).order('created_at')
       setIntegrations(data ?? [])
 
       if (type === 'woocommerce') setWcModal(false)
@@ -362,8 +364,9 @@ export default function IntegracijeSekcija() {
   steps={[
     { icon: '🔑', title: 'Kopirajte Webhook URL', desc: 'Ta URL boste vnesli v Stripe nastavitve.', code: `${webhookBaseUrl}/stripe?org_id=${orgId}`, copyable: true },
     { icon: '💳', title: 'Odprite Stripe Dashboard', desc: 'Pojdite na: Developers → Webhooks → Add endpoint' },
-    { icon: '📋', title: 'Izpolnite podatke', desc: 'Events: checkout.session.completed, invoice.paid, payment_intent.succeeded · URL: (iz koraka 1)' },
+    { icon: '📋', title: 'Izpolnite podatke', desc: 'Events: checkout.session.completed, invoice.paid, payment_intent.succeeded, charge.refunded · URL: (iz koraka 1)' },
     { icon: '✅', title: 'Kopirajte Signing secret', desc: 'Stripe vam ob ustvarjanju webhooka pokaže "Signing secret" — kopirajte ga spodaj v polje Webhook Secret.' },
+    { icon: '🛡️', title: 'Dodajte ključ za branje (priporočeno)', desc: 'Po povezavi vpišite še restricted key (samo branje). Računko potem vsako noč sam preveri vsa plačila in izda račun za vsako, ki ga še nima — tudi če webhook dogodek zgreši.' },
   ]}
   tip="Uporabite vaš LASTEN Stripe webhook (za vašo aplikacijo/produkt) — ne za Računko naročnino."
 />
@@ -384,9 +387,13 @@ export default function IntegracijeSekcija() {
               </div>
               <div style={{ fontSize: 12, color: '#888', marginTop: 10, lineHeight: 1.5 }}>
                 V Stripe: <strong>Developers → Webhooks → Add endpoint</strong><br />
-                Events: <strong>checkout.session.completed, invoice.paid, payment_intent.succeeded</strong> · URL: (zgoraj)
+                Events: <strong>checkout.session.completed, invoice.paid, payment_intent.succeeded, charge.refunded</strong> · URL: (zgoraj)
               </div>
             </div>
+          )}
+          {/* PRELET 326: kljuc za branje, uskladitev in knjiga placil */}
+          {strIntegration && orgId && (
+            <StripePlacila orgId={orgId} zadnji4={(strIntegration as any).api_key_zadnji4 ?? null} zadnjaUskladitev={(strIntegration as any).zadnja_uskladitev ?? null} />
           )}
         </div>
 
@@ -525,6 +532,13 @@ const RAZLOGI_DOGODKOV: Record<string, string> = {
   woocommerce_order_invoiced_by_woocommerce: 'Plačilo WooCommerce naročila — račun izda WooCommerce integracija',
   invoice_number_conflict: 'Trk številke računa — Stripe bo dogodek poslal znova',
   kpo_entry_failed: 'Račun izdan, vnos v knjigo prihodkov ni uspel',
+  kljuc_za_branje_ne_deluje: 'Ključ za branje ne deluje (preklican ali brez dovoljenj) — obdelano iz vsebine dogodka',
+  potreben_kljuc_za_branje: 'Za to vrsto dogodka (vračilo, spor) je potreben ključ za branje',
+  checkout_ni_placan: 'Checkout še ni plačan (npr. bančno nakazilo v teku)',
+  dogodek_brez_placila: 'Dogodek ne zadeva plačila',
+  placilo_ni_uspelo: 'Plačilo ni uspelo',
+  stripe_racun_ni_placan: 'Stripe račun še ni plačan',
+  placilo_ni_najdeno: 'Plačila v Stripu ni bilo mogoče najti',
 }
 
 function opisDogodka(log: any): string | null {

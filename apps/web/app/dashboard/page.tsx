@@ -211,6 +211,10 @@ export default function DashboardPage() {
   // iztek clanarine sploh ni izvedel. Podatki so ze obstajali, manjkal je
   // le prikaz na mestu, kjer lastnik dejansko pogleda.
   const [posOpozorila, setPosOpozorila] = useState<any[]>([])
+  // PRELET 326: Stripe placila brez racuna (za pregled / napaka / caka) in
+  // vracila brez dobropisa - vidno na nadzorni plosci, ne le v Integracijah.
+  const [stripeBrezRacuna, setStripeBrezRacuna] = useState(0)
+  const [stripeNastavitev, setStripeNastavitev] = useState<null | 'brez_kljuca' | 'neusklajeno'>(null)
   const [emailConnectionsCount, setEmailConnectionsCount] = useState(0)
   /**
    * PRELET 217: izbrani vir prihodka na kartici.
@@ -409,6 +413,24 @@ export default function DashboardPage() {
         setPosOpozorila([])
       }
       setEmailConnectionsCount(emailConnRes.count || 0)
+
+      {
+        const [pl, plNedokoncani, vr, si] = await Promise.all([
+          supabase.from('stripe_placila').select('id', { count: 'exact', head: true }).eq('org_id', o.id).in('stanje', ['pregled', 'napaka', 'caka']),
+          // Racun izdan, a mu manjka KPO vnos ali FURS potrditev.
+          supabase.from('stripe_placila').select('id', { count: 'exact', head: true }).eq('org_id', o.id).eq('stanje', 'izdan').not('razlog', 'is', null),
+          supabase.from('stripe_vracila').select('id', { count: 'exact', head: true }).eq('org_id', o.id).in('stanje', ['pregled', 'napaka', 'caka']),
+          supabase.from('integrations').select('api_key_zadnji4, zadnja_uskladitev').eq('org_id', o.id).eq('type', 'stripe').eq('is_active', true).maybeSingle(),
+        ])
+        setStripeBrezRacuna((pl.count || 0) + (plNedokoncani.count || 0) + (vr.count || 0))
+        // Brez kljuca za branje ni nocne uskladitve - izpadel webhook bi ostal neopazen.
+        // S kljucem, a brez uspesne uskladitve 3 dni: kljuc najverjetneje ne deluje vec.
+        const sd: any = si.data
+        setStripeNastavitev(!sd ? null
+          : !sd.api_key_zadnji4 ? 'brez_kljuca'
+          : sd.zadnja_uskladitev && Date.now() - new Date(sd.zadnja_uskladitev).getTime() > 3 * 86400_000 ? 'neusklajeno'
+          : null)
+      }
 
       const invoices = invRes.data || []
       const receipts = expRes.data || []
@@ -1199,6 +1221,19 @@ export default function DashboardPage() {
             </div>
           )}
         </section>
+
+        {stripeBrezRacuna > 0 && (
+          <a href="/nastavitve?razdelek=integracije" style={{ display:'block', textDecoration:'none', background:'#FEF3C7', border:'1px solid #FDE68A', borderRadius:14, padding:'14px 18px', marginBottom:20, color:'#92400E', fontSize:13 }}>
+            ⚠️ <b>{stripeBrezRacuna} {stripeBrezRacuna === 1 ? 'Stripe plačilo ali vračilo zahteva' : 'Stripe plačil ali vračil zahteva'} pozornost</b> (manjka račun, dobropis, vnos v KPO ali FURS potrditev). Odprite Integracije → Stripe za podrobnosti →
+          </a>
+        )}
+        {stripeNastavitev && (
+          <a href="/nastavitve?razdelek=integracije" style={{ display:'block', textDecoration:'none', background:'#FEF3C7', border:'1px solid #FDE68A', borderRadius:14, padding:'14px 18px', marginBottom:20, color:'#92400E', fontSize:13 }}>
+            {stripeNastavitev === 'brez_kljuca'
+              ? <>⚠️ <b>Stripe: vpišite ključ za branje.</b> Brez njega Računko ne more nočno preveriti, ali je webhook zajel vsa plačila — izpadlo plačilo bi ostalo brez računa. Integracije → Stripe →</>
+              : <>⚠️ <b>Stripe: uskladitev že več dni ni uspela.</b> Ključ za branje morda ne deluje več (preklican ali brez dovoljenj). Integracije → Stripe → Preveri nastavitev →</>}
+          </a>
+        )}
 
         {/* OPOZORILA IZ BLAGAJNE — DODANO 21.8.2026.
             Prikaze se SAMO, ce ima organizacija blagajno in ce opozorila
