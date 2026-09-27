@@ -405,18 +405,29 @@ async function fiskaliziraj(supabase: any, orgId: string, racunId: string) {
   }
 }
 
-async function izdajRacun(supabase: any, org: any, p: Placilo): Promise<VpisIzid> {
+/**
+ * Rocno izdan racun (brez davcne potrditve), ki ga nadomestimo z davcno
+ * potrjenim: kupec (podjetje, naslov, davcna), postavke in zneski se
+ * prenesejo NESPREMENJENI - nov racun je enak staremu, le s FURS stevilko,
+ * ZOI in EOR (prelet 327).
+ */
+export type Predloga = Record<string, any>
+
+const POLJA_KUPCA = ['client_name', 'client_tax_number', 'client_vat_number', 'client_address', 'client_email', 'client_iban', 'customer_id'] as const
+const POLJA_VSEBINE = ['line_items', 'amount_net', 'vat_amount', 'amount_total', 'service_date_from', 'service_date_to', 'service_date', 'header_text', 'vat_exemption_code', 'vat_exemption_text', 'invoice_subtype'] as const
+
+async function izdajRacun(supabase: any, org: any, p: Placilo, predloga?: Predloga): Promise<VpisIzid> {
   const bruto = p.znesekCenti / 100
   const neto = bruto / (org.vat_registered ? 1.22 : 1)
   const ddv = org.vat_registered ? bruto - neto : 0
   const r2 = (x: number) => Math.round(x * 100) / 100
   const danes = lokalniDatum()
   const datumPlacila = lokalniDatum(p.placanoOb)
-  const kupec = p.kupecIme || p.kupecEmail || 'Stranka iz Stripe'
+  const kupec = predloga?.client_name || p.kupecIme || p.kupecEmail || 'Stranka iz Stripe'
   const opis = (p.opis || `Stripe plačilo #${p.kljuc}`).slice(0, 300)
   const postavke = [{ description: opis, quantity: 1, unit_price: r2(neto), amount_net: r2(neto), vat_rate: org.vat_registered ? 22 : 0, vat_amount: r2(ddv) }]
 
-  const vpis = await vpisiSStevilko(supabase, org.id, {
+  const vrstica: Record<string, any> = {
     org_id: org.id,
     invoice_type: 'invoice',
     client_name: kupec,
@@ -434,12 +445,22 @@ async function izdajRacun(supabase: any, org: any, p: Placilo): Promise<VpisIzid
     paid_amount: bruto,
     notes: `Stripe plačilo (${p.kljuc}).${p.opomba}`,
     external_reference: `stripe-${p.kljuc}`,
-  })
+    stripe_payment_id: p.paymentIntentId ?? p.kljuc,
+  }
+  if (predloga) {
+    for (const k of [...POLJA_KUPCA, ...POLJA_VSEBINE]) if (predloga[k] !== undefined && predloga[k] !== null) vrstica[k] = predloga[k]
+    vrstica.notes = predloga.invoice_number
+      ? `Nadomešča račun ${predloga.invoice_number}, ki je bil izdan brez davčne potrditve. Plačano s kartico prek Stripe (${p.kljuc}).`
+      : `Plačano s kartico prek Stripe (${p.kljuc}).`
+  }
+
+  const vpis = await vpisiSStevilko(supabase, org.id, vrstica)
   if (!('id' in vpis)) return vpis
 
   const { error: kpoErr } = await supabase.from('kpo_entries').insert({
     org_id: org.id, entry_date: danes, description: `Stripe — ${kupec}`, entry_type: 'income',
-    income: neto, vat_out: ddv, invoice_id: vpis.id, category: 'spletna_prodaja', notes: 'Avtomatski vnos iz Stripe',
+    income: Number(vrstica.amount_net), vat_out: Number(vrstica.vat_amount), invoice_id: vpis.id, category: 'spletna_prodaja',
+    notes: predloga?.invoice_number ? `Stripe — nadomešča račun ${predloga.invoice_number}` : 'Avtomatski vnos iz Stripe',
   })
   if (kpoErr) console.error('Stripe: racun', vpis.stevilka, 'je nastal, vnos v KPO NI uspel:', kpoErr.message)
 
@@ -447,7 +468,8 @@ async function izdajRacun(supabase: any, org: any, p: Placilo): Promise<VpisIzid
 
   // PDF + e-posta kupcu (napaka tu NIKOLI ne podre obdelave - racun obstaja).
   const koncnaSt = (furs?.success && furs.invoiceNumber) ? furs.invoiceNumber : vpis.stevilka
-  if (p.kupecEmail) {
+  // Nadomestni racun uporabnik poslje sam (kupcu pojasni zamenjavo).
+  if (p.kupecEmail && !predloga) {
     try {
       const zaPdf = {
         invoice_number: koncnaSt, invoice_type: 'invoice', client_name: kupec, client_email: p.kupecEmail,
@@ -473,6 +495,31 @@ async function izdajRacun(supabase: any, org: any, p: Placilo): Promise<VpisIzid
     }
   }
   return vpis
+}
+
+/**
+ * Storno rocnega racuna, ki ga je nadomestil davcno potrjen racun. Enako kot
+ * gumb "Storno" v Racunih: kreditni zapis <st>-S in izvirnik 'cancelled'.
+ */
+async function stornirajPredlogo(supabase: any, predloga: Predloga): Promise<string | null> {
+  const stSt = `${predloga.invoice_number}-S`
+  const { data: obst } = await supabase.from('issued_invoices').select('id').eq('org_id', predloga.org_id).eq('invoice_number', stSt).maybeSingle()
+  if (!obst) {
+    const { error } = await supabase.from('issued_invoices').insert({
+      org_id: predloga.org_id, invoice_number: stSt,
+      client_name: predloga.client_name, client_email: predloga.client_email, client_tax_number: predloga.client_tax_number,
+      client_address: predloga.client_address, issue_date: lokalniDatum(), due_date: lokalniDatum(),
+      line_items: (predloga.line_items || []).map((it: any) => ({ ...it, unit_price: -Math.abs(Number(it.unit_price || 0)) })),
+      amount_net: -Math.abs(Number(predloga.amount_net || 0)), vat_amount: -Math.abs(Number(predloga.vat_amount || 0)),
+      amount_total: -Math.abs(Number(predloga.amount_total || 0)), status: 'cancelled',
+      notes: `Storno računa ${predloga.invoice_number} — nadomeščen z davčno potrjenim računom.`, reference: `SI00 ${stSt}`,
+    })
+    if (error) return 'storno_ni_uspel'
+  }
+  const { error: uErr } = await supabase.from('issued_invoices')
+    .update({ status: 'cancelled', notes: `${predloga.notes ? predloga.notes + '\n' : ''}Storniran — nadomeščen z davčno potrjenim računom.` })
+    .eq('id', predloga.id)
+  return uErr ? 'storno_ni_uspel' : null
 }
 
 async function izdajDobropis(supabase: any, org: any, v: Vracilo, izvirnikId: string, kljucPlacila: string): Promise<VpisIzid | { napaka: string }> {
@@ -541,6 +588,10 @@ export type OpcijeObdelave = {
   // Rocna potrditev ("Izdaj racun"): obide pregled, ki caka na odlocitev
   // uporabnika (placilo pred zacetkom samodejne izdaje, izven Stripa ...).
   prisili?: boolean
+  // Rocno izdan, davcno nepotrjen racun za TO placilo: nov racun prevzame
+  // njegovega kupca in postavke, star se stornira (prelet 327). Brez id:
+  // le podatki kupca, vneseni pred izdajo (npr. racun na podjetje).
+  predloga?: Predloga
 }
 
 /**
@@ -613,6 +664,7 @@ export async function obdelajPlacilo(supabase: any, org: any, p: Placilo, izvor:
   const predZacetkom = (d: Date) => !opcije.prisili && !!samodejnoOd && d.getTime() < samodejnoOd.getTime() - 5 * 60_000
   let racunId: string | null = zapis.racun_id ?? null
   let novRacun = false
+  let stornoNapaka: string | null = null
 
   // 2. Racun (natanko enkrat).
   if (!racunId) {
@@ -641,10 +693,15 @@ export async function obdelajPlacilo(supabase: any, org: any, p: Placilo, izvor:
         return { stanje: preskok.stanje, razlog: preskok.razlog }
       }
 
-      const izid = await izdajRacun(supabase, org, p)
+      const izid = await izdajRacun(supabase, org, p, opcije.predloga)
       if ('id' in izid) {
         racunId = izid.id
         novRacun = true
+        // Rocni racun se stornira, ce se ni (uporabnik ga je morda ze storniral).
+        if (opcije.predloga?.id && opcije.predloga.status !== 'cancelled') {
+          stornoNapaka = await stornirajPredlogo(supabase, opcije.predloga)
+          if (stornoNapaka) console.error('Nadomestni racun izdan, storno izvirnika ni uspel:', opcije.predloga.id)
+        }
       } else if ('dvojnik' in izid) {
         racunId = await najdiRacunPoReferencah(supabase, orgId, [p.kljuc])
       } else {
@@ -655,7 +712,7 @@ export async function obdelajPlacilo(supabase: any, org: any, p: Placilo, izvor:
   }
 
   // 2b. Racun obstaja - dopolnimo, kar morda manjka (KPO, FURS).
-  const manjka = racunId ? await dokoncajRacun(supabase, orgId, racunId, kupec, novRacun) : 'racun_ne_obstaja'
+  const manjka = (racunId ? await dokoncajRacun(supabase, orgId, racunId, kupec, novRacun) : 'racun_ne_obstaja') ?? stornoNapaka
   await nastaviStanje(supabase, orgId, p.kljuc, 'izdan', manjka, racunId)
 
   // 3. Vracila -> dobropisi (vsako vracilo natanko enkrat).

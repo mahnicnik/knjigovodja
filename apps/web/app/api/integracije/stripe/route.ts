@@ -23,6 +23,9 @@ export const maxDuration = 60
  *  - 'ponovi'        { kljuc }   ponovno obdela eno placilo iz knjige
  *  - 'izdaj'         { kljuc }   uporabnik potrdi izdajo racuna za placilo v pregledu
  *                                (pred zacetkom samodejne izdaje, izven Stripa ...)
+ *  - 'nadomesti'     { kljuc, racunId }  placilo je bilo zaracunano ROCNO brez
+ *                                davcne potrditve: nov, davcno potrjen racun z ISTIM
+ *                                kupcem in postavkami, rocni se stornira (prelet 327)
  *
  * Sprejme SAMO omejen kljuc (rk_) - Racunko Stripa uporabnika nikoli ne more
  * spreminjati. Testni kljuc le v testnem/demo nacinu FURS (sicer bi testna
@@ -120,6 +123,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, dni, ...izid })
     }
 
+    if (akcija === 'nadomesti') {
+      const kljuc = String(body.kljuc || '')
+      const racunId = String(body.racunId || '')
+      if (!kljuc.startsWith('pi_') && !kljuc.startsWith('in_') && !kljuc.startsWith('ch_')) return NextResponse.json({ error: 'Neznan ključ plačila' }, { status: 400 })
+      const { data: vrsta } = await sb.from('stripe_placila').select('stanje, racun_id').eq('org_id', orgId).eq('kljuc', kljuc).maybeSingle()
+      if (!vrsta) return NextResponse.json({ error: 'Plačilo ni v knjigi — najprej kliknite Uskladi.' }, { status: 400 })
+      if (vrsta.racun_id) return NextResponse.json({ error: 'To plačilo že ima račun v Računku.' }, { status: 400 })
+      const { data: predloga } = await sb.from('issued_invoices').select('*').eq('id', racunId).eq('org_id', orgId).maybeSingle()
+      if (!predloga) return NextResponse.json({ error: 'Račun ni najden.' }, { status: 404 })
+      if (predloga.eor) return NextResponse.json({ error: `Račun ${predloga.invoice_number} je že davčno potrjen — nadomeščanje ni potrebno.` }, { status: 400 })
+      // Ze storniran rocni racun je dovoljen (uporabnik ga je storniral pred nadomestitvijo) -
+      // storno zapis (<st>-S) sam pa ni racun za nadomestitev.
+      if (predloga.status === 'draft' || /-S$/.test(String(predloga.invoice_number))) return NextResponse.json({ error: `Račun ${predloga.invoice_number} je osnutek ali storno zapis.` }, { status: 400 })
+      const { data: zeNadomescen } = await sb.from('issued_invoices').select('invoice_number').eq('org_id', orgId).like('notes', `Nadomešča račun ${predloga.invoice_number},%`).limit(1)
+      if (zeNadomescen?.length) return NextResponse.json({ error: `Račun ${predloga.invoice_number} je že nadomeščen z računom ${zeNadomescen[0].invoice_number}.` }, { status: 400 })
+      if (Number(predloga.amount_total) <= 0) return NextResponse.json({ error: 'Nadomestiti je mogoče samo račun s pozitivnim zneskom.' }, { status: 400 })
+      if (String(predloga.external_reference || '').startsWith('stripe-')) return NextResponse.json({ error: 'Račun je že vezan na Stripe plačilo.' }, { status: 400 })
+
+      const ref = kljuc.startsWith('pi_') ? { paymentIntentId: kljuc } : kljuc.startsWith('in_') ? { stripeInvoiceId: kljuc } : { chargeId: kljuc }
+      const p = await normalizirajPrekoApi(stripe, ref)
+      if (jePreskok(p)) return NextResponse.json({ error: `Plačila ni mogoče obdelati: ${p.preskok}` }, { status: 400 })
+      // Zneska se morata ujemati - sicer racun ni za to placilo.
+      if (Math.abs(Number(predloga.amount_total) * 100 - p.znesekCenti) > 1) {
+        return NextResponse.json({ error: `Znesek računa ${predloga.invoice_number} (${Number(predloga.amount_total).toFixed(2)} €) se ne ujema s plačilom (${(p.znesekCenti / 100).toFixed(2)} €).` }, { status: 400 })
+      }
+      const izid = await obdelajPlacilo(sb, org, p, 'nadomestni_racun', { prisili: true, predloga })
+      let stevilka: string | null = null
+      if (izid.racunId) {
+        const { data: nov } = await sb.from('issued_invoices').select('invoice_number').eq('id', izid.racunId).maybeSingle()
+        stevilka = nov?.invoice_number ?? null
+      }
+      return NextResponse.json({ success: true, ...izid, stevilka, nadomescen: predloga.invoice_number })
+    }
+
     if (akcija === 'ponovi' || akcija === 'izdaj') {
       const kljuc = String(body.kljuc || '')
       const ref = kljuc.startsWith('pi_') ? { paymentIntentId: kljuc }
@@ -131,7 +168,20 @@ export async function POST(request: NextRequest) {
       const p = await normalizirajPrekoApi(stripe, ref)
       if (jePreskok(p)) return NextResponse.json({ success: true, stanje: 'preskoceno', razlog: p.preskok })
       // 'izdaj' = uporabnik je placilo pregledal in potrdil, da racun se ni bil izdan.
-      const izid = await obdelajPlacilo(sb, org, p, akcija === 'izdaj' ? 'rocna_potrditev' : 'rocno', { prisili: akcija === 'izdaj' })
+      // Neobvezno { kupec }: racun na drugega kupca kot v Stripu (npr. podjetje).
+      let predloga: Record<string, any> | undefined
+      if (akcija === 'izdaj' && body.kupec && typeof body.kupec === 'object') {
+        const k = body.kupec
+        const naziv = String(k.naziv || '').trim().slice(0, 200)
+        if (!naziv) return NextResponse.json({ error: 'Vpišite naziv kupca.' }, { status: 400 })
+        predloga = {
+          client_name: naziv,
+          client_address: String(k.naslov || '').trim().slice(0, 300) || null,
+          client_tax_number: String(k.davcna || '').trim().slice(0, 30) || null,
+          client_email: String(k.email || '').trim().slice(0, 200) || null,
+        }
+      }
+      const izid = await obdelajPlacilo(sb, org, p, akcija === 'izdaj' ? 'rocna_potrditev' : 'rocno', { prisili: akcija === 'izdaj', predloga })
       return NextResponse.json({ success: true, ...izid })
     }
 

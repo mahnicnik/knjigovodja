@@ -8,7 +8,7 @@
  * Racunko pozna, je tu - z racunom, s preskokom in razlogom, ali oznaceno
  * za pregled.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 
 type Vrstica = {
@@ -41,6 +41,7 @@ const RAZLOGI: Record<string, string> = {
   kpo_manjka: 'Račun izdan, a vnos v KPO ni uspel — "Poskusi znova" ga dopolni',
   furs_ni_potrjen: 'Račun izdan, a še ni potrjen pri FURS — "Poskusi znova" ali potrdite v Računih',
   racun_ne_obstaja: 'Povezani račun ne obstaja več — "Poskusi znova"',
+  storno_ni_uspel: 'Nadomestni račun je izdan, storno ročnega računa pa ni uspel — stornirajte ga v Računih',
 }
 const razlogBesedilo = (r: string | null) => {
   if (!r) return ''
@@ -61,6 +62,10 @@ export default function StripePlacila({ orgId, zadnji4, zadnjaUskladitev }: { or
   const [preverbe, setPreverbe] = useState<{ ok: boolean; naslov: string; opis: string }[] | null>(null)
   const [vrstice, setVrstice] = useState<Vrstica[]>([])
   const [vracilaZaPregled, setVracilaZaPregled] = useState(0)
+  // Prelet 327: placilo, ki je bilo zaracunano rocno (brez davcne potrditve).
+  const [nadomescanje, setNadomescanje] = useState<{ kljuc: string; kandidati: any[]; izbran: string } | null>(null)
+  // Racun na drugega kupca kot v Stripu (npr. podjetje).
+  const [kupecObrazec, setKupecObrazec] = useState<{ kljuc: string; naziv: string; naslov: string; davcna: string; email: string } | null>(null)
 
   const nalozi = useCallback(async () => {
     const [{ data }, { count }] = await Promise.all([
@@ -123,6 +128,48 @@ export default function StripePlacila({ orgId, zadnji4, zadnjaUskladitev }: { or
     nalozi()
   }
 
+  async function odpriNadomescanje(v: Vrstica) {
+    const d = v.placano_ob ? new Date(v.placano_ob) : new Date()
+    const od = new Date(d.getTime() - 7 * 86400_000).toISOString().slice(0, 10)
+    const doo = new Date(d.getTime() + 45 * 86400_000).toISOString().slice(0, 10)
+    const { data } = await supabase.from('issued_invoices')
+      .select('id, invoice_number, client_name, issue_date, amount_total, status, eor, external_reference')
+      .eq('org_id', orgId).eq('amount_total', v.znesek_centi / 100).is('eor', null)
+      .gte('issue_date', od).lte('issue_date', doo).order('issue_date')
+    // Tudi ze stornirani rocni racuni (uporabnik ga je morda storniral sam), ne pa storno zapisi (-S).
+    const kandidati = (data || []).filter((r: any) => r.status !== 'draft' && !/-S$/.test(String(r.invoice_number)) && !String(r.external_reference || '').startsWith('stripe-'))
+    setNadomescanje({ kljuc: v.kljuc, kandidati, izbran: kandidati[0]?.id ?? '' })
+  }
+
+  async function nadomesti() {
+    if (!nadomescanje?.izbran) return
+    const r = nadomescanje.kandidati.find(k => k.id === nadomescanje.izbran)
+    if (!confirm(`Račun ${r?.invoice_number} (${r?.client_name}) bo ${r?.status === 'cancelled' ? '' : 'storniran in '}nadomeščen z NOVIM, davčno potrjenim računom z istim kupcem in postavkami. Nadaljujem?`)) return
+    const d = await klici('nadomesti', { kljuc: nadomescanje.kljuc, racunId: nadomescanje.izbran })
+    if (d) {
+      setNadomescanje(null)
+      setSporocilo({
+        ok: d.stanje === 'izdan' && !d.razlog,
+        besedilo: d.stanje === 'izdan'
+          ? `Izdan davčno potrjen račun ${d.stevilka ?? ''}, ki nadomešča ${d.nadomescen} (storniran).${d.razlog ? ' Pozor: ' + razlogBesedilo(d.razlog) : ''} Novi račun pošljite kupcu iz Računov.`
+          : `Stanje: ${d.stanje}${d.razlog ? ' — ' + razlogBesedilo(d.razlog) : ''}`,
+      })
+    }
+    nalozi()
+  }
+
+  async function izdajNaKupca() {
+    if (!kupecObrazec?.naziv.trim()) return
+    if (!confirm(`Izdam davčno potrjen račun na "${kupecObrazec.naziv}"? Preverite, da za to plačilo nimate že drugega veljavnega računa.`)) return
+    const { kljuc, ...kupec } = kupecObrazec
+    const d = await klici('izdaj', { kljuc, kupec })
+    if (d) {
+      setKupecObrazec(null)
+      setSporocilo({ ok: d.stanje === 'izdan' && !d.razlog, besedilo: d.stanje === 'izdan' ? (d.razlog ? `Račun je izdan, a: ${razlogBesedilo(d.razlog)}` : `Račun je izdan na ${kupec.naziv} in davčno potrjen. Pošljete ga iz Računov.`) : `Stanje: ${d.stanje}${d.razlog ? ' — ' + razlogBesedilo(d.razlog) : ''}` })
+    }
+    nalozi()
+  }
+
   const potrebujePozornost = (v: Vrstica) => v.stanje === 'pregled' || v.stanje === 'napaka' || v.stanje === 'caka' || (v.stanje === 'izdan' && !!v.razlog)
   const brezRacuna = vrstice.filter(potrebujePozornost).length
 
@@ -173,7 +220,8 @@ export default function StripePlacila({ orgId, zadnji4, zadnjaUskladitev }: { or
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {vrstice.map(v => (
-            <div key={v.kljuc} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', background: '#F7F6F2', borderRadius: 8, fontSize: 12 }}>
+            <Fragment key={v.kljuc}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', background: '#F7F6F2', borderRadius: 8, fontSize: 12 }}>
               <span>{v.stanje === 'izdan' && !v.razlog ? '✅' : v.stanje === 'preskoceno' ? '⏭️' : '⚠️'}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 500, color: '#0D1F12', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -193,9 +241,48 @@ export default function StripePlacila({ orgId, zadnji4, zadnjaUskladitev }: { or
               )}
               {/* Placila, ki cakajo na ODLOCITEV uporabnika (ne na popravek): rocna potrditev izdaje. */}
               {imaKljuc && v.stanje === 'pregled' && !v.racun_id && (
-                <button style={gumbTemen} disabled={!!dela} onClick={() => ponovi(v.kljuc, 'izdaj')}>Izdaj račun</button>
+                <>
+                  <button style={gumb} disabled={!!dela} onClick={() => { setKupecObrazec(null); odpriNadomescanje(v) }} title="Za to plačilo ste račun že izdali ročno, a ni davčno potrjen">Imam ročni račun</button>
+                  <button style={gumb} disabled={!!dela} onClick={() => { setNadomescanje(null); setKupecObrazec({ kljuc: v.kljuc, naziv: '', naslov: '', davcna: '', email: v.kupec_email || '' }) }} title="Račun na podjetje ali drugega kupca kot v Stripu">Izdaj na podjetje</button>
+                  <button style={gumbTemen} disabled={!!dela} onClick={() => ponovi(v.kljuc, 'izdaj')}>Izdaj račun</button>
+                </>
               )}
             </div>
+            {kupecObrazec?.kljuc === v.kljuc && (
+              <div style={{ margin: '0 0 6px 28px', padding: '10px 12px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: 8, fontSize: 12 }}>
+                <div style={{ marginBottom: 6, color: '#0D1F12' }}>Kupec na računu (namesto <strong>{v.kupec_ime || v.kupec_email || 'kupca iz Stripa'}</strong>). Račun bo davčno potrjen.</div>
+                {([['naziv', 'Naziv podjetja *'], ['naslov', 'Naslov'], ['davcna', 'Davčna / ID za DDV'], ['email', 'E-pošta']] as const).map(([polje, oznaka]) => (
+                  <input key={polje} value={kupecObrazec[polje]} placeholder={oznaka} onChange={e => setKupecObrazec({ ...kupecObrazec, [polje]: e.target.value })}
+                    style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginBottom: 6, padding: '7px 9px', borderRadius: 7, border: '0.5px solid rgba(0,0,0,0.15)', fontSize: 12, fontFamily: 'inherit' }} />
+                ))}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button style={gumbTemen} disabled={!!dela || !kupecObrazec.naziv.trim()} onClick={izdajNaKupca}>{dela === 'izdaj' ? 'Izdajam…' : 'Izdaj davčno potrjen račun'}</button>
+                  <button style={gumb} disabled={!!dela} onClick={() => setKupecObrazec(null)}>Prekliči</button>
+                </div>
+              </div>
+            )}
+            {nadomescanje?.kljuc === v.kljuc && (
+              <div style={{ margin: '0 0 6px 28px', padding: '10px 12px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: 8, fontSize: 12 }}>
+                {nadomescanje.kandidati.length === 0 ? (
+                  <div style={{ color: '#92400E' }}>Ni ročnega, davčno nepotrjenega računa z zneskom {eur(v.znesek_centi, v.valuta)} v obdobju plačila. <button style={{ ...gumb, marginLeft: 8 }} onClick={() => setNadomescanje(null)}>Zapri</button></div>
+                ) : (
+                  <>
+                    <div style={{ marginBottom: 6, color: '#0D1F12' }}>Izberite ročni račun za to plačilo. Nadomestil ga bo <strong>davčno potrjen</strong> račun z istim kupcem, postavkami in zneskom; ročni se stornira (če še ni).</div>
+                    {nadomescanje.kandidati.map(k => (
+                      <label key={k.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '3px 0', cursor: 'pointer' }}>
+                        <input type="radio" name={`nad-${v.kljuc}`} checked={nadomescanje.izbran === k.id} onChange={() => setNadomescanje({ ...nadomescanje, izbran: k.id })} />
+                        <span><strong>{k.invoice_number}</strong> · {k.client_name} · {new Date(k.issue_date).toLocaleDateString('sl-SI')} · {eur(Math.round(Number(k.amount_total) * 100))}{k.status === 'cancelled' ? ' · že storniran' : ''}</span>
+                      </label>
+                    ))}
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                      <button style={gumbTemen} disabled={!!dela || !nadomescanje.izbran} onClick={nadomesti}>{dela === 'nadomesti' ? 'Izdajam…' : 'Nadomesti z davčno potrjenim'}</button>
+                      <button style={gumb} disabled={!!dela} onClick={() => setNadomescanje(null)}>Prekliči</button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            </Fragment>
           ))}
         </div>
       )}
