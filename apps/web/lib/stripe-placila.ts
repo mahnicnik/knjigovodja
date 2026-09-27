@@ -34,6 +34,7 @@ import { confirmIssuedInvoiceWithFurs } from '@/lib/furs-invoice-confirm'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { InvoicePDF, generateUpnQr, generateFursQr } from '@/lib/invoice-pdf'
 import { buildInvoiceEmailHtml } from '@/lib/invoice-email'
+import { logotipZaEmail } from '@/lib/logotip'
 import { resend, posiljateljZa } from '@/lib/resend'
 import { decryptToken } from '@/lib/token-crypto'
 
@@ -434,6 +435,8 @@ async function izdajRacun(supabase: any, org: any, p: Placilo, predloga?: Predlo
     client_email: p.kupecEmail,
     issue_date: danes,
     due_date: danes,
+    // PDF izpise "Opravljeno" iz service_date (prelet 329) - prej ga Stripe racuni niso imeli.
+    service_date: datumPlacila,
     service_date_from: datumPlacila,
     service_date_to: datumPlacila,
     line_items: postavke,
@@ -480,13 +483,15 @@ async function izdajRacun(supabase: any, org: any, p: Placilo, predloga?: Predlo
       let fursQr: string | undefined
       if (furs?.success && furs.zoi) { try { fursQr = await generateFursQr(furs.zoi, new Date(danes)) } catch { /* brez QR */ } }
       const pdf = await renderToBuffer(InvoicePDF({ invoice: zaPdf, org, qrDataUrl: qr, fursQrDataUrl: fursQr }) as any)
+      const logo = await logotipZaEmail(org)
       const html = buildInvoiceEmailHtml({
+        logoCid: logo?.cid ?? null,
         orgName: org.name, invoiceNumber: koncnaSt, issueDate: danes, amount: bruto, dueDate: danes,
         customMessage: 'Vaše Stripe plačilo je bilo uspešno zaključeno. V prilogi je račun.', iban: org.iban ?? null, reference: null,
       })
       const { error: mErr } = await resend.emails.send({
         from: posiljateljZa(org.name), to: [p.kupecEmail], subject: `Račun ${koncnaSt}`, html,
-        attachments: [{ filename: `racun-${koncnaSt}.pdf`, content: pdf }],
+        attachments: [{ filename: `racun-${koncnaSt}.pdf`, content: pdf }, ...(logo ? [logo.priloga] : [])],
       } as any)
       if (!mErr) await supabase.from('issued_invoices').update({ last_email_sent_at: new Date().toISOString() }).eq('id', vpis.id)
       else console.error('Stripe: e-posta z racunom ni bila poslana:', vpis.id, mErr.message)

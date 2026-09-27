@@ -2,6 +2,7 @@ import { renderToBuffer } from '@react-pdf/renderer'
 import { lokalniDatum } from '@/lib/tax-constants'
 import { InvoicePDF, generateUpnQr } from '@/lib/invoice-pdf'
 import { buildInvoiceEmailHtml } from '@/lib/invoice-email'
+import { logotipZaEmail } from '@/lib/logotip'
 import { resend, FROM_EMAIL, posiljateljZa } from '@/lib/resend'
 
 interface InstallmentToInvoice {
@@ -126,7 +127,9 @@ export async function issueInstallmentInvoice(
   const pdfElement = InvoicePDF({ invoice: invoiceForPdf, org, qrDataUrl })
   const pdfBuffer = await renderToBuffer(pdfElement as any)
 
+  const logo = await logotipZaEmail(org)
   const emailHtml = buildInvoiceEmailHtml({
+    logoCid: logo?.cid ?? null,
     orgName: org.name,
     invoiceNumber: newInvoice.invoice_number,
     issueDate: newInvoice.issue_date,
@@ -155,6 +158,7 @@ export async function issueInstallmentInvoice(
     html: emailHtml,
     attachments: [
       { filename: `racun-${newInvoice.invoice_number}.pdf`, content: pdfBuffer },
+      ...(logo ? [logo.priloga] : []),
       // VGRAJENA priloga za QR v telesu sporocila (C15).
       //
       // POPRAVLJENO (24.8.2026): polje se je imenovalo `content_id`, knjiznica

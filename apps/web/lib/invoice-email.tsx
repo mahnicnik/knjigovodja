@@ -19,6 +19,8 @@ interface Props {
    * slike privzeto blokirata in stranka bi videla prazen kvadrat.
    */
   qrCid?: string | null
+  /** PRELET 330: Content-ID vgrajene priloge z logotipom izdajatelja. */
+  logoCid?: string | null
 }
 
 export function buildInvoiceEmailHtml({
@@ -31,6 +33,7 @@ export function buildInvoiceEmailHtml({
   iban,
   reference,
   qrCid,
+  logoCid,
 }: Props): string {
   const formattedIssue = new Date(issueDate).toLocaleDateString('sl-SI')
   const formattedDue = new Date(dueDate).toLocaleDateString('sl-SI')
@@ -72,6 +75,8 @@ export function buildInvoiceEmailHtml({
           <!-- Header -->
           <tr>
             <td style="padding:28px 32px 20px 32px;border-bottom:1px solid #f0f0f0;">
+              ${logoCid ? `<!-- PRELET 330: logotip izdajatelja (vgrajena priloga cid:, kot QR koda). -->
+              <img src="cid:${escapeHtml(logoCid)}" alt="${escapeHtml(orgName)}" style="display:block;max-width:200px;max-height:64px;width:auto;height:auto;border:0;margin-bottom:12px;"/>` : ''}
               <div style="font-size:18px;font-weight:600;color:#0D1F12;">${escapeHtml(orgName)}</div>
               <div style="font-size:13px;color:#888;margin-top:2px;">vam pošilja račun</div>
             </td>

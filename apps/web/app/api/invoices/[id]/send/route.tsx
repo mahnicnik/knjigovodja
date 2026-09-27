@@ -4,6 +4,7 @@ import { resend, FROM_EMAIL } from '@/lib/resend'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { InvoicePDF, generateUpnQr } from '@/lib/invoice-pdf'
 import { buildInvoiceEmailHtml } from '@/lib/invoice-email'
+import { logotipZaEmail } from '@/lib/logotip'
 // PRELET 281: generator e-racuna po uradni shemi e-SLOG 2.0.
 import { zgradiESlogXml } from '@/lib/e-slog'
 
@@ -76,7 +77,7 @@ export async function POST(
     const pdfBuffer = await renderToBuffer(pdfElement as any)
 
     // Priponke — PDF je vedno priložen
-    const attachments: Array<{ filename: string; content: Buffer | string }> = [
+    const attachments: Array<{ filename: string; content: Buffer | string; contentId?: string }> = [
       {
         filename: `racun-${invoice.invoice_number}.pdf`,
         content: pdfBuffer,
@@ -147,8 +148,13 @@ export async function POST(
       }
     }
 
+    // PRELET 330: logotip izdajatelja v glavi sporocila (vgrajena priloga).
+    const logo = await logotipZaEmail(org)
+    if (logo) attachments.push(logo.priloga)
+
     // Zgradimo email HTML
     const emailHtml = buildInvoiceEmailHtml({
+      logoCid: logo?.cid ?? null,
       orgName: org.name,
       invoiceNumber: invoice.invoice_number,
       issueDate: invoice.issue_date,

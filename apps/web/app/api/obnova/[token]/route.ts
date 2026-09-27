@@ -6,6 +6,7 @@ import { FROM_EMAIL, posiljateljZa } from '@/lib/resend'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { InvoicePDF, generateUpnQr } from '@/lib/invoice-pdf'
 import { buildInvoiceEmailHtml } from '@/lib/invoice-email'
+import { logotipZaEmail } from '@/lib/logotip'
 
 /**
  * JAVNO PODALJŠANJE KARTICE (22.8.2026)
@@ -194,6 +195,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
         const qr0 = await generateUpnQr(zaPdf, org0)
         const pdf0 = await renderToBuffer(InvoicePDF({ invoice: zaPdf, org: org0, qrDataUrl: qr0 }) as any)
         const resend0 = new Resend(process.env.RESEND_API_KEY)
+        const logo0 = await logotipZaEmail(org0)
         const { error: e0 } = await resend0.emails.send({
           from: posiljateljZa(org0.name),  // PRELET 277
           to: [(z.customers as any).email],
@@ -202,12 +204,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
             orgName: org0.name, invoiceNumber: q0.quote_number,
             issueDate: q0.issue_date, amount: Number(q0.amount_total),
             dueDate: q0.valid_until, iban: org0.iban ?? null,
-            reference: `SI00 ${q0.quote_number}`, qrCid: qr0 ? 'upnqr' : null,
+            reference: `SI00 ${q0.quote_number}`, qrCid: qr0 ? 'upnqr' : null, logoCid: logo0?.cid ?? null,
             customMessage: 'Ponovno pošiljamo predračun za podaljšanje kartice.',
           }),
           attachments: [
             { filename: `predracun-${q0.quote_number}.pdf`, content: pdf0 },
             ...(qr0 ? [{ filename: 'upnqr.png', content: Buffer.from(qr0.split(',')[1] || '', 'base64'), contentId: 'upnqr' }] : []),
+            ...(logo0 ? [logo0.priloga] : []),
           ],
         } as any)
         poslanoZnova = !e0
@@ -350,7 +353,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       }
       const qr = await generateUpnQr(zaPdf, org)
       const pdf = await renderToBuffer(InvoicePDF({ invoice: zaPdf, org, qrDataUrl: qr }) as any)
+      const logo = await logotipZaEmail(org)
       const html = buildInvoiceEmailHtml({
+        logoCid: logo?.cid ?? null,
         orgName: org.name,
         invoiceNumber: predracun.quote_number,
         issueDate: zaPdf.issue_date,
@@ -370,6 +375,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
         html,
         attachments: [
           { filename: `predracun-${predracun.quote_number}.pdf`, content: pdf },
+          ...(logo ? [logo.priloga] : []),
           ...(qr ? [{
             filename: 'upnqr.png',
             content: Buffer.from(qr.split(',')[1] || '', 'base64'),

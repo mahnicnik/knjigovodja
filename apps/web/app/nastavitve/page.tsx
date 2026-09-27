@@ -16,6 +16,7 @@ import IntegracijeSekcija from '@/components/nastavitve/Integracije'
 // nikjer prikazana - komponenta brez vstopne tocke je enaka, kot da je ni.
 import DvostopenjskaPrijava from '@/components/DvostopenjskaPrijava'
 import EmailSkeniranjeSekcija from '@/components/nastavitve/EmailSkeniranje'
+import Logotip from '@/components/nastavitve/Logotip'
 import posthog from 'posthog-js'
 import UpgradeButton from '@/components/UpgradeButton'
 import ManageSubscriptionButton from '@/components/ManageSubscriptionButton'
@@ -302,6 +303,8 @@ export default function NastavitevPage() {
           <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
             <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 20 }}>🏢 Profil podjetja</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* PRELET 330: logotip se shrani takoj ob nalaganju (ne s "Shrani"). */}
+              {org?.id && <Logotip orgId={org.id} logoUrl={org.logo_url ?? null} onSpremeni={u => setOrg({ ...org, logo_url: u })} />}
               <div>
                 <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Ime s.p. *</label>
                 <input value={form.name} onChange={e => setForm({...form, name: e.target.value})} className={inp}/>

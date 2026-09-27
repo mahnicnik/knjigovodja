@@ -7,6 +7,7 @@ import { FROM_EMAIL, posiljateljZa } from '@/lib/resend'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { InvoicePDF, generateUpnQr } from '@/lib/invoice-pdf'
 import { buildInvoiceEmailHtml } from '@/lib/invoice-email'
+import { logotipZaEmail } from '@/lib/logotip'
 import { lokalniDatum } from '@/lib/tax-constants'
 
 /**
@@ -183,7 +184,9 @@ export async function POST(req: NextRequest) {
     try {
       const qr = await generateUpnQr(racun, org)
       const pdf = await renderToBuffer(InvoicePDF({ invoice: racun, org, qrDataUrl: qr }) as any)
+      const logo = await logotipZaEmail(org)
       const html = buildInvoiceEmailHtml({
+        logoCid: logo?.cid ?? null,
         orgName: org.name,
         invoiceNumber: racun.invoice_number,
         issueDate: racun.issue_date,
@@ -203,6 +206,7 @@ export async function POST(req: NextRequest) {
         html,
         attachments: [
           { filename: `racun-${racun.invoice_number}.pdf`, content: pdf },
+          ...(logo ? [logo.priloga] : []),
           ...(qr ? [{
             filename: 'upnqr.png',
             content: Buffer.from(qr.split(',')[1] || '', 'base64'),

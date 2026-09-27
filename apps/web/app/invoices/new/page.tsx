@@ -814,6 +814,10 @@ export default function NewInvoicePage() {
             {org && (
               <div className="mt-4 pt-4 border-t border-gray-100">
                 <div className="text-xs text-gray-500 mb-2">Izdajatelj</div>
+                {/* PRELET 330: logotip na racunu (nalozi se v Nastavitve -> Profil podjetja). */}
+                {org.logo_url
+                  ? <img src={org.logo_url} alt="Logotip" style={{ maxWidth: 140, maxHeight: 44, objectFit: 'contain', marginBottom: 8 }} />
+                  : <a href="/nastavitve?razdelek=profil" className="text-xs text-emerald-700 underline mb-2 inline-block">+ Dodaj logotip na račune</a>}
                 <div className="text-xs text-gray-700 leading-relaxed">
                   <div className="font-medium">{org.name}</div>
                   <div>{org.address}</div>
