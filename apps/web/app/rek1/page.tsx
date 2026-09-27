@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS, MANDATORY_HEALTH_CONTRIBUTION, GENERAL_RELIEF_MONTH, INCOME_TAX_BRACKETS , lokalniDatum} from '@/lib/tax-constants'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import { obracunPlace } from '@/lib/place'
 
 // POPRAVLJENO (26.7.2026): EE.injury ODSTRANJEN - zaposlenci NIKOLI ne
 // placujejo prispevka za poskodbe pri delu, to bremeni samo delodajalca.
@@ -99,13 +100,17 @@ export default function REK1Page() {
           er_piz: Number(uploaded.er_piz || 0), er_zzzs: Number(uploaded.er_zzzs || 0),
           er_injury: Number(uploaded.er_injury || 0), er_unemployment: Number(uploaded.er_unemployment || 0),
           er_parental: Number(uploaded.er_parental || 0), er_total,
-          totalCost: Number(uploaded.employer_total_cost || uploaded.total_cost || 0),
-          totalFurs: r(ee_total + incomeTax + er_total),
+          totalCost: obracunPlace(uploaded).strosek,
+          // PRELET 335: FURS s placilne liste ("Skupaj vsi prispevki in davki"),
+          // vkljucno s prispevki delodajalca iz razlike do minimalne osnove.
+          totalFurs: obracunPlace(uploaded).furs,
+          naTrr: obracunPlace(uploaded).naTrr,
         },
       }
     }
     const effectiveGross = grossSalaryOverride !== undefined ? grossSalaryOverride : Number(emp.gross_salary)
-    return { fromUpload: false, effectiveGross, p: calcPayroll(effectiveGross, emp.dependents || 0) }
+    const izr = calcPayroll(effectiveGross, emp.dependents || 0)
+    return { fromUpload: false, effectiveGross, p: { ...izr, naTrr: izr.netSalary } }
   }
 
   async function load() {
@@ -223,7 +228,7 @@ export default function REK1Page() {
             2. Pojdite na <strong>edavki.durs.si</strong> → Vloge → REK-1<br/>
             3. Naložite XML datoteko<br/>
             4. Preverite in oddajte<br/>
-            5. <strong>Šele po oddaji REK-1 smete izplačati plačo!</strong>
+            5. <strong>REK-1 oddate najkasneje na dan izplačila plače.</strong> Če plače obračunava računovodja, REK-1 odda on — tu samo preverite zneske.
           </div>
         </div>
 
@@ -260,10 +265,16 @@ export default function REK1Page() {
                         )}
                       </div>
                     </div>
-                    <button onClick={() => downloadREK1(emp)}
-                      className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2">
-                      ⬇ REK-1 XML
-                    </button>
+                    {/* PRELET 335: XML tu ni uradna eDavki shema - ne sme dajati vtisa, da je
+                        pripravljen za oddajo. Pri nalozeni placilni listi REK-1 odda racunovodja. */}
+                    {fromUpload ? (
+                      <span style={{ fontSize: 11, color: '#666', maxWidth: 200, textAlign: 'right' }}>REK-1 za to plačo odda vaš računovodja — tu preverite zneske.</span>
+                    ) : (
+                      <button onClick={() => downloadREK1(emp)} title="Delovni povzetek - ni uradna eDavki shema, ne oddajajte ga neposredno."
+                        className="border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm flex items-center gap-2">
+                        ⬇ Povzetek (XML, ni za oddajo)
+                      </button>
+                    )}
                   </div>
 
                   {/* Pregled podatkov */}
@@ -310,13 +321,11 @@ export default function REK1Page() {
                         <div className="text-xs text-gray-400">Dohodnina + prispevki EE + prispevki ER</div>
                         <div className="text-xl font-semibold text-orange-400 mt-1">€{p.totalFurs.toFixed(2)}</div>
                         <div className="text-xs text-gray-500 mt-1 font-mono">SI56 0110 0888 1000 030</div>
-                        <div className="text-xs text-gray-500 font-mono">
-                          Sklic: SI19 {org?.tax_number} PD{String(selectedMonth+1).padStart(2,'0')}{String(selectedYear).slice(-2)}
-                        </div>
+                        <div className="text-xs text-gray-500">Sklic prepišite s plačilnega naloga računovodje.</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-xs text-gray-400 mb-1">Neto delavcu</div>
-                        <div className="text-lg font-semibold text-green-400">€{p.netSalary.toFixed(2)}</div>
+                        <div className="text-xs text-gray-400 mb-1">Delavcu na TRR{(p as any).naTrr > p.netSalary ? ' (neto + povračila)' : ''}</div>
+                        <div className="text-lg font-semibold text-green-400">€{Number((p as any).naTrr ?? p.netSalary).toFixed(2)}</div>
                         {emp.iban && <div className="text-xs text-gray-500 font-mono mt-1">{emp.iban}</div>}
                       </div>
                     </div>

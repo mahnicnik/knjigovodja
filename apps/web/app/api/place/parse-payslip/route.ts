@@ -23,13 +23,23 @@ OSNOVNO:
 - gross_amount: BRUTO plača (SKUPAJ BRUTO)
 - net_amount: NETO plača (NETO IZPLAČILO, PRED dodatki kot prehrana/prevoz)
 - tax_amount: DAVEK (akontacija dohodnine)
+- payment_date: "Datum izplačila" (YYYY-MM-DD) ali null
+
+POVRAČILA IN IZPLAČILO (PRELET 335):
+- meal_allowance: povračilo za prehrano (npr. vrstica "Prehrana"), sicer 0
+- travel_allowance: povračilo za prevoz na delo, sicer 0
+- other_allowances: druga povračila/dodatki, izplačani poleg neto plače (brez prehrane in prevoza), sicer 0
+- payout_amount: znesek, nakazan zaposlenemu na TRR (npr. "Neto izplačilo na OSR/TRR" = neto + povračila)
+- total_taxes_contributions: "SKUPAJ VSI PRISPEVKI IN DAVKI" (vse, kar gre FURS), sicer null
 
 PRISPEVKI ZAPOSLENCA (iz bruto, "plača delavec"):
 - ee_piz: prispevek za pokojninsko in invalidsko zavarovanje
 - ee_zzzs: prispevek za zdravstveno zavarovanje
 - ee_unemployment: prispevek za zaposlovanje
 - ee_injury: prispevek za poškodbe pri delu (če obstaja pri zaposlencu, sicer 0)
-- ee_total: SKUPAJ PRISPEVKI zaposlenca
+- ee_long_term_care: prispevek za dolgotrajno oskrbo zaposlenca (1 %), sicer 0
+- ee_ozp: obvezni zdravstveni prispevek (fiksni znesek), sicer 0
+- ee_total: SKUPAJ PRISPEVKI zaposlenca (tabela "Prispevki iz bruto (plača delavec)")
 
 PRISPEVKI DELODAJALCA (na bruto, "plača delodajalec"):
 - er_piz: prispevek za pokojninsko in invalidsko zavarovanje
@@ -37,7 +47,9 @@ PRISPEVKI DELODAJALCA (na bruto, "plača delodajalec"):
 - er_unemployment: prispevek za zaposlovanje
 - er_injury: prispevek za poškodbe pri delu
 - er_parental: prispevek za starševsko varstvo
-- er_total: SKUPAJ prispevki delodajalca
+- er_long_term_care: prispevek za dolgotrajno oskrbo delodajalca (1 %), sicer 0
+- er_min_base_diff: prispevki, ki jih plača DELODAJALEC iz razlike do minimalne osnove (tabela "Prispevki iz bruto (plača delodajalec)"), sicer 0
+- er_total: SKUPAJ prispevki delodajalca = tabela "Prispevki NA bruto" + er_min_base_diff
 
 DAVČNA OSNOVA IN OLAJŠAVE:
 - income_tax_base: OSNOVA ZA DAVEK

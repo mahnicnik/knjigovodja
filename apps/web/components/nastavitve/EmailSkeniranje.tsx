@@ -135,7 +135,16 @@ function EmailSkeniranjeContent() {
     setScanning(false)
   }
 
+  // PRELET 335: varovalka pred dvojnim klikom - pri Polansu je vecklik
+  // ustvaril stiri enake stroske.
+  const [potrjujem, setPotrjujem] = useState<string | null>(null)
   async function confirmPending(item: any) {
+    if (potrjujem) return
+    setPotrjujem(item.id)
+    try { await potrdiPredlog(item) } finally { setPotrjujem(null) }
+  }
+
+  async function potrdiPredlog(item: any) {
     const d = item.extracted
     // PRELET 332: opozorilo pred dvojnikom.
     const u = ujemanja.get(item.id)
@@ -382,6 +391,7 @@ function EmailSkeniranjeContent() {
                     Iz e-maila: {item.email_from} · {item.email_subject}
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 10 }}>
+                    {item.extracted?._opomba && <div style={{ gridColumn: '1 / -1', fontSize: 11, color: '#92400E' }}>ℹ️ {item.extracted._opomba}</div>}
                     <div><span style={{ fontSize: 10, color: '#999' }}>Dobavitelj</span><div style={{ fontSize: 13, fontWeight: 600 }}>{item.extracted.vendor}</div></div>
                     <div><span style={{ fontSize: 10, color: '#999' }}>Datum</span><div style={{ fontSize: 13, fontWeight: 600 }}>{item.extracted.date}</div></div>
                     <div><span style={{ fontSize: 10, color: '#999' }}>Skupaj</span><div style={{ fontSize: 13, fontWeight: 700 }}>€{formatEurNumber(Number(item.extracted.amount_total || 0))}</div></div>

@@ -9,6 +9,7 @@ import AppLayout from '@/components/AppLayout'
 import { formatEurNumber } from '@/lib/format'
 import { naloziListino } from '@/lib/listine'
 import { napovejKategorijo, opisIzVrstice } from '@/lib/kategorizacija'
+import { najdiPlacilnoObveznost } from '@/lib/place'
 
 // ================================================================
 // FORMATI SLOVENSKIH BANK
@@ -97,6 +98,8 @@ interface BankTransaction {
   bookCategory?: string
   napovedZanesljivost?: 'visoka' | 'srednja' | 'nizka'
   napovedRazlog?: string
+  // PRELET 335: odliv, ki poravna placo (na TRR ali FURS) - ni nov strosek.
+  matched_placa?: { payslipId: string; vrsta: 'neto' | 'furs'; opis: string } | null
 }
 
 // Prepozna notranji promet (POS gotovinski polog/dvig, prenos med lastnimi
@@ -443,16 +446,46 @@ export default function BankaPage() {
         .order('entry_date', { ascending: false })
         .limit(300)
 
+      // PRELET 335: odprte obveznosti iz placilnih list (zadnjih 8 mesecev).
+      const { data: odprtePlace } = await supabase.from('payslips')
+        .select('id, type, month, year, employee_name_raw, gross_salary, net_salary, income_tax, ee_total, er_total, meal_allowance, travel_expenses, other_allowances, total_furs, employer_total_cost, total_cost, paid_at, neto_placano_at, furs_placano_at')
+        .eq('org_id', orgId)
+        .gte('year', new Date().getFullYear() - 1)
+        .or('neto_placano_at.is.null,furs_placano_at.is.null')
+      const porabljenePlace = new Set<string>()
+
       const matched = matchTransactions(parsed, invoices).map(t => {
+        const placa = t.type === 'debit' ? najdiPlacilnoObveznost(t.amount, t.date, odprtePlace || [], porabljenePlace) : null
+        if (placa) porabljenePlace.add(`${placa.payslipId}:${placa.vrsta}`)
         const napoved = napovejKategorijo(t.description, t.type === 'credit' ? 'income' : 'expense', zgodovina || [])
         return {
           ...t,
           isInternal: isInternalTransfer(t.description),
-          bookCategory: t.matched_invoice ? undefined : napoved.kategorija,
+          matched_placa: placa,
+          selected: placa ? true : t.selected,
+          bookCategory: t.matched_invoice || placa ? undefined : napoved.kategorija,
           napovedZanesljivost: napoved.zanesljivost,
           napovedRazlog: napoved.razlog,
         }
       })
+      // PRELET 335: FURS obveznost je pogosto placana z VEC nalogi isti dan
+      // (PIZ, ZZZS, akontacija ...). Ce se vsota takih odlivov ujema z odprto
+      // obveznostjo FURS, so vsi poravnava place - ne nov strosek.
+      const drzava = /FURS|PRORA|ZPIZ|ZZZS|DAVK|DAVEK|PRISP|SI19|0110 ?0888|ENOTNI/i
+      const poDnevih = new Map<string, number[]>()
+      matched.forEach((t, i) => {
+        if (t.type !== 'debit' || t.matched_placa || t.isInternal || !drzava.test(`${t.description} ${t.reference}`)) return
+        poDnevih.set(t.date, [...(poDnevih.get(t.date) || []), i])
+      })
+      for (const [datum, idx] of poDnevih) {
+        if (idx.length < 2) continue
+        const vsota = Math.round(idx.reduce((s2, i) => s2 + matched[i].amount, 0) * 100) / 100
+        const zadetek = najdiPlacilnoObveznost(vsota, datum, (odprtePlace || []).map((p: any) => ({ ...p, neto_placano_at: p.neto_placano_at || 'x' })), porabljenePlace)
+        if (zadetek && zadetek.vrsta === 'furs') {
+          porabljenePlace.add(`${zadetek.payslipId}:furs`)
+          for (const i of idx) matched[i] = { ...matched[i], matched_placa: { ...zadetek, opis: `${zadetek.opis} (${idx.length} nalogi)` }, selected: true, bookCategory: undefined }
+        }
+      }
       setTransactions(matched)
 
       const credits = matched.filter(t => t.type === 'credit')
@@ -487,6 +520,17 @@ export default function BankaPage() {
     for (const t of transactions) {
       if (!t.selected) continue
       if (t.isInternal) continue // notranji promet - ne knjizi
+
+      if (t.matched_placa) {
+        // PRELET 335: placilo place (na TRR ali FURS) - strosek je ze v KPO iz
+        // placilne liste. Tu le oznacimo obveznost kot placano, BREZ novega
+        // vnosa v knjigo (prej: neto je bil med stroski dvakrat).
+        const polje = t.matched_placa.vrsta === 'neto' ? 'neto_placano_at' : 'furs_placano_at'
+        const { error: plErr } = await supabase.from('payslips').update({ [polje]: new Date(t.date).toISOString() }).eq('id', t.matched_placa.payslipId)
+        if (plErr) { errors.push(`Plačila plače ni bilo mogoče označiti: ${plErr.message}`); continue }
+        bookedCount++
+        continue
+      }
 
       if (t.type === 'credit' && t.matched_invoice) {
         // Predal 1: ujeto z racunom - samodejno knjizi s pravo DDV razclenitvijo
@@ -581,7 +625,7 @@ export default function BankaPage() {
   // POPRAVLJENO (25.7.2026): prej je gumb spodaj stel SAMO ujete racune -
   // ce ni bilo ujemanj, je bil "0" in onemogocen, kljub temu da
   // applyImport() zdaj knjizi TUDI kategorizirane vrstice.
-  const willBookCount = transactions.filter(t => t.selected && !t.isInternal && (t.matched_invoice || t.bookCategory)).length
+  const willBookCount = transactions.filter(t => t.selected && !t.isInternal && (t.matched_invoice || t.matched_placa || t.bookCategory)).length
 
   return (
     <AppLayout>
@@ -726,6 +770,10 @@ export default function BankaPage() {
                             </span>
                           ) : t.matched_invoice ? (
                             <span style={{ color: '#1D9E75', fontWeight: 600 }}>✓ {t.matched_invoice.invoice_number} — {t.matched_invoice.client_name}</span>
+                          ) : t.matched_placa ? (
+                            <span style={{ color: '#1D9E75', fontWeight: 600 }} title="Strošek plače je že v knjigi iz plačilne liste - to plačilo se samo označi kot plačano.">
+                              ✓ {t.matched_placa.opis} <span style={{ fontWeight: 400, color: '#888' }}>(ni nov strošek)</span>
+                            </span>
                           ) : (
                             <select
                               value={t.bookCategory || ''}
@@ -742,7 +790,7 @@ export default function BankaPage() {
                               Uporabnik mora vedeti, kaj je program uganil in
                               kaj je ostalo nerazvrsceno - sicer bi slepo
                               potrdil napacno razvrstitev. */}
-                          {!t.isInternal && !t.matched_invoice && t.napovedRazlog && (
+                          {!t.isInternal && !t.matched_invoice && !t.matched_placa && t.napovedRazlog && (
                             <div style={{ fontSize: 10, marginTop: 3,
                               color: t.napovedZanesljivost === 'visoka' ? '#1D9E75'
                                    : t.napovedZanesljivost === 'srednja' ? '#888' : '#D97706' }}>

@@ -17,24 +17,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { formatEurNumber } from '@/lib/format'
+import { obracunPlace, rokPlacila } from '@/lib/place'
 
 const MESECI = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'avg', 'sep', 'okt', 'nov', 'dec']
-
-export function obracunPlace(p: any) {
-  const neto = Number(p.net_salary || 0)
-  const strosek = Number(p.employer_total_cost ?? p.total_cost ?? p.gross_salary ?? 0)
-  const drzavi = Math.max(0, Math.round((strosek - neto) * 100) / 100)
-  return { neto, strosek, drzavi }
-}
-
-/** Rok placila: mesecna placa do 18. naslednjega meseca (ZDR-1, 134. clen), regres do 1. julija. */
-export function rokPlacila(p: any): string | null {
-  if (!p.year) return null
-  if (p.type === 'regres') return `${p.year}-07-01`
-  if (!p.month) return null
-  const d = new Date(Date.UTC(p.year, p.month, 18)) // month je 1..12 -> naslednji mesec
-  return d.toISOString().slice(0, 10)
-}
 
 export default function ObveznostiPlac({ orgId, employees, leto, osvezi }: { orgId: string; employees: any[]; leto: number; osvezi: number }) {
   const supabase = createClient()
@@ -43,7 +28,7 @@ export default function ObveznostiPlac({ orgId, employees, leto, osvezi }: { org
 
   const nalozi = useCallback(async () => {
     const { data } = await supabase.from('payslips')
-      .select('id, employee_id, employee_name_raw, type, month, year, gross_salary, net_salary, employer_total_cost, total_cost, neto_placano_at, furs_placano_at')
+      .select('id, employee_id, employee_name_raw, type, month, year, gross_salary, net_salary, income_tax, ee_total, er_total, meal_allowance, travel_expenses, other_allowances, total_furs, employer_total_cost, total_cost, paid_at, neto_placano_at, furs_placano_at')
       .eq('org_id', orgId).eq('year', leto)
       .order('month', { ascending: false })
     setListe(data || [])
@@ -63,15 +48,45 @@ export default function ObveznostiPlac({ orgId, employees, leto, osvezi }: { org
     setListe(prev => prev.map(x => x.id === p.id ? { ...x, [polje]: nova } : x))
   }
 
-  if (liste.length === 0) return null
+  // PRELET 335: izbris placilne liste izbrise tudi njen vnos v KPO (povezava payslip_id).
+  async function izbrisi(p: any) {
+    const ime = zap.get(p.employee_id)?.full_name || p.employee_name_raw || 'zaposleni'
+    if (!confirm(`Izbrišem plačilno listo (${ime}, ${p.type === 'regres' ? 'regres' : MESECI[(p.month || 1) - 1]} ${p.year})? Izbriše se tudi strošek v knjigi (KPO).`)) return
+    setDela(p.id + 'x')
+    const { error: kErr } = await supabase.from('kpo_entries').delete().eq('payslip_id', p.id)
+    const { error } = kErr ? { error: kErr } : await supabase.from('payslips').delete().eq('id', p.id)
+    setDela(null)
+    if (error) { alert('Ni bilo mogoče izbrisati: ' + error.message); return }
+    setListe(prev => prev.filter(x => x.id !== p.id))
+  }
+
+  // PRELET 335: manjkajoce placilne liste (brez njih strosek plac ni v knjigi).
+  const danesD = new Date()
+  const zadnjiMesec = leto < danesD.getFullYear() ? 12 : leto === danesD.getFullYear() ? danesD.getMonth() : 0 // zakljuceni meseci
+  const manjka: string[] = []
+  for (const e of employees) {
+    const zacetek = e.start_date ? new Date(e.start_date) : null
+    for (let m = 1; m <= zadnjiMesec; m++) {
+      const konecMeseca = new Date(leto, m, 0)
+      if (zacetek && zacetek > konecMeseca) continue
+      if (!liste.some(p => p.type === 'monthly' && p.month === m && (p.employee_id === e.id))) manjka.push(`${e.full_name}: ${MESECI[m - 1]}`)
+    }
+  }
+  const opozoriloManjka = manjka.length > 0 && (
+    <div style={{ fontSize: 12, color: '#92400E', background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 10, padding: '8px 12px', marginBottom: 12 }}>
+      ⚠️ <strong>Manjkajo plačilne liste ({leto}):</strong> {manjka.slice(0, 12).join(', ')}{manjka.length > 12 ? ` … (+${manjka.length - 12})` : ''}. Brez njih strošek plač ni v knjigi (KPO) — naložite jih z gumbom „Naloži plačilno listo“.
+    </div>
+  )
+
+  if (liste.length === 0) return opozoriloManjka ? <div className="mb-6">{opozoriloManjka}</div> : null
 
   let strosek = 0, drzavi = 0, neto = 0, netoDruzina = 0, odprtoNeto = 0, odprtoFurs = 0
   for (const p of liste) {
     const o = obracunPlace(p)
-    strosek += o.strosek; drzavi += o.drzavi; neto += o.neto
-    if (zap.get(p.employee_id)?.druzinski_clan) netoDruzina += o.neto
-    if (!p.neto_placano_at) odprtoNeto += o.neto
-    if (!p.furs_placano_at) odprtoFurs += o.drzavi
+    strosek += o.strosek; drzavi += o.furs; neto += o.naTrr
+    if (zap.get(p.employee_id)?.druzinski_clan) netoDruzina += o.naTrr
+    if (!p.neto_placano_at) odprtoNeto += o.naTrr
+    if (!p.furs_placano_at) odprtoFurs += o.furs
   }
   const imaDruzino = netoDruzina > 0
   const eur = (n: number) => `€${formatEurNumber(n)}`
@@ -92,10 +107,11 @@ export default function ObveznostiPlac({ orgId, employees, leto, osvezi }: { org
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
         {kartica('Strošek v knjigi (KPO)', eur(strosek), 'bruto II — davčno priznan odhodek')}
         {kartica('Državi (FURS)', eur(drzavi), 'prispevki + akontacija dohodnine')}
-        {kartica('Neto zaposlenim', eur(neto), imaDruzino ? `od tega ${eur(netoDruzina)} družinskim članom` : 'izplačano na TRR zaposlenih')}
-        {imaDruzino && kartica('Dejanski strošek za družino', eur(strosek - netoDruzina), `${eur(netoDruzina)} neto ostane v družini`, true)}
+        {kartica('Zaposlenim na TRR', eur(neto), imaDruzino ? `neto + povračila; od tega ${eur(netoDruzina)} družinskim članom` : 'neto + povračila (prehrana, prevoz)')}
+        {imaDruzino && kartica('Dejanski strošek za družino', eur(strosek - netoDruzina), `${eur(netoDruzina)} ostane v družini`, true)}
       </div>
 
+      {opozoriloManjka}
       {(odprtoNeto > 0.009 || odprtoFurs > 0.009) && (
         <div style={{ fontSize: 12, color: '#92400E', background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 10, padding: '8px 12px', marginBottom: 12 }}>
           Še za plačilo: neto <strong>{eur(odprtoNeto)}</strong> · FURS <strong>{eur(odprtoFurs)}</strong>
@@ -108,10 +124,11 @@ export default function ObveznostiPlac({ orgId, employees, leto, osvezi }: { org
             <tr style={{ color: '#888', textAlign: 'left' }}>
               <th style={{ padding: '6px 8px', fontWeight: 500 }}>Obdobje</th>
               <th style={{ padding: '6px 8px', fontWeight: 500 }}>Zaposleni</th>
-              <th style={{ padding: '6px 8px', fontWeight: 500, textAlign: 'right' }}>Neto → zaposleni</th>
+              <th style={{ padding: '6px 8px', fontWeight: 500, textAlign: 'right' }}>Na TRR zaposlenemu</th>
               <th style={{ padding: '6px 8px', fontWeight: 500, textAlign: 'right' }}>Državi (FURS)</th>
               <th style={{ padding: '6px 8px', fontWeight: 500, textAlign: 'right' }}>Strošek (KPO)</th>
               <th style={{ padding: '6px 8px', fontWeight: 500 }}>Rok</th>
+              <th style={{ padding: '6px 8px' }} />
             </tr>
           </thead>
           <tbody>
@@ -134,17 +151,20 @@ export default function ObveznostiPlac({ orgId, employees, leto, osvezi }: { org
                 <tr key={p.id} style={{ borderTop: '1px solid #f3f3f3' }}>
                   <td style={{ padding: '8px' }}>{p.type === 'regres' ? `Regres ${p.year}` : `${MESECI[(p.month || 1) - 1]} ${p.year}`}</td>
                   <td style={{ padding: '8px' }}>{e?.full_name || p.employee_name_raw || '—'}{e?.druzinski_clan ? ' 👪' : ''}</td>
-                  <td style={{ padding: '8px', textAlign: 'right' }}>{gumb('neto_placano_at', o.neto)}</td>
-                  <td style={{ padding: '8px', textAlign: 'right' }}>{gumb('furs_placano_at', o.drzavi)}</td>
+                  <td style={{ padding: '8px', textAlign: 'right' }}>{gumb('neto_placano_at', o.naTrr)}</td>
+                  <td style={{ padding: '8px', textAlign: 'right' }}>{gumb('furs_placano_at', o.furs)}</td>
                   <td style={{ padding: '8px', textAlign: 'right', color: '#666' }}>{eur(o.strosek)}</td>
                   <td style={{ padding: '8px', color: zamuda && (!p.neto_placano_at || !p.furs_placano_at) ? '#DC2626' : '#888' }}>{rok ? new Date(rok).toLocaleDateString('sl-SI') : '—'}</td>
+                  <td style={{ padding: '8px', textAlign: 'right' }}>
+                    <button type="button" disabled={dela === p.id + 'x'} onClick={() => izbrisi(p)} title="Izbriši plačilno listo in njen strošek v knjigi" style={{ border: 0, background: 'none', cursor: 'pointer', color: '#bbb', fontSize: 13 }}>✕</button>
+                  </td>
                 </tr>
               )
             })}
           </tbody>
         </table>
       </div>
-      <div className="text-xs text-gray-400 mt-3">Kliknite znesek, da ga označite kot plačanega. 👪 = družinski član (nastavite pri urejanju zaposlenega). Prispevke in akontacijo plačate na dan izplačila plače, hkrati z oddajo REK-1.</div>
+      <div className="text-xs text-gray-400 mt-3">Kliknite znesek, da ga označite kot plačanega. 👪 = družinski član (nastavite pri urejanju zaposlenega). Plačila na TRR in FURS iz bančnega uvoza se samodejno označijo kot plačana in NE gredo še enkrat med stroške. Prispevke in akontacijo plačate na dan izplačila plače.</div>
     </div>
   )
 }

@@ -9,6 +9,7 @@ import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 import { formatEurNumber } from '@/lib/format'
 import ObveznostiPlac from '@/components/place/ObveznostiPlac'
+import { obracunPlace, preveriObracun, datumKnjizenja, MESECI_IME } from '@/lib/place'
 
 // POPRAVLJENO (26.7.2026): glej rek1/page.tsx za razlago (isti popravek)
 const EE = { piz: EMPLOYEE_CONTRIBUTIONS.piz, zzzs: EMPLOYEE_CONTRIBUTIONS.zzzs, unemployment: EMPLOYEE_CONTRIBUTIONS.unemployment, parental: EMPLOYEE_CONTRIBUTIONS.parental, dolgotrajnaOskrba: EMPLOYEE_CONTRIBUTIONS.longTermCare } // iz lib/tax-constants.ts
@@ -291,87 +292,106 @@ export default function PlacePage() {
   }
 
 
+  // PRELET 335: kandidat za placilno listo iz prebranih podatkov (za predogled in shranjevanje).
+  function placilnaIzBranja(p: any) {
+    const eeTotal = Number(p.ee_total ?? 0)
+    const erTotal = Number(p.er_total ?? 0)
+    return {
+      gross_salary: Number(p.gross_amount || 0),
+      net_salary: Number(p.net_amount || 0),
+      income_tax: Number(p.tax_amount || 0),
+      ee_total: eeTotal,
+      er_total: erTotal,
+      meal_allowance: Number(p.meal_allowance || 0),
+      travel_expenses: Number(p.travel_allowance || 0),
+      other_allowances: Number(p.other_allowances || 0),
+      total_furs: p.total_taxes_contributions != null ? Number(p.total_taxes_contributions) : null,
+      employer_total_cost: p.employer_total_cost ?? null,
+    }
+  }
+
   async function savePayslipUpload() {
     if (!org || !uploadParsed) return
+    if (uploadSaving) return
     setUploadSaving(true)
-    const p = uploadParsed
-    // KLJUCNO: employer_total_cost ("Skupaj strosek v breme podjetja") je
-    // DEJANSKI strosek - ce ga AI ni zaznal, opozorimo in uporabimo bruto
-    // kot skrajno rezervo (z opozorilom, da preveri rocno).
-    const bookAmount = p.employer_total_cost ?? p.gross_amount
-    const usedFallback = p.employer_total_cost == null
+    try {
+      const p = uploadParsed
+      const periodDate = p.period_end ? new Date(p.period_end) : new Date()
+      const month = periodDate.getMonth() + 1
+      const year = periodDate.getFullYear()
+      const osnova = placilnaIzBranja(p)
+      const o = obracunPlace(osnova)
+      const emp = employees.find(e => e.id === uploadEmployeeId)
+      const ime = emp?.full_name || p.employee_name || 'zaposleni'
 
-    // POPRAVLJENO (25.7.2026): prava imena stolpcev (gross_salary/
-    // net_salary/income_tax, month+year namesto period_start/period_end)
-    const periodDate = p.period_end ? new Date(p.period_end) : new Date()
-    // Polna razclenitev (25.7.2026) - omogoca /rek1 strani uporabo RESNICNIH
-    // stevilk namesto ocene kalkulatorja.
-    const { error } = await supabase.from('payslips').insert({
-      org_id: org.id,
-      employee_id: uploadEmployeeId || null,
-      employee_name_raw: p.employee_name || null,
-      type: 'monthly',
-      month: periodDate.getMonth() + 1,
-      year: periodDate.getFullYear(),
-      gross_salary: p.gross_amount,
-      net_salary: p.net_amount,
-      income_tax: p.tax_amount,
-      income_tax_base: p.income_tax_base ?? null,
-      general_relief: p.general_relief ?? null,
-      dependent_relief: p.dependent_relief ?? 0,
-      ee_piz: p.ee_piz ?? 0,
-      ee_zzzs: p.ee_zzzs ?? 0,
-      ee_unemployment: p.ee_unemployment ?? 0,
-      ee_injury: p.ee_injury ?? 0,
-      ee_total: p.ee_total ?? 0,
-      er_piz: p.er_piz ?? 0,
-      er_zzzs: p.er_zzzs ?? 0,
-      er_unemployment: p.er_unemployment ?? 0,
-      er_injury: p.er_injury ?? 0,
-      er_parental: p.er_parental ?? 0,
-      er_total: p.er_total ?? 0,
-      employer_total_cost: p.employer_total_cost,
-      total_cost: p.employer_total_cost ?? p.gross_amount,
-      status: 'paid',
-      paid_at: new Date().toISOString(),
-      attachment_base64: uploadBase64,
-      attachment_type: uploadFile?.type?.startsWith('image/') ? 'image' : 'pdf',
-      notes: 'Naložena plačilna lista (AI branje)',
-    })
-    if (error) {
-      alert('Napaka pri shranjevanju: ' + error.message)
+      // Ista placilna lista (zaposleni + mesec) se ne sme poknjiziti dvakrat.
+      let obstojeca: any = null
+      if (uploadEmployeeId) {
+        const { data } = await supabase.from('payslips').select('id')
+          .eq('org_id', org.id).eq('employee_id', uploadEmployeeId).eq('type', 'monthly')
+          .eq('year', year).eq('month', month).maybeSingle()
+        obstojeca = data
+        if (obstojeca && !confirm(`Plačilna lista za ${ime}, ${MESECI_IME[month - 1]} ${year}, je že naložena. Jo zamenjam z novo? (Vnos v knjigi se posodobi, ne podvoji.)`)) return
+      }
+
+      const vrstica: Record<string, any> = {
+        org_id: org.id,
+        employee_id: uploadEmployeeId || null,
+        employee_name_raw: p.employee_name || null,
+        type: 'monthly',
+        month, year,
+        ...osnova,
+        total_furs: o.furs,
+        total_cost: o.strosek,
+        employer_total_cost: o.strosek,
+        income_tax_base: p.income_tax_base ?? null,
+        general_relief: p.general_relief ?? null,
+        dependent_relief: p.dependent_relief ?? 0,
+        ee_piz: p.ee_piz ?? 0, ee_zzzs: p.ee_zzzs ?? 0, ee_unemployment: p.ee_unemployment ?? 0, ee_injury: p.ee_injury ?? 0,
+        ee_long_term_care: p.ee_long_term_care ?? 0, ee_ozp: p.ee_ozp ?? 0,
+        er_piz: p.er_piz ?? 0, er_zzzs: p.er_zzzs ?? 0, er_unemployment: p.er_unemployment ?? 0, er_injury: p.er_injury ?? 0,
+        er_parental: p.er_parental ?? 0, er_long_term_care: p.er_long_term_care ?? 0, er_min_base_diff: p.er_min_base_diff ?? 0,
+        status: 'paid',
+        // Datum izplacila s placilne liste (prej: trenutek nalaganja).
+        paid_at: p.payment_date ? new Date(p.payment_date + 'T12:00:00').toISOString() : null,
+        attachment_base64: uploadBase64,
+        attachment_type: uploadFile?.type?.startsWith('image/') ? 'image' : 'pdf',
+        notes: 'Naložena plačilna lista (AI branje)',
+      }
+      const { data: shranjena, error } = obstojeca
+        ? await supabase.from('payslips').update(vrstica).eq('id', obstojeca.id).select('*').single()
+        : await supabase.from('payslips').insert(vrstica).select('*').single()
+      if (error || !shranjena) { alert('Napaka pri shranjevanju: ' + (error?.message || '')); return }
+
+      // KPO: EN vnos na placilno listo - skupaj strosek v breme podjetja, na
+      // datum izplacila (denarno nacelo). Placili na TRR in FURS sta le
+      // poravnava - v bancnem uvozu se ne knjizita kot strosek.
+      await supabase.from('kpo_entries').delete().eq('payslip_id', shranjena.id)
+      const { error: kpoErr } = await supabase.from('kpo_entries').insert({
+        org_id: org.id,
+        entry_date: datumKnjizenja(shranjena),
+        description: `Plača ${MESECI_IME[month - 1]} ${year} — ${ime}`,
+        entry_type: 'expense',
+        income: 0,
+        expense: o.strosek,
+        vat_in: 0,
+        vat_out: 0,
+        category: 'Plače',
+        payslip_id: shranjena.id,
+        notes: `Na TRR ${o.naTrr.toFixed(2)} € · FURS ${o.furs.toFixed(2)} €${p.employer_total_cost == null ? ' · OPOZORILO: "Skupaj strošek v breme podjetja" ni bil zaznan - preveri' : ''}`,
+      })
+      if (kpoErr) { alert('Plačilna lista je shranjena, strošek v knjigi pa NI: ' + kpoErr.message); return }
+
+      setShowUpload(false)
+      setUploadFile(null)
+      setUploadBase64('')
+      setUploadParsed(null)
+      setUploadEmployeeId('')
+      setOsveziObveznosti(x => x + 1)
+      load()
+    } finally {
       setUploadSaving(false)
-      return
     }
-
-    // Poknjizi v KPO - uporabi employer_total_cost (DEJANSKI strosek), ne
-    // samo bruto placo.
-    // POPRAVLJENO (16.8.2026): prej brez preverbe - strosek place se ni
-    // poknjizil, uporabnik pa je videl potrditev. To popaci davcno osnovo.
-    const { error: placaKpoErr } = await supabase.from('kpo_entries').insert({
-      org_id: org.id,
-      entry_date: p.period_end,
-      description: `Plača ${p.employee_name || ''} — ${p.period_start} do ${p.period_end}`,
-      entry_type: 'expense',
-      income: 0,
-      expense: bookAmount,
-      vat_in: 0,
-      vat_out: 0,
-      category: 'Plače',
-      notes: usedFallback
-        ? `Nalozena plac. lista - OPOZORILO: "Skupaj strosek v breme podjetja" ni bil zaznan, uporabljena bruto placa namesto tega - preveri rocno!`
-        : `Naložena plačilna lista (skupaj strošek v breme podjetja)`,
-    })
-    if (placaKpoErr) { alert('Stroška plače ni bilo mogoče poknjižiti: ' + placaKpoErr.message); return }
-
-    setUploadSaving(false)
-    setShowUpload(false)
-    setUploadFile(null)
-    setUploadBase64('')
-    setUploadParsed(null)
-    setUploadEmployeeId('')
-    setOsveziObveznosti(x => x + 1)
-    load()
   }
 
   useEffect(() => { load() }, [])
@@ -444,22 +464,44 @@ export default function PlacePage() {
 
   async function izplačajRegres(emp: any, amount: number) {
     if (!org) return
-    const regres = calcRegres(Number(emp.gross_salary))
-    // POPRAVLJENO 26.7.2026: prava imena stolpcev
-    const { error: payslipErr } = await supabase.from('payslips').insert({
+    // POPRAVLJENO (prelet 335): prej je bil znesek vedno bruto placa (vneseni
+    // znesek se je prezrl), akontacija je vkljucevala tudi prispevke, strosek
+    // regresa pa NI sel v KPO. Zdaj: vneseni znesek, pravilna razclenitev in
+    // en vnos v knjigo (bruto + prispevki delodajalca).
+    const regres = calcRegres(amount)
+    const leto = new Date().getFullYear()
+    const furs = r(regres.eeContrib + regres.tax + regres.erContrib)
+    const strosek = r(regres.amount + regres.erContrib)
+    const { data: lista, error: payslipErr } = await supabase.from('payslips').insert({
       org_id: org.id,
       employee_id: emp.id,
+      employee_name_raw: emp.full_name,
       type: 'regres',
       month: 7,
-      year: new Date().getFullYear(),
+      year: leto,
       gross_salary: regres.amount,
       net_salary: regres.netAmount,
-      income_tax: r(regres.amount - regres.netAmount),
+      income_tax: regres.tax,
+      ee_total: regres.eeContrib,
+      er_total: regres.erContrib,
+      total_furs: furs,
+      employer_total_cost: strosek,
+      total_cost: strosek,
       status: 'paid',
       paid_at: new Date().toISOString(),
+    }).select('id, paid_at').single()
+    if (payslipErr || !lista) { alert('Plačilne liste za regres ni bilo mogoče shraniti: ' + (payslipErr?.message || '')); return }
+    const { error: kpoErr } = await supabase.from('kpo_entries').insert({
+      org_id: org.id,
+      entry_date: String(lista.paid_at).slice(0, 10),
+      description: `Regres ${leto} — ${emp.full_name}`,
+      entry_type: 'expense', income: 0, expense: strosek, vat_in: 0, vat_out: 0,
+      category: 'Plače', payslip_id: lista.id,
+      notes: `Na TRR ${regres.netAmount.toFixed(2)} € · FURS ${furs.toFixed(2)} €`,
     })
-    if (payslipErr) { alert('Plačilne liste za regres ni bilo mogoče shraniti: ' + payslipErr.message); return }
+    if (kpoErr) alert('Regres je zabeležen, strošek v knjigi pa NI: ' + kpoErr.message)
     setRegresModal(null)
+    setOsveziObveznosti(x => x + 1)
     load()
   }
 
@@ -743,6 +785,15 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
                     <label className="text-xs text-gray-500 block mb-1">Neto plača (€)</label>
                     <input type="number" onFocus={e => e.target.select()} value={uploadParsed.net_amount ?? ''} onChange={e => setUploadParsed({ ...uploadParsed, net_amount: parseFloat(e.target.value) || 0 })} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm" />
                   </div>
+                  {/* PRELET 335: povracila in datum izplacila - brez njiju se zneska za TRR in FURS ne izideta */}
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Prehrana, prevoz in druga povračila (€)</label>
+                    <input type="number" onFocus={e => e.target.select()} value={Number(uploadParsed.meal_allowance || 0) + Number(uploadParsed.travel_allowance || 0) + Number(uploadParsed.other_allowances || 0) || ''} onChange={e => setUploadParsed({ ...uploadParsed, meal_allowance: parseFloat(e.target.value) || 0, travel_allowance: 0, other_allowances: 0 })} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Datum izplačila</label>
+                    <input type="date" value={uploadParsed.payment_date || ''} onChange={e => setUploadParsed({ ...uploadParsed, payment_date: e.target.value || null })} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm" />
+                  </div>
                   <div className="col-span-2">
                     <label className="text-xs text-gray-500 block mb-1">
                       Skupaj strošek v breme podjetja (€) — <strong>to se poknjiži v KPO</strong>
@@ -759,27 +810,27 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
                     )}
                   </div>
                 </div>
-                {/* PRELET 333: kaj je treba placati in kaj je zares strosek */}
+                {/* PRELET 335: kaj je treba placati in kaj je zares strosek (iz lib/place) */}
                 {(() => {
-                  const neto = Number(uploadParsed.net_amount || 0)
-                  const strosek = Number(uploadParsed.employer_total_cost ?? uploadParsed.gross_amount ?? 0)
-                  const drzavi = Math.max(0, strosek - neto)
+                  const o = obracunPlace(placilnaIzBranja(uploadParsed))
+                  const kontrola = preveriObracun(o)
                   const druzina = !!employees.find(e => e.id === uploadEmployeeId)?.druzinski_clan
-                  const konec = uploadParsed.period_end ? new Date(uploadParsed.period_end) : null
-                  const rok = konec ? new Date(konec.getFullYear(), konec.getMonth() + 1, 18) : null
                   const vrstica = (t: string, v: number, poudarek?: boolean) => (
                     <div className="flex justify-between text-sm py-1" style={poudarek ? { fontWeight: 600 } : undefined}><span>{t}</span><span>€{formatEurNumber(v)}</span></div>
                   )
                   return (
                     <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 mb-4">
-                      <div className="text-xs font-medium text-gray-500 uppercase mb-1">Za plačilo{rok ? ` do ${rok.toLocaleDateString('sl-SI')}` : ''}</div>
-                      {vrstica('Neto → zaposleni (na TRR)', neto)}
-                      {vrstica('Državi — prispevki in akontacija (FURS)', drzavi)}
+                      <div className="text-xs font-medium text-gray-500 uppercase mb-1">Za plačilo{uploadParsed.payment_date ? ` — datum izplačila ${new Date(uploadParsed.payment_date).toLocaleDateString('sl-SI')}` : ''}</div>
+                      {vrstica(`Zaposlenemu na TRR (neto ${formatEurNumber(o.neto)}${o.povracila ? ` + povračila ${formatEurNumber(o.povracila)}` : ''})`, o.naTrr)}
+                      {vrstica('FURS — prispevki in akontacija', o.furs)}
                       <div className="border-t border-gray-200 my-1" />
-                      {vrstica('Skupaj strošek → v knjigo (KPO)', strosek, true)}
+                      {vrstica('Skupaj strošek → en vnos v knjigo (KPO)', o.strosek, true)}
+                      <div className="text-xs mt-1" style={{ color: kontrola.ok ? '#0E5E3B' : '#B45309' }}>
+                        {kontrola.ok ? '✓ Zneski se ujemajo (na TRR + FURS = skupaj strošek)' : `⚠ Zneski se ne ujemajo za €${formatEurNumber(Math.abs(kontrola.razlika))} — preverite prebrane vrednosti`}
+                      </div>
                       {druzina && (
                         <div className="text-xs mt-2 p-2 rounded-lg" style={{ background: '#E1F5EE', color: '#0E5E3B' }}>
-                          👪 Družinski član: iz družine zares odide <strong>€{formatEurNumber(drzavi)}</strong> (državi), <strong>€{formatEurNumber(neto)}</strong> neto ostane v družini.
+                          👪 Družinski član: iz družine zares odide <strong>€{formatEurNumber(o.furs)}</strong> (državi), <strong>€{formatEurNumber(o.naTrr)}</strong> ostane v družini.
                         </div>
                       )}
                     </div>

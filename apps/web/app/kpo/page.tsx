@@ -134,6 +134,7 @@ export default function KPOPage() {
       .from('receipts')
       .select('id, vendor, receipt_date, amount_net, amount_total, vat_amount, category, description, status')
       .eq('org_id', org.id)
+      .neq('status', 'rejected') // PRELET 335: zavrnjen strosek ni odhodek
       .gte('receipt_date', from)
       .lte('receipt_date', to)
       .order('receipt_date', { ascending: false })

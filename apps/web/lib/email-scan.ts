@@ -52,7 +52,8 @@ const PROMPT = `Analiziraj ta dokument in vrni JSON z naslednjimi polji:
 - category: ena od: Pisarniski material, Komunikacije, Programska oprema, Transport, Prehrana, Izobrazevanje, Marketing, Oprema, Storitve, Drugo
 - invoice_number: stevilka racuna, kot je izpisana (ali null)
 - vendor_tax_number: davcna stevilka ali ID za DDV dobavitelja (ali null)
-- is_invoice: true ce je to racun/faktura/e-racun (tudi ze placan), false ce ni (npr. dobavnica brez zneskov, ponudba, opomnik, izpisek, potrdilo o transakcijah, newsletter)
+- is_invoice: true ce je to racun za nakup - ne glede na to, kako se imenuje (racun, e-racun, faktura, invoice, receipt, bill, Rechnung, "racun za sklenjena zavarovanja", tudi ze placan). Mocan znak racuna: dokument vsebuje DAVCNO STEVILKO ali ID ZA DDV izdajatelja IN znesek. false za: dobavnico brez zneskov, predracun, ponudbo, opomin, bancni izpisek, potrdilo o kartičnih transakcijah, placilni nalog, newsletter
+- has_tax_number: true ce dokument vsebuje davcno stevilko ali ID za DDV izdajatelja
 - document_type: kratko, kaj dokument je (npr. "racun", "dobavnica", "predracun", "izpisek", "potrdilo o placilu")
 
 Vedno izpolni vsa polja, ki jih lahko razberes (tudi ce is_invoice=false).
@@ -215,7 +216,13 @@ export async function skenirajPovezavo(
         const json = text.match(/\{[\s\S]*\}/)
         if (!json) throw new Error('AI ni vrnil podatkov')
         extracted = { ...JSON.parse(json[0]), ...oznaka }
-        status = extracted.is_invoice === false ? 'ni_racun' : 'pending'
+        // PRELET 335: dokument z davcno stevilko izdajatelja in zneskom je skoraj
+        // vedno racun, tudi ce ga AI ni tako poimenoval - gre v pregled
+        // (razen ocitnih ne-racunov: izpisek, transakcije, nalog, predracun ...).
+        const zDavcno = (extracted.has_tax_number || extracted.vendor_tax_number) && Number(extracted.amount_total) > 0
+        const neRacun = /izpis|transakc|nalog|predra|ponudb|opomin|dobavnic/i.test(String(extracted.document_type || ''))
+        status = extracted.is_invoice === false && !(zDavcno && !neRacun) ? 'ni_racun' : 'pending'
+        if (extracted.is_invoice === false && status === 'pending') extracted._opomba = 'Vsebuje davčno številko izdajatelja — preverite, ali je račun'
       } catch (e: any) {
         const sporocilo = String(e?.message || e)
         const zaklenjen = /password protected/i.test(sporocilo)
