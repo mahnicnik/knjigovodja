@@ -9,3 +9,4 @@ node_modules/
 # Izpisi Playwright testov (19.8.2026) - ne sodijo v repozitorij.
 test-results/
 playwright-report/
+prelet*.py
