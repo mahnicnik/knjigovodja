@@ -204,6 +204,16 @@ export default function PlacePage() {
   const [uploadError, setUploadError] = useState('')
   // PRELET 333: osvezi seznam obveznosti po shranjeni placilni listi.
   const [osveziObveznosti, setOsveziObveznosti] = useState(0)
+  // PRELET 336: nalozene placilne liste izbranega leta - kartica zaposlenega
+  // pokaze DEJANSKE zneske, ce lista za izbrani mesec obstaja (sicer oceno).
+  const [placilneListe, setPlacilneListe] = useState<any[]>([])
+  useEffect(() => {
+    if (!org?.id) return
+    supabase.from('payslips')
+      .select('id, employee_id, type, month, year, gross_salary, net_salary, income_tax, ee_total, er_total, meal_allowance, travel_expenses, other_allowances, total_furs, employer_total_cost, total_cost')
+      .eq('org_id', org.id).eq('year', selectedYear).eq('type', 'monthly')
+      .then(({ data }) => setPlacilneListe(data || []))
+  }, [org?.id, selectedYear, osveziObveznosti])
 
   const [form, setForm] = useState({
     full_name: '', tax_number: '', iban: '', gross_salary: '',
@@ -925,7 +935,7 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
               {[
                 { label:'Ime in priimek *', key:'full_name', type:'text' },
                 { label:'Davčna številka', key:'tax_number', type:'text' },
-                { label:'Bruto plača (€) *', key:'gross_salary', type:'number' },
+                { label:'Bruto plača (€) * — "SKUPAJ BRUTO" s plačilne liste, ne strošek podjetja', key:'gross_salary', type:'number' },
                 { label:'IBAN delavca', key:'iban', type:'text' },
               ].map(f => (
                 <div key={f.key}><label className="text-xs text-gray-500 block mb-1">{f.label}</label>
@@ -1057,25 +1067,32 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
                     </div>
                   </div>
 
-                  {/* Izračun */}
-                  <div className="grid grid-cols-4 gap-3">
-                    <div className="bg-blue-50 rounded-xl p-3 text-center">
-                      <div className="text-xs text-blue-600 mb-1">Bruto</div>
-                      <div className="font-semibold text-blue-700">€{formatEurNumber(p.taxableGross)}</div>
-                    </div>
-                    <div className="bg-green-50 rounded-xl p-3 text-center">
-                      <div className="text-xs text-green-600 mb-1">Neto plača</div>
-                      <div className="font-semibold text-green-700">€{formatEurNumber(p.netSalary)}</div>
-                    </div>
-                    <div className="bg-red-50 rounded-xl p-3 text-center">
-                      <div className="text-xs text-red-600 mb-1">FURS skupaj</div>
-                      <div className="font-semibold text-red-700">€{formatEurNumber(p.totalFurs)}</div>
-                    </div>
-                    <div className="bg-gray-50 rounded-xl p-3 text-center">
-                      <div className="text-xs text-gray-600 mb-1">Vaš strošek</div>
-                      <div className="font-semibold text-gray-900">€{formatEurNumber(p.totalCost)}</div>
-                    </div>
-                  </div>
+                  {/* Izračun - PRELET 336: dejanski zneski iz plačilne liste, če obstaja */}
+                  {(() => {
+                    const lista = placilneListe.find(l => l.employee_id === emp.id && l.month === selectedMonth + 1)
+                    const o = lista ? obracunPlace(lista) : null
+                    const kartice = o
+                      ? [['Bruto', o.bruto], ['Na TRR (neto + povračila)', o.naTrr], ['FURS skupaj', o.furs], ['Vaš strošek', o.strosek]] as const
+                      : [['Bruto', p.taxableGross], ['Neto plača', p.netSalary], ['FURS skupaj', p.totalFurs], ['Vaš strošek', p.totalCost]] as const
+                    const barve = ['bg-blue-50 text-blue-700', 'bg-green-50 text-green-700', 'bg-red-50 text-red-700', 'bg-gray-50 text-gray-900']
+                    return (
+                      <>
+                        <div className="text-xs mb-2" style={{ color: o ? '#1D9E75' : '#92400E' }}>
+                          {o
+                            ? `📎 ${MONTHS[selectedMonth]} ${selectedYear}: zneski iz naložene plačilne liste`
+                            : `≈ Ocena za ${MONTHS[selectedMonth]} (kalkulator iz bruto plače ${formatEurNumber(Number(emp.gross_salary))} € in dodatkov zgoraj) — plačilna lista za ta mesec še ni naložena`}
+                        </div>
+                        <div className="grid grid-cols-4 gap-3">
+                          {kartice.map(([naslov, znesek], i) => (
+                            <div key={naslov} className={`${barve[i]} rounded-xl p-3 text-center`}>
+                              <div className="text-xs mb-1 opacity-80">{naslov}</div>
+                              <div className="font-semibold">€{formatEurNumber(znesek)}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )
+                  })()}
                 </div>
               )
             })}
