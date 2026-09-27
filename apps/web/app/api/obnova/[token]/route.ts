@@ -6,7 +6,7 @@ import { FROM_EMAIL, posiljateljZa } from '@/lib/resend'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { InvoicePDF, generateUpnQr } from '@/lib/invoice-pdf'
 import { buildInvoiceEmailHtml } from '@/lib/invoice-email'
-import { logotipZaEmail } from '@/lib/logotip'
+import { logotipZaEmail, logoNastavitve } from '@/lib/logotip'
 
 /**
  * JAVNO PODALJŠANJE KARTICE (22.8.2026)
@@ -204,7 +204,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
             orgName: org0.name, invoiceNumber: q0.quote_number,
             issueDate: q0.issue_date, amount: Number(q0.amount_total),
             dueDate: q0.valid_until, iban: org0.iban ?? null,
-            reference: `SI00 ${q0.quote_number}`, qrCid: qr0 ? 'upnqr' : null, logoCid: logo0?.cid ?? null,
+            reference: `SI00 ${q0.quote_number}`, qrCid: qr0 ? 'upnqr' : null, logoCid: logo0?.cid ?? null, logo: logoNastavitve(org0),
             customMessage: 'Ponovno pošiljamo predračun za podaljšanje kartice.',
           }),
           attachments: [
@@ -355,7 +355,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       const pdf = await renderToBuffer(InvoicePDF({ invoice: zaPdf, org, qrDataUrl: qr }) as any)
       const logo = await logotipZaEmail(org)
       const html = buildInvoiceEmailHtml({
-        logoCid: logo?.cid ?? null,
+        logoCid: logo?.cid ?? null, logo: logoNastavitve(org),
         orgName: org.name,
         invoiceNumber: predracun.quote_number,
         issueDate: zaPdf.issue_date,

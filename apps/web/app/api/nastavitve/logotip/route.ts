@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { resolveActiveOrgId } from '@/lib/active-org-server'
+import { logoNastavitve } from '@/lib/logotip'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,6 +12,8 @@ export const dynamic = 'force-dynamic'
  *
  *  POST   multipart { orgId, datoteka }  nalozi / zamenja logotip
  *  DELETE ?orgId=...                     odstrani logotip
+ *  GET    ?orgId=...                     trenutni logotip (za urejevalnik - ista domena, brez CORS)
+ *  PATCH  { orgId, nastavitve }          polozaj, velikost, prikaz v e-posti (prelet 331)
  *
  * Samo lastnik ali skrbnik. Sprejme PNG ali JPEG do 2 MB - samo ta dva
  * formata PDF knjiznica (@react-pdf) zanesljivo izrise. Vrsto preverimo po
@@ -92,6 +95,39 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true })
   } catch (e: any) {
     console.error('api/nastavitve/logotip DELETE:', e)
+    return NextResponse.json({ error: e?.message || 'Napaka' }, { status: 500 })
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const d = await dostop(request, new URL(request.url).searchParams.get('orgId'))
+    if ('napaka' in d) return d.napaka
+    const { data: org } = await d.sb.from('organizations').select('logo_pot').eq('id', d.orgId).single()
+    if (!org?.logo_pot) return NextResponse.json({ error: 'Logotip ni naložen' }, { status: 404 })
+    const { data, error } = await d.sb.storage.from(VEDRO).download(org.logo_pot)
+    if (error || !data) return NextResponse.json({ error: 'Logotipa ni bilo mogoče prebrati' }, { status: 500 })
+    return new NextResponse(Buffer.from(await data.arrayBuffer()), {
+      headers: { 'Content-Type': org.logo_pot.endsWith('.png') ? 'image/png' : 'image/jpeg', 'Cache-Control': 'no-store' },
+    })
+  } catch (e: any) {
+    console.error('api/nastavitve/logotip GET:', e)
+    return NextResponse.json({ error: e?.message || 'Napaka' }, { status: 500 })
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json().catch(() => ({}))
+    const d = await dostop(request, body.orgId ? String(body.orgId) : null)
+    if ('napaka' in d) return d.napaka
+    // Samo znane vrednosti - vse ostalo se nadomesti s privzetim.
+    const nastavitve = logoNastavitve({ logo_nastavitve: body.nastavitve })
+    const { error } = await d.sb.from('organizations').update({ logo_nastavitve: nastavitve }).eq('id', d.orgId)
+    if (error) return NextResponse.json({ error: 'Nastavitev ni bilo mogoče shraniti: ' + error.message }, { status: 500 })
+    return NextResponse.json({ success: true, nastavitve })
+  } catch (e: any) {
+    console.error('api/nastavitve/logotip PATCH:', e)
     return NextResponse.json({ error: e?.message || 'Napaka' }, { status: 500 })
   }
 }

@@ -21,7 +21,8 @@ export const LOGOTIP_CID = 'logotip'
  */
 export async function logotipZaEmail(org: any): Promise<{ cid: string; priloga: { filename: string; content: Buffer; contentId: string } } | null> {
   const url = logotipUrl(org)
-  if (!url) return null
+  // PRELET 331: uporabnik lahko logotip v e-posti izklopi.
+  if (!url || !logoNastavitve(org).vEposti) return null
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
     if (!res.ok) return null
@@ -31,5 +32,30 @@ export async function logotipZaEmail(org: any): Promise<{ cid: string; priloga: 
     return { cid: LOGOTIP_CID, priloga: { filename: png ? 'logotip.png' : 'logotip.jpg', content: buf, contentId: LOGOTIP_CID } }
   } catch {
     return null
+  }
+}
+
+/**
+ * PRELET 331: kje in kako velik je logotip (organizations.logo_nastavitve).
+ * Neznane/manjkajoce vrednosti -> privzeto (levo, srednji, tudi v e-posti).
+ */
+export type LogoPolozaj = 'levo' | 'sredina' | 'desno'
+export type LogoVelikost = 'majhen' | 'srednji' | 'velik'
+export type LogoNastavitve = { polozaj: LogoPolozaj; velikost: LogoVelikost; vEposti: boolean }
+
+export const LOGO_PRIVZETO: LogoNastavitve = { polozaj: 'levo', velikost: 'srednji', vEposti: true }
+/** Najvecja visina (PDF v pt, e-posta v px) in sirina. */
+export const LOGO_MERE: Record<LogoVelikost, { pdfVisina: number; pdfSirina: number; emailVisina: number; emailSirina: number }> = {
+  majhen:  { pdfVisina: 36, pdfSirina: 120, emailVisina: 40, emailSirina: 140 },
+  srednji: { pdfVisina: 56, pdfSirina: 170, emailVisina: 64, emailSirina: 200 },
+  velik:   { pdfVisina: 80, pdfSirina: 240, emailVisina: 90, emailSirina: 280 },
+}
+
+export function logoNastavitve(org: any): LogoNastavitve {
+  const n = (org?.logo_nastavitve && typeof org.logo_nastavitve === 'object') ? org.logo_nastavitve : {}
+  return {
+    polozaj: (['levo', 'sredina', 'desno'] as const).includes(n.polozaj) ? n.polozaj : LOGO_PRIVZETO.polozaj,
+    velikost: (['majhen', 'srednji', 'velik'] as const).includes(n.velikost) ? n.velikost : LOGO_PRIVZETO.velikost,
+    vEposti: typeof n.vEposti === 'boolean' ? n.vEposti : LOGO_PRIVZETO.vEposti,
   }
 }

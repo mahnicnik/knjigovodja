@@ -304,7 +304,7 @@ export default function NastavitevPage() {
             <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 20 }}>🏢 Profil podjetja</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {/* PRELET 330: logotip se shrani takoj ob nalaganju (ne s "Shrani"). */}
-              {org?.id && <Logotip orgId={org.id} logoUrl={org.logo_url ?? null} onSpremeni={u => setOrg({ ...org, logo_url: u })} />}
+              {org?.id && <Logotip orgId={org.id} logoUrl={org.logo_url ?? null} logoNastavitve={org.logo_nastavitve} imePodjetja={form.name || org.name} onSpremeni={u => setOrg({ ...org, logo_url: u })} />}
               <div>
                 <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Ime s.p. *</label>
                 <input value={form.name} onChange={e => setForm({...form, name: e.target.value})} className={inp}/>

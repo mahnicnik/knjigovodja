@@ -2,7 +2,7 @@ import { renderToBuffer } from '@react-pdf/renderer'
 import { lokalniDatum } from '@/lib/tax-constants'
 import { InvoicePDF, generateUpnQr } from '@/lib/invoice-pdf'
 import { buildInvoiceEmailHtml } from '@/lib/invoice-email'
-import { logotipZaEmail } from '@/lib/logotip'
+import { logotipZaEmail, logoNastavitve } from '@/lib/logotip'
 import { resend, FROM_EMAIL, posiljateljZa } from '@/lib/resend'
 
 interface InstallmentToInvoice {
@@ -129,7 +129,7 @@ export async function issueInstallmentInvoice(
 
   const logo = await logotipZaEmail(org)
   const emailHtml = buildInvoiceEmailHtml({
-    logoCid: logo?.cid ?? null,
+    logoCid: logo?.cid ?? null, logo: logoNastavitve(org),
     orgName: org.name,
     invoiceNumber: newInvoice.invoice_number,
     issueDate: newInvoice.issue_date,

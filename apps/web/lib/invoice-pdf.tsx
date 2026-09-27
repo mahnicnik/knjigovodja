@@ -1,6 +1,6 @@
 import { Document, Page, Text, View, StyleSheet, Image, Font } from '@react-pdf/renderer'
 import QRCode from 'qrcode'
-import { logotipUrl } from '@/lib/logotip'
+import { logotipUrl, logoNastavitve, LOGO_MERE } from '@/lib/logotip'
 
 // Inter latin-ext (VSE tri utezi morajo biti latin-EXT, sicer manjkajo
 // sumniki - prejsnja verzija je imela navadni latin subset, ki NIMA "č",
@@ -66,17 +66,26 @@ export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
   // PRELET 330: ce slike ni mogoce prenesti, @react-pdf izpise opozorilo in
   // racun se izrise brez logotipa (racun nikoli ne pade zaradi logotipa).
   const logotip = logotipUrl(org)
+  // PRELET 331: polozaj (levo / na sredini / desno) in velikost po izbiri uporabnika.
+  const logoN = logoNastavitve(org)
+  const logoM = LOGO_MERE[logoN.velikost]
+  const logoSlog = (poravnava: 'left' | 'center' | 'right') => ({
+    maxWidth: logoM.pdfSirina, maxHeight: logoM.pdfVisina, objectFit: 'contain' as const, objectPosition: poravnava, marginBottom: 10,
+  })
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
+        {logotip && logoN.polozaj === 'sredina' && (
+          <View style={{ alignItems: 'center', marginBottom: 14 }}>
+            <Image src={logotip} style={logoSlog('center')} />
+          </View>
+        )}
         <View style={styles.header}>
           {/* POPRAVLJENO (11.8.2026): dodana maxWidth - prej se je dolgo
               ime podjetja stiskalo ob naslov "RAČUN" brez preloma vrstice. */}
           <View style={{ maxWidth: '60%' }}>
-            {logotip && (
-              <Image src={logotip} style={{ maxWidth: 170, maxHeight: 56, objectFit: 'contain', objectPosition: 'left', marginBottom: 10 }} />
-            )}
+            {logotip && logoN.polozaj === 'levo' && <Image src={logotip} style={logoSlog('left')} />}
             <Text style={styles.companyName}>{org.name || ''}</Text>
             <View style={styles.companyInfo}>
               <Text>{org.address || ''}</Text>
@@ -90,6 +99,9 @@ export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
             </View>
           </View>
           <View style={styles.invoiceTitle}>
+            {logotip && logoN.polozaj === 'desno' && (
+              <View style={{ alignItems: 'flex-end' }}><Image src={logotip} style={logoSlog('right')} /></View>
+            )}
             <Text style={[styles.invoiceTitleH1, { color: isStorno || isDobropis ? '#c00' : '#111' }]}>{docType}</Text>
             <View style={styles.invoiceMeta}>
               <Text>Številka: {invoice.invoice_number}</Text>

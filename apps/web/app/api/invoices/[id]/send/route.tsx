@@ -4,7 +4,7 @@ import { resend, FROM_EMAIL } from '@/lib/resend'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { InvoicePDF, generateUpnQr } from '@/lib/invoice-pdf'
 import { buildInvoiceEmailHtml } from '@/lib/invoice-email'
-import { logotipZaEmail } from '@/lib/logotip'
+import { logotipZaEmail, logoNastavitve } from '@/lib/logotip'
 // PRELET 281: generator e-racuna po uradni shemi e-SLOG 2.0.
 import { zgradiESlogXml } from '@/lib/e-slog'
 
@@ -154,7 +154,7 @@ export async function POST(
 
     // Zgradimo email HTML
     const emailHtml = buildInvoiceEmailHtml({
-      logoCid: logo?.cid ?? null,
+      logoCid: logo?.cid ?? null, logo: logoNastavitve(org),
       orgName: org.name,
       invoiceNumber: invoice.invoice_number,
       issueDate: invoice.issue_date,

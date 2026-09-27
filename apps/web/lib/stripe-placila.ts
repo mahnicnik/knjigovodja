@@ -34,7 +34,7 @@ import { confirmIssuedInvoiceWithFurs } from '@/lib/furs-invoice-confirm'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { InvoicePDF, generateUpnQr, generateFursQr } from '@/lib/invoice-pdf'
 import { buildInvoiceEmailHtml } from '@/lib/invoice-email'
-import { logotipZaEmail } from '@/lib/logotip'
+import { logotipZaEmail, logoNastavitve } from '@/lib/logotip'
 import { resend, posiljateljZa } from '@/lib/resend'
 import { decryptToken } from '@/lib/token-crypto'
 
@@ -485,7 +485,7 @@ async function izdajRacun(supabase: any, org: any, p: Placilo, predloga?: Predlo
       const pdf = await renderToBuffer(InvoicePDF({ invoice: zaPdf, org, qrDataUrl: qr, fursQrDataUrl: fursQr }) as any)
       const logo = await logotipZaEmail(org)
       const html = buildInvoiceEmailHtml({
-        logoCid: logo?.cid ?? null,
+        logoCid: logo?.cid ?? null, logo: logoNastavitve(org),
         orgName: org.name, invoiceNumber: koncnaSt, issueDate: danes, amount: bruto, dueDate: danes,
         customMessage: 'Vaše Stripe plačilo je bilo uspešno zaključeno. V prilogi je račun.', iban: org.iban ?? null, reference: null,
       })
