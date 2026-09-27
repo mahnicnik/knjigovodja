@@ -19,6 +19,9 @@ function EmailSkeniranjeContent() {
   const [savingId, setSavingId] = useState<string | null>(null)
   // PRELET 332: ze vneseni stroski v obdobju predlogov - za oznako "Ze dodano".
   const [obstojeci, setObstojeci] = useState<ObstojeciStrosek[]>([])
+  // PRELET 334: vse, kar skeniranje ni dalo v pregled, je zdaj VIDNO.
+  const [ostali, setOstali] = useState<Record<'ni_racun' | 'napaka' | 'rejected', any[]>>({ ni_racun: [], napaka: [], rejected: [] })
+  const [odprto, setOdprto] = useState<'ni_racun' | 'napaka' | 'rejected' | null>(null)
   const searchParams = useSearchParams()
   const supabase = createClient()
 
@@ -37,6 +40,28 @@ function EmailSkeniranjeContent() {
     setObstojeci((rc as any) || [])
   }
 
+  async function naloziOstale(orgId: string) {
+    const { data } = await supabase.from('email_scan_pending')
+      .select('id, email_subject, email_from, email_date, attachment_name, extracted, status, reviewed_at, created_at')
+      .eq('org_id', orgId).in('status', ['ni_racun', 'napaka', 'rejected'])
+      .order('email_date', { ascending: false }).limit(300)
+    const o: any = { ni_racun: [], napaka: [], rejected: [] }
+    for (const r of data || []) o[r.status]?.push(r)
+    setOstali(o)
+  }
+
+  async function vPregled(item: any) {
+    const { error } = await supabase.from('email_scan_pending').update({ status: 'pending', reviewed_at: null }).eq('id', item.id)
+    if (error) { alert('Ni bilo mogoče: ' + error.message); return }
+    if (org?.id) { await naloziPredloge(org.id); await naloziOstale(org.id) }
+  }
+
+  async function odstraniOstalo(item: any) {
+    const { error } = await supabase.from('email_scan_pending').update({ status: 'rejected', reviewed_at: new Date().toISOString() }).eq('id', item.id)
+    if (error) { alert('Ni bilo mogoče: ' + error.message); return }
+    if (org?.id) await naloziOstale(org.id)
+  }
+
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
@@ -47,6 +72,7 @@ function EmailSkeniranjeContent() {
       const { data: conns } = await supabase.from('email_connections').select('*').eq('org_id', member.org_id).order('created_at', { ascending: false })
       setConnections(conns || [])
       await naloziPredloge(member.org_id)
+      await naloziOstale(member.org_id)
       setLoading(false)
     }
     load()
@@ -67,33 +93,45 @@ function EmailSkeniranjeContent() {
     setConnections(prev => prev.filter(c => c.id !== id))
   }
 
+  // PRELET 334: skeniranje v vec krogih - ce streznik javi "nedokonceno"
+  // (casovna omejitev), nadaljujemo samodejno; ze obdelane priloge se preskocijo.
+  const [napredek, setNapredek] = useState('')
   async function runScanNow(range?: { from: string; to: string }) {
     setScanning(true)
+    const vsota = { scanned: 0, found: 0, zeVneseno: 0, niRacun: 0, zaklenjenih: 0, napak: 0 }
+    let nedokoncano = false
+    const napake: string[] = []
     try {
-      const res = await fetch('/api/email-scan/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...(range ? { from: range.from, to: range.to } : {}), orgId: org?.id }),
-      })
-      const data = await res.json()
-      if (!res.ok) { alert('Napaka: ' + data.error); return }
-      // POPRAVLJENO (30.7.2026): opozori, ce paginacijska meja (100
-      // sporocil) ni zajela vsega - uporabnik naj pozene se enkrat.
-      const cappedMsg = data.capped
-        ? '\n\n⚠️ V tem obdobju je bilo VEC kot 100 e-mailov s prilogo - ta tek jih ni zajel vseh. Poženite skeniranje še enkrat za isto obdobje, da zajamete preostale.'
-        : ''
-      const zeMsg = data.zeVneseno ? ` Od teh je ${data.zeVneseno} že vnesenih med stroške — označeni so z "Že dodano".` : ''
-      alert(`Skeniranje končano. Pregledanih ${data.scanned || 0} e-mailov, najdenih ${data.found || 0} novih stroškov v pregled.${zeMsg}${cappedMsg}`)
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
-        if (member) {
-          await naloziPredloge(member.org_id)
-        }
+      for (let krog = 1; krog <= 8; krog++) {
+        setNapredek(krog > 1 ? `Nadaljujem (${krog}. krog) — do zdaj ${vsota.found} novih računov…` : '')
+        const res = await fetch('/api/email-scan/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...(range ? { from: range.from, to: range.to } : {}), orgId: org?.id }),
+        })
+        const data = await res.json().catch(() => ({ error: 'Strežnik ni odgovoril (morda časovna omejitev) — poskusite znova.' }))
+        if (!res.ok) { alert('Napaka: ' + (data.error || res.status)); break }
+        vsota.scanned = Math.max(vsota.scanned, data.scanned || 0)
+        for (const k of ['found', 'zeVneseno', 'niRacun', 'zaklenjenih', 'napak'] as const) vsota[k] += data[k] || 0
+        for (const n of data.napake || []) if (!napake.includes(n)) napake.push(n)
+        nedokoncano = !!data.nedokoncano
+        if (!nedokoncano || napake.length) break
       }
+      const vrstice = [
+        `Pregledanih e-mailov s prilogo: ${vsota.scanned}`,
+        `Novih računov v pregled: ${vsota.found}${vsota.zeVneseno ? ` (od tega ${vsota.zeVneseno} že med stroški — oznaka "Že dodano")` : ''}`,
+        vsota.niRacun ? `PDF-jev, ki niso računi (dobavnice, izpiski …): ${vsota.niRacun} — seznam "Ni prepoznano kot račun"` : '',
+        vsota.zaklenjenih ? `Zaklenjenih PDF (geslo): ${vsota.zaklenjenih} — vnesite jih ročno` : '',
+        vsota.napak ? `Napak pri branju: ${vsota.napak} — ob naslednjem skeniranju se poskusijo znova` : '',
+        nedokoncano ? '⚠️ Vsega ni bilo mogoče pregledati naenkrat — kliknite še enkrat, nadaljuje, kjer je ostal.' : '',
+        ...napake.map(n => '⚠️ ' + n),
+      ].filter(Boolean)
+      alert('Skeniranje končano.\n\n' + vrstice.join('\n'))
+      if (org?.id) { await naloziPredloge(org.id); await naloziOstale(org.id) }
     } catch (e: any) {
       alert('Napaka: ' + e.message)
     }
+    setNapredek('')
     setScanning(false)
   }
 
@@ -162,6 +200,7 @@ function EmailSkeniranjeContent() {
     // seznama, v bazi pa ostal, zato bi se ob osvezitvi znova pojavil.
     if (rejErr) { alert('Predloga ni bilo mogoče zavrniti: ' + rejErr.message); return }
     setPending(prev => prev.filter(p => p.id !== id))
+    if (org?.id) naloziOstale(org.id)
   }
 
   async function previewPdf(item: any) {
@@ -282,10 +321,11 @@ function EmailSkeniranjeContent() {
           {connections.length > 0 && (
             <>
               <button onClick={() => runScanNow()} disabled={scanning} style={{ marginTop: 16, width: '100%', padding: '11px', borderRadius: 9, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600 }}>
-                {scanning ? 'Skeniram...' : '🔍 Preveri zdaj (od zadnjega skena)'}
+                {scanning ? (napredek || 'Skeniram… (lahko traja nekaj minut)') : '🔍 Preveri zdaj (od zadnjega skena)'}
               </button>
               <div style={{ marginTop: 12, padding: 14, background: '#faf9f7', borderRadius: 10 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Ali preveri dolocen datumski razpon</div>
+                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Ali preveri dolocen datumski razpon</div>
+                <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>Za pregled za nazaj (npr. od začetka leta). Že obdelane priloge se preskočijo — dvojnikov ne bo.</div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                   <div style={{ flex: 1 }}>
                     <label style={{ fontSize: 10, color: '#999', display: 'block', marginBottom: 4 }}>Od</label>
@@ -364,6 +404,52 @@ function EmailSkeniranjeContent() {
                 )
               })}
             </div>
+          </div>
+        )}
+
+        {/* PRELET 334: kar ni slo v pregled, je vidno tukaj. */}
+        {(ostali.ni_racun.length + ostali.napaka.length + ostali.rejected.length) > 0 && (
+          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 20, marginTop: 20 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 10 }}>Ostale priloge iz e-pošte</div>
+            {([
+              ['ni_racun', '📄 Ni prepoznano kot račun', 'AI meni, da dokument ni račun (dobavnica, izpisek, potrdilo …). Če je, ga dodajte v pregled.'],
+              ['napaka', '🔒 Zaklenjeni PDF in napake branja', 'PDF z geslom ne more prebrati nihče razen vas — odprite ga in strošek vnesite ročno. Napake branja se ob naslednjem skeniranju poskusijo znova.'],
+              ['rejected', '✕ Zavrnjeni', 'Predlogi, ki ste jih zavrnili. Če ste kakšnega zavrnili po pomoti, ga obnovite.'],
+            ] as const).filter(([k]) => ostali[k].length > 0).map(([k, naslov, opis]) => (
+              <div key={k} style={{ borderTop: '1px solid #f3f3f3' }}>
+                <button onClick={() => setOdprto(odprto === k ? null : k)} style={{ width: '100%', display: 'flex', justifyContent: 'space-between', padding: '10px 0', background: 'none', border: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600, color: '#0D1F12' }}>
+                  <span>{naslov} ({ostali[k].length})</span><span>{odprto === k ? '▲' : '▼'}</span>
+                </button>
+                {odprto === k && (
+                  <div style={{ paddingBottom: 10 }}>
+                    <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>{opis}</div>
+                    {ostali[k].map((item: any) => {
+                      const e = item.extracted || {}
+                      const razlog = e._razlog === 'pdf_zaklenjen' ? 'PDF je zaklenjen z geslom' : e._razlog === 'napaka_branja' ? 'Napaka branja — poskusi se znova ob naslednjem skeniranju' : e.document_type ? `AI: ${e.document_type}` : ''
+                      return (
+                        <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: '#F7F6F2', borderRadius: 8, marginBottom: 6, fontSize: 12 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {e.vendor || item.email_from}{e.amount_total ? ` · €${formatEurNumber(Number(e.amount_total))}` : ''}{e.date ? ` · ${e.date}` : ''}
+                            </div>
+                            <div style={{ color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {item.email_subject} · {item.attachment_name}{razlog ? ` · ${razlog}` : ''}
+                            </div>
+                          </div>
+                          <button onClick={() => previewPdf(item)} style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📄</button>
+                          {k !== 'napaka' ? (
+                            <button onClick={() => vPregled(item)} style={{ padding: '6px 10px', borderRadius: 7, border: 0, background: '#0D1F12', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, fontWeight: 600 }}>{k === 'rejected' ? 'Obnovi' : 'V pregled'}</button>
+                          ) : null}
+                          {k !== 'rejected' && (
+                            <button onClick={() => odstraniOstalo(item)} title="Odstrani" style={{ padding: '6px 8px', borderRadius: 7, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, color: '#999' }}>✕</button>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>

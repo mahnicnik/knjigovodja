@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
 import { createServerClient } from '@supabase/ssr'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
-import { decryptToken, encryptToken } from '@/lib/token-crypto'
 import { resolveActiveOrgId } from '@/lib/active-org-server'
-import { najdiUjemanje, STROSEK_POLJA } from '@/lib/strosek-ujemanje'
+import { skenirajPovezavo } from '@/lib/email-scan'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+export const maxDuration = 300
+
 
 /**
  * Preveri Gmail povezave organizacije, poisce e-maile s prilogami od
@@ -74,206 +73,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Ni povezanih e-mail racunov' }, { status: 400 })
     }
 
-    let totalFound = 0
-    let totalZeVneseno = 0
-    let totalScanned = 0
-    let anyCapped = false
-
+    // PRELET 334: skupna logika z nocnim skeniranjem (lib/email-scan).
+    const zacetek = Date.now()
+    const skupaj = { scanned: 0, found: 0, zeVneseno: 0, niRacun: 0, zaklenjenih: 0, napak: 0, nedokoncano: false, napake: [] as string[] }
     for (const conn of connections) {
-      let accessToken = decryptToken(conn.access_token)
-
-      // Osvezi zeton, ce je potekel
-      if (conn.token_expires_at && new Date(conn.token_expires_at) <= new Date()) {
-        const refreshToken = decryptToken(conn.refresh_token)
-        const refreshRes = await fetch('https://oauth2.googleapis.com/token', {
-          // POPRAVLJENO (17.8.2026): casovna omejitev - brez nje zahteva ob
-          // neodzivni storitvi visi, dokler je streznik sam ne prekine.
-          signal: AbortSignal.timeout(10000),
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            client_id: process.env.GMAIL_CLIENT_ID!,
-            client_secret: process.env.GMAIL_CLIENT_SECRET!,
-            refresh_token: refreshToken,
-            grant_type: 'refresh_token',
-          }),
-        })
-        const refreshData = await refreshRes.json()
-        if (!refreshRes.ok) continue
-        accessToken = refreshData.access_token
-        const newExpiresAt = new Date(Date.now() + (refreshData.expires_in || 3600) * 1000).toISOString()
-        await supabase.from('email_connections').update({ access_token: encryptToken(accessToken), token_expires_at: newExpiresAt }).eq('id', conn.id)
-      }
-
-      const since = customFrom || (conn.last_scanned_at
-        ? new Date(conn.last_scanned_at)
-        : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)) // privzeto zadnjih 7 dni
-      const afterStr = Math.floor(since.getTime() / 1000)
-      const beforeStr = customTo ? Math.floor(customTo.getTime() / 1000) : null
-      const senderFilter = (conn.sender_filters || []).length > 0
-        ? '(' + conn.sender_filters.map((s: string) => `from:${s}`).join(' OR ') + ')'
-        : ''
-      const beforePart = beforeStr ? `before:${beforeStr}` : ''
-      // POPRAVLJENO: ključne besede odstranjene kot obvezen pogoj - AI že
-      // razvrsti is_invoice po branju priloge, torej Gmail iskanje samo
-      // omeji na "ima prilogo v obdobju" (+ pošiljatelj, če je nastavljen).
-      const query = `has:attachment after:${afterStr} ${beforePart} ${senderFilter}`.trim()
-
-      // POPRAVLJENO: paginacija - beremo do 5 strani (100 sporočil), da se
-      // večje število računov v obdobju ne izgubi tiho pri prvih 20.
-      const MAX_PAGES = 5
-      let allMessages: { id: string }[] = []
-      let pageToken: string | undefined = undefined
-      let gmailError = false
-
-      for (let page = 0; page < MAX_PAGES; page++) {
-        const url = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages')
-        url.searchParams.set('q', query)
-        url.searchParams.set('maxResults', '20')
-        if (pageToken) url.searchParams.set('pageToken', pageToken)
-
-        const listRes = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } })
-        const listData = await listRes.json()
-
-        if (!listRes.ok) {
-          gmailError = true
-          break
-        }
-        if (listData.messages) allMessages.push(...listData.messages)
-        if (!listData.nextPageToken) break
-        pageToken = listData.nextPageToken
-        if (page === MAX_PAGES - 1) anyCapped = true
-      }
-
-      // POPRAVLJENO: last_scanned_at se premakne SAMO ob resnicnem uspehu
-      // (prej se je premaknil tudi ob napaki Gmail API-ja -> tisto obdobje
-      // se ni nikoli vec skeniralo).
-      if (gmailError) {
-        console.error('email-scan: Gmail API napaka za povezavo', conn.id)
-        continue
-      }
-
-      totalScanned += allMessages.length
-
-      for (const msgRef of allMessages) {
-        const msgRes = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgRef.id}`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        )
-        const msg = await msgRes.json()
-        const headers = msg.payload?.headers || []
-        const subject = headers.find((h: any) => h.name === 'Subject')?.value || ''
-        const from = headers.find((h: any) => h.name === 'From')?.value || ''
-        const dateHeader = headers.find((h: any) => h.name === 'Date')?.value
-
-        // Preveri ali je ta e-mail ze bil obdelan
-        const { data: existing } = await supabase
-          .from('email_scan_pending')
-          .select('id')
-          .eq('connection_id', conn.id)
-          .contains('extracted', { _gmail_message_id: msgRef.id })
-          .maybeSingle()
-        if (existing) continue
-
-        // Poisci PDF prilogo
-        const parts = msg.payload?.parts || []
-        const pdfPart = parts.find((p: any) => p.filename?.toLowerCase().endsWith('.pdf') && p.body?.attachmentId)
-        if (!pdfPart) continue
-
-        const attRes = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgRef.id}/attachments/${pdfPart.body.attachmentId}`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        )
-        const attData = await attRes.json()
-        if (!attData.data) continue
-        // Gmail uporablja URL-safe base64, pretvorimo v standarden base64
-        const pdfBase64 = attData.data.replace(/-/g, '+').replace(/_/g, '/')
-
-        try {
-          const aiRes = await anthropic.messages.create({
-            model: 'claude-sonnet-4-6',
-            max_tokens: 1024,
-            messages: [{
-              role: 'user',
-              content: [
-                { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 } },
-                {
-                  type: 'text',
-                  text: `Analiziraj ta racun/invoice in vrni JSON z naslednjimi polji:
-- vendor: ime dobavitelja
-- date: datum v formatu YYYY-MM-DD
-- amount_net: znesek brez DDV (samo stevilo)
-- vat_rate: stopnja DDV (22, 9.5, ali 0)
-- vat_amount: znesek DDV (samo stevilo)
-- amount_total: skupni znesek (samo stevilo)
-- description: kratek opis
-- category: ena od: Pisarniski material, Komunikacije, Programska oprema, Transport, Prehrana, Izobrazevanje, Marketing, Oprema, Storitve, Drugo
-- invoice_number: stevilka racuna, kot je izpisana (ali null)
-- vendor_tax_number: davcna stevilka ali ID za DDV dobavitelja (ali null)
-- is_invoice: true ce je to dejansko racun/faktura, false ce ni (npr. marketing email, opomnik, newsletter)
-
-Vrni SAMO JSON brez dodatnega besedila.`,
-                },
-              ],
-            }],
-          })
-          const text = aiRes.content[0].type === 'text' ? aiRes.content[0].text : ''
-          const jsonMatch = text.match(/\{[\s\S]*\}/)
-          if (!jsonMatch) continue
-          const extracted = JSON.parse(jsonMatch[0])
-          if (extracted.is_invoice === false) continue
-
-          extracted._gmail_message_id = msgRef.id
-
-          // PRELET 332: je ta strosek ze vnesen (npr. rocno med mesecem)?
-          // Samo za stevec v obvestilu - seznam oznako izracuna sproti.
-          try {
-            const d = String(extracted.date || '').slice(0, 10)
-            const t = Date.parse(d)
-            if (Number.isFinite(t)) {
-              const { data: kandidati } = await supabase.from('receipts').select(STROSEK_POLJA)
-                .eq('org_id', member.org_id).neq('status', 'rejected')
-                .gte('receipt_date', new Date(t - 12 * 86_400_000).toISOString().slice(0, 10))
-                .lte('receipt_date', new Date(t + 12 * 86_400_000).toISOString().slice(0, 10))
-                .limit(500)
-              if (najdiUjemanje(extracted, kandidati || [])) totalZeVneseno++
-            }
-          } catch { /* ujemanje ni kljucno za skeniranje */ }
-
-          // POPRAVLJENO (16.8.2026): prej brez preverbe napake - najden racun se
-          // ni shranil, stevec pa ga je vseeno stel. Ker se e-posta oznaci kot
-          // preskenirana, tega racuna NE bi nikoli vec nasel.
-          const { error: pendErr } = await supabase.from('email_scan_pending').insert({
-            org_id: member.org_id,
-            connection_id: conn.id,
-            email_subject: subject,
-            email_from: from,
-            email_date: dateHeader ? new Date(dateHeader).toISOString() : null,
-            attachment_name: pdfPart.filename,
-            extracted,
-            pdf_base64: pdfBase64,
-            status: 'pending',
-          })
-          if (pendErr) { console.error('email-scan: najdenega racuna ni bilo mogoce shraniti:', msgRef.id, pendErr); continue }
-          totalFound++
-        } catch (aiErr) {
-          console.error('AI scan error for message', msgRef.id, aiErr)
-          continue
-        }
-      }
-
-      if (!customFrom) {
-        const { error: lsErr } = await supabase.from('email_connections').update({ last_scanned_at: new Date().toISOString() }).eq('id', conn.id)
-        if (lsErr) console.error('email-scan: oznake zadnjega skeniranja ni bilo mogoce shraniti:', lsErr)
-      }
+      const preostalo = 240_000 - (Date.now() - zacetek)
+      if (preostalo < 15_000) { skupaj.nedokoncano = true; break }
+      const od = customFrom || (conn.last_scanned_at ? new Date(conn.last_scanned_at) : new Date(Date.now() - 7 * 86_400_000))
+      const izid = await skenirajPovezavo(supabase, conn, { od, do: customTo, rokMs: preostalo, premakniOznako: true })
+      skupaj.scanned += izid.pregledanih
+      skupaj.found += izid.najdenih
+      skupaj.zeVneseno += izid.zeVneseno
+      skupaj.niRacun += izid.niRacun
+      skupaj.zaklenjenih += izid.zaklenjenih
+      skupaj.napak += izid.napak
+      skupaj.nedokoncano = skupaj.nedokoncano || izid.nedokoncano
+      if (izid.napaka) skupaj.napake.push(`${conn.email_address}: ${izid.napaka}`)
     }
 
     return NextResponse.json({
       success: true,
-      found: totalFound,
-      zeVneseno: totalZeVneseno, // od najdenih: ze vneseni med stroske (prelet 332)
-      scanned: totalScanned,
-      capped: anyCapped, // true = obstaja se vec sporocil, ki jih ta tek ni zajel - pozeni znova
+      ...skupaj,
+      capped: skupaj.nedokoncano, // zdruzljivost s starim odjemalcem
     })
   } catch (e: any) {
     console.error('Email scan run error:', e)

@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+
+// PRELET 334: zaporedna opravila (tudi e-postno skeniranje) - vec casa.
+export const maxDuration = 300
 import { GET as notificationsGET } from '../notifications/route'
 import { GET as legalUpdatesGET } from '../legal-updates/route'
 import { GET as birthdaysGET } from '../birthdays/route'
