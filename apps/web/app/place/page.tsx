@@ -8,6 +8,7 @@ import { EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIONS, MANDATORY_HEALTH_CONTRI
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 import { formatEurNumber } from '@/lib/format'
+import ObveznostiPlac from '@/components/place/ObveznostiPlac'
 
 // POPRAVLJENO (26.7.2026): glej rek1/page.tsx za razlago (isti popravek)
 const EE = { piz: EMPLOYEE_CONTRIBUTIONS.piz, zzzs: EMPLOYEE_CONTRIBUTIONS.zzzs, unemployment: EMPLOYEE_CONTRIBUTIONS.unemployment, parental: EMPLOYEE_CONTRIBUTIONS.parental, dolgotrajnaOskrba: EMPLOYEE_CONTRIBUTIONS.longTermCare } // iz lib/tax-constants.ts
@@ -200,16 +201,18 @@ export default function PlacePage() {
   const [uploadPassword, setUploadPassword] = useState('')
   const [uploadNeedsPassword, setUploadNeedsPassword] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  // PRELET 333: osvezi seznam obveznosti po shranjeni placilni listi.
+  const [osveziObveznosti, setOsveziObveznosti] = useState(0)
 
   const [form, setForm] = useState({
     full_name: '', tax_number: '', iban: '', gross_salary: '',
     employment_type: 'full_time', start_date: lokalniDatum(), dependents: 0,
-    annual_leave_days: 20,
+    annual_leave_days: 20, druzinski_clan: false,
   })
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null)
 
   function emptyForm() {
-    return { full_name: '', tax_number: '', iban: '', gross_salary: '', employment_type: 'full_time', start_date: lokalniDatum(), dependents: 0, annual_leave_days: 20 }
+    return { full_name: '', tax_number: '', iban: '', gross_salary: '', employment_type: 'full_time', start_date: lokalniDatum(), dependents: 0, annual_leave_days: 20, druzinski_clan: false }
   }
 
   function startEdit(emp: any) {
@@ -219,6 +222,7 @@ export default function PlacePage() {
       gross_salary: String(emp.gross_salary ?? ''), employment_type: emp.employment_type || 'full_time',
       start_date: emp.start_date || lokalniDatum(),
       dependents: emp.dependents || 0, annual_leave_days: emp.annual_leave_days ?? 20,
+      druzinski_clan: !!emp.druzinski_clan,
     })
     setShowForm(true)
   }
@@ -366,6 +370,7 @@ export default function PlacePage() {
     setUploadBase64('')
     setUploadParsed(null)
     setUploadEmployeeId('')
+    setOsveziObveznosti(x => x + 1)
     load()
   }
 
@@ -412,6 +417,7 @@ export default function PlacePage() {
         iban: form.iban, gross_salary: parseFloat(form.gross_salary),
         employment_type: form.employment_type, start_date: form.start_date,
         dependents: form.dependents, annual_leave_days: form.annual_leave_days,
+        druzinski_clan: form.druzinski_clan,
       }
       let saveError
       if (editingEmployeeId) {
@@ -753,6 +759,32 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
                     )}
                   </div>
                 </div>
+                {/* PRELET 333: kaj je treba placati in kaj je zares strosek */}
+                {(() => {
+                  const neto = Number(uploadParsed.net_amount || 0)
+                  const strosek = Number(uploadParsed.employer_total_cost ?? uploadParsed.gross_amount ?? 0)
+                  const drzavi = Math.max(0, strosek - neto)
+                  const druzina = !!employees.find(e => e.id === uploadEmployeeId)?.druzinski_clan
+                  const konec = uploadParsed.period_end ? new Date(uploadParsed.period_end) : null
+                  const rok = konec ? new Date(konec.getFullYear(), konec.getMonth() + 1, 18) : null
+                  const vrstica = (t: string, v: number, poudarek?: boolean) => (
+                    <div className="flex justify-between text-sm py-1" style={poudarek ? { fontWeight: 600 } : undefined}><span>{t}</span><span>€{formatEurNumber(v)}</span></div>
+                  )
+                  return (
+                    <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 mb-4">
+                      <div className="text-xs font-medium text-gray-500 uppercase mb-1">Za plačilo{rok ? ` do ${rok.toLocaleDateString('sl-SI')}` : ''}</div>
+                      {vrstica('Neto → zaposleni (na TRR)', neto)}
+                      {vrstica('Državi — prispevki in akontacija (FURS)', drzavi)}
+                      <div className="border-t border-gray-200 my-1" />
+                      {vrstica('Skupaj strošek → v knjigo (KPO)', strosek, true)}
+                      {druzina && (
+                        <div className="text-xs mt-2 p-2 rounded-lg" style={{ background: '#E1F5EE', color: '#0E5E3B' }}>
+                          👪 Družinski član: iz družine zares odide <strong>€{formatEurNumber(drzavi)}</strong> (državi), <strong>€{formatEurNumber(neto)}</strong> neto ostane v družini.
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
                 <div className="flex gap-3">
                   <button onClick={() => { setUploadParsed(null); setUploadFile(null) }} className="flex-1 border border-gray-200 text-gray-700 rounded-xl py-2.5 text-sm">← Naloži drugo</button>
                   <button onClick={savePayslipUpload} disabled={uploadSaving} className="flex-1 bg-gray-900 text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-40">
@@ -859,6 +891,14 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
               <div><label className="text-xs text-gray-500 block mb-1">Letni dopust (dni)</label>
                 <input type="number" onFocus={e => e.target.select()} min={20} value={form.annual_leave_days} onChange={e=>setForm({...form,annual_leave_days:parseInt(e.target.value)||20})} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none" /></div>
             </div>
+            {/* PRELET 333: druzinski clan - vpliva SAMO na prikaz, v KPO gre vedno celoten strosek. */}
+            <label className="flex items-start gap-2 text-sm text-gray-700 mb-4 cursor-pointer">
+              <input type="checkbox" checked={form.druzinski_clan} onChange={e => setForm({ ...form, druzinski_clan: e.target.checked })} className="mt-1" />
+              <span>
+                👪 Družinski član (npr. partner/partnerka)
+                <span className="block text-xs text-gray-500">Neto plača ostane v družini — pri pregledu plač boste videli ločeno, koliko zares plačate državi. V knjigo (KPO) gre še vedno celoten strošek, ker vam zniža davek.</span>
+              </span>
+            </label>
             <div className="flex gap-3">
               <button onClick={handleAddEmployee} disabled={saving||!form.full_name||!form.gross_salary} className="flex-1 bg-gray-900 text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-40">
                 {saving ? 'Shranjujem…' : editingEmployeeId ? 'Shrani' : 'Dodaj zaposlenega'}
@@ -867,6 +907,9 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
             </div>
           </div>
         )}
+
+        {/* PRELET 333: strosek plac, obveznosti (neto / FURS) in druzinski pogled */}
+        {org?.id && <ObveznostiPlac orgId={org.id} employees={employees} leto={selectedYear} osvezi={osveziObveznosti} />}
 
         {/* Regres opomnik */}
         {showRegresAlert && (
@@ -912,7 +955,7 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
                 <div key={emp.id} className="bg-white rounded-2xl border border-gray-100 p-6">
                   <div className="flex justify-between items-start mb-4">
                     <div>
-                      <div className="font-semibold text-gray-900">{emp.full_name}</div>
+                      <div className="font-semibold text-gray-900">{emp.full_name}{emp.druzinski_clan && <span title="Družinski član — neto ostane v družini" className="ml-2 text-xs font-normal text-gray-500">👪 družinski član</span>}</div>
                       <div className="text-xs text-gray-500 mt-0.5">
                         {emp.employment_type === 'full_time' ? 'Polni delovni čas' : emp.employment_type === 'part_time' ? 'Skrajšan' : 'Študent'}
                         {emp.tax_number && ` · ${emp.tax_number}`}
