@@ -161,6 +161,8 @@ export async function GET(request: NextRequest) {
 - amount_total: skupni znesek (samo stevilo)
 - description: kratek opis
 - category: ena od: Pisarniski material, Komunikacije, Programska oprema, Transport, Prehrana, Izobrazevanje, Marketing, Oprema, Storitve, Drugo
+- invoice_number: stevilka racuna, kot je izpisana (ali null)
+- vendor_tax_number: davcna stevilka ali ID za DDV dobavitelja (ali null)
 - is_invoice: true ce je to dejansko racun/faktura, false ce ni
 
 Vrni SAMO JSON brez dodatnega besedila.`,

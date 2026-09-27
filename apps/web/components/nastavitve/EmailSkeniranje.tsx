@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import { formatEurNumber } from '@/lib/format'
+import { najdiUjemanje, oknoZaPrimerjavo, STROSEK_POLJA, type ObstojeciStrosek, type Ujemanje } from '@/lib/strosek-ujemanje'
 
 function EmailSkeniranjeContent() {
   const [org, setOrg] = useState<any>(null)
@@ -16,8 +17,25 @@ function EmailSkeniranjeContent() {
   const [rangeFrom, setRangeFrom] = useState('')
   const [rangeTo, setRangeTo] = useState('')
   const [savingId, setSavingId] = useState<string | null>(null)
+  // PRELET 332: ze vneseni stroski v obdobju predlogov - za oznako "Ze dodano".
+  const [obstojeci, setObstojeci] = useState<ObstojeciStrosek[]>([])
   const searchParams = useSearchParams()
   const supabase = createClient()
+
+  // PRELET 332: predlogi + stroski v istem obdobju (ujemanje se racuna sproti,
+  // zato je oznaka pravilna tudi za stroske, vnesene PO skeniranju).
+  async function naloziPredloge(orgId: string) {
+    // POPRAVLJENO (19.8.2026, HITROST): brez `pdf_base64` - PDF potrebujemo
+    // SAMO ob predogledu in ob potrditvi.
+    const { data: pend } = await supabase.from('email_scan_pending').select('id, org_id, connection_id, email_subject, email_from, email_date, attachment_name, extracted, status, created_at').eq('org_id', orgId).eq('status', 'pending').order('created_at', { ascending: false })
+    setPending(pend || [])
+    const okno = oknoZaPrimerjavo(pend || [])
+    if (!okno) { setObstojeci([]); return }
+    const { data: rc } = await supabase.from('receipts').select(STROSEK_POLJA)
+      .eq('org_id', orgId).neq('status', 'rejected')
+      .gte('receipt_date', okno.od).lte('receipt_date', okno.do).limit(2000)
+    setObstojeci((rc as any) || [])
+  }
 
   useEffect(() => {
     async function load() {
@@ -28,12 +46,7 @@ function EmailSkeniranjeContent() {
       setOrg((member as any).organizations)
       const { data: conns } = await supabase.from('email_connections').select('*').eq('org_id', member.org_id).order('created_at', { ascending: false })
       setConnections(conns || [])
-      // POPRAVLJENO (19.8.2026, HITROST): `select('*')` je prenasal tudi
-      // `pdf_base64` - pri Niku 6,8 MB PDF-jev za 26 cakajocih predlogov.
-      // PDF potrebujemo SAMO ob predogledu in ob potrditvi, zato ga naloz(imo
-      // takrat (glej nalozi PDF spodaj).
-      const { data: pend } = await supabase.from('email_scan_pending').select('id, org_id, connection_id, email_subject, email_from, email_date, attachment_name, extracted, status, created_at').eq('org_id', member.org_id).eq('status', 'pending').order('created_at', { ascending: false })
-      setPending(pend || [])
+      await naloziPredloge(member.org_id)
       setLoading(false)
     }
     load()
@@ -60,7 +73,7 @@ function EmailSkeniranjeContent() {
       const res = await fetch('/api/email-scan/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(range ? { from: range.from, to: range.to } : {}),
+        body: JSON.stringify({ ...(range ? { from: range.from, to: range.to } : {}), orgId: org?.id }),
       })
       const data = await res.json()
       if (!res.ok) { alert('Napaka: ' + data.error); return }
@@ -69,17 +82,13 @@ function EmailSkeniranjeContent() {
       const cappedMsg = data.capped
         ? '\n\n⚠️ V tem obdobju je bilo VEC kot 100 e-mailov s prilogo - ta tek jih ni zajel vseh. Poženite skeniranje še enkrat za isto obdobje, da zajamete preostale.'
         : ''
-      alert(`Skeniranje koncano. Pregledanih ${data.scanned || 0} e-mailov, najdenih ${data.found || 0} novih stroskov v pregled.${cappedMsg}`)
+      const zeMsg = data.zeVneseno ? ` Od teh je ${data.zeVneseno} že vnesenih med stroške — označeni so z "Že dodano".` : ''
+      alert(`Skeniranje končano. Pregledanih ${data.scanned || 0} e-mailov, najdenih ${data.found || 0} novih stroškov v pregled.${zeMsg}${cappedMsg}`)
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
         if (member) {
-          // POPRAVLJENO (19.8.2026, HITROST): `select('*')` je prenasal tudi
-      // `pdf_base64` - pri Niku 6,8 MB PDF-jev za 26 cakajocih predlogov.
-      // PDF potrebujemo SAMO ob predogledu in ob potrditvi, zato ga naloz(imo
-      // takrat (glej nalozi PDF spodaj).
-      const { data: pend } = await supabase.from('email_scan_pending').select('id, org_id, connection_id, email_subject, email_from, email_date, attachment_name, extracted, status, created_at').eq('org_id', member.org_id).eq('status', 'pending').order('created_at', { ascending: false })
-          setPending(pend || [])
+          await naloziPredloge(member.org_id)
         }
       }
     } catch (e: any) {
@@ -90,6 +99,9 @@ function EmailSkeniranjeContent() {
 
   async function confirmPending(item: any) {
     const d = item.extracted
+    // PRELET 332: opozorilo pred dvojnikom.
+    const u = ujemanja.get(item.id)
+    if (u && !confirm(`Ta strošek je ${u.zanesljivost === 'gotovo' ? '' : 'morda '}že dodan (${u.vendor || 'strošek'}, ${u.datum ? new Date(u.datum).toLocaleDateString('sl-SI') : ''}, €${formatEurNumber(u.znesek)}).\n\nGa vseeno dodam še enkrat?`)) return
     // DODANO (prelet 298): AI pri e-postnem skeniranju vedno vrne razcep na
     // DDV, tudi ce organizacija NI davcni zavezanec - takrat DDV-ja ne sme
     // uveljavljati in je celoten placan (bruto) znesek strosek. Enak popravek
@@ -111,6 +123,9 @@ function EmailSkeniranjeContent() {
       amount_total: amountTotal,
       description: d.description || '',
       category: d.category || 'Drugo',
+      // PRELET 332: za prepoznavanje ze vnesenih stroskov ob naslednjem skeniranju.
+      receipt_number: d.invoice_number || null,
+      vendor_tax_num: d.vendor_tax_number || null,
       status: 'confirmed',
       is_deductible: true,
       // PDF naloz(imo sele tu, ne ze ob prikazu seznama (19.8.2026).
@@ -137,6 +152,8 @@ function EmailSkeniranjeContent() {
     if (kpoErr) { alert('Vnosa v knjigo ni bilo mogoče shraniti: ' + kpoErr.message); return }
     await supabase.from('email_scan_pending').update({ status: 'confirmed', reviewed_at: new Date().toISOString() }).eq('id', item.id)
     setPending(prev => prev.filter(p => p.id !== item.id))
+    // Pravkar dodan strosek: ostali predlogi za isti racun dobijo oznako takoj.
+    if (rcpData?.id) setObstojeci(prev => [...prev, { id: rcpData.id, vendor: d.vendor || '', receipt_date: d.date || lokalniDatum(), amount_total: amountTotal, amount_net: amountNet, receipt_number: d.invoice_number || null, vendor_tax_num: d.vendor_tax_number || null }])
   }
 
   async function rejectPending(id: string) {
@@ -162,6 +179,22 @@ function EmailSkeniranjeContent() {
     const url = URL.createObjectURL(blob)
     window.open(url, '_blank')
   }
+
+  // PRELET 332: odstrani vse predloge, ki so ZANESLJIVO ze dodani.
+  async function odstraniZeDodane() {
+    const ids = pending.filter(p => ujemanja.get(p.id)?.zanesljivost === 'gotovo').map(p => p.id)
+    if (ids.length === 0) return
+    if (!confirm(`Odstranim ${ids.length} ${ids.length === 1 ? 'predlog, ki je' : 'predlogov, ki so'} že med stroški? Stroški ostanejo nespremenjeni.`)) return
+    const { error } = await supabase.from('email_scan_pending').update({ status: 'rejected', reviewed_at: new Date().toISOString() }).in('id', ids)
+    if (error) { alert('Predlogov ni bilo mogoče odstraniti: ' + error.message); return }
+    setPending(prev => prev.filter(p => !ids.includes(p.id)))
+  }
+
+  const ujemanja = new Map<string, Ujemanje>()
+  for (const p of pending) { const u = najdiUjemanje(p.extracted, obstojeci); if (u) ujemanja.set(p.id, u) }
+  const steviloGotovih = pending.filter(p => ujemanja.get(p.id)?.zanesljivost === 'gotovo').length
+  // Novi najprej, ze dodani na koncu.
+  const razvrsceni = [...pending].sort((a, b) => (ujemanja.has(a.id) ? 1 : 0) - (ujemanja.has(b.id) ? 1 : 0))
 
   const scheduleLabels: Record<string, string> = { daily: 'Dnevno', weekly: 'Tedensko', monthly: 'Mesecno', custom: 'Po meri (cron)' }
 
@@ -279,10 +312,32 @@ function EmailSkeniranjeContent() {
         {/* CAKALNA VRSTA ZA POTRDITEV */}
         {pending.length > 0 && (
           <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>Najdeni strosti — cakajo na potrditev ({pending.length})</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>Najdeni stroški — čakajo na potrditev ({pending.length})</div>
+                {ujemanja.size > 0 && (
+                  <div style={{ fontSize: 12, color: '#666', marginTop: 3 }}>
+                    Novih: <strong>{pending.length - ujemanja.size}</strong> · že dodanih med stroške: <strong>{ujemanja.size}</strong>
+                  </div>
+                )}
+              </div>
+              {steviloGotovih > 0 && (
+                <button onClick={odstraniZeDodane} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #A6D9C3', background: '#E1F5EE', color: '#0E5E3B', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600 }}>
+                  Odstrani že dodane iz pregleda ({steviloGotovih})
+                </button>
+              )}
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {pending.map(item => (
-                <div key={item.id} style={{ border: '1px solid #f0f0f0', borderRadius: 12, padding: 16 }}>
+              {razvrsceni.map(item => {
+                const u = ujemanja.get(item.id)
+                return (
+                <div key={item.id} style={{ border: `1px solid ${u ? (u.zanesljivost === 'gotovo' ? '#A6D9C3' : '#FDE68A') : '#f0f0f0'}`, borderRadius: 12, padding: 16, background: u ? (u.zanesljivost === 'gotovo' ? '#F4FBF8' : '#FFFCF0') : '#fff' }}>
+                  {u && (
+                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: u.zanesljivost === 'gotovo' ? '#0E5E3B' : '#92400E' }}>
+                      {u.zanesljivost === 'gotovo' ? '✓ Že dodano med stroške' : '⚠ Morda že dodano'}
+                      <span style={{ fontWeight: 400, color: '#666' }}> — {u.vendor || 'strošek'}{u.datum ? ` · ${new Date(u.datum).toLocaleDateString('sl-SI')}` : ''} · €{formatEurNumber(u.znesek)}</span>
+                    </div>
+                  )}
                   <div style={{ fontSize: 11, color: '#999', marginBottom: 6 }}>
                     Iz e-maila: {item.email_from} · {item.email_subject}
                   </div>
@@ -293,11 +348,21 @@ function EmailSkeniranjeContent() {
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={() => previewPdf(item)} style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600 }}>📄 Predogled</button>
-                    <button onClick={() => rejectPending(item.id)} style={{ flex: 1, padding: '9px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600 }}>Zavrni</button>
-                    <button onClick={() => confirmPending(item)} style={{ flex: 2, padding: '9px', borderRadius: 8, border: 'none', background: '#0D1F12', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700 }}>Potrdi in dodaj med stroske</button>
+                    {u ? (
+                      <>
+                        <button onClick={() => confirmPending(item)} style={{ flex: 1, padding: '9px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600 }}>Ni isto — vseeno dodaj</button>
+                        <button onClick={() => rejectPending(item.id)} style={{ flex: 2, padding: '9px', borderRadius: 8, border: 'none', background: '#0E5E3B', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700 }}>Že dodano — odstrani iz pregleda</button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => rejectPending(item.id)} style={{ flex: 1, padding: '9px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600 }}>Zavrni</button>
+                        <button onClick={() => confirmPending(item)} style={{ flex: 2, padding: '9px', borderRadius: 8, border: 'none', background: '#0D1F12', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700 }}>Potrdi in dodaj med stroške</button>
+                      </>
+                    )}
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )}

@@ -4,6 +4,8 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { decryptToken, encryptToken } from '@/lib/token-crypto'
+import { resolveActiveOrgId } from '@/lib/active-org-server'
+import { najdiUjemanje, STROSEK_POLJA } from '@/lib/strosek-ujemanje'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -49,17 +51,18 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })
 
-    const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).maybeSingle()
-    if (!member) return NextResponse.json({ error: 'Org ni najdena' }, { status: 404 })
-
     // Neobvezno: rocno izbrano casovno okno (namesto "od zadnjega skena naprej")
     let customFrom: Date | null = null
     let customTo: Date | null = null
-    try {
-      const body = await request.json().catch(() => ({}))
-      if (body.from) customFrom = new Date(body.from)
-      if (body.to) customTo = new Date(body.to)
-    } catch {}
+    const body = await request.json().catch(() => ({} as any))
+    if (body.from) customFrom = new Date(body.from)
+    if (body.to) customTo = new Date(body.to)
+
+    // PRELET 332: aktivna organizacija (prej .maybeSingle() na org_members -
+    // uporabnik z VEC organizacijami je dobil "Org ni najdena").
+    const { orgId } = await resolveActiveOrgId(supabase as any, user.id, body.orgId ?? request.headers.get('x-active-org'))
+    if (!orgId || (body.orgId && orgId !== body.orgId)) return NextResponse.json({ error: 'Org ni najdena' }, { status: 404 })
+    const member = { org_id: orgId }
 
     const { data: connections } = await supabase
       .from('email_connections')
@@ -72,6 +75,7 @@ export async function POST(request: NextRequest) {
     }
 
     let totalFound = 0
+    let totalZeVneseno = 0
     let totalScanned = 0
     let anyCapped = false
 
@@ -204,6 +208,8 @@ export async function POST(request: NextRequest) {
 - amount_total: skupni znesek (samo stevilo)
 - description: kratek opis
 - category: ena od: Pisarniski material, Komunikacije, Programska oprema, Transport, Prehrana, Izobrazevanje, Marketing, Oprema, Storitve, Drugo
+- invoice_number: stevilka racuna, kot je izpisana (ali null)
+- vendor_tax_number: davcna stevilka ali ID za DDV dobavitelja (ali null)
 - is_invoice: true ce je to dejansko racun/faktura, false ce ni (npr. marketing email, opomnik, newsletter)
 
 Vrni SAMO JSON brez dodatnega besedila.`,
@@ -218,6 +224,21 @@ Vrni SAMO JSON brez dodatnega besedila.`,
           if (extracted.is_invoice === false) continue
 
           extracted._gmail_message_id = msgRef.id
+
+          // PRELET 332: je ta strosek ze vnesen (npr. rocno med mesecem)?
+          // Samo za stevec v obvestilu - seznam oznako izracuna sproti.
+          try {
+            const d = String(extracted.date || '').slice(0, 10)
+            const t = Date.parse(d)
+            if (Number.isFinite(t)) {
+              const { data: kandidati } = await supabase.from('receipts').select(STROSEK_POLJA)
+                .eq('org_id', member.org_id).neq('status', 'rejected')
+                .gte('receipt_date', new Date(t - 12 * 86_400_000).toISOString().slice(0, 10))
+                .lte('receipt_date', new Date(t + 12 * 86_400_000).toISOString().slice(0, 10))
+                .limit(500)
+              if (najdiUjemanje(extracted, kandidati || [])) totalZeVneseno++
+            }
+          } catch { /* ujemanje ni kljucno za skeniranje */ }
 
           // POPRAVLJENO (16.8.2026): prej brez preverbe napake - najden racun se
           // ni shranil, stevec pa ga je vseeno stel. Ker se e-posta oznaci kot
@@ -250,6 +271,7 @@ Vrni SAMO JSON brez dodatnega besedila.`,
     return NextResponse.json({
       success: true,
       found: totalFound,
+      zeVneseno: totalZeVneseno, // od najdenih: ze vneseni med stroske (prelet 332)
       scanned: totalScanned,
       capped: anyCapped, // true = obstaja se vec sporocil, ki jih ta tek ni zajel - pozeni znova
     })
