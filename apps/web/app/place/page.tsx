@@ -1070,16 +1070,26 @@ ${emp.iban ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
                   {/* Izračun - PRELET 336: dejanski zneski iz plačilne liste, če obstaja */}
                   {(() => {
                     const lista = placilneListe.find(l => l.employee_id === emp.id && l.month === selectedMonth + 1)
-                    const o = lista ? obracunPlace(lista) : null
+                    // PRELET 337: brez liste za ta mesec - ce ima zaposleni nalozeno listo z ISTO
+                    // bruto placo in ni vnesenih dodatkov, je ta lista najboljsa ocena (kalkulator
+                    // ne pozna vseh posebnosti obracuna, npr. dodatne olajsave na placilni listi).
+                    const brezDodatkov = !Object.values(empExtras || {}).some((v: any) => Number(v) > 0)
+                    const vzorec = !lista && brezDodatkov
+                      ? [...placilneListe].filter(l => l.employee_id === emp.id && Math.abs(Number(l.gross_salary) - Number(emp.gross_salary)) < 0.01)
+                          .sort((a, b) => b.month - a.month)[0]
+                      : undefined
+                    const o = lista ? obracunPlace(lista) : vzorec ? obracunPlace(vzorec) : null
                     const kartice = o
                       ? [['Bruto', o.bruto], ['Na TRR (neto + povračila)', o.naTrr], ['FURS skupaj', o.furs], ['Vaš strošek', o.strosek]] as const
                       : [['Bruto', p.taxableGross], ['Neto plača', p.netSalary], ['FURS skupaj', p.totalFurs], ['Vaš strošek', p.totalCost]] as const
                     const barve = ['bg-blue-50 text-blue-700', 'bg-green-50 text-green-700', 'bg-red-50 text-red-700', 'bg-gray-50 text-gray-900']
                     return (
                       <>
-                        <div className="text-xs mb-2" style={{ color: o ? '#1D9E75' : '#92400E' }}>
-                          {o
+                        <div className="text-xs mb-2" style={{ color: lista ? '#1D9E75' : '#92400E' }}>
+                          {lista
                             ? `📎 ${MONTHS[selectedMonth]} ${selectedYear}: zneski iz naložene plačilne liste`
+                            : vzorec
+                            ? `≈ Ocena za ${MONTHS[selectedMonth]} po zadnji plačilni listi (${MONTHS[vzorec.month - 1]}) — enaka bruto plača, zato enaki zneski. Točni bodo, ko naložite listo za ta mesec.`
                             : `≈ Ocena za ${MONTHS[selectedMonth]} (kalkulator iz bruto plače ${formatEurNumber(Number(emp.gross_salary))} € in dodatkov zgoraj) — plačilna lista za ta mesec še ni naložena`}
                         </div>
                         <div className="grid grid-cols-4 gap-3">
