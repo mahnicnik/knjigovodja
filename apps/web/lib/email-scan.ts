@@ -27,6 +27,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { decryptToken, encryptToken } from '@/lib/token-crypto'
 import { najdiUjemanje, STROSEK_POLJA } from '@/lib/strosek-ujemanje'
+import { navodiloRazvrscanja, dopolniRazvrstitev, prejsnjaRazvrstitev, kontekstPodjetja } from '@/lib/konti'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -41,7 +42,8 @@ export type IzidSkeniranja = {
   napaka?: string          // povezave ni bilo mogoce uporabiti
 }
 
-const PROMPT = `Analiziraj ta dokument in vrni JSON z naslednjimi polji:
+// PRELET 339: kategorija po kontih (lib/konti) in kontekst podjetja.
+const promptZa = (kontekst: string | null) => `Analiziraj ta dokument in vrni JSON z naslednjimi polji:
 - vendor: ime dobavitelja/izdajatelja
 - date: datum racuna v formatu YYYY-MM-DD
 - amount_net: znesek brez DDV (samo stevilo)
@@ -49,7 +51,7 @@ const PROMPT = `Analiziraj ta dokument in vrni JSON z naslednjimi polji:
 - vat_amount: znesek DDV (samo stevilo)
 - amount_total: skupni znesek za placilo (samo stevilo)
 - description: kratek opis
-- category: ena od: Pisarniski material, Komunikacije, Programska oprema, Transport, Prehrana, Izobrazevanje, Marketing, Oprema, Storitve, Drugo
+${navodiloRazvrscanja(kontekst)}
 - invoice_number: stevilka racuna, kot je izpisana (ali null)
 - vendor_tax_number: davcna stevilka ali ID za DDV dobavitelja (ali null)
 - is_invoice: true ce je to racun za nakup - ne glede na to, kako se imenuje (racun, e-racun, faktura, invoice, receipt, bill, Rechnung, "racun za sklenjena zavarovanja", tudi ze placan). Mocan znak racuna: dokument vsebuje DAVCNO STEVILKO ali ID ZA DDV izdajatelja IN znesek. false za: dobavnico brez zneskov, predracun, ponudbo, opomin, bancni izpisek, potrdilo o kartičnih transakcijah, placilni nalog, newsletter
@@ -126,6 +128,9 @@ export async function skenirajPovezavo(
   const casJe = () => Date.now() - zacetek > opcije.rokMs
   const izid: IzidSkeniranja = { pregledanih: 0, najdenih: 0, zeVneseno: 0, niRacun: 0, zaklenjenih: 0, napak: 0, nedokoncano: false }
   let prehodnaNapaka = false
+
+  const { data: orgPodatki } = await supabase.from('organizations').select('name, pos_profile, vat_registered').eq('id', conn.org_id).maybeSingle()
+  const prompt = promptZa(kontekstPodjetja(orgPodatki))
 
   const accessToken = await osveziZeton(supabase, conn)
   if (!accessToken) return { ...izid, nedokoncano: true, napaka: 'Gmail povezava je potekla — povežite Gmail znova.' }
@@ -206,16 +211,17 @@ export async function skenirajPovezavo(
       try {
         const ai = await anthropic.messages.create({
           model: 'claude-sonnet-4-6',
-          max_tokens: 1024,
+          max_tokens: 1500,
           messages: [{ role: 'user', content: [
             { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 } },
-            { type: 'text', text: PROMPT },
+            { type: 'text', text: prompt },
           ] }],
         })
         const text = ai.content[0]?.type === 'text' ? ai.content[0].text : ''
         const json = text.match(/\{[\s\S]*\}/)
         if (!json) throw new Error('AI ni vrnil podatkov')
         extracted = { ...JSON.parse(json[0]), ...oznaka }
+        extracted = dopolniRazvrstitev(extracted, await prejsnjaRazvrstitev(supabase, conn.org_id, extracted))
         // PRELET 335: dokument z davcno stevilko izdajatelja in zneskom je skoraj
         // vedno racun, tudi ce ga AI ni tako poimenoval - gre v pregled
         // (razen ocitnih ne-racunov: izpisek, transakcije, nalog, predracun ...).

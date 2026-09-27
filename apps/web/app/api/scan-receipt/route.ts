@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
+import { navodiloRazvrscanja, dopolniRazvrstitev, prejsnjaRazvrstitev, kontekstPodjetja } from '@/lib/konti'
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -20,13 +21,35 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })
     }
-    const member = await resolveActiveOrg(supabase, user.id, getRequestedOrgId(request), 'subscription_status') // vec-org podpora (30.7.2026)
+    const member = await resolveActiveOrg(supabase, user.id, getRequestedOrgId(request), 'subscription_status, name, pos_profile, vat_registered') // vec-org podpora (30.7.2026)
     const subStatus = (member as any)?.organizations?.subscription_status
     const isPro = subStatus === 'pro' || subStatus === 'pro_pos'
     if (!isPro) {
       return NextResponse.json({ error: 'AI skeniranje računov je na voljo samo v Pro paketu.' }, { status: 403 })
     }
     const { image, mediaType, pdfBase64 } = await request.json()
+
+    // PRELET 339: razvrstitev po kontih (lib/konti) + uporabnikove pretekle odlocitve.
+    const navodilo = `Analiziraj ta racun/invoice in vrni JSON z naslednjimi polji:
+- vendor: ime dobavitelja/podjetja, ki je izdalo racun
+- vendor_tax_number: davcna stevilka ali ID za DDV dobavitelja (ali null)
+- invoice_number: stevilka racuna (ali null)
+- date: datum v formatu YYYY-MM-DD
+- amount_net: znesek brez DDV (samo stevilo, brez €)
+- vat_rate: stopnja DDV (22, 9.5, 5 ali 0 - ce je obrnjena davcna obveznost ali brez DDV, potem 0)
+- vat_amount: znesek DDV (samo stevilo)
+- amount_total: skupni znesek (samo stevilo)
+- description: kratek opis, kaj je bilo kupljeno
+${navodiloRazvrscanja(kontekstPodjetja((member as any)?.organizations))}
+
+Vrni SAMO JSON brez dodatnega besedila.`
+    const koncaj = async (text: string) => {
+      const jsonMatch = text.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) return NextResponse.json({ error: 'Ni mogoče prebrati podatkov' })
+      const d = JSON.parse(jsonMatch[0])
+      const prej = member.orgId ? await prejsnjaRazvrstitev(supabase, member.orgId, d) : null
+      return NextResponse.json(dopolniRazvrstitev(d, prej))
+    }
 
     let finalImage = image
     let finalMediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' = 'image/jpeg'
@@ -35,7 +58,7 @@ export async function POST(request: NextRequest) {
     if (pdfBase64) {
       const response = await client.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1024,
+        max_tokens: 1500,
         messages: [
           {
             role: 'user',
@@ -50,17 +73,7 @@ export async function POST(request: NextRequest) {
               },
               {
                 type: 'text',
-                text: `Analiziraj ta račun/invoice in vrni JSON z naslednjimi polji:
-- vendor: ime dobavitelja/podjetja ki je izdalo račun
-- date: datum v formatu YYYY-MM-DD
-- amount_net: znesek brez DDV (samo število, brez €)
-- vat_rate: stopnja DDV (22, 9.5, ali 0 - če je reverse charge ali brez DDV potem 0)
-- vat_amount: znesek DDV (samo število)
-- amount_total: skupni znesek (samo število)
-- description: kratek opis
-- category: ena od: Pisarniški material, Komunikacije, Programska oprema, Transport, Prehrana, Izobraževanje, Marketing, Oprema, Storitve, Drugo
-
-Vrni SAMO JSON brez dodatnega besedila.`,
+                text: navodilo,
               },
             ],
           },
@@ -72,9 +85,7 @@ Vrni SAMO JSON brez dodatnega besedila.`,
     // polje prazno in dostop vrze napako, ki podre celotno stran namesto da bi
     // uporabniku povedala, da branje ni uspelo.
     (response.content?.[0]?.type === 'text' ? response.content[0].text : '')
-      const jsonMatch = text.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) return NextResponse.json({ error: 'Ni mogoče prebrati podatkov' })
-      return NextResponse.json(JSON.parse(jsonMatch[0]))
+      return koncaj(text)
     }
 
     // Slika
@@ -82,7 +93,7 @@ Vrni SAMO JSON brez dodatnega besedila.`,
 
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
+      max_tokens: 1500,
       messages: [
         {
           role: 'user',
@@ -97,17 +108,7 @@ Vrni SAMO JSON brez dodatnega besedila.`,
             },
             {
               type: 'text',
-              text: `Analiziraj ta račun in vrni JSON z naslednjimi polji:
-- vendor: ime dobavitelja
-- date: datum v formatu YYYY-MM-DD
-- amount_net: znesek brez DDV (samo število)
-- vat_rate: stopnja DDV (22, 9.5, ali 0)
-- vat_amount: znesek DDV (samo število)
-- amount_total: skupni znesek (samo število)
-- description: kratek opis
-- category: ena od: Pisarniški material, Komunikacije, Programska oprema, Transport, Prehrana, Izobraževanje, Marketing, Oprema, Storitve, Drugo
-
-Vrni SAMO JSON brez dodatnega besedila.`,
+              text: navodilo,
             },
           ],
         },
@@ -115,9 +116,7 @@ Vrni SAMO JSON brez dodatnega besedila.`,
     })
 
     const text = response.content[0].type === 'text' ? response.content[0].text : ''
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return NextResponse.json({ error: 'Ni mogoče prebrati podatkov' })
-    return NextResponse.json(JSON.parse(jsonMatch[0]))
+    return koncaj(text)
 
   } catch (error: any) {
     console.error('Scan error:', error)

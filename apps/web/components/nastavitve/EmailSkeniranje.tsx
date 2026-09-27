@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import { formatEurNumber } from '@/lib/format'
+import { izbireKategorij, kontoZa, normalizirajKategorijo } from '@/lib/konti'
 import { najdiUjemanje, oknoZaPrimerjavo, STROSEK_POLJA, type ObstojeciStrosek, type Ujemanje } from '@/lib/strosek-ujemanje'
 
 function EmailSkeniranjeContent() {
@@ -157,6 +158,7 @@ function EmailSkeniranjeContent() {
   // PRELET 335: varovalka pred dvojnim klikom - pri Polansu je vecklik
   // ustvaril stiri enake stroske.
   const [potrjujem, setPotrjujem] = useState<string | null>(null)
+  const [izbraneKat, setIzbraneKat] = useState<Record<string, string>>({}) // PRELET 339
   async function confirmPending(item: any) {
     if (potrjujem) return
     setPotrjujem(item.id)
@@ -165,6 +167,8 @@ function EmailSkeniranjeContent() {
 
   async function potrdiPredlog(item: any) {
     const d = item.extracted
+    // PRELET 339: kategorija, kot jo je uporabnik morda popravil v pregledu.
+    const kategorija = izbraneKat[item.id] || normalizirajKategorijo(d.category)
     // PRELET 332: opozorilo pred dvojnikom.
     const u = ujemanja.get(item.id)
     if (u && !confirm(`Ta strošek je ${u.zanesljivost === 'gotovo' ? '' : 'morda '}že dodan (${u.vendor || 'strošek'}, ${u.datum ? new Date(u.datum).toLocaleDateString('sl-SI') : ''}, €${formatEurNumber(u.znesek)}).\n\nGa vseeno dodam še enkrat?`)) return
@@ -188,12 +192,13 @@ function EmailSkeniranjeContent() {
       vat_amount: vatAmount,
       amount_total: amountTotal,
       description: d.description || '',
-      category: d.category || 'Drugo',
+      category: kategorija,
       // PRELET 332: za prepoznavanje ze vnesenih stroskov ob naslednjem skeniranju.
       receipt_number: d.invoice_number || null,
       vendor_tax_num: d.vendor_tax_number || null,
       status: 'confirmed',
-      is_deductible: true,
+      is_deductible: kontoZa(kategorija).delez > 0,
+      ai_raw_json: { ...d, category: kategorija, konto: kontoZa(kategorija).konto, davcni_delez: kontoZa(kategorija).delez, ai_category: d.category },
       // PDF naloz(imo sele tu, ne ze ob prikazu seznama (19.8.2026).
       attachment_base64: (await supabase.from('email_scan_pending').select('pdf_base64').eq('id', item.id).maybeSingle()).data?.pdf_base64 || null,
       attachment_type: 'pdf',
@@ -206,13 +211,14 @@ function EmailSkeniranjeContent() {
     const { error: kpoErr } = await supabase.from('kpo_entries').insert({
       org_id: org.id,
       entry_date: d.date || lokalniDatum(),
-      description: `${d.vendor || ''} — ${d.category || 'Drugo'}`,
+      description: `${d.vendor || ''} — ${kategorija}`,
       entry_type: 'expense',
       income: 0,
       expense: amountNet,
       vat_in: vatAmount,
       vat_out: 0,
-      category: d.category || 'Drugo',
+      category: kategorija,
+      notes: d.accountant_note || null,
       receipt_id: rcpData?.id ?? null,
     })
     if (kpoErr) { alert('Vnosa v knjigo ni bilo mogoče shraniti: ' + kpoErr.message); return }
@@ -414,6 +420,19 @@ function EmailSkeniranjeContent() {
                     <div><span style={{ fontSize: 10, color: '#999' }}>Dobavitelj</span><div style={{ fontSize: 13, fontWeight: 600 }}>{item.extracted.vendor}</div></div>
                     <div><span style={{ fontSize: 10, color: '#999' }}>Datum</span><div style={{ fontSize: 13, fontWeight: 600 }}>{item.extracted.date}</div></div>
                     <div><span style={{ fontSize: 10, color: '#999' }}>Skupaj</span><div style={{ fontSize: 13, fontWeight: 700 }}>€{formatEurNumber(Number(item.extracted.amount_total || 0))}</div></div>
+                    {(() => {
+                      const kat = izbraneKat[item.id] || normalizirajKategorijo(item.extracted.category)
+                      return (
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <span style={{ fontSize: 10, color: '#999' }}>Kategorija · konto {kontoZa(kat).konto}{kontoZa(kat).delez < 100 ? ` · davčno ${kontoZa(kat).delez} %` : ''}{item.extracted.category_reason ? ` · ${item.extracted.category_reason}` : ''}</span>
+                          <select value={kat} onChange={e => setIzbraneKat(p => ({ ...p, [item.id]: e.target.value }))}
+                            style={{ display: 'block', width: '100%', marginTop: 2, padding: '6px 8px', borderRadius: 8, border: '1px solid #e5e7eb', fontFamily: 'inherit', fontSize: 12, background: '#fff' }}>
+                            {izbireKategorij(kat).map(c => <option key={c}>{c}</option>)}
+                          </select>
+                          {item.extracted.accountant_note && <div style={{ fontSize: 11, color: '#92400E', marginTop: 4 }}>Opomba za računovodjo: {item.extracted.accountant_note}</div>}
+                        </div>
+                      )
+                    })()}
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={() => previewPdf(item)} style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600 }}>📄 Predogled</button>

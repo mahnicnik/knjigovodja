@@ -47,6 +47,10 @@ export interface ReceiptRow {
   is_deductible: boolean
   status: string
   has_image: boolean
+  /** PRELET 339: konto (SIR), davcno priznani delez in opomba iz AI razvrstitve */
+  konto?: string | null
+  davcni_delez?: number | null
+  opomba?: string | null
 }
 
 export interface KPOEntryRow {
@@ -64,6 +68,7 @@ export interface KPOEntryRow {
   notes: string | null
   invoice_id: string | null
   receipt_id: string | null // DODANO 30.7.2026: manjkal je za prepoznavo ze stetih STROSKOV
+  konto?: string | null // PRELET 339
 }
 
 export interface ExportInput {
@@ -247,10 +252,12 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
     'DDV vstop. skupaj',
     'Skupaj z DDV',
     'Kategorija',
+    'Konto',
     'Opis',
     'Davčno priznano',
     'Status',
     'Skenirano',
+    'Opomba za računovodjo',
   ]
 
   const kprRows = input.receipts.map(r => {
@@ -269,10 +276,12 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
       formatAmount(r.vat_amount),
       formatAmount(r.amount_total),
       r.category ?? '',
+      r.konto ?? '',
       r.description ?? '',
-      r.is_deductible ? 'Da' : 'Ne',
+      !r.is_deductible ? 'Ne' : (r.davcni_delez != null && r.davcni_delez < 100 ? `${r.davcni_delez} %` : 'Da'),
       statusLabel(r.status),
       r.has_image ? 'Da' : 'Ne',
+      r.opomba ?? '',
     ]
   })
 
@@ -284,7 +293,7 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
     formatAmount(totalKprNet),
     formatAmount(totalKprVat),
     formatAmount(totalKprGross),
-    '', '', '', '', '',
+    '', '', '', '', '', '', '',
   ]
 
   const wsKpr = XLSX.utils.aoa_to_sheet([
@@ -301,7 +310,7 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
     { wch: 14 }, { wch: 12 }, { wch: 30 }, { wch: 12 },
     { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
     { wch: 14 }, { wch: 14 }, { wch: 14 },
-    { wch: 20 }, { wch: 35 }, { wch: 10 }, { wch: 12 }, { wch: 10 },
+    { wch: 20 }, { wch: 8 }, { wch: 35 }, { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 45 },
   ]
   
   XLSX.utils.book_append_sheet(wb, wsKpr, 'Prejeti računi (KPR)')
@@ -356,7 +365,7 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
   // je seznam RAZDELJEN na dva jasna dela, brez rocnega filtriranja.
   const kpoHeaders = [
     'Datum', 'Opis', 'Tip', 'Prihodek', 'Odhodek',
-    'DDV vhod', 'DDV izhod', 'Stopnja DDV', 'Kategorija', 'Opombe',
+    'DDV vhod', 'DDV izhod', 'Stopnja DDV', 'Kategorija', 'Konto', 'Opombe',
   ]
 
   const kpoBookable = input.kpoEntries.filter(e => !e.invoice_id && !e.receipt_id)
@@ -372,6 +381,7 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
     formatAmount(e.vat_out),
     e.vat_rate != null ? `${e.vat_rate}%` : (Number(e.vat_out ?? 0) > 0 ? '22%' : ''),
     e.category ?? '',
+    e.konto ?? '',
     e.notes ?? '',
   ]
 
@@ -380,7 +390,7 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
   const sumRowBookable = [
     'SKUPAJ ZA KNJIŽENJE', '', '',
     formatAmount(totalBookableIncome), formatAmount(totalBookableExpense),
-    '', '', '', '', '',
+    '', '', '', '', '', '',
   ]
 
   const kpoSheetData: any[][] = [
@@ -409,7 +419,7 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
   const wsKpo = XLSX.utils.aoa_to_sheet(kpoSheetData)
   wsKpo['!cols'] = [
     { wch: 12 }, { wch: 35 }, { wch: 10 }, { wch: 12 }, { wch: 12 },
-    { wch: 10 }, { wch: 10 }, { wch: 11 }, { wch: 20 }, { wch: 30 },
+    { wch: 10 }, { wch: 10 }, { wch: 11 }, { wch: 20 }, { wch: 8 }, { wch: 30 },
   ]
 
   XLSX.utils.book_append_sheet(wb, wsKpo, 'KPO evidenca')
@@ -514,7 +524,7 @@ export function generateAccountingCSV_KPR(input: ExportInput): string {
     'Stevilka_dokumenta', 'Datum_prejema', 'Dobavitelj', 'Davcna_st',
     'Osnova_22', 'DDV_22_vstop', 'Osnova_95', 'DDV_95_vstop', 'Osnova_0',
     'Skupaj_neto', 'DDV_vstop_skupaj', 'Skupaj_bruto',
-    'Kategorija', 'Opis', 'Davcno_priznano', 'Status', 'Skenirano',
+    'Kategorija', 'Konto', 'Opis', 'Davcno_priznano', 'Status', 'Skenirano', 'Opomba',
   ].join(';')
 
   const rows = input.receipts.map(r => {
@@ -533,10 +543,12 @@ export function generateAccountingCSV_KPR(input: ExportInput): string {
       formatAmount(r.vat_amount).toString().replace('.', ','),
       formatAmount(r.amount_total).toString().replace('.', ','),
       r.category ?? '',
+      r.konto ?? '',
       `"${(r.description ?? '').replace(/"/g, '""').replace(/\n/g, ' ')}"`,
-      r.is_deductible ? 'Da' : 'Ne',
+      !r.is_deductible ? 'Ne' : (r.davcni_delez != null && r.davcni_delez < 100 ? `${r.davcni_delez} %` : 'Da'),
       statusLabel(r.status),
       r.has_image ? 'Da' : 'Ne',
+      `"${(r.opomba ?? '').replace(/"/g, '""').replace(/\n/g, ' ')}"`,
     ].join(';')
   })
 

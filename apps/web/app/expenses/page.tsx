@@ -8,6 +8,7 @@ import posthog from 'posthog-js'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 import { formatEurNumber } from '@/lib/format'
+import { IMENA_KATEGORIJ, izbireKategorij, kontoZa, najdiKategorijo } from '@/lib/konti'
 
 const MONTHS = ['Januar','Februar','Marec','April','Maj','Junij','Julij','Avgust','September','Oktober','November','December']
 
@@ -85,7 +86,7 @@ export default function ExpensesPage() {
     // POPRAVLJENO (19.8.2026, HITROST): `select('*')` je prenasal tudi
     // `attachment_base64` (21 MB skeniranih listin), ceprav ta stran prilog
     // sploh ne prikazuje - samo seznam stroskov.
-    let query = supabase.from('receipts').select('id, org_id, vendor, vendor_tax_num, receipt_date, receipt_number, amount_net, vat_rate, vat_amount, amount_total, category, description, is_deductible, status, kpo_entry_id, created_at, updated_at, attachment_type, attachment_path, image_url').eq('org_id', org.id)
+    let query = supabase.from('receipts').select('id, org_id, vendor, vendor_tax_num, receipt_date, receipt_number, amount_net, vat_rate, vat_amount, amount_total, category, description, is_deductible, ai_raw_json, status, kpo_entry_id, created_at, updated_at, attachment_type, attachment_path, image_url').eq('org_id', org.id)
     if (from) query = query.gte('receipt_date', from)
     if (to) query = query.lte('receipt_date', to)
     const { data } = await query.order('receipt_date', { ascending: false })
@@ -169,7 +170,7 @@ export default function ExpensesPage() {
       description: form.description,
       category: form.category,
       status: 'confirmed',
-      is_deductible: true,
+      is_deductible: kontoZa(form.category).delez > 0,
     }
     // POPRAVLJENO (30.7.2026, audit): ob urejanju se je v KPO vedno
     // ustvaril NOV vnos -> strosek se je v davcni evidenci PODVOJIL.
@@ -245,11 +246,8 @@ export default function ExpensesPage() {
   const totalVat = expenses.reduce((s, e) => s + Number(e.vat_amount || 0), 0)
   const totalGross = expenses.reduce((s, e) => s + Number(e.amount_total || 0), 0)
 
-  const categories = [
-    'Pisarniški material', 'Komunikacije', 'Programska oprema',
-    'Transport', 'Prehrana', 'Izobraževanje', 'Marketing',
-    'Oprema', 'Storitve', 'Drugo'
-  ]
+  // PRELET 339: kategorije s konti (lib/konti).
+  const categories = IMENA_KATEGORIJ
 
   if (loading) return (
     <AppLayout>
@@ -405,8 +403,11 @@ export default function ExpensesPage() {
                   onChange={e => setForm({...form, category: e.target.value})}
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none"
                 >
-                  {categories.map(c => <option key={c}>{c}</option>)}
+                  {izbireKategorij(form.category).map(c => <option key={c}>{c}</option>)}
                 </select>
+                <div className="text-[11px] text-gray-500 mt-1">
+                  Konto {kontoZa(form.category).konto || '—'}{najdiKategorijo(form.category) ? ` · ${najdiKategorijo(form.category)!.nazivKonta}` : ''}{kontoZa(form.category).delez < 100 ? ` · davčno priznano ${kontoZa(form.category).delez} %` : ''}. Ko popravite kategorijo, jo AI za tega dobavitelja uporabi tudi naslednjič.
+                </div>
               </div>
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Opis (opcijsko)</label>
@@ -518,7 +519,7 @@ export default function ExpensesPage() {
                   {(exp.receipt_date ? (exp.receipt_date ? (exp.receipt_date ? new Date(exp.receipt_date).toLocaleDateString('sl-SI') : '—') : '—') : '—')}
                 </div>
                 <div className={org?.vat_registered ? 'col-span-3 text-xs font-medium text-gray-900 truncate' : 'col-span-5 text-xs font-medium text-gray-900 truncate'}>{exp.vendor}</div>
-                <div className="col-span-2 text-xs text-gray-500 truncate">{exp.category}</div>
+                <div className="col-span-2 text-xs text-gray-500 truncate" title={`Konto ${kontoZa(exp.category).konto}${exp.ai_raw_json?.accountant_note ? ' — ' + exp.ai_raw_json.accountant_note : ''}`}>{exp.category} <span className="text-gray-400">· {kontoZa(exp.category).konto}</span>{exp.ai_raw_json?.accountant_note ? ' ⚠️' : ''}</div>
                 <div className="col-span-2 text-xs text-right text-red-500">€{formatEurNumber(Number(org?.vat_registered ? exp.amount_net : exp.amount_total))}</div>
                 {org?.vat_registered && <div className="col-span-2 text-xs text-right text-green-600">€{formatEurNumber(Number(exp.vat_amount))}</div>}
                 {org?.vat_registered && <div className="col-span-1 text-xs text-right font-medium">€{formatEurNumber(Number(exp.amount_total))}</div>}

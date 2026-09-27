@@ -10,6 +10,7 @@ import { formatEurNumber } from '@/lib/format'
 import { naloziListino } from '@/lib/listine'
 import { napovejKategorijo, opisIzVrstice } from '@/lib/kategorizacija'
 import { najdiPlacilnoObveznost } from '@/lib/place'
+import { IMENA_KATEGORIJ, izbireKategorij } from '@/lib/konti'
 
 // ================================================================
 // FORMATI SLOVENSKIH BANK
@@ -113,11 +114,8 @@ function isInternalTransfer(description: string): boolean {
 }
 
 const INCOME_CATEGORIES = ['Prodaja blaga/storitev', 'Obresti', 'Drugo']
-const EXPENSE_CATEGORIES = [
-  'Pisarniški material', 'Komunikacije', 'Programska oprema',
-  'Transport', 'Prehrana', 'Izobraževanje', 'Marketing',
-  'Oprema', 'Storitve', 'Bančne provizije', 'Drugo'
-]
+// PRELET 339: kategorije s konti (lib/konti).
+const EXPENSE_CATEGORIES = IMENA_KATEGORIJ
 
 // Varna base64 pretvorba za VELIKE datoteke (24.7.2026) - btoa(String.
 // fromCharCode(...bytes)) povzroci "Maximum call stack size exceeded" pri
@@ -434,7 +432,7 @@ export default function BankaPage() {
 
       // SPREMENJENO (19.8.2026): namesto privzete kategorije "Drugo" zdaj
       // kategorijo NAPOVEMO - najprej iz uporabnikovih preteklih odlocitev,
-      // nato po pravilih (Petrol -> Transport, Telekom -> Komunikacije ...).
+      // nato po pravilih (Petrol -> Gorivo, Telekom -> Komunikacije ...).
       // Prej je vse pristalo v "Drugo": pri enem uporabniku 151 od 254 vnosov,
       // zaradi cesar so bile razdelitve po kategorijah povsod prazne.
       const { data: zgodovina } = await supabase
@@ -781,7 +779,7 @@ export default function BankaPage() {
                               style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.15)', color: t.bookCategory ? '#0D1F12' : '#D97706' }}
                             >
                               <option value="">Izberi kategorijo…</option>
-                              {(t.type === 'credit' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map(c => (
+                              {(t.type === 'credit' ? INCOME_CATEGORIES : izbireKategorij(t.bookCategory)).map(c => (
                                 <option key={c} value={c}>{c}</option>
                               ))}
                             </select>

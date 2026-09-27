@@ -10,6 +10,7 @@ import { getActiveMembership } from '@/lib/active-org'
 import { naloziListino, base64VBlob } from '@/lib/listine'
 import SkenerDokumenta from '@/components/SkenerDokumenta'
 import AppLayout from '@/components/AppLayout'
+import { IMENA_KATEGORIJ, izbireKategorij, kontoZa, najdiKategorijo } from '@/lib/konti'
 
 // Varna base64 pretvorba za VELIKE datoteke (24.7.2026). btoa(String.
 // fromCharCode(...bytes)) je za vecje PDF-je (100KB+) povzrocalo "Maximum
@@ -65,11 +66,8 @@ export default function ScanPage() {
   const [batchProcessing, setBatchProcessing] = useState(false)
   const batchFileRef = useRef<HTMLInputElement>(null)
 
-  const categories = [
-    'Pisarniški material', 'Komunikacije', 'Programska oprema',
-    'Transport', 'Prehrana', 'Izobraževanje', 'Marketing',
-    'Oprema', 'Storitve', 'Drugo'
-  ]
+  // PRELET 339: kategorije s konti (lib/konti).
+  const categories = IMENA_KATEGORIJ
 
   useEffect(() => {
     async function load() {
@@ -205,7 +203,7 @@ export default function ScanPage() {
         receipt_date: data.date || lokalniDatum(),
         amount_net: (jeZavezanec ? data.amount_net : (data.amount_total ?? data.amount_net))?.toString() || '',
         vat_rate: jeZavezanec ? (data.vat_rate?.toString() || '0') : '0',
-        category: data.category || 'Marketing',
+        category: data.category || 'Drugo',
         description: data.description || '',
       })
     } catch (err) {
@@ -268,7 +266,9 @@ export default function ScanPage() {
       description: form.description,
       category: form.category,
       status: 'confirmed',
-      is_deductible: true,
+      is_deductible: kontoZa(form.category).delez > 0,
+      // PRELET 339: AI-jev predlog + koncni konto (za izvoz racunovodji).
+      ai_raw_json: result ? { ...result, category: form.category, konto: kontoZa(form.category).konto, davcni_delez: kontoZa(form.category).delez, ai_category: result.category } : null,
       attachment_path: potListine,
       // Ce je nalaganje v storage spodletelo, listino izjemoma se vedno
       // shranimo v bazo — da se ne izgubi.
@@ -294,6 +294,7 @@ export default function ScanPage() {
       vat_in: vatAmount,
       vat_out: 0,
       category: form.category,
+      notes: result?.accountant_note || null,
       receipt_id: rcpData?.id ?? null,
     })
     if (kpoErr) { alert('Vnosa v knjigo ni bilo mogoče shraniti: ' + kpoErr.message); return }
@@ -377,7 +378,10 @@ export default function ScanPage() {
           description: data.description || '',
           category,
           status: 'confirmed',
-          is_deductible: true,
+          is_deductible: kontoZa(category).delez > 0,
+          receipt_number: data.invoice_number || null,
+          vendor_tax_num: data.vendor_tax_number || null,
+          ai_raw_json: data,
           attachment_path: rezP.path,
           attachment_base64: rezP.path ? null : base64, // rezerva, ce storage odpove
           attachment_type: 'pdf',
@@ -396,6 +400,7 @@ export default function ScanPage() {
           vat_in: vatAmount,
           vat_out: 0,
           category,
+          notes: data.accountant_note || null,
           receipt_id: rcpData2?.id ?? null,
         })
         if (kpoErr3) { console.error('Vnosa v knjigo ni bilo mogoče shraniti:', kpoErr3); napake.push('Vnosa v knjigo ni bilo mogoče shraniti: ' + kpoErr3.message); continue }
@@ -630,8 +635,15 @@ export default function ScanPage() {
                     onChange={e => setForm({...form, category: e.target.value})}
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none"
                   >
-                    {categories.map(c => <option key={c}>{c}</option>)}
+                    {izbireKategorij(form.category).map(c => <option key={c}>{c}</option>)}
                   </select>
+                  <div className="text-[11px] text-gray-500 mt-1 leading-snug">
+                    Konto {kontoZa(form.category).konto || '—'}{najdiKategorijo(form.category) ? ` · ${najdiKategorijo(form.category)!.nazivKonta}` : ''}{kontoZa(form.category).delez < 100 ? ` · davčno priznano ${kontoZa(form.category).delez} %` : ''}
+                    {result?.category_reason && result.category === form.category ? <> · AI: {result.category_reason}</> : null}
+                  </div>
+                  {result?.accountant_note && (
+                    <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 mt-1 leading-snug">Opomba za računovodjo: {result.accountant_note}</div>
+                  )}
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">{org?.vat_registered ? 'Znesek brez DDV (€) *' : 'Znesek stroška (€) *'}</label>

@@ -18,10 +18,12 @@ import {
 // ─── Pravila ────────────────────────────────────────────────────────────
 
 test('pravila: znani slovenski ponudniki', () => {
-  expect(poPravilih('PETROL, SLOVENSKA ENERGETSKA DRUŽBA, D.D.', 'expense')?.kategorija).toBe('Transport')
+  expect(poPravilih('PETROL, SLOVENSKA ENERGETSKA DRUŽBA, D.D.', 'expense')?.kategorija).toBe('Gorivo')
   expect(poPravilih('Telekom Slovenije d.d.', 'expense')?.kategorija).toBe('Komunikacije')
-  expect(poPravilih('MERCATOR d.d. Ljubljana', 'expense')?.kategorija).toBe('Prehrana')
-  expect(poPravilih('ECE, energetska družba, d.o.o.', 'expense')?.kategorija).toBe('Režijski stroški')
+  // PRELET 339: trgovina z zivili je odvisna od dejavnosti - odloci uporabnik.
+  expect(poPravilih('MERCATOR d.d. Ljubljana', 'expense')).toBeNull()
+  expect(poPravilih('Gostilna Pri Lojzetu', 'expense')?.kategorija).toBe('Reprezentanca')
+  expect(poPravilih('ECE, energetska družba, d.o.o.', 'expense')?.kategorija).toBe('Energija')
   expect(poPravilih('ZZZS prispevki', 'expense')?.kategorija).toBe('Prispevki')
   expect(poPravilih('FURS akontacija dohodnine', 'expense')?.kategorija).toBe('Davki')
 })

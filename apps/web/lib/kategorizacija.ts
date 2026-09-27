@@ -25,18 +25,22 @@ export interface Napoved {
 /** Pravila: ključna beseda (male črke) -> kategorija. */
 const PRAVILA: Array<{ vzorci: string[]; kategorija: string; tip?: 'income' | 'expense' }> = [
   // Gorivo in prevoz
-  { vzorci: ['petrol', 'omv', 'shell', 'mol ', 'bencin', 'gorivo', 'avtocest', 'dars', 'vignette'], kategorija: 'Transport' },
-  { vzorci: ['lpp', 'arriva', 'slovenske železnice', 'taxi', 'uber', 'bolt'], kategorija: 'Transport' },
+  // PRELET 339: kategorije s konti (lib/konti) namesto splosnega "Transport".
+  { vzorci: ['avtocest', 'dars', 'vignette', 'vinjet', 'parkirn', 'lpp', 'arriva', 'slovenske železnice', 'taxi', 'uber', 'bolt'], kategorija: 'Potni stroški' },
+  { vzorci: ['petrol energ'], kategorija: 'Energija' },
+  { vzorci: ['petrol', 'omv', 'shell', 'mol ', 'bencin', 'gorivo'], kategorija: 'Gorivo' },
 
   // Komunikacije
   { vzorci: ['telekom', 'a1 ', 'a1,', 'telemach', 't-2', 't2 ', 'hot ', 'simobil', 'internet', 'mobitel'], kategorija: 'Komunikacije' },
 
   // Energija in režija
-  { vzorci: ['elektro', 'ece,', 'petrol energ', 'energetika', 'plin', 'toplotna', 'komunala', 'vodovod', 'odpadki', 'snaga'], kategorija: 'Režijski stroški' },
+  { vzorci: ['komunala', 'vodovod', 'odpadki', 'snaga'], kategorija: 'Komunala in voda' },
+  { vzorci: ['elektro', 'ece,', 'energetika', 'plin', 'toplotna'], kategorija: 'Energija' },
 
   // Prehrana in trgovina
-  { vzorci: ['mercator', 'spar', 'hofer', 'lidl', 'tuš', 'tus ', 'jager', 'e.leclerc', 'leclerc', 'metro'], kategorija: 'Prehrana' },
-  { vzorci: ['gostilna', 'restavracija', 'pizzeria', 'picerija', 'kavarna', 'bar '], kategorija: 'Prehrana' },
+  // Trgovine z zivili: odvisno od dejavnosti (blago, material ali zasebno) - brez pravila,
+  // odloci uporabnik (in to se nato uporabi iz zgodovine).
+  { vzorci: ['gostilna', 'restavracija', 'pizzeria', 'picerija', 'kavarna', 'bar '], kategorija: 'Reprezentanca' },
 
   // Bančno
   { vzorci: ['provizij', 'stroški vodenja', 'nadomestilo za', 'bančn', 'banka stro'], kategorija: 'Bančne provizije' },

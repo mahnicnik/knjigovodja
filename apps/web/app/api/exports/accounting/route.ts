@@ -14,6 +14,7 @@ import {
 } from '@/lib/accounting-export'
 import { resend, FROM_EMAIL, posiljateljZa } from '@/lib/resend'
 import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
+import { kontoZa } from '@/lib/konti'
 
 const MONTHS = [
   'januar', 'februar', 'marec', 'april', 'maj', 'junij',
@@ -186,6 +187,10 @@ export async function POST(req: NextRequest) {
       is_deductible: r.is_deductible ?? true,
       status: r.status,
       has_image: !!r.image_url,
+      // PRELET 339: konto in davcni delez iz kategorije, opomba iz AI razvrstitve.
+      konto: kontoZa(r.category).konto,
+      davcni_delez: kontoZa(r.category).delez,
+      opomba: r.ai_raw_json?.accountant_note ?? null,
     }))
 
     const kpoEntries: KPOEntryRow[] = (kpoEntriesData ?? []).map((e: any) => ({
@@ -203,6 +208,7 @@ export async function POST(req: NextRequest) {
       // obrazca DDV-O spada promet iz blagajne, banke ali kartic.
       vat_rate: e.vat_rate,
       receipt_id: e.receipt_id, // DODANO 30.7.2026
+      konto: e.entry_type === 'expense' ? kontoZa(e.category).konto : null, // PRELET 339
     }))
 
     const exportInput: ExportInput = {

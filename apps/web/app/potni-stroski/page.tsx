@@ -149,7 +149,7 @@ export default function PotniStroskiPage() {
       expense: calculatedAmount,
       vat_in: 0,
       vat_out: 0,
-      category: 'Transport',
+      category: 'Potni stroški', // PRELET 339 (konto 414)
     })
     if (potErr) { alert('Potnega stroška ni bilo mogoče poknjižiti: ' + potErr.message); return }
 
