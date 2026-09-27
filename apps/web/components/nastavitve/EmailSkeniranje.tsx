@@ -45,9 +45,27 @@ function EmailSkeniranjeContent() {
       .select('id, email_subject, email_from, email_date, attachment_name, extracted, status, reviewed_at, created_at')
       .eq('org_id', orgId).in('status', ['ni_racun', 'napaka', 'rejected'])
       .order('email_date', { ascending: false }).limit(300)
+    // PRELET 338: seznama se ne nabirata v nedogled - zavrnjeni in "ni racun"
+    // so vidni 30 dni (za morebitno obnovo), potem se skrijejo. Zaklenjeni PDF
+    // in napake ostanejo, dokler jih ne uredite.
+    const meja = Date.now() - 30 * 86_400_000
     const o: any = { ni_racun: [], napaka: [], rejected: [] }
-    for (const r of data || []) o[r.status]?.push(r)
+    for (const r of data || []) {
+      const cas = Date.parse(r.reviewed_at || r.created_at)
+      if (r.status !== 'napaka' && Number.isFinite(cas) && cas < meja) continue
+      o[r.status]?.push(r)
+    }
     setOstali(o)
+  }
+
+  // PRELET 338: "Pocisti" - predlogi gredo v arhiv (ne prikazujejo se vec,
+  // ostanejo pa zabelezeni, da jih naslednje skeniranje ne najde znova).
+  async function pocisti(k: 'ni_racun' | 'napaka' | 'rejected') {
+    const ids = ostali[k].map((x: any) => x.id)
+    if (!ids.length || !confirm(`Počistim ${ids.length} ${ids.length === 1 ? 'zapis' : 'zapisov'} s seznama? Naslednje skeniranje jih ne bo več prikazalo.`)) return
+    const { error } = await supabase.from('email_scan_pending').update({ status: 'arhiv', reviewed_at: new Date().toISOString() }).in('id', ids)
+    if (error) { alert('Ni bilo mogoče: ' + error.message); return }
+    if (org?.id) await naloziOstale(org.id)
   }
 
   async function vPregled(item: any) {
@@ -57,7 +75,8 @@ function EmailSkeniranjeContent() {
   }
 
   async function odstraniOstalo(item: any) {
-    const { error } = await supabase.from('email_scan_pending').update({ status: 'rejected', reviewed_at: new Date().toISOString() }).eq('id', item.id)
+    // PRELET 338: odstranjen "ni racun" / napaka gre v arhiv, ne med zavrnjene.
+    const { error } = await supabase.from('email_scan_pending').update({ status: 'arhiv', reviewed_at: new Date().toISOString() }).eq('id', item.id)
     if (error) { alert('Ni bilo mogoče: ' + error.message); return }
     if (org?.id) await naloziOstale(org.id)
   }
@@ -432,10 +451,13 @@ function EmailSkeniranjeContent() {
                 </button>
                 {odprto === k && (
                   <div style={{ paddingBottom: 10 }}>
-                    <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>{opis}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', marginBottom: 8 }}>
+                      <div style={{ fontSize: 11, color: '#888' }}>{opis}{k !== 'napaka' ? ' Prikazani so zadnjih 30 dni.' : ''}</div>
+                      <button onClick={() => pocisti(k)} style={{ flexShrink: 0, padding: '5px 10px', borderRadius: 7, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>Počisti vse</button>
+                    </div>
                     {ostali[k].map((item: any) => {
                       const e = item.extracted || {}
-                      const razlog = e._razlog === 'pdf_zaklenjen' ? 'PDF je zaklenjen z geslom' : e._razlog === 'napaka_branja' ? 'Napaka branja — poskusi se znova ob naslednjem skeniranju' : e.document_type ? `AI: ${e.document_type}` : ''
+                      const razlog = e._razlog === 'posiljatelj_vedno_zavrnjen' ? 'Samodejno — dokumente tega pošiljatelja vedno zavrnete' : e._razlog === 'pdf_zaklenjen' ? 'PDF je zaklenjen z geslom' : e._razlog === 'napaka_branja' ? 'Napaka branja — poskusi se znova ob naslednjem skeniranju' : e.document_type ? `AI: ${e.document_type}` : ''
                       return (
                         <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: '#F7F6F2', borderRadius: 8, marginBottom: 6, fontSize: 12 }}>
                           <div style={{ flex: 1, minWidth: 0 }}>

@@ -232,13 +232,32 @@ export async function skenirajPovezavo(
         else { izid.napak++; prehodnaNapaka = true }
       }
 
-      const vrstica = { ...osnova, extracted, status }
+      // PRELET 338: posiljatelj, cigar dokumente uporabnik VEDNO zavrne (vsaj 3x,
+      // nikoli potrjen - npr. potrdila o transakcijah), se ne kopici vec v pregledu:
+      // "ni racun" gre naravnost v arhiv, predlog pa med zavrnjene (30 dni viden,
+      // en klik "Obnovi").
+      let koncniStatus: string = status
+      if (status !== 'napaka') {
+        const naslov = (String(osnova.email_from).match(/<([^>]+)>/)?.[1] || String(osnova.email_from)).trim().toLowerCase()
+        if (naslov) {
+          const { data: zgodovina } = await supabase.from('email_scan_pending').select('status')
+            .eq('org_id', conn.org_id).ilike('email_from', `%${naslov.replace(/[%_]/g, '')}%`).limit(50)
+          const potrjenih = (zgodovina || []).filter((z: any) => z.status === 'confirmed').length
+          const zavrnjenih = (zgodovina || []).filter((z: any) => z.status === 'rejected' || z.status === 'arhiv').length
+          if (potrjenih === 0 && zavrnjenih >= 3) {
+            koncniStatus = status === 'ni_racun' ? 'arhiv' : 'rejected'
+            extracted._razlog = 'posiljatelj_vedno_zavrnjen'
+          }
+        }
+      }
+      const vrstica: Record<string, any> = { ...osnova, extracted, status: koncniStatus }
+      if (koncniStatus === 'rejected' || koncniStatus === 'arhiv') vrstica.reviewed_at = new Date().toISOString()
       const { error } = ponovi
         ? await supabase.from('email_scan_pending').update(vrstica).eq('id', prej!.id)
         : await supabase.from('email_scan_pending').insert(vrstica)
       if (error) { console.error('email-scan: zapisa ni bilo mogoce shraniti:', msgId, ime, error.message); prehodnaNapaka = true; continue }
 
-      if (status === 'pending') {
+      if (koncniStatus === 'pending') {
         izid.najdenih++
         try {
           const t = Date.parse(String(extracted.date || '').slice(0, 10))
@@ -251,7 +270,7 @@ export async function skenirajPovezavo(
             if (najdiUjemanje(extracted, kandidati || [])) izid.zeVneseno++
           }
         } catch { /* ni kljucno */ }
-      } else if (status === 'ni_racun') izid.niRacun++
+      } else if (koncniStatus === 'ni_racun') izid.niRacun++
     }
   }
 
