@@ -34,6 +34,7 @@ const styles = StyleSheet.create({
   col3: { flex: 1.5, textAlign: 'right' },
   col4: { flex: 1, textAlign: 'right' },
   col5: { flex: 1.5, textAlign: 'right' },
+  colPop: { flex: 1, textAlign: 'right' },
   totals: { alignItems: 'flex-end', marginTop: 18 },
   totalsBox: { width: 240 },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, color: '#666', fontSize: 10 },
@@ -63,6 +64,12 @@ export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
   const isDobropis = invoice.invoice_number?.includes('-D')
   const docType = isDobropis ? 'DOBROPIS' : isStorno ? 'STORNO' : 'RAČUN'
   const lineItems = invoice.line_items || []
+  // POPRAVLJENO (29.9.2026): popust je bil na izdanem racunu neviden, znesek
+  // vrstice pa prikazan BREZ popusta (vsota spodaj je bila pravilna, vrstice
+  // se niso ujemale). Stolpec Popust se pokaze le, ce ga ima vsaj ena postavka.
+  const imaPopust = lineItems.some((i: any) => Number(i.discount_pct || 0) > 0)
+  const skupajPopust = lineItems.reduce((s: number, i: any) =>
+    s + Number(i.quantity || 0) * Number(i.unit_price || 0) * Number(i.discount_pct || 0) / 100, 0)
   // PRELET 330: ce slike ni mogoce prenesti, @react-pdf izpise opozorilo in
   // racun se izrise brez logotipa (racun nikoli ne pade zaradi logotipa).
   const logotip = logotipUrl(org)
@@ -150,6 +157,7 @@ export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
           <Text style={[styles.tableHeaderText, styles.col1]}>Storitev / Blago</Text>
           <Text style={[styles.tableHeaderText, styles.col2]}>Količina</Text>
           <Text style={[styles.tableHeaderText, styles.col3]}>Cena (€)</Text>
+          {imaPopust && <Text style={[styles.tableHeaderText, styles.colPop]}>Popust</Text>}
           <Text style={[styles.tableHeaderText, styles.col4]}>DDV</Text>
           <Text style={[styles.tableHeaderText, styles.col5]}>Skupaj (€)</Text>
         </View>
@@ -159,13 +167,20 @@ export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
             <Text style={styles.col1}>{item.description || ''}</Text>
             <Text style={styles.col2}>{item.quantity}</Text>
             <Text style={styles.col3}>{Number(item.unit_price).toFixed(2).replace('.', ',')} €</Text>
+            {imaPopust && <Text style={styles.colPop}>{Number(item.discount_pct || 0) > 0 ? `${String(Number(item.discount_pct)).replace('.', ',')} %` : ''}</Text>}
             <Text style={styles.col4}>{item.vat_rate}%</Text>
-            <Text style={styles.col5}>{(item.quantity * item.unit_price).toFixed(2).replace('.', ',')} €</Text>
+            <Text style={styles.col5}>{(Number(item.quantity || 0) * Number(item.unit_price || 0) * (1 - Number(item.discount_pct || 0) / 100)).toFixed(2).replace('.', ',')} €</Text>
           </View>
         ))}
 
         <View style={styles.totals}>
           <View style={styles.totalsBox}>
+            {imaPopust && Math.abs(skupajPopust) > 0.004 && (
+              <View style={styles.totalRow}>
+                <Text>Skupaj popust:</Text>
+                <Text>-{Math.abs(skupajPopust).toFixed(2).replace('.', ',')} €</Text>
+              </View>
+            )}
             {/* POPRAVLJENO (16.8.2026): pri racunu z VEC stopnjami DDV je bila
                 prikazana ena sama skupna osnova in en DDV. 82. clen ZDDV-1
                 zahteva razclenitev po stopnjah - kupec mora videti osnovo in

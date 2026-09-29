@@ -762,6 +762,9 @@ export default function InvoicesPage() {
                             <th style={{ textAlign: 'left', padding: '4px 8px', color: '#999', fontWeight: 600 }}>Opis</th>
                             <th style={{ textAlign: 'right', padding: '4px 8px', color: '#999', fontWeight: 600 }}>Količina</th>
                             <th style={{ textAlign: 'right', padding: '4px 8px', color: '#999', fontWeight: 600 }}>Cena/enoto</th>
+                            {postavke.some((p: any) => Number(p.discount_pct || 0) > 0) && (
+                              <th style={{ textAlign: 'right', padding: '4px 8px', color: '#999', fontWeight: 600 }}>Popust</th>
+                            )}
                             <th style={{ textAlign: 'right', padding: '4px 8px', color: '#999', fontWeight: 600 }}>Znesek</th>
                           </tr>
                         </thead>
@@ -773,6 +776,9 @@ export default function InvoicesPage() {
                                 <td style={{ padding: '5px 8px' }}>{p.description || '—'}</td>
                                 <td style={{ padding: '5px 8px', textAlign: 'right' }}>{p.quantity ?? '—'}</td>
                                 <td style={{ padding: '5px 8px', textAlign: 'right' }}>€{formatEurNumber(Number(p.unit_price || 0))}</td>
+                                {postavke.some((q: any) => Number(q.discount_pct || 0) > 0) && (
+                                  <td style={{ padding: '5px 8px', textAlign: 'right', color: '#b45309' }}>{Number(p.discount_pct || 0) > 0 ? `${String(Number(p.discount_pct)).replace('.', ',')} %` : ''}</td>
+                                )}
                                 <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600 }}>€{formatEurNumber(znesek)}</td>
                               </tr>
                             )
