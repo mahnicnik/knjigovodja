@@ -120,6 +120,7 @@ export default function NastavitevPage() {
   }, [])
   const [form, setForm] = useState({
     name: '', tax_number: '', vat_number: '', vat_registered: false,
+    vat_period: 'quarterly',
     vat_exemption_code: '', vat_exemption_custom_text: '',
     iban: '', bic: '', address: '', post_code: '', city: '',
     // POPRAVLJENO (19.8.2026): polja prispevkov so bila v stanju stevila, iz
@@ -157,6 +158,7 @@ export default function NastavitevPage() {
       setForm({
         name: o.name || '', tax_number: o.tax_number || '',
         vat_number: o.vat_number || '', vat_registered: o.vat_registered || false,
+        vat_period: o.vat_period === 'monthly' ? 'monthly' : 'quarterly',
         vat_exemption_code: o.vat_exemption_code || '', vat_exemption_custom_text: o.vat_exemption_custom_text || '',
         iban: o.iban || '', bic: o.bic || '', address: o.address || '',
         post_code: o.post_code || '', city: o.city || '',
@@ -179,6 +181,7 @@ export default function NastavitevPage() {
     const { error } = await supabase.from('organizations').update({
       name: form.name, tax_number: form.tax_number, vat_number: form.vat_number,
       vat_registered: form.vat_registered, iban: form.iban, bic: form.bic,
+      vat_period: form.vat_registered ? form.vat_period : null,
       vat_exemption_code: form.vat_exemption_code || null,
       vat_exemption_custom_text: form.vat_exemption_custom_text || null,
       address: form.address, post_code: form.post_code, city: form.city,
@@ -374,6 +377,13 @@ export default function NastavitevPage() {
                   <div style={{ marginTop: 10 }}>
                     <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>ID za DDV</label>
                     <input value={form.vat_number} onChange={e => setForm({...form, vat_number: e.target.value})} placeholder="SI12345678" className={inp}/>
+                    {/* PRELET 341: davcno obdobje dolozi rok placila DDV v
+                        napovedi pretoka denarja (zadnji dan naslednjega meseca). */}
+                    <label style={{ fontSize: 11, color: '#888', display: 'block', margin: '10px 0 4px' }}>Davčno obdobje za DDV</label>
+                    <select value={form.vat_period} onChange={e => setForm({...form, vat_period: e.target.value})} className={inp}>
+                      <option value="quarterly">Četrtletno (običajno do 210.000 € letnega prometa)</option>
+                      <option value="monthly">Mesečno</option>
+                    </select>
                   </div>
                 )}
 

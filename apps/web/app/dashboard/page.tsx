@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import LegalUpdatesWidget from '@/components/LegalUpdatesWidget'
 import { calculateNetIncome, projectMonthlyRevenue, checkNormirancePragRisk, getTaxSystemLabel, type LegalForm, type TaxSystem } from '@/lib/tax-calculator'
-import { generateCashFlow, getChartMaxValue, type OpenInvoice } from '@/lib/cash-flow'
+import { generateCashFlow, formatEur, vatPeriodsInWindow, estimateDailyIncomeByWeekday, detectRecurringExpenses, type OpenInvoice, type Obligation, type RecurringExpense } from '@/lib/cash-flow'
 import { getActiveMembership } from '@/lib/active-org'
 import OrgSwitcher from '@/components/OrgSwitcher'
 import AppLayout from '@/components/AppLayout'
@@ -171,6 +171,25 @@ export default function DashboardPage() {
   const supabase = createClient()
 
   const [org, setOrg] = useState<any>(null)
+  // PRELET 341: rocni vnos stanja na TRR za napoved pretoka denarja
+  const [stanjeUrejanje, setStanjeUrejanje] = useState(false)
+  const [stanjeVnos, setStanjeVnos] = useState('')
+  const [stanjeShranjujem, setStanjeShranjujem] = useState(false)
+  async function shraniStanje() {
+    if (!org) return
+    const vnos = stanjeVnos.trim()
+    const znesek = vnos === '' ? null : Number(vnos.replace(/\./g, '').replace(',', '.'))
+    if (znesek !== null && isNaN(znesek)) return
+    setStanjeShranjujem(true)
+    const datum = znesek === null ? null : lokalniDatum(new Date())
+    const { error } = await supabase.from('organizations')
+      .update({ cash_balance: znesek, cash_balance_date: datum }).eq('id', org.id)
+    setStanjeShranjujem(false)
+    if (!error) {
+      setOrg({ ...org, cash_balance: znesek, cash_balance_date: datum })
+      setStanjeUrejanje(false)
+    }
+  }
   // DODANO (19.9.2026): odstevalnik do izteka brezplacnega preizkusa (glej
   // trialInfo spodaj) - locena state samo za "Nadgradi zdaj" gumb v banerju.
   const [trialUpgrading, setTrialUpgrading] = useState(false)
@@ -246,6 +265,10 @@ export default function DashboardPage() {
     hasAccountant: false,
     legalForm: null as LegalForm | null,
     taxSystem: null as TaxSystem | null,
+    // PRELET 341: vhodni podatki za napoved pretoka denarja
+    vatObligations: [] as Obligation[],
+    dailyIncomeByWeekday: [0, 0, 0, 0, 0, 0, 0] as number[],
+    recurringExpenses: [] as RecurringExpense[],
   })
 
   const now = new Date()
@@ -256,6 +279,10 @@ export default function DashboardPage() {
   const monthStart = `${year}-${String(month+1).padStart(2,'0')}-01`
   const monthEnd = `${year}-${String(month+1).padStart(2,'0')}-${new Date(year,month+1,0).getDate()}`
   const yearStart = `${year}-01-01`
+  const kpoOd = (() => {
+    const d = lokalniDatum(new Date(year, month - 7, 1))
+    return d < yearStart ? d : yearStart
+  })()
   // DODANO (17.8.2026): obdobje TEKOCEGA CETRTLETJA. Obveznost za DDV se je
   // racunala iz VSEH racunov od zacetka poslovanja, prikazana pa kot znesek za
   // tekoce cetrtletje - kar je bilo napacno v obe smeri.
@@ -376,7 +403,10 @@ export default function DashboardPage() {
         supabase.from('kpo_entries')
           .select('income, expense, vat_out, vat_in, entry_date, invoice_id, receipt_id')
           .eq('org_id', o.id)
-          .gte('entry_date', yearStart)
+          // PRELET 341: od najzgodnejsega od (zacetek leta, 7 mesecev nazaj) -
+          // napoved pretoka rabi zgodovino prometa in DDV preteklega obdobja,
+          // ki je lahko se v lanskem letu.
+          .gte('entry_date', kpoOd)
           .lte('entry_date', quarterEnd > monthEnd ? quarterEnd : monthEnd),
         // DODANO 29.7.2026: stevilo samodejno pripravljenih osnutkov
         // ponavljajocih racunov, ki cakajo na rocno potrditev.
@@ -560,10 +590,38 @@ export default function DashboardPage() {
           ['accountant', 'racunovodja', 'viewer'].includes(String(c.role || '').toLowerCase()))
       } catch { /* ob napaki koraka ostaneta neoznacena */ }
 
+      // PRELET 341: ce odgovorov z uvajanja ni, pravno obliko izpeljemo iz
+      // sistema obdavcitve organizacije. Prej je bila `null` in napoved
+      // pretoka je izpustila prispevke s.p. in akontacijo dohodnine.
       const legalForm: LegalForm | null = onboardingAnswers?.tip === 'sp' ? 'sp'
         : onboardingAnswers?.tip === 'doo' ? 'doo'
         : onboardingAnswers?.tip === 'zavod' ? 'zavod'
+        : o.tax_system === 'doo_obdavcitev' ? 'doo'
+        : ['normirani_80', 'normirani_40', 'dejanski'].includes(o.tax_system) ? 'sp'
         : null
+
+      // PRELET 341: DDV po davcnih obdobjih, katerih rok placila pade v
+      // naslednjih 30 dni (rok = zadnji dan meseca po koncu obdobja).
+      const ddvZaObdobje = (od: string, do_: string) => {
+        const izh = invoices.filter((i: any) => i.issue_date >= od && i.issue_date <= do_)
+          .reduce((s: number, i: any) => s + Number(i.vat_amount || 0), 0)
+          + kpoVsi.filter((e: any) => !e.invoice_id && e.entry_date >= od && e.entry_date <= do_)
+            .reduce((s: number, e: any) => s + Number(e.vat_out || 0), 0)
+        const vst = receipts.filter((r: any) => r.receipt_date >= od && r.receipt_date <= do_)
+          .reduce((s: number, r: any) => s + Number(r.vat_amount || 0), 0)
+          + kpoVsi.filter((e: any) => !e.receipt_id && e.entry_date >= od && e.entry_date <= do_)
+            .reduce((s: number, e: any) => s + Number(e.vat_in || 0), 0)
+        return Math.max(0, izh - vst)
+      }
+      const vatObligations: Obligation[] = o.vat_registered
+        ? vatPeriodsInWindow(now, o.vat_period === 'monthly' ? 'monthly' : 'quarterly').map(p => ({
+            date: p.deadline,
+            amount: ddvZaObdobje(p.start, p.end),
+            label: p.ended ? p.label : `${p.label} (ocena do danes)`,
+          }))
+        : []
+      const dailyIncomeByWeekday = estimateDailyIncomeByWeekday(kpoVsi, now)
+      const recurringExpenses = detectRecurringExpenses(receipts, now)
 
       setData({
         revenue, expenses, kpoReceivedMonth,
@@ -590,6 +648,9 @@ export default function DashboardPage() {
         hasAccountant: accountantDone,
         legalForm,
         taxSystem: (o.tax_system as TaxSystem) || null,
+        vatObligations,
+        dailyIncomeByWeekday,
+        recurringExpenses,
       })
       setLoading(false)
     } catch (err) {
@@ -760,18 +821,27 @@ export default function DashboardPage() {
   const cashFlow = useMemo(() => {
     return generateCashFlow({
       openInvoices: data.openInvoices,
+      // PRELET 341: izhodiscno stanje na TRR (null = neznano)
+      startingBalance: org?.cash_balance != null ? Number(org.cash_balance) : null,
+      startingBalanceDate: org?.cash_balance_date || null,
       legalForm: data.legalForm,
       taxSystem: data.taxSystem,
       isVatRegistered: !!org?.vat_registered,
       hasEmployees: data.hasEmployees,
+      vatObligations: data.vatObligations,
+      dailyIncomeByWeekday: data.dailyIncomeByWeekday,
+      recurringExpenses: data.recurringExpenses,
       // POPRAVLJENO (16.8.2026): prej groba ocena iz davcnega kalkulatorja
       // (promet x 22%, BREZ vstopnega DDV), ceprav Dashboard ze ima natancen
       // izracun iz dejanskih evidenc (izhodni DDV minus vstopni). Napoved
       // pretoka denarja je zato precenjevala obveznost za DDV - pri 10.000 EUR
       // prometa in 3.000 EUR vstopnega DDV za priblizno 660 EUR mesecno.
-      monthlyVatLiability: data.vatDue,
-      monthlyIncomeTax: taxResult.details.incomeTax,
-      monthlyContributions: taxResult.details.contributions,
+      // PRELET 341: prispevki in akontacija iz nastavitev organizacije (kot
+      // na placilnih nalogih FURS); kalkulator le kot rezerva.
+      monthlyIncomeTax: Number(org?.contrib_akontacija || 0) > 0 ? Number(org.contrib_akontacija) : taxResult.details.incomeTax,
+      monthlyContributions:
+        (Number(org?.contrib_piz ?? 0) + Number(org?.contrib_zzzs ?? 0) + Number(org?.contrib_zaposlovanje ?? 0) + Number(org?.contrib_starsevstvo ?? 0))
+        || taxResult.details.contributions,
       monthlyPayrollCost: data.monthlyPayrollCost, // DODANO 11.8.2026
     })
   }, [data, org, taxResult])
@@ -1162,10 +1232,41 @@ export default function DashboardPage() {
               <h3>{cashFlow.summary.message || `Imam dovolj v ${MONTHS_LONG[(month+1) % 12]}u?`}</h3>
             </div>
             <div className="rk-cf-summary">
-              <div className="item"><div className="l">Pričakovan dotok</div><div className="v in">{cashFlow.summary.totalInflow >= 0 ? '+' : ''}€{Math.round(cashFlow.summary.totalInflow).toLocaleString('sl-SI')}</div></div>
-              <div className="item"><div className="l">Načrtovani odhodki</div><div className="v out">−€{Math.round(cashFlow.summary.totalOutflow).toLocaleString('sl-SI')}</div></div>
-              <div className="item"><div className="l">Stanje po 30 dneh</div><div className="v" style={{ color: cashFlow.summary.endBalance >= 0 ? 'var(--green)' : 'var(--bad)' }}>€{Math.round(cashFlow.summary.endBalance).toLocaleString('sl-SI')}</div></div>
+              <div className="item"><div className="l">Pričakovan dotok</div><div className="v in">{formatEur(cashFlow.summary.totalInflow, true)}</div>
+                {cashFlow.summary.estimatedInflow > 0 && (
+                  <div style={{ fontSize: 11, color: 'var(--ink3)', marginTop: 2 }}>računi {formatEur(cashFlow.summary.invoiceInflow)} · ocena prometa {formatEur(cashFlow.summary.estimatedInflow)}</div>
+                )}
+              </div>
+              <div className="item"><div className="l">Načrtovani odhodki</div><div className="v out">{formatEur(-cashFlow.summary.totalOutflow)}</div></div>
+              <div className="item">
+                <div className="l">{cashFlow.summary.hasStartingBalance ? 'Stanje po 30 dneh' : 'Neto pretok 30 dni'}</div>
+                <div className="v" style={{ color: cashFlow.summary.endBalance >= 0 ? 'var(--green)' : 'var(--bad)' }}>{formatEur(cashFlow.summary.endBalance, !cashFlow.summary.hasStartingBalance)}</div>
+              </div>
             </div>
+          </div>
+          {/* PRELET 341: izhodiscno stanje na racunu - brez njega graf kaze
+              samo neto pretok in ne govori o "negativni bilanci". */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 12, color: 'var(--ink2)', margin: '4px 0 8px' }}>
+            {stanjeUrejanje ? (
+              <>
+                <span>Stanje na računu danes (€):</span>
+                <input autoFocus inputMode="decimal" value={stanjeVnos} onChange={e => setStanjeVnos(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') shraniStanje(); if (e.key === 'Escape') setStanjeUrejanje(false) }}
+                  placeholder="npr. 4.250,00" style={{ width: 130, border: '1px solid var(--rule)', borderRadius: 8, padding: '4px 8px', fontSize: 12 }} />
+                <button onClick={shraniStanje} disabled={stanjeShranjujem} style={{ fontSize: 12, fontWeight: 600, color: 'var(--green)', background: 'none', border: 'none', cursor: 'pointer' }}>{stanjeShranjujem ? 'Shranjujem…' : 'Shrani'}</button>
+                <button onClick={() => setStanjeUrejanje(false)} style={{ fontSize: 12, color: 'var(--ink3)', background: 'none', border: 'none', cursor: 'pointer' }}>Prekliči</button>
+              </>
+            ) : cashFlow.summary.hasStartingBalance ? (
+              <>
+                <span>Izhodišče: stanje na računu <b>{formatEur(cashFlow.summary.startingBalance)}</b>{org?.cash_balance_date ? ` (vneseno ${new Date(org.cash_balance_date).toLocaleDateString('sl-SI')})` : ''}</span>
+                <button onClick={() => { setStanjeVnos(String(org?.cash_balance ?? '').replace('.', ',')); setStanjeUrejanje(true) }} style={{ fontSize: 12, color: 'var(--green)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Posodobi</button>
+              </>
+            ) : (
+              <button onClick={() => { setStanjeVnos(''); setStanjeUrejanje(true) }} style={{ fontSize: 12, fontWeight: 600, color: 'var(--green)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>+ Vnesite stanje na računu za realno napoved</button>
+            )}
+            {cashFlow.summary.overdueCount > 0 && (
+              <span style={{ color: '#B45309' }}>· {cashFlow.summary.overdueCount} {cashFlow.summary.overdueCount === 1 ? 'zapadel račun' : 'zapadlih računov'} ({formatEur(cashFlow.summary.overdueAmount)}) ni vštetih — datum plačila ni znan</span>
+            )}
           </div>
           {cashFlow.summary.totalInflow === 0 && cashFlow.summary.totalOutflow === 0 ? (
             <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--ink3)' }}>
@@ -1174,38 +1275,55 @@ export default function DashboardPage() {
             </div>
           ) : (
             <svg className="rk-cf-chart" viewBox="0 0 1100 180" preserveAspectRatio="none">
+              {/* PRELET 341: stolpci (dnevni pretok) in crta (stanje) imata
+                  LOCENI merili - prej skupno, zato je pri vecjem stanju na
+                  racunu pretok postal neviden, crta pa je bila prirezana. */}
               {(() => {
-                const max = getChartMaxValue(cashFlow.days)
-                const scale = 80 / max
+                const maxTok = Math.max(1, ...cashFlow.days.map(d => Math.max(d.inflow, d.outflow)))
+                const scale = 70 / maxTok
                 return cashFlow.days.map((d, i) => {
                   const x = (i / 29) * 1080 + 10
-                  const inH = d.inflow * scale
+                  const racuniH = (d.inflow - d.inflowEstimate) * scale
+                  const ocenaH = d.inflowEstimate * scale
                   const outH = d.outflow * scale
+                  const naslov = `${new Date(d.date).toLocaleDateString('sl-SI', { day: 'numeric', month: 'short' })}` +
+                    (d.inflow > 0 ? ` · dotok ${formatEur(d.inflow)}` : '') +
+                    (d.outflow > 0 ? ` · odtok ${formatEur(d.outflow)} (${d.outflowReasons.join(', ')})` : '') +
+                    ` · stanje ${formatEur(d.balance)}`
                   return (
                     <g key={i}>
-                      {inH > 0 && <rect x={x - 6} y={90 - inH} width="12" height={inH} fill="#0E5E3B" rx="2"><title>{d.date}: +€{Math.round(d.inflow)}</title></rect>}
-                      {outH > 0 && <rect x={x - 6} y="90" width="12" height={outH} fill="#E8B547" rx="2"><title>{d.date}: −€{Math.round(d.outflow)}</title></rect>}
+                      <title>{naslov}</title>
+                      {ocenaH > 0 && <rect x={x - 6} y={90 - ocenaH} width="12" height={ocenaH} fill="#0E5E3B" opacity="0.35" rx="2" />}
+                      {racuniH > 0 && <rect x={x - 6} y={90 - ocenaH - racuniH} width="12" height={racuniH} fill="#0E5E3B" rx="2" />}
+                      {outH > 0 && <rect x={x - 6} y="90" width="12" height={outH} fill="#E8B547" rx="2" />}
                     </g>
                   )
                 })
               })()}
               <line x1="0" x2="1100" y1="90" y2="90" stroke="var(--rule)" strokeWidth="0.5" />
               {(() => {
-                const max = getChartMaxValue(cashFlow.days)
-                const scale = 80 / max
-                const pts = cashFlow.days.map((d, i) => {
-                  const x = (i / 29) * 1080 + 10
-                  const y = 90 - (d.balance * scale)
-                  return `${x} ${Math.max(10, Math.min(170, y))}`
-                }).join(' L ')
-                return <path d={`M ${pts}`} stroke="var(--ink)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                const vals = cashFlow.days.map(d => d.balance)
+                const lo = Math.min(0, ...vals)
+                const hi = Math.max(0, ...vals)
+                const razpon = (hi - lo) || 1
+                // stanje 0 je vedno na sredinski crti ce so vrednosti obeh predznakov
+                const y = (v: number) => 12 + (hi - v) / razpon * 156
+                const pts = cashFlow.days.map((d, i) => `${(i / 29) * 1080 + 10} ${y(d.balance)}`).join(' L ')
+                const neg = cashFlow.summary.hasStartingBalance && cashFlow.summary.daysNegative > 0
+                return (
+                  <>
+                    {cashFlow.summary.hasStartingBalance && lo < 0 && <line x1="0" x2="1100" y1={y(0)} y2={y(0)} stroke="var(--bad)" strokeWidth="0.5" strokeDasharray="4 4" />}
+                    <path d={`M ${pts}`} stroke={neg ? 'var(--bad)' : 'var(--ink)'} strokeWidth="1.5" fill="none" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+                  </>
+                )
               })()}
             </svg>
           )}
           <div className="rk-cf-legend">
             <span><span className="dot in" />Dotok (računi)</span>
-            <span><span className="dot out" />Odtok (davki, prispevki, naročnine)</span>
-            <span><span className="dot bal" />Bilanca</span>
+            {cashFlow.summary.estimatedInflow > 0 && <span><span className="dot in" style={{ opacity: 0.35 }} />Ocena prometa (povprečje zadnjih 12 tednov)</span>}
+            <span><span className="dot out" />Odtok (davki, prispevki, plače, ponavljajoči stroški)</span>
+            <span><span className="dot bal" />{cashFlow.summary.hasStartingBalance ? 'Stanje na računu' : 'Kumulativni neto pretok'}</span>
           </div>
           {/* DODANO (11.8.2026): razclenitvena tabela - jasno vidno OD KOD
               prihaja vsak znesek v napovedi (namesto samo skupne stevilke). */}
@@ -1215,7 +1333,7 @@ export default function DashboardPage() {
               {cashFlow.deadlines.map((d, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '4px 0', color: 'var(--ink2)' }}>
                   <span>{d.label} · {new Date(d.date).toLocaleDateString('sl-SI', { day: 'numeric', month: 'short' })}</span>
-                  <span style={{ fontWeight: 600 }}>€{Math.round(d.amount).toLocaleString('sl-SI')}</span>
+                  <span style={{ fontWeight: 600 }}>{formatEur(d.amount)}</span>
                 </div>
               ))}
             </div>
