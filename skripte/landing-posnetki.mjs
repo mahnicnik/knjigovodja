@@ -28,9 +28,9 @@ const POSNETKI = [
   ['skener-mobilni', '/scan', 'mobilni', 'skener'],
   // Pregled prihodkov, stroskov, neto in DDV na nadzorni plosci.
   ['davki', '/dashboard', 'namizni', 'stevilke'],
-  ['blagajna', '/pos', 'namizni'],
-  ['koledar', '/pos', 'namizni', 'koledar'],
-  ['korak-nastavitve', '/nastavitve/blagajna', 'namizni'],
+  ['blagajna', '/pos', 'namizni', 'pin'],
+  ['koledar', '/pos', 'namizni', 'pin-koledar'],
+  ['korak-nastavitve', '/nastavitve', 'namizni'],
   ['korak-racuni', '/invoices', 'namizni'],
   ['korak-kpo', '/kpo', 'namizni'],
 ]
@@ -42,7 +42,8 @@ const NAPRAVE = {
 
 // Pomocni gumbi in pasica predstavitve na posnetku samo motijo.
 const SKRIJ = `
-  [data-demo-pasica], [aria-label="Pomoč"], [data-page-help], nextjs-portal { display: none !important; }
+  [data-demo-pasica], [aria-label="Pomoč"], [data-page-help], nextjs-portal,
+  .rk-onboard, div[style*="position: fixed"][style*="bottom: 0"] { display: none !important; }
 `
 
 const brskalnik = await chromium.launch(existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : {})
@@ -53,14 +54,26 @@ for (const [nacin, nastavitve] of Object.entries(NAPRAVE)) {
   const stran = await ctx.newPage()
   await stran.goto(`${BASE}/demo?kam=dashboard`, { waitUntil: 'networkidle' })
   if (!new URL(stran.url()).pathname.startsWith('/dashboard')) {
-    throw new Error(`Prijava v /demo ni uspela (pristal na ${stran.url()}).`)
+    console.error(`Prijava v /demo ni uspela za ${nacin} (pristal na ${stran.url()}) - preskakujem.`)
+    await ctx.close()
+    continue
   }
   for (const [ime, pot, naprava, akcija] of POSNETKI) {
     if (naprava !== nacin) continue
+    try {
     await stran.goto(`${BASE}${pot}`, { waitUntil: 'networkidle' })
     await stran.addStyleTag({ content: SKRIJ })
-    if (akcija === 'koledar') await stran.getByText('Koledar', { exact: true }).first().click().catch(() => {})
-    if (akcija === 'stevilke') await stran.locator('.rk-stat').first().scrollIntoViewIfNeeded().catch(() => {})
+    // Prelet 347: blagajna je zaklenjena s PIN-om osebja. Demo vodja Marko ima 2222.
+    if (akcija?.startsWith('pin')) {
+      const tipka = stran.getByRole('button', { name: '2', exact: true }).first()
+      if (await tipka.isVisible().catch(() => false)) {
+        for (let i = 0; i < 4; i++) { await tipka.click(); await stran.waitForTimeout(150) }
+        await stran.waitForTimeout(2000)
+      }
+    }
+    if (akcija === 'pin-koledar') { await stran.getByText('Koledar', { exact: true }).first().click().catch(() => {}); await stran.waitForTimeout(1500) }
+    // Stevilke (prihodki, odhodki, DDV) in napoved pretoka denarja na vrhu zaslona.
+    if (akcija === 'stevilke') await stran.evaluate(() => document.querySelector('.rk-stat')?.scrollIntoView({ block: 'start' })).catch(() => {})
     if (akcija === 'skener') {
       await stran.locator('input[type=file][accept*="pdf"]').setInputFiles('skripte/landing-blok-primer.png')
       await stran.getByText('Skeniraj s AI').click()
@@ -73,7 +86,13 @@ for (const [nacin, nastavitve] of Object.entries(NAPRAVE)) {
     const cilj = `${MAPA}/${ime}.webp`
     const info = await sharp(png).webp({ quality: 82 }).toFile(cilj)
     manifest[ime] = { sirina: info.width, visina: info.height }
+    // Prelet 346: mere zapisemo po VSAKEM posnetku - ce se kasnejsi zatakne,
+    // so ze narejeni vseeno vidni na strani.
+    writeFileSync(MANIFEST, JSON.stringify(manifest, null, 2) + '\n')
     console.log('posneto', ime, info.width, 'x', info.height)
+    } catch (e) {
+      console.error('NI POSNETO', ime, '-', e.message.split('\n')[0])
+    }
   }
   await ctx.close()
 }
