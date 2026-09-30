@@ -213,4 +213,10 @@ select '85d4b904-54eb-4430-ab7a-ce446fa76be6', false,
   t.trajanje, t.oseb, t.stanje, 'manual', 'DEMO-PODATKI'
 from t;
 
+-- PRELET 351: v demu Marko (PIN 2222) vidi celotno blagajno, tudi
+-- nastavitve, porocila in osebje. Samo demo podjetje; globalna vloga
+-- Vodja ostane nespremenjena za prave uporabnike.
+update staff set role = 'Lastnik', permissions = null
+where business_id = '85d4b904-54eb-4430-ab7a-ce446fa76be6' and name = 'Marko';
+
 commit;
