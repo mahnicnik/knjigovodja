@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import PageHelp from "@/components/PageHelp";
 import DemoPasica from "@/components/DemoPasica";
 import ZascitaStevilcnihPolj from "@/components/ZascitaStevilcnihPolj";
@@ -97,6 +97,20 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
+/**
+ * POPRAVLJENO (19.8.2026): `maximum-scale=1` je uporabniku PREPOVEDAL
+ * priblizevanje zaslona. Na racunih in v tabelah z drobno pisavo je bilo
+ * to mocno motece, za slabovidne pa oviro. Samodejno priblizevanje ob
+ * kliku v polje resujemo z `font-size: 16px` v globals.css.
+ *
+ * PRELET 355: prej rocna oznaka <meta name="viewport"> v <head>; Next pa
+ * doda svojo privzeto, zato sta bili v HTML dve. Vsebina je enaka.
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -121,11 +135,8 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Računko" />
-        {/* POPRAVLJENO (19.8.2026): `maximum-scale=1` je uporabniku PREPOVEDAL
-            priblizevanje zaslona. Na racunih in v tabelah z drobno pisavo je bilo
-            to mocno mote(ce, za slabovidne pa oviro. Samodejno priblizevanje ob
-            kliku v polje resujemo z `font-size: 16px` v globals.css. */}
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        {/* Viewport je od preleta 355 v `export const viewport` zgoraj (Next ga
+            sicer doda se sam in sta bili v glavi DVE oznaki). */}
       </head>
       {/* PRELET 259: pasica se prikaze SAMO predstavitvenemu uporabniku.
           Obiskovalec mora ves cas vedeti, kje je - sicer bo mislil, da je

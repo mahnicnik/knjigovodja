@@ -31,6 +31,7 @@ import { veljavnaDavcnaStevilka } from '@/lib/pos-calc'
 import MnozicneCene from '@/components/pos/MnozicneCene'
 import ZgodovinaCen from '@/components/pos/ZgodovinaCen'
 import { dodajVVrsto } from '@/lib/offline-vrsta'
+import { useJeTelefon, POS_TELEFON_CSS, SpodnjaNavigacija, SpodnjiList, VrsticaLista } from '@/components/pos/TelefonPostavitev'
 import { jeElektron, preberiKontekst, naslednjaLokalnaStevilka, zabeleziIzPolneStevilke, zaznanaPovezava } from '@/lib/offline-prodaja'
 
 // ================================================================
@@ -924,8 +925,8 @@ function LockScreen({ auth, imePodjetja }) {
 function Modal({ open, onClose, children, width=480 }) {
   if (!open) return null
   return (
-    <div onClick={onClose} style={{ position:'absolute', inset:0, zIndex:50, background:'rgba(15,20,18,0.55)', backdropFilter:'blur(2px)', display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
-      <div onClick={e => e.stopPropagation()} style={{ width, maxWidth:'94%', maxHeight:'92%', overflow:'auto', background:T.modalBg, borderRadius:14, border:'1px solid rgba(0,0,0,0.06)', boxShadow:'0 20px 60px rgba(0,0,0,0.25)' }}>
+    <div className="pos-modal-ozadje" onClick={onClose} style={{ position:'absolute', inset:0, zIndex:50, background:'rgba(15,20,18,0.55)', backdropFilter:'blur(2px)', display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+      <div className="pos-modal" onClick={e => e.stopPropagation()} style={{ width, maxWidth:'94%', maxHeight:'92%', overflow:'auto', background:T.modalBg, borderRadius:14, border:'1px solid rgba(0,0,0,0.06)', boxShadow:'0 20px 60px rgba(0,0,0,0.25)' }}>
         {children}
       </div>
     </div>
@@ -934,7 +935,7 @@ function Modal({ open, onClose, children, width=480 }) {
 
 function ModalHeader({ title, onClose }) {
   return (
-    <div style={{ padding:'18px 22px', borderBottom:'1px solid rgba(0,0,0,0.06)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+    <div className="pos-modal-glava" style={{ padding:'18px 22px', borderBottom:'1px solid rgba(0,0,0,0.06)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
       <div style={{ fontSize:16, fontWeight:600 }}>{title}</div>
       <button onClick={onClose} style={{ width:32, height:32, borderRadius:10, border:'1px solid rgba(0,0,0,0.08)', background:'transparent', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
         <KI name="x" size={16}/>
@@ -1714,11 +1715,11 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
   return (
     <Modal open={open} onClose={processing ? undefined : onCancel} width={620}>
       <ModalHeader title="Zaključi račun" onClose={onCancel}/>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 220px' }}>
+      <div className="pos-placilo-mreza" style={{ display:'grid', gridTemplateColumns:'1fr 220px' }}>
         <div style={{ padding:22, display:'flex', flexDirection:'column', gap:16 }}>
           <div>
             <div style={{ fontWeight:600, fontSize:12, color:T.muted, marginBottom:8, textTransform:'uppercase', letterSpacing:'0.06em' }}>Način plačila</div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:6 }}>
+            <div className="pos-placilo-nacini" style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:6 }}>
               {CFG.paymentMethods.map(pm => (
                 <button key={pm.id} onClick={() => { setMethod(pm.id); setCardConfirmed(false) }} style={{ padding:'12px 8px', borderRadius:10, cursor:'pointer', background: method===pm.id ? T.accent : T.chipBg, color: method===pm.id ? '#fff' : 'inherit', border:'none', display:'flex', alignItems:'center', gap:8, fontWeight:600, fontSize:13, fontFamily:'inherit' }}>
                   <span style={{ fontSize:20 }}>{pm.icon}</span>{pm.name}
@@ -1824,7 +1825,7 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
               )}
             </div>
           )}
-          <div style={{ display:'flex', gap:16 }}>
+          <div className="pos-placilo-dodatki" style={{ display:'flex', gap:16 }}>
             <div style={{ flex:1 }}>
               <div style={{ fontWeight:600, fontSize:12, color:T.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.06em' }}>Napitnina</div>
               <div style={{ display:'flex', gap:4 }}>
@@ -1853,7 +1854,7 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
           </div>
           {error && <div style={{ padding:'10px 12px', borderRadius:8, background:'rgba(168,50,50,0.10)', color:T.danger, fontSize:12, fontWeight:600 }}>✕ {error}</div>}
         </div>
-        <div style={{ padding:22, background:T.summaryBg, borderLeft:'1px solid rgba(0,0,0,0.06)', display:'flex', flexDirection:'column' }}>
+        <div className="pos-placilo-povzetek" style={{ padding:22, background:T.summaryBg, borderLeft:'1px solid rgba(0,0,0,0.06)', display:'flex', flexDirection:'column' }}>
           <div style={{ fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', color:T.muted, marginBottom:10 }}>Povzetek</div>
 
           {/* DODANO (21.8.2026): SEZNAM POSTAVK. Prej sta bili prikazani samo
@@ -1915,7 +1916,7 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
           )}
         </div>
       </div>
-      <div style={{ padding:'12px 22px 20px', borderTop:'1px solid rgba(0,0,0,0.06)', display:'flex', alignItems:'center', gap:10 }}>
+      <div className="pos-placilo-noga" style={{ padding:'12px 22px 20px', borderTop:'1px solid rgba(0,0,0,0.06)', display:'flex', alignItems:'center', gap:10 }}>
         <label style={{ display:'flex', alignItems:'center', gap:7, fontSize:12, fontWeight:500, color:T.muted, cursor:'pointer' }}>
           <input type="checkbox" checked={furs} onChange={e => setFurs(e.target.checked)} disabled={processing} style={{ accentColor:T.accent, width:15, height:15 }}/>
           Davčno potrdi (FURS)
@@ -1926,7 +1927,7 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
           <input type="checkbox" checked={naPodjetje} onChange={e => setNaPodjetje(e.target.checked)} disabled={processing} style={{ accentColor:T.accent, width:15, height:15 }}/>
           Račun na podjetje
         </label>
-        <div style={{ marginLeft:'auto', display:'flex', gap:8 }}>
+        <div className="pos-placilo-gumbi" style={{ marginLeft:'auto', display:'flex', gap:8 }}>
           <button onClick={onCancel} disabled={processing} style={{ padding:'10px 14px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'1px solid rgba(0,0,0,0.12)', background:'transparent', fontWeight:600, fontSize:13, opacity: processing ? 0.4 : 1 }}>Prekliči</button>
           {/* DODANO (22.8.2026): gumb je ostal videti aktiven tudi, kadar
               unovcenje ni mogoce (stranka brez kartice) - napaka se je pokazala
@@ -2326,7 +2327,7 @@ function SideNav({ screen, setScreen, nav, staffId }) {
      * `scrollbarWidth:'none'` skrije drsnik, ker bi na ozkem stolpcu pojedel
      * cetrtino sirine; pomikanje s kolescem in dotikom deluje naprej.
      */
-    <div style={{ width:80, background:T.surface, borderRight:'1px solid '+T.line, display:'flex', flexDirection:'column', alignItems:'center', padding:'10px 0', gap:4, flexShrink:0, minHeight:0 }}>
+    <div className="pos-stranska" style={{ width:80, background:T.surface, borderRight:'1px solid '+T.line, display:'flex', flexDirection:'column', alignItems:'center', padding:'10px 0', gap:4, flexShrink:0, minHeight:0 }}>
       <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, overflowY:'auto', flex:1, minHeight:0, width:'100%', scrollbarWidth:'none' }}>
       {vrstniRed.map(id => {
         const s = SCREENS[id]
@@ -2415,12 +2416,12 @@ function UserAvatar({ user, onLock }) {
   const initials = user.name.split(' ').map(w => w[0]).join('').slice(0, 2)
   return (
     <div style={{ position:'relative' }}>
-      <button onClick={() => setOpen(o => !o)} style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 4px 4px 10px', borderRadius:999, background:'rgba(255,255,255,0.08)', border:'none', color:T.headerInk, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600 }}>
-        <div style={{ lineHeight:1.1, textAlign:'right' }}>
+      <button className="pos-avatar-gumb" aria-label={user.name} onClick={() => setOpen(o => !o)} style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 4px 4px 10px', borderRadius:999, background:'rgba(255,255,255,0.08)', border:'none', color:T.headerInk, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600 }}>
+        <div className="pos-avatar-ime" style={{ lineHeight:1.1, textAlign:'right' }}>
           <div style={{ fontWeight:700 }}>{user.name.split(' ')[0]}</div>
           <div style={{ fontSize:10, opacity:0.65 }}>{user.role}</div>
         </div>
-        <div style={{ width:30, height:30, borderRadius:999, background: user.color || T.accent, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:11 }}>{initials}</div>
+        <div className="pos-avatar-krog" style={{ width:30, height:30, borderRadius:999, background: user.color || T.accent, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:11 }}>{initials}</div>
       </button>
       {open && (
         <>
@@ -2617,8 +2618,8 @@ function FloorScreen({ spaces, switchToTable, setScreen }) {
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', minHeight:0 }}>
-      <div style={{ padding:'12px 18px', background:T.surface, borderBottom:'1px solid '+T.line, display:'flex', alignItems:'center', gap:10 }}>
-        <div style={{ display:'flex', gap:4, background:T.surface3, padding:4, borderRadius:10 }}>
+      <div className="pos-tloris-orodja" style={{ padding:'12px 18px', background:T.surface, borderBottom:'1px solid '+T.line, display:'flex', alignItems:'center', gap:10 }}>
+        <div className="pos-tloris-prostori" style={{ display:'flex', gap:4, background:T.surface3, padding:4, borderRadius:10 }}>
           {spaces.map(s => (
             <button key={s.id} onClick={() => setSelectedSpace(s.id)} style={{ padding:'8px 14px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', border:'none', fontWeight:700, fontSize:13, background: selectedSpace===s.id ? T.header : 'transparent', color: selectedSpace===s.id ? T.headerInk : T.ink, display:'flex', alignItems:'center', gap:8 }}>
               <span style={{ width:8, height:8, borderRadius:999, background:s.color }}/>
@@ -2627,7 +2628,7 @@ function FloorScreen({ spaces, switchToTable, setScreen }) {
             </button>
           ))}
         </div>
-        <div style={{ display:'flex', gap:10, marginLeft:16 }}>
+        <div className="pos-tloris-legenda" style={{ display:'flex', gap:10, marginLeft:16 }}>
           {Object.entries(T.status).map(([k, st]) => (
             <div key={k} style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, color:T.muted, fontWeight:600 }}>
               <span style={{ width:9, height:9, borderRadius:999, background:st.dot }}/>{st.label}
@@ -2640,7 +2641,9 @@ function FloorScreen({ spaces, switchToTable, setScreen }) {
           </button>
         </div>
       </div>
-      <div style={{ flex:1, position:'relative', overflow:'hidden', background:T.bg, backgroundImage:'radial-gradient(circle, '+T.line+' 1px, transparent 1px)', backgroundSize:'24px 24px' }}>
+      {/* PRELET 355: okvir omogoca, da se tloris na telefonu drsi, namesto da mize padejo cez rob. */}
+      <div className="pos-tloris-okvir" style={{ flex:1, display:'flex', minHeight:0, minWidth:0 }}>
+      <div className="pos-tloris" style={{ flex:1, position:'relative', overflow:'hidden', background:T.bg, backgroundImage:'radial-gradient(circle, '+T.line+' 1px, transparent 1px)', backgroundSize:'24px 24px' }}>
         {(space.tables || []).map(t => {
           const st = T.status[t.status] || T.status.free
           const isRound = t.seats <= 2
@@ -2662,6 +2665,7 @@ function FloorScreen({ spaces, switchToTable, setScreen }) {
             </button>
           )
         })}
+      </div>
       </div>
     </div>
   )
@@ -2819,6 +2823,10 @@ function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart
   const [selectedCat, setSelectedCat] = useState('cat-fav')
   const [search, setSearch] = useState('')
   const [scanModal, setScanModal] = useState(false)
+  // PRELET 355: na telefonu je kosarica spodnji list, ki se odpre na dotik.
+  // Ko se izprazni (placano, pocisceno), se zapre sama.
+  const [kosaricaOdprta, setKosaricaOdprta] = useState(false)
+  useEffect(() => { if (cart.length === 0) setKosaricaOdprta(false) }, [cart.length])
 
   const items = useMemo(() => {
     if (search) return posData.items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()) || (i.code || '').toLowerCase().includes(search.toLowerCase()))
@@ -2838,16 +2846,16 @@ function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart
   }
 
   return (
-    <div style={{ flex:1, display:'flex', minHeight:0 }}>
-      {/* Kategorije sidebar */}
-      <div style={{ width:196, background:T.surface, borderRight:'1px solid '+T.line, display:'flex', flexDirection:'column', flexShrink:0 }}>
-        <div style={{ padding:'12px 14px', borderBottom:'1px solid '+T.lineSoft, fontSize:11, textTransform:'uppercase', letterSpacing:'0.08em', color:T.muted, fontWeight:700 }}>Kategorije</div>
-        <div style={{ overflowY:'auto', flex:1, padding:8 }}>
+    <div className="pos-prodaja" style={{ flex:1, display:'flex', minHeight:0 }}>
+      {/* Kategorije sidebar (na telefonu vodoravni trak - glej TelefonPostavitev) */}
+      <div className="pos-kat" style={{ width:196, background:T.surface, borderRight:'1px solid '+T.line, display:'flex', flexDirection:'column', flexShrink:0 }}>
+        <div className="pos-kat-naslov" style={{ padding:'12px 14px', borderBottom:'1px solid '+T.lineSoft, fontSize:11, textTransform:'uppercase', letterSpacing:'0.08em', color:T.muted, fontWeight:700 }}>Kategorije</div>
+        <div className="pos-kat-seznam" style={{ overflowY:'auto', flex:1, padding:8 }}>
           {posData.categories.map(c => {
             const active = selectedCat === c.id
             const jePriljubljeno = c.id === 'cat-fav'
             return (
-              <button key={c.id}
+              <button key={c.id} className="pos-kat-gumb"
                 draggable={!jePriljubljeno}
                 onDragStart={() => !jePriljubljeno && setVlecemKat(c.id)}
                 onDragOver={e => { if (!jePriljubljeno) { e.preventDefault(); setNadKat(c.id) } }}
@@ -2863,7 +2871,7 @@ function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart
                   width:'100%', padding:'10px', borderRadius:9, marginBottom:2, background: active ? T.accentSoft : 'transparent', color: active ? T.accent : T.ink, border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:13, fontWeight: active ? 700 : 500, display:'flex', alignItems:'center', gap:10, textAlign:'left' }}>
                 <span style={{ width:30, height:30, borderRadius:8, background:c.color||T.accent, display:'flex', alignItems:'center', justifyContent:'center', fontSize:15 }}>{c.icon}</span>
                 <span style={{ flex:1 }}>{c.name}</span>
-                {active && <KI name="chev" size={14}/>}
+                {active && <span className="pos-kat-chev"><KI name="chev" size={14}/></span>}
               </button>
             )
           })}
@@ -2871,9 +2879,9 @@ function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart
       </div>
 
       {/* Artikli */}
-      <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0, background:T.bg }}>
-        <div style={{ padding:'12px 16px', borderBottom:'1px solid '+T.line, background:T.surface, display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-          <div style={{ position:'relative', flex:1, maxWidth:360 }}>
+      <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0, minHeight:0, background:T.bg }}>
+        <div className="pos-artikli-orodja" style={{ padding:'12px 16px', borderBottom:'1px solid '+T.line, background:T.surface, display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+          <div className="pos-artikli-iskalnik" style={{ position:'relative', flex:1, maxWidth:360 }}>
             <div style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', color:T.muted }}><KI name="search" size={15}/></div>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Išči artikel ali šifro…" style={{ width:'100%', padding:'9px 12px 9px 36px', borderRadius:9, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13, background:T.surface2, outline:'none', boxSizing:'border-box' }}/>
           </div>
@@ -2891,12 +2899,12 @@ function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart
             }
             setHappyHourActive(h => !h)
           }} style={{ padding:'9px 12px', borderRadius:9, background: happyHourActive ? T.brand : T.surface2, color: happyHourActive ? T.header : T.ink, border:'1px solid '+(happyHourActive ? T.brand : T.line), fontWeight:700, fontSize:12, display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontFamily:'inherit' }}>
-            <KI name="happy" size={14}/> Happy hour{happyHourActive ? ` −${Number(H.activeHappyHourRule(posData.happyHourRules)?.discount_pct ?? 0)}%` : ''}
+            <KI name="happy" size={14}/><span className="pos-hh-napis">Happy hour</span>{happyHourActive ? ` −${Number(H.activeHappyHourRule(posData.happyHourRules)?.discount_pct ?? 0)}%` : ''}
           </button>
-          <div style={{ marginLeft:'auto', fontSize:12, color:T.muted }}>{items.length} artiklov</div>
+          <div className="pos-artikli-stevec" style={{ marginLeft:'auto', fontSize:12, color:T.muted }}>{items.length} artiklov</div>
         </div>
 
-        <div style={{ flex:1, overflowY:'auto', padding:14, display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(150px, 1fr))', gap:8, alignContent:'start' }}>
+        <div className="pos-artikli-mreza" style={{ flex:1, overflowY:'auto', padding:14, display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(150px, 1fr))', gap:8, alignContent:'start' }}>
           {items.map(it => {
             // POPRAVLJENO (16.8.2026): oznaka po AKTIVNEM PRAVILU, ne po imenu
             const hhRule = happyHourActive ? H.activeHappyHourRule(posData.happyHourRules) : null
@@ -2924,10 +2932,42 @@ function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart
           })}
           {items.length === 0 && <div style={{ gridColumn:'1/-1', padding:40, textAlign:'center', color:T.muted }}>Ni artiklov v tej kategoriji</div>}
         </div>
+
+        {/* PRELET 355: pritrjena vrstica kosarice - samo na telefonu. Dotik
+            odpre kosarico, "Plačaj" pa gre naravnost na placilo (isti pogoj
+            kot gumb v kosarici: brez odprte blagajne najprej odpri blagajno). */}
+        {(() => {
+          const kosov = cart.reduce((s, l) => s + l.qty, 0)
+          const zaPlacilo = totals.total * (1 - cartDiscount / 100)
+          return (
+            <div className="pos-samo-telefon pos-kosarica-vrstica" role="button" tabIndex={0}
+              onClick={() => { if (cart.length) setKosaricaOdprta(true) }}
+              onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && cart.length) setKosaricaOdprta(true) }}
+              aria-label="Odpri košarico"
+              style={{ cursor: cart.length ? 'pointer' : 'default' }}>
+              <div style={{ flex:1, minWidth:0, minHeight:44, display:'flex', flexDirection:'column', justifyContent:'center', lineHeight:1.15 }}>
+                <div style={{ fontSize:12, color:T.muted, fontWeight:600 }}>
+                  {cart.length ? `${kosov} kos · ${activeTable ? activeTable.name : 'Hitra prodaja'}` : 'Košarica je prazna'}
+                </div>
+                <div style={{ fontSize:18, fontWeight:800, fontVariantNumeric:'tabular-nums' }}>Skupaj {eur(zaPlacilo)}</div>
+              </div>
+              <button disabled={cart.length === 0}
+                onClick={e => {
+                  e.stopPropagation()
+                  if (!cashSession && onNeedOpenCash) { onNeedOpenCash(); return }
+                  setPaymentOpen({ discount: cartDiscount })
+                }}
+                style={{ minHeight:48, minWidth:120, padding:'0 18px', borderRadius:11, border:'none', fontFamily:'inherit', fontWeight:800, fontSize:16,
+                  background: cart.length ? T.accent : '#ccc', color:'#fff', cursor: cart.length ? 'pointer' : 'not-allowed' }}>
+                {!cashSession ? '🔒 Odpri' : 'Plačaj'}
+              </button>
+            </div>
+          )
+        })()}
       </div>
 
       {/* Košarica */}
-      <SaleCart cart={cart} setCart={setCart} adjustQty={adjustQty} activeTable={activeTable} activeCustomer={activeCustomer} setPaymentOpen={setPaymentOpen} totals={totals} setActiveCustomer={setActiveCustomer} customers={posData.customers} cartDiscount={cartDiscount} setCartDiscount={setCartDiscount} cashSession={cashSession} onNeedOpenCash={onNeedOpenCash}
+      <SaleCart telefonOdprta={kosaricaOdprta} onTelefonZapri={() => setKosaricaOdprta(false)} cart={cart} setCart={setCart} adjustQty={adjustQty} activeTable={activeTable} activeCustomer={activeCustomer} setPaymentOpen={setPaymentOpen} totals={totals} setActiveCustomer={setActiveCustomer} customers={posData.customers} cartDiscount={cartDiscount} setCartDiscount={setCartDiscount} cashSession={cashSession} onNeedOpenCash={onNeedOpenCash}
         auth={auth}
         vatRegistered={posData.org?.vat_registered}
         onWriteoff={() => setShowWriteoff(true)}
@@ -3123,7 +3163,7 @@ ${recipientHtml}
   )
 }
 
-function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPaymentOpen, totals, setActiveCustomer, customers, cartDiscount, setCartDiscount, cashSession, onNeedOpenCash, onHoldOrder, onProforma, onWriteoff, auth, vatRegistered }) {
+function SaleCart({ telefonOdprta = false, onTelefonZapri = () => {}, cart, setCart, adjustQty, activeTable, activeCustomer, setPaymentOpen, totals, setActiveCustomer, customers, cartDiscount, setCartDiscount, cashSession, onNeedOpenCash, onHoldOrder, onProforma, onWriteoff, auth, vatRegistered }) {
   /**
    * POPRAVLJENO (prelet 202): blagajna se je sesula ob kliku na mizo z
    * "Application error: a client-side exception".
@@ -3155,8 +3195,12 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
   const filteredCustomers = customers.filter(c => !custSearch || c.name.toLowerCase().includes(custSearch.toLowerCase()) || (c.phone || '').includes(custSearch))
 
   return (
-    <div style={{ width:340, background:T.surface, borderLeft:'1px solid '+T.line, display:'flex', flexDirection:'column', flexShrink:0 }}>
-      <div style={{ padding:'12px 16px', borderBottom:'1px solid '+T.line, display:'flex', alignItems:'center', gap:8 }}>
+    <div className={'pos-kosarica' + (telefonOdprta ? ' pos-kosarica-odprta' : '')} style={{ width:340, background:T.surface, borderLeft:'1px solid '+T.line, display:'flex', flexDirection:'column', flexShrink:0 }}>
+      <div className="pos-kos-glava" style={{ padding:'12px 16px', borderBottom:'1px solid '+T.line, display:'flex', alignItems:'center', gap:8 }}>
+        <button className="pos-samo-telefon" onClick={onTelefonZapri} aria-label="Zapri košarico"
+          style={{ border:'none', background:T.chipBg, borderRadius:10, cursor:'pointer', color:T.ink, marginLeft:-6 }}>
+          <KI name="chevD" size={20}/>
+        </button>
         <div style={{ flex:1 }}>
           <div style={{ fontSize:10, textTransform:'uppercase', letterSpacing:'0.08em', color:T.muted, fontWeight:700 }}>Naročilo</div>
           <div style={{ fontWeight:700, fontSize:14, marginTop:2 }}>
@@ -3268,11 +3312,11 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
             <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:5 }}>
               <div style={{ fontWeight:800, fontSize:14, fontVariantNumeric:'tabular-nums' }}>{eur(H.lineTotal(l))}</div>
               <div style={{ display:'flex', alignItems:'center', gap:2 }}>
-                <button onClick={() => l.qty===1 ? setCart(c => c.filter(x => x.lineId!==l.lineId)) : adjustQty(l.lineId, -1)} style={{ width:24, height:24, borderRadius:6, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <button onClick={() => l.qty===1 ? setCart(c => c.filter(x => x.lineId!==l.lineId)) : adjustQty(l.lineId, -1)} className="pos-kos-gumb" aria-label="Manj" style={{ width:24, height:24, borderRadius:6, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
                   {l.qty===1 ? <KI name="trash" size={11}/> : <KI name="minus" size={12}/>}
                 </button>
-                <div style={{ width:24, textAlign:'center', fontWeight:700, fontSize:13 }}>{l.qty}</div>
-                <button onClick={() => adjustQty(l.lineId, 1)} style={{ width:24, height:24, borderRadius:6, border:'none', background:T.accentSoft, color:T.accent, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <div className="pos-kos-kolicina" style={{ width:24, textAlign:'center', fontWeight:700, fontSize:13 }}>{l.qty}</div>
+                <button onClick={() => adjustQty(l.lineId, 1)} className="pos-kos-gumb" aria-label="Več" style={{ width:24, height:24, borderRadius:6, border:'none', background:T.accentSoft, color:T.accent, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
                   <KI name="plus" size={12}/>
                 </button>
                 {/* PRELET 201: popust SAMO na to postavko. Popust na celoten
@@ -3282,7 +3326,7 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
                     setVnosZnesek(Number(l.discountEur||0) ? String(l.discountEur) : '')
                     setPopustVrstice(l.lineId)
                   }}
-                  title="Popust na to postavko"
+                  title="Popust na to postavko" className="pos-kos-gumb"
                   style={{ width:24, height:24, borderRadius:6, marginLeft:2, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700,
                     border: '1px solid ' + (Number(l.discountPct||0) > 0 || Number(l.discountEur||0) > 0 ? T.accent : T.line),
                     background: Number(l.discountPct||0) > 0 || Number(l.discountEur||0) > 0 ? T.accentSoft : T.surface,
@@ -3294,7 +3338,7 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
       </div>
 
       {cart.length > 0 && (
-        <div style={{ padding:'8px 10px', borderTop:'1px solid '+T.line, display:'flex', gap:5 }}>
+        <div className="pos-kos-akcije" style={{ padding:'8px 10px', borderTop:'1px solid '+T.line, display:'flex', gap:5 }}>
           <button onClick={() => setPickCustomer(true)} style={{ flex:1, padding:'8px 4px', borderRadius:7, background:T.chipBg, border:'none', cursor:'pointer', color:T.ink, fontFamily:'inherit', display:'flex', flexDirection:'column', alignItems:'center', gap:3, fontSize:10, fontWeight:700 }}>
             <KI name="user" size={14}/>Stranka
           </button>
@@ -3354,7 +3398,7 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
           </div>
         </div>
         {cart.length > 0 && (
-          <div style={{ display:'flex', gap:6, marginTop:8 }}>
+          <div className="pos-kos-akcije" style={{ display:'flex', gap:6, marginTop:8 }}>
             <button onClick={onHoldOrder} style={{ flex:1, padding:'9px 4px', borderRadius:8, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700, color:T.ink, display:'flex', alignItems:'center', justifyContent:'center', gap:4 }}>
               💾 Shrani
             </button>
@@ -3369,7 +3413,7 @@ function SaleCart({ cart, setCart, adjustQty, activeTable, activeCustomer, setPa
         <button disabled={cart.length===0} onClick={() => {
           if (!cashSession && onNeedOpenCash) { onNeedOpenCash(); return }
           setPaymentOpen({ discount: cartDiscount })
-        }} style={{ width:'100%', marginTop:8, padding:'13px', borderRadius:9, cursor: cart.length ? 'pointer' : 'not-allowed', fontFamily:'inherit', border:'none', background: cart.length ? T.accent : '#ccc', color:'#fff', fontWeight:800, fontSize:15, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+        }} className="pos-kos-placaj" style={{ width:'100%', marginTop:8, padding:'13px', borderRadius:9, cursor: cart.length ? 'pointer' : 'not-allowed', fontFamily:'inherit', border:'none', background: cart.length ? T.accent : '#ccc', color:'#fff', fontWeight:800, fontSize:15, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
           <KI name="arrow" size={16} strokeWidth={2.2}/> {!cashSession ? '🔒 Odpri blagajno' : (cart.length > 0 ? `Plačaj ${eur(totals.total*(1-cartDiscount/100))}` : 'Plačaj')}
         </button>
       </div>
@@ -4640,9 +4684,9 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
   }
 
   return (
-    <div style={{ flex:1, display:'flex', minHeight:0 }}>
+    <div className={'pos-dvodelno' + (selected ? ' pos-dvodelno-podrobno' : '')} style={{ flex:1, display:'flex', minHeight:0 }}>
       {/* Leva lista */}
-      <div style={{ width:280, background:T.surface, borderRight:'1px solid '+T.line, display:'flex', flexDirection:'column', flexShrink:0 }}>
+      <div className="pos-dvodelno-seznam" style={{ width:280, background:T.surface, borderRight:'1px solid '+T.line, display:'flex', flexDirection:'column', flexShrink:0 }}>
         <div style={{ padding:'10px 10px 8px', borderBottom:'1px solid '+T.line }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
             <div style={{ fontSize:12, fontWeight:700, color:T.muted }}>{filtered.length} strank</div>
@@ -4724,16 +4768,19 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
 
       {/* Desna stran */}
       {!selected ? (
-        <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', color:T.muted, gap:8 }}>
+        <div className="pos-dvodelno-vsebina" style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', color:T.muted, gap:8 }}>
           <div style={{ fontSize:36 }}>👤</div>
           <div style={{ fontSize:14, fontWeight:600, color:T.ink }}>Izberi stranko</div>
           <div style={{ fontSize:12 }}>ali dodaj novo s klikom + Nova</div>
         </div>
       ) : (
-        <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0, background:T.bg }}>
+        <div className="pos-dvodelno-vsebina" style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0, background:T.bg }}>
           {/* Header */}
-          <div style={{ background:T.surface, borderBottom:'1px solid '+T.line, padding:'14px 20px' }}>
-            <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:12 }}>
+          <div className="pos-stranka-glava" style={{ background:T.surface, borderBottom:'1px solid '+T.line, padding:'14px 20px' }}>
+            <button className="pos-samo-telefon pos-nazaj" onClick={() => setSelectedId(null)}>
+              <KI name="chev" size={16}/> Vse stranke
+            </button>
+            <div className="pos-stranka-vrstica" style={{ display:'flex', alignItems:'center', gap:14, marginBottom:12 }}>
               <div style={{ width:52, height:52, borderRadius:999, background:T.accent, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:800, fontSize:18, flexShrink:0 }}>
                 {initials(selected.name)}
               </div>
@@ -4781,7 +4828,7 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
             )}
 
             {/* Tabi */}
-            <div style={{ display:'flex', gap:0, borderBottom:'2px solid '+T.line, marginBottom:-14 }}>
+            <div className="pos-zavihki" style={{ display:'flex', gap:0, borderBottom:'2px solid '+T.line, marginBottom:-14 }}>
               {[
                 ['pregled','Pregled'],
                 ['kartice','Paketi & predplačilo'+(customerPackages.filter(p=>p.active).length?' '+customerPackages.filter(p=>p.active).length:'')],
@@ -6918,7 +6965,7 @@ function InventoryScreen({ posData }) {
 
       {/* Header statistike */}
       <div style={{ padding:'14px 20px', background:T.surface, borderBottom:'1px solid '+T.line }}>
-        <div style={{ display:'flex', gap:16, alignItems:'center', marginBottom:12 }}>
+        <div className="pos-zaloga-glava" style={{ display:'flex', gap:16, alignItems:'center', marginBottom:12 }}>
           <div>
             <div style={{ fontSize:11, color:T.muted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em' }}>ZALOGA</div>
             <div style={{ fontSize:20, fontWeight:800 }}>{allItems.length + allIngredients.length} artiklov</div>
@@ -9889,9 +9936,9 @@ function OrdersScreen({ posData, auth }) {
   }
 
   return (
-    <div style={{ display:'flex', height:'100%', gap:0 }}>
+    <div className={'pos-dvodelno' + (selectedOrder ? ' pos-dvodelno-podrobno' : '')} style={{ display:'flex', height:'100%', gap:0 }}>
       {/* Seznam */}
-      <div style={{ width: selectedOrder ? 400 : '100%', borderRight: selectedOrder ? '1px solid '+T.line : 'none', display:'flex', flexDirection:'column', minWidth:0 }}>
+      <div className="pos-dvodelno-seznam" style={{ width: selectedOrder ? 400 : '100%', borderRight: selectedOrder ? '1px solid '+T.line : 'none', display:'flex', flexDirection:'column', minWidth:0 }}>
         {/* Header */}
         <div style={{ padding:'16px 20px', borderBottom:'1px solid '+T.line, display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
           <div style={{ fontWeight:700, fontSize:16 }}>Računi</div>
@@ -9916,7 +9963,7 @@ function OrdersScreen({ posData, auth }) {
             )}
           </div>
         </div>
-        <div style={{ padding:'10px 16px', borderBottom:'1px solid '+T.line, display:'flex', gap:10, alignItems:'center' }}>
+        <div className="pos-racuni-iskanje" style={{ padding:'10px 16px', borderBottom:'1px solid '+T.line, display:'flex', gap:10, alignItems:'center' }}>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Išči po številki, EOR ali ZOI…" style={{ flex:1, padding:'7px 10px', borderRadius:8, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:12, background:T.inputBg, outline:'none' }}/>
           <div style={{ fontSize:12, color:T.muted, whiteSpace:'nowrap' }}>
             {filtered.length} računov · €{totalFiltered.toFixed(2)}
@@ -10035,8 +10082,8 @@ function OrdersScreen({ posData, auth }) {
       )}
       {/* Detail */}
       {selectedOrder && (
-        <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
-          <div style={{ padding:'14px 20px', borderBottom:'1px solid '+T.line, display:'flex', alignItems:'center', gap:12 }}>
+        <div className="pos-dvodelno-vsebina" style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
+          <div className="pos-racun-glava" style={{ padding:'14px 20px', borderBottom:'1px solid '+T.line, display:'flex', alignItems:'center', gap:12 }}>
             <div style={{ flex:1 }}>
               <div style={{ fontWeight:700, fontSize:15 }}>Račun #{selectedOrder.number || selectedOrder.id.slice(-6)}</div>
               <div style={{ fontSize:12, color:T.muted }}>{selectedOrder.closed_at ? new Date(selectedOrder.closed_at).toLocaleString('sl-SI') : '—'}</div>
@@ -11502,6 +11549,9 @@ function InterniAktSection({ posData }) {
 function AdminScreen({ auth, posData }) {
   const isOwner = !!(auth?.user?.is_master || auth?.user?.role === 'Lastnik')
   const [section, setSection] = useState(isOwner ? 'staff' : 'profile')
+  // PRELET 355: na telefonu najprej seznam razdelkov, nato razdelek cez cel
+  // zaslon z gumbom Nazaj (CSS: .pos-dvodelno). Na sirsih zaslonih brez ucinka.
+  const [telefonPodrobno, setTelefonPodrobno] = useState(false)
   const supabase = createClient()
 
   const allSections = [
@@ -11525,16 +11575,19 @@ function AdminScreen({ auth, posData }) {
   const sections = allSections.filter(sec => !sec.ownerOnly || isOwner)
 
   return (
-    <div style={{ flex:1, display:'flex', minHeight:0 }}>
-      <div style={{ width:220, background:T.surface, borderRight:'1px solid '+T.line, padding:12, flexShrink:0, overflowY:'auto' }}>
+    <div className={'pos-dvodelno' + (telefonPodrobno ? ' pos-dvodelno-podrobno' : '')} style={{ flex:1, display:'flex', minHeight:0 }}>
+      <div className="pos-dvodelno-seznam" style={{ width:220, background:T.surface, borderRight:'1px solid '+T.line, padding:12, flexShrink:0, overflowY:'auto' }}>
         <div style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:'0.08em', padding:'8px 10px' }}>Nastavitve</div>
         {sections.map(s => (
-          <button key={s.id} onClick={() => setSection(s.id)} style={{ width:'100%', padding:'10px 12px', borderRadius:9, marginBottom:2, background: section===s.id?T.accentSoft:'transparent', color: section===s.id?T.accent:T.ink, border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:13, fontWeight: section===s.id?700:500, display:'flex', alignItems:'center', gap:10, textAlign:'left' }}>
+          <button key={s.id} onClick={() => { setSection(s.id); setTelefonPodrobno(true) }} style={{ width:'100%', padding:'10px 12px', borderRadius:9, marginBottom:2, background: section===s.id?T.accentSoft:'transparent', color: section===s.id?T.accent:T.ink, border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:13, fontWeight: section===s.id?700:500, display:'flex', alignItems:'center', gap:10, textAlign:'left' }}>
             <KI name={s.icon} size={15}/> {s.label}
           </button>
         ))}
       </div>
-      <div style={{ flex:1, overflow:'auto', padding:24, background:T.bg }}>
+      <div className="pos-dvodelno-vsebina" style={{ flex:1, overflow:'auto', padding:24, background:T.bg }}>
+        <button className="pos-samo-telefon pos-nazaj" onClick={() => setTelefonPodrobno(false)}>
+          <KI name="chev" size={16}/> {sections.find(x => x.id === section)?.label || 'Nastavitve'}
+        </button>
         {section==='staff'      && <StaffSection posData={posData}/>}
         {section==='categories' && <CatalogSection posData={posData}/>}
         {section==='spaces'     && <SpacesSection posData={posData}/>}
@@ -14769,7 +14822,7 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
 
   return (
     <div style={{ position:'relative' }}>
-      <button onClick={()=>setNotifOpen(o=>!o)} style={{ position:'relative', width:36, height:36, borderRadius:10, background:'rgba(255,255,255,0.08)', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:T.headerInk }}>
+      <button className="pos-ni-telefon" aria-label="Opozorila" onClick={()=>setNotifOpen(o=>!o)} style={{ position:'relative', width:36, height:36, borderRadius:10, background:'rgba(255,255,255,0.08)', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:T.headerInk }}>
         <KI name="bell" size={18}/>
         {(unread.length + unconfirmed) > 0 && (
           <span style={{ position:'absolute', top:-4, right:-4, minWidth:18, height:18, padding:'0 4px', borderRadius:9, background:T.danger, color:'#fff', fontSize:10, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', border:'2px solid '+T.header }}>
@@ -14781,10 +14834,13 @@ function BellNotifications({ notifications, notifOpen, setNotifOpen, posData, or
       {notifOpen && (
         <>
           <div onClick={()=>setNotifOpen(false)} style={{ position:'fixed', inset:0, zIndex:44 }}/>
-          <div style={{ position:'absolute', top:'calc(100% + 8px)', right:0, zIndex:45, width:360, maxHeight:480, background:'#fff', color:T.ink, borderRadius:13, boxShadow:'0 16px 48px rgba(0,0,0,0.22)', border:'1px solid '+T.line, overflow:'hidden', display:'flex', flexDirection:'column' }}>
+          <div className="pos-zvonec-plosca" style={{ position:'absolute', top:'calc(100% + 8px)', right:0, zIndex:45, width:360, maxHeight:480, background:'#fff', color:T.ink, borderRadius:13, boxShadow:'0 16px 48px rgba(0,0,0,0.22)', border:'1px solid '+T.line, overflow:'hidden', display:'flex', flexDirection:'column' }}>
             <div style={{ padding:'14px 16px', borderBottom:'1px solid '+T.line, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
               <div style={{ fontWeight:700, fontSize:14 }}>Opozorila <span style={{ fontSize:12, color:T.muted, fontWeight:500 }}>({unread.length} novih)</span></div>
               {unread.length > 0 && <button onClick={markAllRead} style={{ fontSize:11, color:T.accent, background:'none', border:0, cursor:'pointer', fontWeight:600 }}>Označi vse kot prebrano</button>}
+              {/* PRELET 355: na telefonu je seznam cez cel zaslon - potrebuje svoj gumb za zapiranje. */}
+              <button className="pos-samo-telefon" onClick={()=>setNotifOpen(false)} aria-label="Zapri opozorila"
+                style={{ width:44, height:44, border:'none', background:'transparent', fontSize:24, color:T.muted, cursor:'pointer', alignItems:'center', justifyContent:'center' }}>×</button>
             </div>
             <div style={{ overflowY:'auto', flex:1 }}>
               {unconfirmed > 0 && (
@@ -15729,6 +15785,10 @@ function KlasikApp() {
   }
   const [now, setNow] = useState(new Date())
   const [notifOpen, setNotifOpen] = useState(false)
+  // PRELET 355: meni "⋯" v glavi na telefonu.
+  const [meniTelefonOdprt, setMeniTelefonOdprt] = useState(false)
+  const jeTelefon = useJeTelefon()
+  const steviloOpozoril = (posData.notifications || []).filter((n: any) => !n.read && !n.dismissed).length
   const [orderListOpen, setOrderListOpen] = useState(false)
   const [showClockIn, setShowClockIn] = useState(false)
   const [wsRefreshKey, setWsRefreshKey] = useState(0)
@@ -15799,21 +15859,23 @@ function KlasikApp() {
   const days = ['Ned','Pon','Tor','Sre','Čet','Pet','Sob']
 
   return (
-    <div style={{ width:'100%', height:'100%', background:T.bg, color:T.ink, fontFamily:'"Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif', fontSize:13, display:'flex', flexDirection:'column', overflow:'hidden', position:'relative' }}>
+    <div className="pos-koren" style={{ width:'100%', height:'100%', background:T.bg, color:T.ink, fontFamily:'"Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif', fontSize:13, display:'flex', flexDirection:'column', overflow:'hidden', position:'relative' }}>
+      {/* PRELET 355: postavitev za telefon (≤ 767 pik). Nad tem ne velja nic. */}
+      <style>{POS_TELEFON_CSS}</style>
 
       {/* HEADER */}
-      <div style={{ background:T.header, color:T.headerInk, padding:'8px 16px', display:'flex', alignItems:'center', gap:14, flexShrink:0, borderBottom:'1px solid '+T.headerLine, minHeight:56 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+      <div className="pos-glava" style={{ background:T.header, color:T.headerInk, padding:'8px 16px', display:'flex', alignItems:'center', gap:14, flexShrink:0, borderBottom:'1px solid '+T.headerLine, minHeight:56 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10, minWidth:0 }}>
           <ZnakRacunko size={32}/>
-          <div style={{ lineHeight:1.1 }}>
-            <div style={{ fontWeight:700, fontSize:14 }}>{posData.businessName || 'Blagajna'}</div>
-            <div style={{ fontSize:11, opacity:0.65, marginTop:2 }}>{profile.name}</div>
+          <div style={{ lineHeight:1.1, minWidth:0 }}>
+            <div className="pos-ime-podjetja" style={{ fontWeight:700, fontSize:14 }}>{posData.businessName || 'Blagajna'}</div>
+            <div className="pos-profil-podnapis" style={{ fontSize:11, opacity:0.65, marginTop:2 }}>{profile.name}</div>
           </div>
         </div>
 
-        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:14 }}>
+        <div className="pos-glava-desno" style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:14 }}>
           {auth.permissions?.viewSales && (
-            <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', lineHeight:1.1 }}>
+            <div className="pos-ni-telefon" style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', lineHeight:1.1 }}>
               <div style={{ fontSize:10, opacity:0.55, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em' }}>Promet</div>
               {/* POPRAVLJENO (25.8.2026): glava je prometu PRISTEVALA trenutno kosarico,
                   ki se ni placana - stevilka, po kateri se blagajnik ravna med
@@ -15822,17 +15884,17 @@ function KlasikApp() {
               <div style={{ fontSize:15, fontWeight:800, color:T.brand, fontVariantNumeric:'tabular-nums' }}>{eur(posData.todayStats.promet)}</div>
             </div>
           )}
-          <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', lineHeight:1.1 }}>
+          <div className="pos-ni-telefon" style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', lineHeight:1.1 }}>
             <div style={{ fontSize:10, opacity:0.55, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em' }}>Računi</div>
             <div style={{ fontSize:15, fontWeight:700, fontVariantNumeric:'tabular-nums' }}>{posData.todayStats.racuni}</div>
           </div>
-          <div style={{ borderLeft:'1px solid '+T.headerLine, paddingLeft:14, display:'flex', flexDirection:'column', alignItems:'flex-end' }}>
+          <div className="pos-ni-telefon" style={{ borderLeft:'1px solid '+T.headerLine, paddingLeft:14, display:'flex', flexDirection:'column', alignItems:'flex-end' }}>
             <div style={{ fontSize:10, opacity:0.55, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em' }}>{days[now.getDay()]}</div>
             <div style={{ fontSize:15, fontWeight:700, fontVariantNumeric:'tabular-nums' }}>
               {String(now.getHours()).padStart(2,"0")}:{String(now.getMinutes()).padStart(2,"0")}
             </div>
           </div>
-          {activePremise && <div style={{ fontSize:10, fontWeight:700, color:'#e9b949', background:'rgba(233,185,73,0.15)', padding:'4px 8px', borderRadius:6, letterSpacing:'0.04em' }}>📍 {activePremise.premise_id}</div>}
+          {activePremise && <div className="pos-ni-telefon" style={{ fontSize:10, fontWeight:700, color:'#e9b949', background:'rgba(233,185,73,0.15)', padding:'4px 8px', borderRadius:6, letterSpacing:'0.04em' }}>📍 {activePremise.premise_id}</div>}
           {/* DODANO (17.8.2026): oznaka TESTNEGA nacina. Ker sta v nastavitvah
               lahko nalozena OBA certifikata, za pultom ni bilo nacina preveriti,
               kateri je aktiven - racun v testnem nacinu je videti enak pravemu,
@@ -15846,10 +15908,12 @@ function KlasikApp() {
           {/* Gumb "📜 AKT" je bil PRESTAVLJEN V NASTAVITVE (25.8.2026): v
               orodni vrstici je zasedal prostor, uporabi pa se redko - ob
               nadzoru. Zdaj je Nastavitve → Interni akt, poleg FURS in DDV. */}
-          <WorkStatusBar key={wsRefreshKey} posData={posData} onRequestClockIn={()=>setShowClockIn(true)}/>
+          <div className="pos-ni-telefon" style={{ display:'contents' }}>
+            <WorkStatusBar key={wsRefreshKey} posData={posData} onRequestClockIn={()=>setShowClockIn(true)}/>
+          </div>
           <BellNotifications notifications={posData.notifications} notifOpen={notifOpen} setNotifOpen={setNotifOpen} posData={posData} orderListOpen={orderListOpen} setOrderListOpen={setOrderListOpen}/>
           {orderListOpen && <OrderListModal posData={posData} onClose={()=>setOrderListOpen(false)}/>}
-          <button onClick={async()=>{
+          <button className="pos-ni-telefon" onClick={async()=>{
             const orders = await pos.orders.getHeldOrders()
             setHeldOrders(orders)
             setHeldOrdersOpen(true)
@@ -15857,7 +15921,7 @@ function KlasikApp() {
             💾 {heldOrders.length > 0 ? heldOrders.length + ' shranjenih' : 'Shranjeni'}
           </button>
           {cashSession && (
-            <button onClick={()=>setShowVmesnoStanje(true)} style={{ padding:'5px 10px', borderRadius:7, border:'none', background:'rgba(37,99,235,0.15)', color:'#2563eb', cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700 }}>
+            <button className="pos-ni-telefon" onClick={()=>setShowVmesnoStanje(true)} style={{ padding:'5px 10px', borderRadius:7, border:'none', background:'rgba(37,99,235,0.15)', color:'#2563eb', cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700 }}>
               Vmesno stanje
             </button>
           )}
@@ -15867,25 +15931,73 @@ function KlasikApp() {
               nekdo ne sme uporabiti, naj ga sploh ne vidi. */}
           {cashSession
             ? (auth?.permissions?.dailyClose
-                ? <button onClick={()=>setShowCloseCash(true)}
+                ? <button className="pos-ni-telefon" onClick={()=>setShowCloseCash(true)}
                     style={{ padding:'5px 10px', borderRadius:7, border:'none', background:'rgba(168,50,50,0.15)', color:T.danger, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700 }}>
                     🔒 Zaključi
                   </button>
-                : <span title="Dnevni zaključek lahko opravi le vodja ali lastnik."
+                : <span className="pos-ni-telefon" title="Dnevni zaključek lahko opravi le vodja ali lastnik."
                     style={{ padding:'5px 10px', borderRadius:7, background:'rgba(255,255,255,0.06)', color:T.inkSoft, fontSize:11, fontWeight:600 }}>
                     Blagajna odprta
                   </span>)
-            : <button onClick={()=>setShowOpenCash(true)} style={{ padding:'5px 10px', borderRadius:7, border:'none', background:T.accentSoft, color:T.accent, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700 }}>
+            : <button className="pos-ni-telefon" onClick={()=>setShowOpenCash(true)} style={{ padding:'5px 10px', borderRadius:7, border:'none', background:T.accentSoft, color:T.accent, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700 }}>
                 🔓 Odpri
               </button>
           }
+          {/* PRELET 355: na telefonu gre vse zgoraj skrito v meni "⋯", da glava ostane v eni vrstici. */}
+          <button className="pos-samo-telefon" onClick={()=>setMeniTelefonOdprt(true)} aria-label="Več možnosti"
+            style={{ position:'relative', width:44, height:44, borderRadius:12, border:'none', background:'rgba(255,255,255,0.08)', color:T.headerInk,
+              cursor:'pointer', alignItems:'center', justifyContent:'center', fontSize:22, fontWeight:800, lineHeight:1, fontFamily:'inherit' }}>
+            ⋯
+            {(steviloOpozoril + heldOrders.length) > 0 && (
+              <span style={{ position:'absolute', top:4, right:4, width:9, height:9, borderRadius:9, background:T.danger, border:'2px solid '+T.header }}/>
+            )}
+          </button>
           <UserAvatar user={auth.user} onLock={auth.lock}/>
         </div>
       </div>
+      <SpodnjiList odprt={meniTelefonOdprt} onZapri={()=>setMeniTelefonOdprt(false)} naslov={posData.businessName || 'Blagajna'} T={T}>
+        <div style={{ display:'grid', gridTemplateColumns: auth.permissions?.viewSales ? '1fr 1fr 1fr' : '1fr 1fr', gap:8, margin:'4px 0 10px' }}>
+          {auth.permissions?.viewSales && (
+            <div style={{ background:T.surface2, borderRadius:12, padding:'10px 12px' }}>
+              <div style={{ fontSize:10, color:T.muted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em' }}>Promet</div>
+              <div style={{ fontSize:16, fontWeight:800, fontVariantNumeric:'tabular-nums' }}>{eur(posData.todayStats.promet)}</div>
+            </div>
+          )}
+          <div style={{ background:T.surface2, borderRadius:12, padding:'10px 12px' }}>
+            <div style={{ fontSize:10, color:T.muted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em' }}>Računi</div>
+            <div style={{ fontSize:16, fontWeight:800, fontVariantNumeric:'tabular-nums' }}>{posData.todayStats.racuni}</div>
+          </div>
+          <div style={{ background:T.surface2, borderRadius:12, padding:'10px 12px' }}>
+            <div style={{ fontSize:10, color:T.muted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em' }}>{days[now.getDay()]}{activePremise ? ' · ' + activePremise.premise_id : ''}</div>
+            <div style={{ fontSize:16, fontWeight:800, fontVariantNumeric:'tabular-nums' }}>{String(now.getHours()).padStart(2,"0")}:{String(now.getMinutes()).padStart(2,"0")}</div>
+          </div>
+        </div>
+        {meniTelefonOdprt && jeTelefon && (
+          <div className="pos-meni-delo" style={{ margin:'0 0 8px', padding:'10px 12px', display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', background:T.header, color:T.headerInk, borderRadius:12, minHeight:44, boxSizing:'border-box' }}>
+            <span style={{ fontSize:12, fontWeight:700, opacity:0.7 }}>Na delu:</span>
+            <WorkStatusBar key={wsRefreshKey} posData={posData} onRequestClockIn={()=>{ setMeniTelefonOdprt(false); setShowClockIn(true) }}/>
+          </div>
+        )}
+        <VrsticaLista T={T} ikona={<KI name="bell" size={20}/>} napis="Opozorila" desno={steviloOpozoril > 0 ? steviloOpozoril : null}
+          onClick={()=>{ setMeniTelefonOdprt(false); setNotifOpen(true) }}/>
+        <VrsticaLista T={T} ikona={<span style={{ fontSize:18 }}>💾</span>} napis="Shranjeni računi" desno={heldOrders.length > 0 ? heldOrders.length : null}
+          onClick={async()=>{ setMeniTelefonOdprt(false); const orders = await pos.orders.getHeldOrders(); setHeldOrders(orders); setHeldOrdersOpen(true) }}/>
+        {cashSession && (
+          <VrsticaLista T={T} ikona={<KI name="money" size={20}/>} napis="Vmesno stanje"
+            onClick={()=>{ setMeniTelefonOdprt(false); setShowVmesnoStanje(true) }}/>
+        )}
+        {cashSession
+          ? (auth?.permissions?.dailyClose
+              ? <VrsticaLista T={T} nevarno ikona={<span style={{ fontSize:18 }}>🔒</span>} napis="Zaključi blagajno (dnevni zaključek)"
+                  onClick={()=>{ setMeniTelefonOdprt(false); setShowCloseCash(true) }}/>
+              : <VrsticaLista T={T} ikona={<span style={{ fontSize:18 }}>🔓</span>} napis="Blagajna odprta" desno={<span style={{ fontSize:12, fontWeight:500 }}>zaključi vodja</span>}/>)
+          : <VrsticaLista T={T} poudarjeno ikona={<span style={{ fontSize:18 }}>🔓</span>} napis="Odpri blagajno"
+              onClick={()=>{ setMeniTelefonOdprt(false); setShowOpenCash(true) }}/>}
+      </SpodnjiList>
 
       {/* CONTEXT STRIP */}
       {(activeTable || activeCustomer || happyHourActive) && (
-        <div style={{ background:T.brand, color:T.header, padding:'7px 18px', display:'flex', alignItems:'center', gap:14, fontSize:12, fontWeight:600, flexShrink:0 }}>
+        <div className="pos-kontekst" style={{ background:T.brand, color:T.header, padding:'7px 18px', display:'flex', alignItems:'center', gap:14, fontSize:12, fontWeight:600, flexShrink:0 }}>
           {happyHourActive && <div style={{ display:'flex', alignItems:'center', gap:6 }}><KI name="happy" size={14}/><span>Happy hour <b>−{Number(H.activeHappyHourRule(posData.happyHourRules)?.discount_pct ?? 0)}%</b></span></div>}
           {activeTable && (
             <div style={{ display:'flex', alignItems:'center', gap:6 }}>
@@ -15912,13 +16024,13 @@ function KlasikApp() {
           if (id !== 'sale' && activeTable) { switchToTable(null) }
           setScreen(id)
         }} nav={nav} staffId={auth?.user?.id}/>
-        <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', minWidth:0 }}>
+        <div className="pos-vsebina" style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', minWidth:0 }}>
           {/* DODANO (26.8.2026): stanje povezave. Osebje mora ob vsakem
               trenutku vedeti, ali racun odhaja v bazo ali caka na napravi -
               sicer bi ob izpadu delalo naprej v prepricanju, da je vse v redu,
               in ob koncu izmene ugotovilo, da polovice racunov ni nikjer. */}
           <StanjePovezave businessId={BUSINESS_ID} T={T}/>
-          <div style={{ flex:1, display:'flex', overflow:'hidden', minWidth:0 }}>
+          <div className="pos-zaslon" style={{ flex:1, display:'flex', overflow:'hidden', minWidth:0 }}>
           {screen==='floor'     && <FloorScreen spaces={posData.spaces} switchToTable={switchToTable} setScreen={setScreen}/>}
           {screen==='sale'      && <SaleScreen activeTable={activeTable} setActiveTable={setActiveTable} activeCustomer={activeCustomer} cart={cart} setCart={setCart} addItem={addItem} adjustQty={adjustQty} setPaymentOpen={setPaymentOpen} totals={totals} setActiveCustomer={setActiveCustomer} posData={posData} happyHourActive={happyHourActive} setHappyHourActive={setHappyHourActive} cashSession={cashSession} onNeedOpenCash={()=>setShowOpenCash(true)} auth={auth}/>}
           {screen==='calendar'  && <CalendarScreen posData={posData}/>}
@@ -15947,6 +16059,9 @@ function KlasikApp() {
           </div>
         </div>
       </div>
+      {/* PRELET 355: spodnja navigacija na telefonu (nad 767 pik skrita s CSS). */}
+      <SpodnjaNavigacija nav={nav} screen={screen} staffId={auth?.user?.id} SCREENS={SCREENS} Ikona={KI} T={T}
+        setScreen={(id) => { if (id !== 'sale' && activeTable) { switchToTable(null) } setScreen(id) }}/>
 
       {/* Modifier izbira modal */}
       {!!modifierPickModal && (
@@ -16212,7 +16327,7 @@ export default function PosPage() {
   )
 
   return (
-    <div style={{ width:'100vw', height:'100vh', overflow:'hidden' }}>
+    <div className="pos-stran" style={{ width:'100vw', height:'100vh', overflow:'hidden' }}>
       <KlasikApp/>
     </div>
   )
