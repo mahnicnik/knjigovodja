@@ -91,6 +91,31 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // PRELET 356: DEMO nacin tudi za blagajno. Doslej ga je poznala samo pot
+    // za spletne racune (lib/furs-invoice-confirm.ts) - blagajna v predstavitvi
+    // je ob VSAKEM placilu vrnila "FURS certifikat ni nalozen" in racuna ni
+    // izdala. Velja IZKLJUCNO za organizacije z furs_demo_mode = true; nic se
+    // ne poslje FURS-u, kodi imata vedno predpono "DEMO-".
+    if (org.furs_demo_mode) {
+      const { data: seqData, error: seqError } = await supabase.rpc('next_invoice_number', {
+        p_business_id: order.business_id, p_premise_id: null, p_device_id: null, p_leto: null,
+      })
+      if (seqError) {
+        return NextResponse.json({ error: 'Napaka pri generiranju številke računa: ' + seqError.message }, { status: 500 })
+      }
+      const stevilka = `DEMO1-BLAG1-${seqData}`
+      const demoKoda = `DEMO-${String(order_id).replace(/-/g, '').slice(0, 12).toUpperCase()}`
+      await supabase.from('pos_invoice_numbers').insert({
+        business_id: order.business_id, sequence_number: seqData, invoice_number: stevilka,
+        order_id: order.id, status: 'issued', note: 'Predstavitveni način - ni prijavljen FURS',
+      })
+      await supabase.from('orders').update({ invoice_number: stevilka }).eq('id', order_id)
+      return NextResponse.json({
+        success: true, zoi: demoKoda, eor: demoKoda, invoiceNumber: stevilka,
+        issuedAt: (order.closed_at ? new Date(order.closed_at) : new Date()).toISOString(),
+      })
+    }
+
     const { cert, isTest } = await getFursCertificate(supabase, member.org_id)
 
     if (!cert) {
