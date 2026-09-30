@@ -14,6 +14,8 @@ type Blok = {
   pot: string
   alt: string
   telefon?: { ime: string; alt: string }
+  /** Posebna slika namesto posnetka v okvirju brskalnika. */
+  vrsta?: 'dokument' | 'skener'
 }
 
 const racun = opravilo('racun')
@@ -25,21 +27,24 @@ const BLOKI: Blok[] = [
     opravilo: 'racun',
     besedilo: 'Izberete stranko in artikle. Račun je davčno potrjen pri FURS, stranka ga dobi po e-pošti.',
     seznam: ['Potrditev pri FURS ob izdaji', 'UPN QR koda na vsakem PDF-u', 'e-račun v obliki e-SLOG 2.0', 'Ponavljajoči se računi in opomini'],
-    posnetek: 'racun', pot: '/invoices/new', alt: 'Izdaja novega računa: stranka, postavke, DDV in skupni znesek',
+    // PRELET 343: pravi PDF iz predloge racuna (lib/invoice-pdf.tsx) z
+    // izmisljenimi podatki - tak racun dobi stranka.
+    posnetek: 'racun', pot: '', vrsta: 'dokument',
+    alt: 'Primer računa, izdanega z Računkom: postavke s popustom, DDV, skupni znesek in UPN QR koda za plačilo',
   },
   {
     naslov: `Stroške fotografirate. Vnos naredi ${IME}.`,
     opravilo: 'strosek',
     besedilo: `Fotografirate račun ali ga posredujete po e-pošti. ${IME} prebere dobavitelja, znesek in DDV ter ga razvrsti. Vi potrdite.`,
-    seznam: ['Skener s telefonom ali računalnikom', 'Prejeti računi po e-pošti', 'Uvoz plačil iz bančnega izpiska'],
-    posnetek: 'skener', pot: '/scan', alt: 'Skeniranje prejetega računa: prebrani dobavitelj, znesek in DDV',
-    telefon: { ime: 'skener-mobilni', alt: 'Skeniranje računa s telefonom' },
+    seznam: ['Skener s telefonom ali računalnikom', 'Konto se določi samodejno — računovodja dobi že razvrščene stroške', 'Prejeti računi po e-pošti', 'Uvoz plačil iz bančnega izpiska'],
+    posnetek: 'skener-mobilni', pot: '/scan', vrsta: 'skener',
+    alt: 'Telefon nad blagajniškim računom: Računko je prebral dobavitelja, znesek, DDV in določil konto',
   },
   {
     naslov: 'Davke in prispevke veste vnaprej',
     opravilo: 'zakljucek',
-    besedilo: 'Nadzorna plošča pokaže, koliko boste plačali in kdaj. Napoved pretoka denarja upošteva odprte račune in prihajajoče obveznosti.',
-    seznam: ['Prispevki in akontacija izračunani sproti', 'Napoved pretoka denarja', 'Opomniki na davčne roke'],
+    besedilo: 'Nadzorna plošča pokaže prihodke, stroške, neto dohodek in DDV za tekoče obdobje ter koliko boste plačali in kdaj.',
+    seznam: ['Neto prihodki, stroški in DDV na enem mestu', 'Prispevki in akontacija izračunani sproti', 'Napoved pretoka denarja in opomniki na roke'],
     posnetek: 'davki', pot: '/dashboard', alt: 'Pregled davkov, prispevkov in napoved pretoka denarja',
   },
   {
@@ -53,7 +58,7 @@ const BLOKI: Blok[] = [
     naslov: 'Člani, paketi in termini',
     besedilo: 'Za fitnes, studie in storitve. Člani imajo pakete in naročnine, termini so v koledarju, obisk se odšteje na blagajni.',
     seznam: ['Mesečne naročnine in paketi obiskov', 'Terminski koledar', 'Dostopi za trenerje in osebje'],
-    posnetek: 'clani', pot: '/pos', alt: 'Seznam članov s paketi in veljavnostjo',
+    posnetek: 'koledar', pot: '/pos', alt: 'Terminski koledar z rezervacijami članov in trenerjev',
   },
 ]
 
@@ -88,7 +93,26 @@ export default function Funkcije() {
                 </ul>
               </div>
               <div className={s.funkcijaSlika}>
-                <Posnetek ime={b.posnetek} pot={b.pot} alt={b.alt} sizes="(max-width: 900px) 92vw, 640px" />
+                {b.vrsta === 'dokument' ? (
+                  <>
+                    <div className={s.dokument}>
+                      <Posnetek ime={b.posnetek} okvir="brez" alt={b.alt} sizes="(max-width: 900px) 92vw, 560px" />
+                    </div>
+                    <p className={s.dokumentNapis}>Primer računa z izmišljenimi podatki — PDF, ki ga dobi vaša stranka.</p>
+                  </>
+                ) : b.vrsta === 'skener' ? (
+                  <div className={s.skener}>
+                    <div className={s.skenerPapir}>
+                      <Posnetek ime="blok-papir" okvir="brez" alt="" sizes="(max-width: 900px) 46vw, 280px" />
+                    </div>
+                    <span className={s.skenerZarek} aria-hidden="true" />
+                    <div className={s.skenerTelefon}>
+                      <Posnetek ime={b.posnetek} okvir="telefon" alt={b.alt} sizes="(max-width: 900px) 52vw, 290px" />
+                    </div>
+                  </div>
+                ) : (
+                  <Posnetek ime={b.posnetek} pot={b.pot} alt={b.alt} sizes="(max-width: 900px) 92vw, 640px" />
+                )}
                 {b.telefon && (
                   <div className={s.funkcijaTelefon}>
                     <Posnetek ime={b.telefon.ime} okvir="telefon" alt={b.telefon.alt} sizes="(max-width: 900px) 30vw, 200px" />

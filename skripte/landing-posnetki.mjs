@@ -22,12 +22,14 @@ const MANIFEST = 'apps/web/components/landing/posnetki.json'
 const POSNETKI = [
   ['dashboard', '/dashboard', 'namizni'],
   ['dashboard-mobilni', '/dashboard', 'mobilni'],
-  ['racun', '/invoices/new', 'namizni'],
-  ['skener', '/scan', 'namizni'],
-  ['skener-mobilni', '/scan', 'mobilni'],
-  ['davki', '/prispevki', 'namizni'],
+  // Prelet 343: 'racun' je staticen PDF (public/landing/racun.webp), ne posnetek.
+  // Skener: nalozi izmisljen blagajniski racun, pusti AI, da ga prebere,
+  // in posname rezultat s kontom. NIC se ne shrani.
+  ['skener-mobilni', '/scan', 'mobilni', 'skener'],
+  // Pregled prihodkov, stroskov, neto in DDV na nadzorni plosci.
+  ['davki', '/dashboard', 'namizni', 'stevilke'],
   ['blagajna', '/pos', 'namizni'],
-  ['clani', '/pos', 'namizni', 'clani'],
+  ['koledar', '/pos', 'namizni', 'koledar'],
   ['korak-nastavitve', '/nastavitve/blagajna', 'namizni'],
   ['korak-racuni', '/invoices', 'namizni'],
   ['korak-kpo', '/kpo', 'namizni'],
@@ -57,7 +59,15 @@ for (const [nacin, nastavitve] of Object.entries(NAPRAVE)) {
     if (naprava !== nacin) continue
     await stran.goto(`${BASE}${pot}`, { waitUntil: 'networkidle' })
     await stran.addStyleTag({ content: SKRIJ })
-    if (akcija === 'clani') await stran.getByText(/Člani/).first().click().catch(() => {})
+    if (akcija === 'koledar') await stran.getByText('Koledar', { exact: true }).first().click().catch(() => {})
+    if (akcija === 'stevilke') await stran.locator('.rk-stat').first().scrollIntoViewIfNeeded().catch(() => {})
+    if (akcija === 'skener') {
+      await stran.locator('input[type=file][accept*="pdf"]').setInputFiles('skripte/landing-blok-primer.png')
+      await stran.getByText('Skeniraj s AI').click()
+      await stran.getByText(/^Konto /).first().waitFor({ timeout: 60000 })
+      await stran.getByText(/^Konto /).first().scrollIntoViewIfNeeded()
+      await stran.mouse.wheel(0, 120)
+    }
     await stran.waitForTimeout(1500)
     const png = await stran.screenshot()
     const cilj = `${MAPA}/${ime}.webp`

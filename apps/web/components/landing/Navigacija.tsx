@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import s from './landing.module.css'
+import Znak from './Znak'
 import { IME } from './ime'
 
 const POVEZAVE: [string, string][] = [
@@ -17,7 +18,7 @@ export default function Navigacija() {
     <header className={s.nav}>
       <div className={s.navNotranje}>
         <a href="#vrh" className={s.logo} aria-label={`${IME} — na vrh strani`}>
-          <span className={s.logoTocka} aria-hidden="true" />
+          <Znak />
           {IME}
         </a>
         <nav className={s.navPovezave} aria-label="Glavna navigacija">

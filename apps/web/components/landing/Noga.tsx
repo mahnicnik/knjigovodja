@@ -1,4 +1,5 @@
 import s from './landing.module.css'
+import Znak from './Znak'
 import { IME } from './ime'
 
 const KONTAKT = 'podpora@xn--raunko-j2a.si'
@@ -10,7 +11,7 @@ export default function Noga() {
       <div className={s.vsebina}>
         <div className={s.nogaMreza}>
           <div>
-            <a href="#vrh" className={s.logo}><span className={s.logoTocka} aria-hidden="true" />{IME}</a>
+            <a href="#vrh" className={s.logo}><Znak />{IME}</a>
             <p className={s.nogaOpis}>Računi, stroški, davki in blagajna za slovenski s.p. in majhna podjetja.</p>
           </div>
           <div>

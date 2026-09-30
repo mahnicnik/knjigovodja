@@ -1,1 +1,10 @@
-{}
+{
+  "racun": {
+    "sirina": 1200,
+    "visina": 1422
+  },
+  "blok-papir": {
+    "sirina": 560,
+    "visina": 730
+  }
+}

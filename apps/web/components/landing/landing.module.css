@@ -6,20 +6,20 @@
 
 .stran {
   --l-ozadje: #FFFFFF;
-  --l-ozadje-2: #F5F7FB;
+  --l-ozadje-2: #F4F7F4;
   --l-tekst: #0B1220;
   --l-tekst-2: #5B6475;
-  --l-primarna: #2E5BFF;
-  --l-primarna-hover: #1F47E6;
-  --l-primarna-svetla: #EAF0FF;
-  --l-rumena: #FFD43B;
+  --l-primarna: #0E5E3B;
+  --l-primarna-hover: #0A4A2E;
+  --l-primarna-svetla: #E4F1E9;
+  --l-rumena: #F3CD6B;
   --l-uspeh: #12B76A;
   --l-temna: #0B1220;
   --l-crta: #E4E8F0;
   --l-r-s: 12px;
   --l-r-m: 16px;
   --l-r-l: 24px;
-  --l-senca: 0 1px 2px rgba(11, 18, 32, .06), 0 12px 32px -8px rgba(11, 18, 32, .18), 0 40px 80px -24px rgba(46, 91, 255, .22);
+  --l-senca: 0 1px 2px rgba(11, 18, 32, .06), 0 12px 32px -8px rgba(11, 18, 32, .18), 0 40px 80px -24px rgba(14, 94, 59, .20);
   --l-rob: clamp(16px, 4vw, 40px);
 
   background: var(--l-ozadje);
@@ -118,11 +118,11 @@
   transition: background .18s ease, transform .12s ease, box-shadow .18s ease;
 }
 .gumbPrimarni { composes: gumb; background: var(--l-primarna); color: #fff; }
-.gumbPrimarni:hover { background: var(--l-primarna-hover); transform: translateY(-1px); box-shadow: 0 10px 24px -10px rgba(46, 91, 255, .7); }
+.gumbPrimarni:hover { background: var(--l-primarna-hover); transform: translateY(-1px); box-shadow: 0 10px 24px -10px rgba(14, 94, 59, .6); }
 .gumbSekundarni { composes: gumb; background: var(--l-ozadje-2); color: var(--l-tekst); }
 .gumbSekundarni:hover { background: #E9EDF5; }
 .gumbSvetli { composes: gumb; background: #fff; color: var(--l-tekst); }
-.gumbSvetli:hover { background: #EEF2FF; }
+.gumbSvetli:hover { background: #E8F2EC; }
 .gumbVelik { min-height: 56px; padding: 16px 28px; font-size: 1.06rem; border-radius: 14px; }
 
 /* ── Navigacija ────────────────────────────────────────── */
@@ -153,12 +153,8 @@
   gap: 8px;
   min-height: 44px;
 }
-.logoTocka {
-  width: 10px; height: 10px;
-  border-radius: 3px;
-  background: var(--l-primarna);
-  transform: rotate(45deg);
-}
+.logoZnak { width: 34px; height: 34px; flex-shrink: 0; }
+.logo { color: var(--l-primarna); }
 .navPovezave {
   display: flex;
   gap: 4px;
@@ -259,8 +255,8 @@
   padding: clamp(16px, 4vw, 56px) clamp(12px, 4vw, 56px) 0;
   border-radius: var(--l-r-l) var(--l-r-l) 0 0;
   background:
-    radial-gradient(120% 90% at 50% 0%, #DCE5FF 0%, rgba(220, 229, 255, 0) 70%),
-    linear-gradient(180deg, #F0F4FF 0%, #fff 100%);
+    radial-gradient(120% 90% at 50% 0%, #DCEFE3 0%, rgba(220, 239, 227, 0) 70%),
+    linear-gradient(180deg, #F1F7F3 0%, #fff 100%);
 }
 .heroOkvir { max-width: 1080px; margin: 0 auto; position: relative; }
 .heroTelefon {
@@ -578,7 +574,7 @@
   line-height: 1;
   color: #fff;
 }
-.kalkUre .marker { background-image: linear-gradient(transparent 70%, rgba(255, 212, 59, .9) 70%, rgba(255, 212, 59, .9) 90%, transparent 90%); }
+.kalkUre .marker { background-image: linear-gradient(transparent 70%, rgba(243, 205, 107, .9) 70%, rgba(243, 205, 107, .9) 90%, transparent 90%); }
 .kalkUreEnota { font-size: .4em; letter-spacing: -0.02em; }
 .kalkEvri {
   display: grid;
@@ -676,7 +672,7 @@
   line-height: 1;
 }
 .paketNa { font-family: var(--l-pisava-besedilo), system-ui, sans-serif; font-size: 1rem; font-weight: 500; letter-spacing: 0; color: var(--l-tekst-2); }
-.paketPoudarjen .paketNa, .paketPoudarjen .paketOpis, .paketPoudarjen .paketDodatno { color: #E3E9FF; }
+.paketPoudarjen .paketNa, .paketPoudarjen .paketOpis, .paketPoudarjen .paketDodatno { color: #DDEFE4; }
 .paketDodatno { font-size: .88rem; color: var(--l-tekst-2); margin-top: 8px; min-height: 1.4em; }
 .paketOpis { color: var(--l-tekst-2); font-size: .98rem; }
 .paketUre { font-weight: 600; font-size: .95rem; }
@@ -777,3 +773,56 @@
   .heroGumbi > a { width: 100%; }
   .zakljucekGumbi > a { width: 100%; }
 }
+
+/* ── Prelet 343: racun kot dokument in kompozicija skenerja ─────────── */
+.dokument {
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: var(--l-senca);
+  overflow: hidden;
+  outline: 1px solid var(--l-crta);
+}
+.dokumentNapis {
+  margin-top: 14px;
+  text-align: center;
+  font-size: .85rem;
+  color: var(--l-tekst-2);
+}
+.skener {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 520px;
+  padding: 24px 0;
+}
+.skenerPapir {
+  position: absolute;
+  left: 4%;
+  top: 6%;
+  width: 46%;
+  transform: rotate(-6deg);
+  filter: drop-shadow(0 18px 30px rgba(11, 18, 32, .18));
+}
+.skenerTelefon {
+  position: relative;
+  margin-left: 34%;
+  width: 46%;
+  max-width: 290px;
+  transform: rotate(3deg);
+}
+.skenerZarek {
+  position: absolute;
+  left: 30%;
+  top: 34%;
+  width: 22%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--l-primarna));
+  opacity: .5;
+}
+@media (max-width: 900px) {
+  .skener { min-height: 420px; }
+  .skenerPapir { width: 48%; left: 0; }
+  .skenerTelefon { margin-left: 40%; width: 52%; }
+}
+.telefonZaslon .brezPosnetka { aspect-ratio: 390 / 844; font-size: .72rem; padding: 12px; }
+.brezPosnetka { background: repeating-linear-gradient(45deg, #F4F7F4 0 12px, #ECF1ED 12px 24px); }

@@ -17,7 +17,7 @@ const MERE = posnetki as Record<string, Mere>
 type Props = {
   ime: string
   alt: string
-  okvir?: 'brskalnik' | 'telefon'
+  okvir?: 'brskalnik' | 'telefon' | 'brez'
   pot?: string
   sizes: string
   priority?: boolean
@@ -40,6 +40,7 @@ export default function Posnetek({ ime, alt, okvir = 'brskalnik', pot, sizes, pr
     <div className={s.brezPosnetka} role="img" aria-label={alt}>/landing/{ime}.webp</div>
   )
 
+  if (okvir === 'brez') return slika
   if (okvir === 'telefon') {
     return (
       <div className={s.telefon}>
