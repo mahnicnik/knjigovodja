@@ -51,7 +51,9 @@ export default function Cene() {
                   Začnite brezplačno
                 </a>
                 <ul className={s.paketSeznam}>
-                  {p.funkcije.map(f => <li key={f}><Kljukica />{f}</li>)}
+                  {p.funkcije.map(f => f.startsWith('Brez ')
+                    ? <li key={f} className={s.paketManjka}><span aria-hidden="true" className={s.paketManjkaZnak}>–</span>{f}</li>
+                    : <li key={f}><Kljukica />{f}</li>)}
                 </ul>
               </article>
             )

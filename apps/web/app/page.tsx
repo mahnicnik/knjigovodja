@@ -9,6 +9,7 @@ import PrejZdaj from '@/components/landing/PrejZdaj'
 import KakoDeluje from '@/components/landing/KakoDeluje'
 import Funkcije from '@/components/landing/Funkcije'
 import ZaKoga from '@/components/landing/ZaKoga'
+import ZaRacunovodje from '@/components/landing/ZaRacunovodje'
 import Kalkulator from '@/components/landing/Kalkulator'
 import Mnenja from '@/components/landing/Mnenja'
 import Cene from '@/components/landing/Cene'
@@ -50,6 +51,7 @@ export default function ZacetnaStran() {
         <KakoDeluje />
         <Funkcije />
         <ZaKoga />
+        <ZaRacunovodje />
         <Kalkulator />
         <Mnenja />
         <Cene />

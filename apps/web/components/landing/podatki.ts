@@ -24,13 +24,18 @@ export type Paket = {
 export const PAKETI: Paket[] = [
   {
     id: 'brezplacno', ime: 'Brezplačno', mesecno: 0, letno: 0,
-    opis: 'Za izdajanje računov, brez omejitve števila.',
-    funkcije: ['Neomejeni računi', 'FURS davčno potrjevanje', 'PDF prenos', 'Prispevki in UPN QR', 'AI pomočnik za vprašanja'],
+    // PRELET 349: prej je ponudba obljubljala "neomejene racune" in "FURS
+    // davcno potrjevanje", aplikacija pa brezplacnemu paketu dovoli 5 racunov,
+    // brez FURS, brez posiljanja po e-posti in brez AI racunovodje
+    // (lib/useSubscription.ts, api/furs/confirm, api/ai-chat). Ponudba mora
+    // opisati, kar uporabnik dejansko dobi.
+    opis: 'Da preizkusite, kako deluje. Za račune, plačane na TRR.',
+    funkcije: ['Do 5 računov', 'PDF z UPN QR kodo za plačilo', 'Izračun prispevkov', 'Pomoč pri uporabi aplikacije', 'Brez davčnega potrjevanja (FURS)'],
   },
   {
     id: 'pro', ime: 'Pro', mesecno: 12.99, letno: 129.90, poudarjen: true,
     opis: 'Za aktivnega s.p., ki ne želi prepisovati stroškov.',
-    funkcije: ['Neomejeni računi in predračuni', 'Fotografirate račun, Računko ga prebere', 'Glasovni vnos računa', 'AI pomočnik za vprašanja o davkih', 'Uvoz plačil iz bančnega izpiska', 'e-račun (e-SLOG) za B2B', 'Evidenca DDV in KPO knjiga', 'Izvoz za Vasco in Pantheon'],
+    funkcije: ['Neomejeni računi in predračuni', 'Davčno potrjevanje računov (FURS)', 'Pošiljanje računov po e-pošti', 'Fotografirate račun, Računko ga prebere in določi konto', 'Glasovni vnos računa', 'AI pomočnik za vprašanja o davkih', 'Uvoz plačil iz bančnega izpiska', 'e-račun (e-SLOG) za B2B', 'Evidenca DDV in KPO knjiga', 'Izvoz za Vasco, Pantheon in Opal', 'Brezplačen dostop za vašega računovodjo'],
   },
   {
     id: 'pos', ime: 'Pro + POS', mesecno: 29.99, letno: 299.90,
@@ -87,7 +92,7 @@ export const VPRASANJA: [string, string][] = [
   ['Kako varni so moji podatki?',
     'Vsi podatki so shranjeni na strežnikih v Evropski uniji, v skladu z GDPR. Varnostne kopije se naredijo vsakih 24 ur. Vaših podatkov brez vaše privolitve ne delimo s tretjimi osebami.'],
   ['Koliko stane?',
-    'Brezplačni paket za osnovno izdajanje računov. Pro stane 12,99 € na mesec, Pro + POS z blagajno 29,99 €. Letno plačilo pomeni dva meseca brezplačno. Brez vezave.'],
+    'Brezplačni paket omogoča do 5 računov za plačila na TRR, brez davčnega potrjevanja. Pro z davčnim potrjevanjem stane 12,99 € na mesec, Pro + POS z blagajno 29,99 €. Letno plačilo pomeni dva meseca brezplačno. Brez vezave.'],
   ['Kateri paket je pravi za mene?',
     `Brezplačno, če izdajate račune in drugo urejate sami. Pro, če želite, da ${IME} bere stroške, uvaža bančne izpiske in vodi KPO ter DDV. Pro + POS, če sprejemate gotovino ali kartice na mestu, vodite člane ali zaloge. Paket lahko zamenjate kadarkoli.`],
   ['Ali deluje za DDV zavezance?',
