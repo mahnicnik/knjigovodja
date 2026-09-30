@@ -15451,7 +15451,10 @@ function KlasikApp() {
     : vsiZasloni
   const profile = profileId === 'custom'
     ? { id:'custom', name:'Po meri', icon:'⚙️', nav: izbraniPoMeri }
-    : (CFG.profiles.find(p => p.id === profileId) || CFG.profiles[0])
+    // PRELET 350: neznan profil (npr. star zapis 'gostinstvo') je padel na
+    // CFG.profiles[0] = 'Po meri' s PRAZNIM menijem - blagajna je bila brez
+    // stranskega menija, tudi za vodjo. Rezerva je zdaj 'Vse v enem'.
+    : (CFG.profiles.find(p => p.id === profileId) || CFG.profiles.find(p => p.id === 'all')!)
 
   // POPRAVLJENO (16.8.2026, VARNOST): 'admin' je bil null = dostopen VSEM,
   // vkljucno z blagajniki, ki imajo systemSettings:false - lahko so urejali

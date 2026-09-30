@@ -866,3 +866,5 @@
 }
 .racunovodjeSpodaj { margin-top: 32px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 .racunovodjeOpomba { color: var(--l-tekst-2); font-size: .9rem; }
+/* Prelet 350: trije koraki enake visine, posnetek poravnan na vrh. */
+.korakPosnetek img { width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; object-position: top; }
