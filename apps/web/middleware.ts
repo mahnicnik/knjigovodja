@@ -54,6 +54,12 @@ const PUBLIC_PREFIXES = [
   // DODANO (26.8.2026): odjava od obvescanja. Stranka NI prijavljena in tudi
   // ne more biti - odjava mora delovati z enim klikom iz e-poste.
   '/odjava',
+  // PRELET 357: placila strank prek Stripe Connect. Kupec ni prijavljen:
+  // kratka povezava blagajne (/p/koda, NFC nalepka) in stalna povezava
+  // zahtevka (/placaj/zeton). Connect webhook preverja podpis, zato mora
+  // telo priti nedotaknjeno. Poševnica na koncu je namerna: '/p' brez nje
+  // bi odprl tudi /pos, /place, /porocila ...
+  '/p/', '/placaj/', '/api/pos/stripe/webhook',
 ]
 
 /**
