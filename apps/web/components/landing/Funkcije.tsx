@@ -51,13 +51,13 @@ const BLOKI: Blok[] = [
     opravilo: 'blagajna',
     besedilo: 'Ob izpadu povezave blagajna izda račun z zaščitno oznako in ga prijavi pri FURS, ko se povezava vrne.',
     seznam: ['Mize, tloris in delitev računa', 'Zaloge z normativi', 'Dnevni zaključek z enim klikom'],
-    posnetek: 'blagajna', pot: '/pos', alt: 'Blagajna z artikli, mizami in odprtim računom',
+    posnetek: 'blagajna', pot: '/pos', alt: 'Blagajna s kategorijami, priljubljenimi artikli in košarico',
   },
   {
     naslov: 'Člani, paketi in termini',
     besedilo: 'Za fitnes, studie in storitve. Člani imajo pakete in naročnine, termini so v koledarju, obisk se odšteje na blagajni.',
     seznam: ['Mesečne naročnine in paketi obiskov', 'Terminski koledar', 'Dostopi za trenerje in osebje'],
-    posnetek: 'koledar', pot: '/pos', alt: 'Terminski koledar z rezervacijami članov in trenerjev',
+    posnetek: 'koledar', pot: '/pos', alt: 'Tedenski urnik terminov s strankami, storitvami in osebjem',
   },
 ]
 

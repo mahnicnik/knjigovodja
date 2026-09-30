@@ -14,5 +14,13 @@
   "korak-nastavitve": {
     "sirina": 1800,
     "visina": 1902
+  },
+  "koledar": {
+    "sirina": 1800,
+    "visina": 1253
+  },
+  "blagajna": {
+    "sirina": 1800,
+    "visina": 887
   }
 }
