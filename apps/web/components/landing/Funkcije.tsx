@@ -26,11 +26,10 @@ const BLOKI: Blok[] = [
     naslov: racun.zdajMin != null ? `Račun izdate v ${formatCas(racun.zdajMin)}` : 'Račun izdate, preden stranka odide',
     opravilo: 'racun',
     besedilo: 'Izberete stranko in artikle. Račun je davčno potrjen pri FURS, stranka ga dobi po e-pošti.',
-    seznam: ['Potrditev pri FURS ob izdaji', 'UPN QR koda na vsakem PDF-u', 'e-račun v obliki e-SLOG 2.0', 'Ponavljajoči se računi in opomini'],
+    seznam: ['Potrditev pri FURS ob izdaji — ZOI, EOR in QR za preverjanje', 'UPN QR koda za plačilo na TRR', 'Vaš logotip na računu', 'e-račun v obliki e-SLOG 2.0', 'Ponavljajoči se računi in opomini'],
     // PRELET 343: pravi PDF iz predloge racuna (lib/invoice-pdf.tsx) z
     // izmisljenimi podatki - tak racun dobi stranka.
-    posnetek: 'racun', pot: '', vrsta: 'dokument',
-    alt: 'Primer računa, izdanega z Računkom: postavke s popustom, DDV, skupni znesek in UPN QR koda za plačilo',
+    posnetek: 'racun', pot: '', vrsta: 'dokument', alt: '',
   },
   {
     naslov: `Stroške fotografirate. Vnos naredi ${IME}.`,
@@ -95,10 +94,15 @@ export default function Funkcije() {
               <div className={s.funkcijaSlika}>
                 {b.vrsta === 'dokument' ? (
                   <>
-                    <div className={s.dokument}>
-                      <Posnetek ime={b.posnetek} okvir="brez" alt={b.alt} sizes="(max-width: 900px) 92vw, 560px" />
+                    <div className={s.dokumenti}>
+                      <div className={`${s.dokument} ${s.dokumentZadaj}`}>
+                        <Posnetek ime="racun" okvir="brez" alt="Primer računa za plačilo na TRR: postavke s popustom, DDV in UPN QR koda" sizes="(max-width: 900px) 64vw, 360px" />
+                      </div>
+                      <div className={`${s.dokument} ${s.dokumentSpredaj}`}>
+                        <Posnetek ime="racun-furs" okvir="brez" alt="Primer davčno potrjenega računa z ZOI, EOR in kodo QR za preverjanje pri FURS" sizes="(max-width: 900px) 64vw, 360px" />
+                      </div>
                     </div>
-                    <p className={s.dokumentNapis}>Primer računa z izmišljenimi podatki — PDF, ki ga dobi vaša stranka.</p>
+                    <p className={s.dokumentNapis}>Primera računov z izmišljenimi podatki — za plačilo na TRR z UPN QR in davčno potrjen z ZOI in EOR.</p>
                   </>
                 ) : b.vrsta === 'skener' ? (
                   <div className={s.skener}>

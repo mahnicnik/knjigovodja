@@ -826,3 +826,17 @@
 }
 .telefonZaslon .brezPosnetka { aspect-ratio: 390 / 844; font-size: .72rem; padding: 12px; }
 .brezPosnetka { background: repeating-linear-gradient(45deg, #F4F7F4 0 12px, #ECF1ED 12px 24px); }
+.dokumenti {
+  position: relative;
+  max-width: 540px;
+  margin: 0 auto;
+  padding: 0 0 30% 0;
+}
+.dokumentZadaj { width: 70%; transform: rotate(-4deg); }
+.dokumentSpredaj {
+  position: absolute;
+  right: 0;
+  top: 16%;
+  width: 70%;
+  transform: rotate(2.5deg);
+}

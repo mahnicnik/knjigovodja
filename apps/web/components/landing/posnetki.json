@@ -1,10 +1,14 @@
 {
   "racun": {
-    "sirina": 1200,
-    "visina": 1422
+    "sirina": 1180,
+    "visina": 1610
   },
   "blok-papir": {
     "sirina": 560,
     "visina": 730
+  },
+  "racun-furs": {
+    "sirina": 1180,
+    "visina": 1514
   }
 }
