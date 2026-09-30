@@ -593,6 +593,58 @@
 @media (max-width: 860px) {
   .kalkulator { grid-template-columns: 1fr; }
 }
+/* PRELET 354: predpostavke (casi opravil), ki jih obiskovalec lahko spremeni */
+.kalkPredpostavke {
+  margin-top: 20px;
+  padding: 18px clamp(18px, 3vw, 28px);
+  border-radius: var(--l-r-l);
+  background: var(--l-ozadje-2);
+}
+.kalkPredpostavke summary {
+  cursor: pointer;
+  font-weight: 600;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+.kalkPredpostavkeUvod { color: var(--l-tekst-2); font-size: .92rem; margin: 4px 0 16px; line-height: 1.5; }
+.kalkTabela { display: grid; gap: 8px; }
+.kalkTabelaGlava, .kalkTabelaVrstica {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px 140px;
+  gap: 12px;
+  align-items: center;
+}
+.kalkTabelaGlava { font-size: .8rem; color: var(--l-tekst-2); font-weight: 600; }
+.kalkTabelaVrstica { padding: 8px 0; border-top: 1px solid var(--l-crta); font-size: .95rem; }
+.kalkTabelaVrstica input {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--l-crta);
+  border-radius: var(--l-r-s);
+  background: #fff;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: var(--l-tekst);
+}
+.kalkTabelaVrstica input:focus-visible { outline: 3px solid var(--l-primarna); outline-offset: 1px; }
+.kalkPonastavi {
+  margin-top: 14px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--l-crta);
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--l-tekst);
+}
+@media (max-width: 560px) {
+  .kalkTabelaGlava, .kalkTabelaVrstica { grid-template-columns: minmax(0, 1fr) 76px 76px; gap: 8px; }
+  .kalkTabelaVrstica { font-size: .85rem; }
+}
 
 /* ── Mnenja ────────────────────────────────────────────── */
 .mnenja { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
