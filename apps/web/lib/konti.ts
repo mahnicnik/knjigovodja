@@ -83,7 +83,17 @@ export function izbireKategorij(trenutna?: string | null): string[] {
 
 /** Poisce kategorijo iz nasega seznama (tudi zapisano brez sumnikov). */
 export function najdiKategorijo(ime?: string | null): KategorijaStroska | null {
-  return PO_IMENU.get(brezSumnikov(String(ime || ''))) || null
+  const kljuc = brezSumnikov(String(ime || ''))
+  const tocno = PO_IMENU.get(kljuc)
+  if (tocno) return tocno
+  // PRELET 353: AI vcasih vrne ime skupaj s kontom iz navodila, npr.
+  // "Drobni inventar (konto 404)" ali "Blago za prodajo - konto 660".
+  // Tak zapis je prej padel na 489 (Drugi stroski).
+  const ocisceno = kljuc
+    .replace(/\(.*?\)/g, ' ')
+    .replace(/[-–:,]?\s*konto\s*\d+.*$/, ' ')
+    .replace(/\s+/g, ' ').trim()
+  return PO_IMENU.get(ocisceno) || null
 }
 
 /** Pretvori AI-jev ali star zapis v ime iz seznama (ce ga prepozna). */

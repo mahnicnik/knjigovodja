@@ -22,5 +22,9 @@
   "blagajna": {
     "sirina": 1800,
     "visina": 887
+  },
+  "skener-mobilni": {
+    "sirina": 780,
+    "visina": 1475
   }
 }
