@@ -4,6 +4,7 @@
  * mora pred tem preveriti pravice (portal) ali zeton (javna stran).
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { zapriSejo } from '@/lib/pos-stripe'
 import { stripeConnect, provizijaCenti, racunUstrezaNacinu, zivoNiDovoljeno } from '@/lib/stripe-connect'
 import { postavkeZaStripe, konecSessiona, prikazanoStanje, supabaseZahtevki, casPlacilaSessiona } from '@/lib/zahtevki'
 
@@ -60,12 +61,19 @@ export async function checkoutZaZahtevek(admin: SupabaseClient, z: any, osnova: 
 
   if (z.checkout_session_id) {
     const star = await stripe.checkout.sessions.retrieve(z.checkout_session_id, {}, racun).catch(() => null)
-    if (star?.payment_status === 'paid') {
+    // PRELET 368 (M2): nove seje ne ustvarimo, dokler stara ni POTRJENO
+    // zaprta - webhook sprejme samo placilo zadnje seje zahtevka.
+    if (!star) throw new Error('Stanja prejšnjega plačila pri Stripe ni bilo mogoče preveriti.')
+    if (star.payment_status === 'paid') {
       await zabeleziPlacilo(admin, z.id, star)
       throw new ZahtevekNeVelja('placan')
     }
-    if (star?.status === 'open' && star.url && star.expires_at * 1000 > Date.now() + 10 * 60_000) return star.url
-    if (star?.status === 'open') await stripe.checkout.sessions.expire(star.id, {}, racun).catch(() => null)
+    if (star.status === 'open' && star.url && star.expires_at * 1000 > Date.now() + 10 * 60_000) return star.url
+    if (star.status === 'open') {
+      const izid = await zapriSejo(stripe, star.id, org.stripe_account_id)
+      if (izid.stanje === 'placano') { await zabeleziPlacilo(admin, z.id, star); throw new ZahtevekNeVelja('placan') }
+      if (izid.stanje === 'napaka') throw new Error('Prejšnjega plačila pri Stripe ni bilo mogoče zapreti.')
+    }
   }
 
   const { expiresAt, podaljsajZahtevek } = konecSessiona(z.velja_do)

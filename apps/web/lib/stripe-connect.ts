@@ -273,3 +273,25 @@ export function novaKratkaKoda(dolzina = 8): string {
   const bajti = crypto.getRandomValues(new Uint8Array(dolzina))
   return Array.from(bajti, b => abc[b % abc.length]).join('')
 }
+
+// ─────────────────────────────────────────────────────────────────
+// PRELET 368 (M2): PREVERBA PLACANE SEJE V WEBHOOKU
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Placana Checkout seja se zakljuci SAMO, ce se ujema z vrstico, ki jo je
+ * ustvaril Racunko: ista organizacija, ista (zadnja) seja, isti znesek v
+ * centih in valuta. Vrne razlog neujemanja ali null.
+ */
+export function neujemanjeSeje(
+  vrstica: { org_id: string; checkout_session_id: string | null; centi: number; valuta?: string | null } | null,
+  sess: { id: string; amount_total: number | null; currency: string | null },
+  orgIdIzMetapodatkov: string | undefined,
+): string | null {
+  if (!vrstica) return 'plačilo v Računku ne obstaja'
+  if (!orgIdIzMetapodatkov || vrstica.org_id !== orgIdIzMetapodatkov) return 'organizacija se ne ujema'
+  if (!vrstica.checkout_session_id || vrstica.checkout_session_id !== sess.id) return 'seja se ne ujema z zadnjo sejo plačila'
+  if (sess.amount_total !== vrstica.centi) return `znesek se ne ujema (plačano ${sess.amount_total} centov, pričakovano ${vrstica.centi})`
+  if ((sess.currency || '').toLowerCase() !== (vrstica.valuta || 'eur').toLowerCase()) return `valuta se ne ujema (${sess.currency})`
+  return null
+}

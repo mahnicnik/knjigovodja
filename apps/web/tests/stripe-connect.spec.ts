@@ -299,3 +299,19 @@ test('M6: vodja s pravico storna sme; nezakljuceno placilo (ni racuna) brez stor
   expect(vraciloDovoljeno({ lastnik: false, dovoljenjaOsebja: { voidReceipt: true }, zakljuceno: true, statusRacuna: 'voided' }).ok).toBe(true)
   expect(vraciloDovoljeno({ lastnik: false, dovoljenjaOsebja: { voidReceipt: true }, zakljuceno: false, statusRacuna: 'open' }).ok).toBe(true)
 })
+
+// ═══════════════════ M2 (prelet 368): PREVERBA SEJE V WEBHOOKU ═══════════════════
+
+import { neujemanjeSeje } from '../lib/stripe-connect'
+
+test('M2: seja se zakljuci samo ob ujemanju org, seje, zneska in valute', () => {
+  const v = { org_id: 'o1', checkout_session_id: 'cs_1', centi: 580, valuta: 'eur' }
+  const sess = { id: 'cs_1', amount_total: 580, currency: 'eur' }
+  expect(neujemanjeSeje(v, sess, 'o1')).toBeNull()
+  expect(neujemanjeSeje(v, sess, 'o2')).toMatch(/organizacija/)
+  expect(neujemanjeSeje(v, { ...sess, id: 'cs_star' }, 'o1')).toMatch(/seja/)
+  expect(neujemanjeSeje(v, { ...sess, amount_total: 581 }, 'o1')).toMatch(/znesek/)
+  expect(neujemanjeSeje(v, { ...sess, currency: 'usd' }, 'o1')).toMatch(/valuta/)
+  expect(neujemanjeSeje(null, sess, 'o1')).toMatch(/ne obstaja/)
+  expect(neujemanjeSeje({ ...v, checkout_session_id: null }, sess, 'o1')).toMatch(/seja/)
+})

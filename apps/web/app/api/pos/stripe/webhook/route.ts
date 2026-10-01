@@ -20,7 +20,7 @@ export const dynamic = 'force-dynamic'
  */
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { adminSupabase, CONNECT_API_VERZIJA, jeZiviKljuc } from '@/lib/stripe-connect'
+import { adminSupabase, CONNECT_API_VERZIJA, jeZiviKljuc, neujemanjeSeje, stripeConnect } from '@/lib/stripe-connect'
 import { supabaseShramba, zakljuciPosPlacilo } from '@/lib/pos-stripe'
 import { obdelajPlacanZahtevek, oznaciZahtevekVrnjen } from '@/lib/zahtevki'
 
@@ -63,6 +63,16 @@ export async function POST(req: Request) {
         const md = sess.metadata || {}
         if (!(await racunPripada(admin, md.org_id, racun))) { izid = { preskoceno: 'tuj racun' }; break }
         const pi = typeof sess.payment_intent === 'string' ? sess.payment_intent : sess.payment_intent?.id || null
+        // PRELET 368 (M2): seja se mora ujemati z vrstico (org, seja, znesek,
+        // valuta). Neujemajoce placilo se ne zakljuci - denar se vrne.
+        const razlog = await neujemanje(admin, md, sess)
+        if (razlog) {
+          izid = { neujemanje: razlog, vracilo: await vrniNeujemajoce(racun!, pi, razlog) }
+          console.error('Stripe Connect webhook: neujemanje seje', sess.id, razlog)
+          // Vracilo ni uspelo -> 500, Stripe dogodek ponovi (denar ne sme obticati).
+          if (pi && !izid.vracilo) return NextResponse.json({ error: 'Vračilo neujemajočega plačila ni uspelo: ' + razlog }, { status: 500 })
+          break
+        }
         if (md.vrsta === 'pos' && md.placilo_id) {
           izid = await zakljuciPosPlacilo(supabaseShramba(admin), md.placilo_id, pi)
           if (izid.stanje === 'napaka') {
@@ -123,4 +133,33 @@ async function racunPripada(admin: any, orgId: string | undefined, racun: string
   if (!orgId || !racun) return false
   const { data } = await admin.from('organizations').select('stripe_account_id, stripe_account_livemode').eq('id', orgId).maybeSingle()
   return data?.stripe_account_id === racun && (data?.stripe_account_livemode ?? false) === jeZiviKljuc()
+}
+
+/** PRELET 368 (M2): pricakovana vrstica za placano sejo. */
+async function neujemanje(admin: any, md: Record<string, string>, sess: Stripe.Checkout.Session): Promise<string | null> {
+  const ses = { id: sess.id, amount_total: sess.amount_total ?? null, currency: sess.currency ?? null }
+  if (md.vrsta === 'pos' && md.placilo_id) {
+    const { data: v } = await admin.from('pos_placila_stripe').select('org_id, checkout_session_id, znesek_centi, valuta').eq('id', md.placilo_id).maybeSingle()
+    return neujemanjeSeje(v ? { org_id: v.org_id, checkout_session_id: v.checkout_session_id, centi: v.znesek_centi, valuta: v.valuta } : null, ses, md.org_id)
+  }
+  if (md.vrsta === 'zahtevek' && md.zahtevek_id) {
+    const { data: v } = await admin.from('placilni_zahtevki').select('org_id, checkout_session_id, znesek, valuta').eq('id', md.zahtevek_id).maybeSingle()
+    return neujemanjeSeje(v ? { org_id: v.org_id, checkout_session_id: v.checkout_session_id, centi: Math.round(Number(v.znesek) * 100), valuta: v.valuta } : null, ses, md.org_id)
+  }
+  return null
+}
+
+/** Neujemajoce placilo vrnemo stranki (idempotentno po PaymentIntent). */
+async function vrniNeujemajoce(racun: string, pi: string | null, razlog: string): Promise<string | null> {
+  if (!pi) return null
+  try {
+    const r = await stripeConnect().refunds.create(
+      { payment_intent: pi, reason: 'requested_by_customer', metadata: { racunko: 'neujemanje', razlog: razlog.slice(0, 450) } },
+      { stripeAccount: racun, idempotencyKey: `neujemanje-pi-${pi}` },
+    )
+    return r.id
+  } catch (e: any) {
+    console.error('Stripe Connect webhook: vracilo neujemajocega placila ni uspelo', pi, e?.message)
+    return null
+  }
 }
