@@ -22,7 +22,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { confirmWithFurs, extractFromP12, type FursConfig, type FursInvoiceData } from '@/lib/furs'
 import { getFursCertificate } from '@/lib/furs-cert'
-import { centiNarocila } from '@/lib/stripe-connect'
+import { centiNarocila, stripeConnect } from '@/lib/stripe-connect'
 
 export type PlaciloVrstica = {
   id: string
@@ -64,12 +64,22 @@ export interface PosShramba {
   potrdiFurs(p: PlaciloVrstica, paymentId: string, paidAt: string): Promise<FursIzid>
   koncaj(id: string, rezultat: FursIzid): Promise<void>
   sprosti(id: string, napaka: string): Promise<void>
+  /**
+   * PRELET 366 (H3): placilo, ki ga ni mogoce zakljuciti (preklicana vrstica,
+   * spremenjen ali zaprt racun), se vrne stranki prek Stripe (idempotentno po
+   * PaymentIntent) - stanje 'vrnjeno', napaka vidna v blagajni.
+   */
+  vrniDenar(p: PlaciloVrstica, paymentIntentId: string | null, razlog: string): Promise<{ refundId: string | null; napaka: string | null }>
 }
+
+/** Racun v blagajni se je med placilom spremenil ali zaprl - placila ni mogoce zakljuciti. */
+export class NarociloNiZakljucljivo extends Error {}
 
 export type IzidZakljucka =
   | { stanje: 'zakljuceno'; rezultat: FursIzid; ponovno: boolean }
   | { stanje: 'v_teku' }
   | { stanje: 'ni_placano'; status: string }
+  | { stanje: 'vrnjeno'; napaka: string }
   | { stanje: 'napaka'; napaka: string }
 
 export async function zakljuciPosPlacilo(
@@ -79,10 +89,20 @@ export async function zakljuciPosPlacilo(
 ): Promise<IzidZakljucka> {
   await s.oznaciPlacano(placiloId, paymentIntentId)
 
+  // PRELET 366 (H3b): stranka je placala sejo vrstice, ki je bila medtem
+  // preklicana (npr. expire ni uspel) - racuna ni, denar gre nazaj.
+  const prej = await s.preberi(placiloId)
+  if (prej && prej.status === 'preklicano' && !prej.zakljuceno_ob) {
+    const razlog = 'Stranka je plačala že preklicano plačilo — denar je bil samodejno vrnjen, račun ni zaključen.'
+    const r = await s.vrniDenar(prej, paymentIntentId ?? prej.payment_intent_id, razlog)
+    return { stanje: 'vrnjeno', napaka: r.napaka || razlog }
+  }
+
   const zaklenjena = await s.zakleni(placiloId)
   if (!zaklenjena) {
     const zdaj = await s.preberi(placiloId)
     if (!zdaj) return { stanje: 'napaka', napaka: 'Plačilo ne obstaja' }
+    if (zdaj.status === 'vrnjeno' && zdaj.zakljuceno_ob) return { stanje: 'vrnjeno', napaka: zdaj.napaka || 'Plačilo je vrnjeno.' }
     if (zdaj.zakljuceno_ob) return { stanje: 'zakljuceno', rezultat: zdaj.rezultat, ponovno: true }
     if (zdaj.status !== 'placano' && zdaj.status !== 'vrnjeno') return { stanje: 'ni_placano', status: zdaj.status }
     return { stanje: 'v_teku' }
@@ -108,6 +128,11 @@ export async function zakljuciPosPlacilo(
     return { stanje: 'zakljuceno', rezultat: furs, ponovno: false }
   } catch (e: any) {
     const napaka = e?.message || String(e)
+    if (e instanceof NarociloNiZakljucljivo) {
+      // PRELET 366 (H3a): racun spremenjen/zaprt med placilom - samodejno vracilo.
+      const r = await s.vrniDenar(zaklenjena, paymentIntentId ?? zaklenjena.payment_intent_id, napaka + ' Denar je bil samodejno vrnjen stranki.')
+      return { stanje: 'vrnjeno', napaka: r.napaka || napaka }
+    }
     await s.sprosti(placiloId, napaka)
     return { stanje: 'napaka', napaka }
   }
@@ -143,14 +168,14 @@ export function supabaseShramba(admin: SupabaseClient): PosShramba {
     },
     async placajNarocilo(p) {
       const { data: order } = await admin.from('orders').select('id, status, total').eq('id', p.order_id).maybeSingle()
-      if (!order) throw new Error('Račun v blagajni ne obstaja več.')
+      if (!order) throw new NarociloNiZakljucljivo('Račun v blagajni ne obstaja več.')
       if (order.status === 'paid' || order.status === 'voided') {
-        throw new Error('Račun je bil medtem že zaključen drugače. Plačilo s kartico vrnite stranki (Storno → vračilo prek Stripe).')
+        throw new NarociloNiZakljucljivo('Račun je bil medtem že zaključen drugače.')
       }
       const znesek = p.znesek_centi / 100
       // PRELET 365 (H2): primerjava v celih centih, enakost.
       if (centiNarocila(order.total) !== p.znesek_centi) {
-        throw new Error(`Znesek računa (${Number(order.total).toFixed(2)} €) se ne ujema s plačanim (${znesek.toFixed(2)} €).`)
+        throw new NarociloNiZakljucljivo(`Račun se je med plačilom spremenil (${Number(order.total).toFixed(2)} €, plačano ${znesek.toFixed(2)} €).`)
       }
       const { data, error } = await admin.rpc('pay_order', {
         p_order_id: p.order_id,
@@ -188,6 +213,29 @@ export function supabaseShramba(admin: SupabaseClient): PosShramba {
     },
     async sprosti(id, napaka) {
       await admin.from('pos_placila_stripe').update({ zakljucevanje_od: null, napaka: napaka || null }).eq('id', id)
+    },
+    async vrniDenar(p, pi, razlog) {
+      let refundId: string | null = null
+      let napaka: string | null = null
+      try {
+        if (!pi) throw new Error('plačilu manjka oznaka pri Stripe')
+        const { data: org } = await admin.from('organizations').select('stripe_account_id').eq('id', p.org_id).single()
+        if (!org?.stripe_account_id) throw new Error('Stripe ni več povezan')
+        const r = await stripeConnect().refunds.create(
+          { payment_intent: pi, reason: 'requested_by_customer', metadata: { vrsta: 'pos', placilo_id: p.id, order_id: p.order_id, samodejno: '1' } },
+          { stripeAccount: org.stripe_account_id, idempotencyKey: `pos-vracilo-pi-${pi}` },
+        )
+        refundId = r.id
+      } catch (e: any) {
+        napaka = `Plačila ni bilo mogoče zaključiti in samodejno vračilo ni uspelo (${e?.message || e}) — vrnite denar v blagajni (gumb »Vrni denar«) ali v Stripe.`
+      }
+      await admin.from('pos_placila_stripe').update({
+        ...(refundId ? { status: 'vrnjeno', refund_id: refundId, vrnjeno_ob: new Date().toISOString(), zakljuceno_ob: new Date().toISOString() } : { status: 'placano' }),
+        ...(pi ? { payment_intent_id: pi } : {}),
+        zakljucevanje_od: null,
+        napaka: napaka || razlog,
+      }).eq('id', p.id)
+      return { refundId, napaka }
     },
   }
 }
@@ -347,5 +395,29 @@ export async function potrdiNarociloPriFurs(
   return {
     success: false, zoi: result.zoi, eor: null, invoiceNumber: invoiceNumberFull, issuedAt: a.issuedAt,
     napaka: result.errorMessage || 'FURS ni potrdil računa.',
+  }
+}
+
+/**
+ * PRELET 366 (H3b): zapre Checkout sejo in pove, ali je Stripe to POTRDIL.
+ *  - 'zaprta'  : seje ni (ali je potekla/zaprta) - placila po njej ne bo,
+ *  - 'placano' : stranka je ze placala - placilo je treba zakljuciti,
+ *  - 'napaka'  : stanja ni mogoce potrditi - vrstice NE smemo preklicati.
+ */
+export async function zapriSejo(stripe: any, sessionId: string | null, stripeAccount: string): Promise<
+  { stanje: 'zaprta' } | { stanje: 'placano'; paymentIntentId: string | null } | { stanje: 'napaka'; napaka: string }
+> {
+  if (!sessionId) return { stanje: 'zaprta' }
+  try {
+    await stripe.checkout.sessions.expire(sessionId, {}, { stripeAccount })
+    return { stanje: 'zaprta' }
+  } catch (e: any) {
+    const sess = await stripe.checkout.sessions.retrieve(sessionId, {}, { stripeAccount }).catch(() => null)
+    if (sess?.payment_status === 'paid') {
+      const pi = typeof sess.payment_intent === 'string' ? sess.payment_intent : sess.payment_intent?.id || null
+      return { stanje: 'placano', paymentIntentId: pi }
+    }
+    if (sess?.status === 'expired') return { stanje: 'zaprta' }
+    return { stanje: 'napaka', napaka: e?.message || String(e) }
   }
 }

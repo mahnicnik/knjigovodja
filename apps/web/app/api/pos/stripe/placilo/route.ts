@@ -18,7 +18,7 @@ import {
   adminSupabase, preveriPogoje, stripeConnect, javniUrl, ConnectNiNastavljen,
   znesekZaStripe, postavkeZaCheckout, provizijaCenti, novaKratkaKoda, NAJMANJ_CENTI,
 } from '@/lib/stripe-connect'
-import { supabaseShramba, zakljuciPosPlacilo } from '@/lib/pos-stripe'
+import { supabaseShramba, zakljuciPosPlacilo, zapriSejo } from '@/lib/pos-stripe'
 
 export const maxDuration = 60
 
@@ -88,15 +88,16 @@ export async function POST(req: Request) {
     if (veljaven && obstojece.znesek_centi === izracun.centi && obstojece.checkout_session_id) {
       return NextResponse.json(odgovor(obstojece, koda, osnova))
     }
-    try {
-      if (obstojece.checkout_session_id) await stripe.checkout.sessions.expire(obstojece.checkout_session_id, {}, { stripeAccount: org.stripe_account_id })
-    } catch (e: any) {
-      // Ce je medtem ze placano, ga ne smemo prepisati - zakljucimo ga.
-      const sess = obstojece.checkout_session_id ? await stripe.checkout.sessions.retrieve(obstojece.checkout_session_id, {}, { stripeAccount: org.stripe_account_id }).catch(() => null) : null
-      if (sess?.payment_status === 'paid') {
-        await zakljuciPosPlacilo(supabaseShramba(admin), obstojece.id, String(sess.payment_intent || '') || null)
-        return NextResponse.json({ error: 'Račun je že plačan.' }, { status: 409 })
-      }
+    // PRELET 366 (H3b): vrstico oznacimo 'preklicano' SELE, ko Stripe potrdi,
+    // da seje ni vec mogoce placati. Sicer bi stranka lahko placala staro sejo
+    // in denar bi ostal brez racuna.
+    const izid = await zapriSejo(stripe, obstojece.checkout_session_id, org.stripe_account_id)
+    if (izid.stanje === 'placano') {
+      await zakljuciPosPlacilo(supabaseShramba(admin), obstojece.id, izid.paymentIntentId)
+      return NextResponse.json({ error: 'Račun je že plačan.' }, { status: 409 })
+    }
+    if (izid.stanje === 'napaka') {
+      return NextResponse.json({ error: 'Prejšnje plačilo pri Stripe ni bilo mogoče preklicati — poskusite znova čez trenutek.' }, { status: 502 })
     }
     await admin.from('pos_placila_stripe').update({ status: 'preklicano' }).eq('id', obstojece.id).eq('status', 'cakanje')
   }

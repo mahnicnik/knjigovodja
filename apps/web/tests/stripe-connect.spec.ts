@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { izracunajZnesekNarocila, postavkeZaCheckout, provizijaCenti } from '../lib/stripe-connect'
-import { zakljuciPosPlacilo, type PosShramba, type PlaciloVrstica, type FursIzid } from '../lib/pos-stripe'
+import { zakljuciPosPlacilo, NarociloNiZakljucljivo, type PosShramba, type PlaciloVrstica, type FursIzid } from '../lib/pos-stripe'
 
 /**
  * TESTI PLACIL S STRIPE V BLAGAJNI (prelet 357)
@@ -131,7 +131,8 @@ function lazna(status: PlaciloVrstica['status'] = 'cakanje') {
     znesek_centi: 580, status, payment_intent_id: null, payment_id: null,
     zakljuceno_ob: null, napaka: null, rezultat: null, zaklep: false,
   }
-  const klici = { placaj: 0, furs: 0 }
+  const klici = { placaj: 0, furs: 0, vracila: [] as string[] }
+  let narociloZaprto = false
   const pocakaj = () => new Promise(r => setTimeout(r, 5))
   const s: PosShramba = {
     async oznaciPlacano(_id, pi) {
@@ -146,7 +147,11 @@ function lazna(status: PlaciloVrstica['status'] = 'cakanje') {
       return { ...vrstica }
     },
     async preberi() { return { ...vrstica } },
-    async placajNarocilo() { klici.placaj++; await pocakaj(); return { paymentId: 'pay1', paidAt: '2026-09-30T10:00:00Z' } },
+    async placajNarocilo() {
+      klici.placaj++; await pocakaj()
+      if (narociloZaprto) throw new NarociloNiZakljucljivo('Račun je bil medtem že zaključen drugače.')
+      return { paymentId: 'pay1', paidAt: '2026-09-30T10:00:00Z' }
+    },
     async shraniPaymentId(_id, pid) { vrstica.payment_id = pid },
     async casPlacila() { return '2026-09-30T10:00:00Z' },
     async potrdiFurs(): Promise<FursIzid> {
@@ -155,8 +160,14 @@ function lazna(status: PlaciloVrstica['status'] = 'cakanje') {
     },
     async koncaj(_id, r) { vrstica.zakljuceno_ob = new Date().toISOString(); vrstica.rezultat = r; vrstica.zaklep = false },
     async sprosti(_id, n) { vrstica.zaklep = false; vrstica.napaka = n || null },
+    async vrniDenar(_p, pi, razlog) {
+      // Stripe idempotenca po PaymentIntent: isto vracilo najvec enkrat.
+      if (!klici.vracila.includes(String(pi))) klici.vracila.push(String(pi))
+      vrstica.status = 'vrnjeno'; vrstica.zakljuceno_ob = new Date().toISOString(); vrstica.zaklep = false; vrstica.napaka = razlog
+      return { refundId: 're_1', napaka: null }
+    },
   }
-  return { s, vrstica, klici }
+  return { s, vrstica, klici, zapri: () => { narociloZaprto = true } }
 }
 
 test('Podvojen webhook (zaporedno): racun se zakljuci in davcno potrdi ENKRAT', async () => {
@@ -182,12 +193,33 @@ test('Podvojen webhook (hkrati): samo en klic zakljuci racun', async () => {
   expect(izidi.filter(i => i.stanje === 'zakljuceno' && !(i as any).ponovno)).toHaveLength(1)
 })
 
-test('Preklicano placilo se ne zakljuci (ni placano)', async () => {
-  const { s, klici } = lazna('preklicano')
+test('H3b: placana seja preklicane vrstice se NE zakljuci - denar se samodejno vrne', async () => {
+  const { s, klici, vrstica } = lazna('preklicano')
   const r = await zakljuciPosPlacilo(s, 'p1', 'pi_1')
-  expect(r.stanje).toBe('ni_placano')
+  expect(r.stanje).toBe('vrnjeno')
   expect(klici.placaj).toBe(0)
   expect(klici.furs).toBe(0)
+  expect(klici.vracila).toEqual(['pi_1'])
+  expect(vrstica.status).toBe('vrnjeno')
+  expect(vrstica.napaka).toMatch(/vrnjen/)
+  // podvojen webhook: vracilo ostane eno
+  const r2 = await zakljuciPosPlacilo(s, 'p1', 'pi_1')
+  expect(r2.stanje).toBe('vrnjeno')
+  expect(klici.vracila).toEqual(['pi_1'])
+})
+
+test('H3a: racun med placilom zaprt drugace - brez FURS, samodejno vracilo, webhook ne ponavlja', async () => {
+  const { s, klici, vrstica, zapri } = lazna()
+  zapri()
+  const r = await zakljuciPosPlacilo(s, 'p1', 'pi_9')
+  expect(r.stanje).toBe('vrnjeno') // webhook vrne 200 - Stripe ne ponavlja
+  expect(klici.furs).toBe(0)
+  expect(klici.vracila).toEqual(['pi_9'])
+  expect(vrstica.status).toBe('vrnjeno')
+  expect(vrstica.napaka).toMatch(/zaključen drugače.*vrnjen/)
+  const r2 = await zakljuciPosPlacilo(s, 'p1', 'pi_9')
+  expect(r2.stanje).toBe('vrnjeno')
+  expect(klici.vracila).toHaveLength(1)
 })
 
 test('Ponovni poskus po napaki ne zapise placila se enkrat', async () => {

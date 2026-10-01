@@ -181,6 +181,17 @@ export function StripeQrZaslon({ placilo, onPlacano, onPreklici, onNovaKoda, T }
   const mm = preostalo != null ? Math.floor(preostalo / 60000) : null
   const ss = preostalo != null ? Math.floor((preostalo % 60000) / 1000) : null
   const placano = stanje.status === 'placano'
+  const vrnjeno = stanje.status === 'vrnjeno'
+  const [vracam, setVracam] = useState(false)
+  async function vrniDenar() {
+    if (!confirm(`Vrnem ${eur(stanje.znesekCenti)} stranki na kartico?`)) return
+    setVracam(true); setNapaka(null)
+    const r = await klicStripe('/api/pos/stripe/vracilo', { id: placilo.id })
+    setVracam(false)
+    if (!r.ok) { setNapaka(r.data.error || 'Vračilo ni uspelo.'); return }
+    const s2 = await klicStripe<StripePlaciloStanje>('/api/pos/stripe/placilo?id=' + placilo.id)
+    if (s2.ok) setStanje(s2.data)
+  }
   const poteklo = stanje.status === 'poteklo' || (stanje.status === 'cakanje' && preostalo === 0)
 
   return (
@@ -204,7 +215,24 @@ export function StripeQrZaslon({ placilo, onPlacano, onPreklici, onNovaKoda, T }
             <div style={{ fontSize: 56 }}>✅</div>
             <div style={{ fontSize: 18, fontWeight: 700, color: T.accent, marginTop: 8 }}>Plačano</div>
             <div style={{ fontSize: 13, color: T.muted, marginTop: 6 }}>{stanje.zakljuceno ? 'Račun je zaključen.' : 'Izdajam in davčno potrjujem račun …'}</div>
-            {stanje.napaka && !stanje.zakljuceno && <div style={{ fontSize: 12, color: T.danger, marginTop: 10 }}>{stanje.napaka}</div>}
+            {stanje.napaka && !stanje.zakljuceno && <div data-testid="stripe-napaka" style={{ fontSize: 12, color: T.danger, marginTop: 10, lineHeight: 1.45 }}>{stanje.napaka}</div>}
+            {napaka && <div style={{ fontSize: 12, color: T.danger, marginTop: 8 }}>{napaka}</div>}
+            {/* PRELET 366 (H3a): placila ni mogoce zakljuciti - prodajalec ni ujet na zaslonu. */}
+            <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+              <button data-testid="stripe-placano-zapri" onClick={onPreklici} style={{ flex: 1, padding: 13, borderRadius: 10, border: '1px solid ' + T.line, background: 'transparent', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}>Zapri</button>
+              {stanje.napaka && !stanje.zakljuceno && (
+                <button data-testid="stripe-vrni-denar" onClick={vrniDenar} disabled={vracam} style={{ flex: 1, padding: 13, borderRadius: 10, border: 'none', background: T.danger, color: '#fff', fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }}>
+                  {vracam ? 'Vračam …' : 'Vrni denar'}
+                </button>
+              )}
+            </div>
+          </div>
+        ) : vrnjeno ? (
+          <div data-testid="stripe-vrnjeno" style={{ padding: '28px 12px' }}>
+            <div style={{ fontSize: 44 }}>↩️</div>
+            <div style={{ fontSize: 16, fontWeight: 700, marginTop: 8 }}>Plačilo vrnjeno stranki</div>
+            <div style={{ fontSize: 13, color: T.muted, marginTop: 6, lineHeight: 1.5 }}>{stanje.napaka || 'Denar je vrnjen na kartico. Račun ni zaključen.'}</div>
+            <button onClick={onPreklici} style={{ marginTop: 18, width: '100%', padding: 13, borderRadius: 10, border: '1px solid ' + T.line, background: 'transparent', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}>Zapri</button>
           </div>
         ) : poteklo ? (
           <div data-testid="stripe-poteklo" style={{ padding: '28px 12px' }}>

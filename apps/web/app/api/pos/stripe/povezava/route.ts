@@ -15,6 +15,7 @@ export const dynamic = 'force-dynamic'
  */
 import { NextResponse } from 'next/server'
 import { sejaInOrganizacija, jeLastnik } from '@/lib/stripe-connect-seja'
+import { supabaseShramba, zakljuciPosPlacilo, zapriSejo } from '@/lib/pos-stripe'
 import { adminSupabase, preveriPogoje, stripeConnect, javniUrl, ConnectNiNastavljen, jeTestniKljuc, jeZiviKljuc, racunUstrezaNacinu } from '@/lib/stripe-connect'
 
 /** PRELET 361: stanje računa Accounts v2 (configuration.merchant). */
@@ -169,9 +170,26 @@ export async function POST(req: Request) {
       // več zaključiti.
       const { data: cakajoca } = await admin.from('pos_placila_stripe')
         .select('id, checkout_session_id').eq('org_id', s.orgId).eq('status', 'cakanje')
+      // PRELET 366 (H3b): preklicano SELE, ko Stripe potrdi zaprtje seje. Ce
+      // je stranka ze placala, se placilo zakljuci; ce stanja ni mogoce
+      // potrditi, povezave NE prekinemo (placilo bi ostalo brez racuna).
+      const nepotrjene: string[] = []
       for (const c of cakajoca || []) {
-        try { if (c.checkout_session_id && org?.stripe_account_id) await stripe.checkout.sessions.expire(c.checkout_session_id, {}, { stripeAccount: org.stripe_account_id }) } catch {}
+        const izid = org?.stripe_account_id ? await zapriSejo(stripe, c.checkout_session_id, org.stripe_account_id) : { stanje: 'zaprta' as const }
+        if (izid.stanje === 'placano') { await zakljuciPosPlacilo(supabaseShramba(admin), c.id, izid.paymentIntentId); continue }
+        if (izid.stanje === 'napaka') { nepotrjene.push(c.id); continue }
         await admin.from('pos_placila_stripe').update({ status: 'preklicano' }).eq('id', c.id).eq('status', 'cakanje')
+      }
+      // Odprte seje zahtevkov za placilo zapremo enako.
+      const { data: zahtevki } = await admin.from('placilni_zahtevki')
+        .select('id, checkout_session_id').eq('org_id', s.orgId).eq('status', 'poslan').not('checkout_session_id', 'is', null)
+      for (const z of zahtevki || []) {
+        if (!org?.stripe_account_id) break
+        const izid = await zapriSejo(stripe, z.checkout_session_id, org.stripe_account_id)
+        if (izid.stanje === 'napaka') nepotrjene.push(z.id)
+      }
+      if (nepotrjene.length > 0) {
+        return NextResponse.json({ error: `${nepotrjene.length} odprtih plačil pri Stripe ni bilo mogoče zapreti — povezave nismo prekinili. Poskusite znova čez minuto.` }, { status: 502 })
       }
       const { error } = await admin.from('organizations').update({
         stripe_account_id: null,
