@@ -216,7 +216,7 @@ export async function POST(req: Request) {
     const status = e instanceof ConnectNiNastavljen ? 503 : 500
     // PRELET 379: napako Stripa zapisemo tudi v dnevnik (Vercel), da jo lahko
     // preverimo brez posnetka zaslona. Brez kljucev in osebnih podatkov.
-    console.error('Stripe povezava:', akcija, s.orgId, e?.type || '', e?.code || '', e?.statusCode || '', e?.message || e)
+    console.error('Stripe povezava:', akcija, s.orgId, e?.type || '', e?.code || '', e?.statusCode || '', e?.requestId || '', e?.message || e)
     // PRELET 380 (diagnostika): kateremu Stripe racunu pripada Connect kljuc
     // in ali je aktiviran. Samo ID in zastavice - brez kljuca.
     if (e?.code === 'account_create_activation_required') {
@@ -225,6 +225,9 @@ export async function POST(req: Request) {
         console.error('Stripe povezava diag:', a?.id, a?.settings?.dashboard?.display_name || a?.business_profile?.name || '', 'charges', a?.charges_enabled, 'details', a?.details_submitted, 'payouts', a?.payouts_enabled, 'due', JSON.stringify(a?.requirements?.currently_due || []), 'disabled', a?.requirements?.disabled_reason || '')
       } catch (d: any) { console.error('Stripe povezava diag napaka:', d?.code || '', d?.message || d) }
     }
-    return NextResponse.json({ error: e?.message || 'Napaka pri povezavi s Stripe' }, { status })
+    // PRELET 384: ID zahteve Stripa (req_...) prikazemo ob napaki - z njim
+    // Stripe podpora najde tocno to zahtevo. Ni skrivnost.
+    const sporocilo = (e?.message || 'Napaka pri povezavi s Stripe') + (e?.requestId ? ` (Stripe ID zahteve: ${e.requestId})` : '')
+    return NextResponse.json({ error: sporocilo }, { status })
   }
 }
