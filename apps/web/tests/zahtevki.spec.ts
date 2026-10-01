@@ -244,3 +244,29 @@ test('FURS ne odgovori: racun obstaja, ni poslan, vidno opozorilo; ponovitev ne 
   expect(m.racuni).toHaveLength(1)
   expect(m.furs).toEqual(['r1', 'r1']) // ponovno poskusi potrditi ISTI racun
 })
+
+// ═══════════════════ PRODUKCIJSKI (ZIVI) NACIN - prelet 363 ═══════════════════
+
+import { jeZiviKljuc, racunUstrezaNacinu, zivoNiDovoljeno } from '../lib/stripe-connect'
+
+test('Zivi nacin: kljuc sk_live_/rk_live_ je zivi, sk_test_ ni', () => {
+  expect(jeZiviKljuc('sk_live_abc')).toBe(true)
+  expect(jeZiviKljuc('rk_live_abc')).toBe(true)
+  expect(jeZiviKljuc('sk_test_abc')).toBe(false)
+  expect(jeZiviKljuc('')).toBe(false)
+})
+
+test('Zivi nacin: testni povezan racun ne velja (podjetje mora Stripe povezati znova)', () => {
+  expect(racunUstrezaNacinu(false, true)).toBe(false)
+  expect(racunUstrezaNacinu(null, true)).toBe(false) // racuni pred preletom 363 so testni
+  expect(racunUstrezaNacinu(true, true)).toBe(true)
+  expect(racunUstrezaNacinu(null, false)).toBe(true)
+  expect(racunUstrezaNacinu(true, false)).toBe(false)
+})
+
+test('Zivi nacin: brez pravih placil v predstavitvi in s FURS testnim okoljem', () => {
+  expect(zivoNiDovoljeno({ furs_demo_mode: true }, true)).toMatch(/predstavitvi/)
+  expect(zivoNiDovoljeno({ furs_test_mode: true }, true)).toMatch(/testnem okolju/)
+  expect(zivoNiDovoljeno({ furs_demo_mode: false, furs_test_mode: false }, true)).toBeNull()
+  expect(zivoNiDovoljeno({ furs_demo_mode: true }, false)).toBeNull() // testni kljuc: demo dovoljen
+})

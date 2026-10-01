@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic'
  */
 import { NextResponse } from 'next/server'
 import { sejaInOrganizacija, jeLastnik } from '@/lib/stripe-connect-seja'
-import { adminSupabase, preveriPogoje, stripeConnect, javniUrl, ConnectNiNastavljen, jeTestniKljuc } from '@/lib/stripe-connect'
+import { adminSupabase, preveriPogoje, stripeConnect, javniUrl, ConnectNiNastavljen, jeTestniKljuc, jeZiviKljuc, racunUstrezaNacinu } from '@/lib/stripe-connect'
 
 /** PRELET 361: stanje računa Accounts v2 (configuration.merchant). */
 function stanjeV2(acct: any) {
@@ -51,9 +51,11 @@ export async function GET(req: Request) {
   let podrobnosti: any = null
   let napaka: string | null = null
   const { data: org } = await admin.from('organizations')
-    .select('stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, stripe_povezano_ob')
+    .select('stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, stripe_povezano_ob, stripe_account_livemode')
     .eq('id', s.orgId).maybeSingle()
-  if (org?.stripe_account_id && url.searchParams.get('osvezi') === '1') {
+  // PRELET 363: racun iz drugega nacina (testni po prehodu na zivo) ne velja.
+  const veljaven = !!org?.stripe_account_id && racunUstrezaNacinu(org?.stripe_account_livemode)
+  if (veljaven && url.searchParams.get('osvezi') === '1') {
     try {
       const st = await osveziIzStripa(admin, s.orgId, org.stripe_account_id)
       podrobnosti = {
@@ -70,10 +72,10 @@ export async function GET(req: Request) {
   return NextResponse.json({
     pogoji,
     povezava: {
-      accountId: org?.stripe_account_id ?? null,
+      accountId: veljaven ? org!.stripe_account_id : null,
       chargesEnabled: pogoji.stripeAktiven,
-      payoutsEnabled: !!org?.stripe_payouts_enabled,
-      povezanoOb: org?.stripe_povezano_ob ?? null,
+      payoutsEnabled: veljaven && !!org?.stripe_payouts_enabled,
+      povezanoOb: veljaven ? org?.stripe_povezano_ob ?? null : null,
       podrobnosti,
       testni: jeTestniKljuc(),
     },
@@ -90,8 +92,10 @@ export async function POST(req: Request) {
   const akcija = String(body.akcija || '')
   const admin = adminSupabase()
   const { data: org } = await admin.from('organizations')
-    .select('id, name, email, stripe_account_id')
+    .select('id, name, email, stripe_account_id, stripe_account_livemode')
     .eq('id', s.orgId).single()
+  // PRELET 363: racun iz drugega nacina se ne uporablja - ob povezavi nastane nov.
+  if (org?.stripe_account_id && !racunUstrezaNacinu(org.stripe_account_livemode)) org.stripe_account_id = null
   const osnova = javniUrl(req)
 
   try {
@@ -132,6 +136,7 @@ export async function POST(req: Request) {
         const st = stanjeV2(acct)
         const { error } = await admin.from('organizations').update({
           stripe_account_id: accountId,
+          stripe_account_livemode: jeZiviKljuc(),
           stripe_charges_enabled: st.chargesEnabled,
           stripe_payouts_enabled: st.payoutsEnabled,
           stripe_povezano_ob: new Date().toISOString(),
@@ -170,6 +175,7 @@ export async function POST(req: Request) {
       }
       const { error } = await admin.from('organizations').update({
         stripe_account_id: null,
+        stripe_account_livemode: null,
         stripe_charges_enabled: false,
         stripe_payouts_enabled: false,
         stripe_povezano_ob: null,

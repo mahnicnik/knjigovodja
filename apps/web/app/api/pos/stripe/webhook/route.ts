@@ -20,7 +20,7 @@ export const dynamic = 'force-dynamic'
  */
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { adminSupabase, CONNECT_API_VERZIJA } from '@/lib/stripe-connect'
+import { adminSupabase, CONNECT_API_VERZIJA, jeZiviKljuc } from '@/lib/stripe-connect'
 import { supabaseShramba, zakljuciPosPlacilo } from '@/lib/pos-stripe'
 import { obdelajPlacanZahtevek, oznaciZahtevekVrnjen } from '@/lib/zahtevki'
 
@@ -39,6 +39,12 @@ export async function POST(req: Request) {
     event = await stripe.webhooks.constructEventAsync(telo, podpis, skrivnost)
   } catch (e: any) {
     return NextResponse.json({ error: 'Neveljaven podpis: ' + e?.message }, { status: 400 })
+  }
+
+  // PRELET 363: zivi Connect endpoint prejema TUDI testne dogodke povezanih
+  // racunov (in obratno). Obdelamo samo dogodke nacina, v katerem je kljuc.
+  if (!!event.livemode !== jeZiviKljuc()) {
+    return NextResponse.json({ received: true, preskoceno: event.livemode ? 'zivi dogodek, testni kljuc' : 'testni dogodek, zivi kljuc' })
   }
 
   const admin = adminSupabase()
@@ -115,6 +121,6 @@ export async function POST(req: Request) {
 /** Dogodek mora priti z racuna, ki je povezan s TO organizacijo. */
 async function racunPripada(admin: any, orgId: string | undefined, racun: string | undefined) {
   if (!orgId || !racun) return false
-  const { data } = await admin.from('organizations').select('stripe_account_id').eq('id', orgId).maybeSingle()
-  return data?.stripe_account_id === racun
+  const { data } = await admin.from('organizations').select('stripe_account_id, stripe_account_livemode').eq('id', orgId).maybeSingle()
+  return data?.stripe_account_id === racun && (data?.stripe_account_livemode ?? false) === jeZiviKljuc()
 }

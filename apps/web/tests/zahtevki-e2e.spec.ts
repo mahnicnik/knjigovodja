@@ -4,8 +4,11 @@ import { test, expect, type Page } from '@playwright/test'
  * E2E: ZAHTEVEK ZA PLACILO V PREDSTAVITVI (prelet 361)
  *
  * Tece na PRODUKCIJI v /demo (furs_demo_mode -> DEMO- kode, nic ne gre FURS).
- * Pogoj: predstavitveno podjetje ima povezan Stripe v TESTNEM nacinu
- * (Nastavitve -> Placila s kartico), sicer je moznost onemogocena.
+ * Pogoj: na strezniku je TESTNI kljuc (sk_test_) in predstavitveno podjetje
+ * ima povezan Stripe v testnem nacinu. Z zivim kljucem (produkcija, prelet
+ * 363) placila v predstavitvi namenoma niso mogoca - pravi denar mora dobiti
+ * pravo davcno potrditev. Takrat preizkus opravi pravo podjetje s pravo
+ * kartico (majhen znesek) in vracilom prek storna.
  *
  * Zagon (posnetki gredo v test-results/zahtevki/):
  *   cd apps/web && E2E_ZAHTEVKI=1 npx playwright test tests/zahtevki-e2e.spec.ts --reporter=list

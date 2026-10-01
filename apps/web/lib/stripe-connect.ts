@@ -8,8 +8,13 @@
  * uporabnika (direct charges, glava Stripe-Account) - denar gre neposredno
  * uporabniku, Stripe mu provizijo zaracuna sam ("Stripe handles pricing").
  *
- * SAMO TESTNI NACIN: dokler ni izrecno dovoljeno (STRIPE_CONNECT_DOVOLI_LIVE=1),
- * zivi kljuc (sk_live_) ne deluje - odjemalec vrne napako, nic se ne zaracuna.
+ * PRODUKCIJSKI NACIN (prelet 363): nacin doloca kljuc STRIPE_CONNECT_SECRET_KEY
+ * (sk_live_/rk_live_ = zivo, pravi denar; sk_test_ = testno). Povezan racun
+ * pripada nacinu, v katerem je bil ustvarjen (organizations.
+ * stripe_account_livemode) - ob neujemanju velja, da Stripe ni povezan.
+ * V zivem nacinu placila s kartico NISO mogoca v predstavitvi (furs_demo_mode)
+ * in s FURS testnim okoljem (furs_test_mode): pravi denar zahteva pravo
+ * davcno potrditev.
  *
  * DAVCNO POTRJEVANJE JE OBVEZNO: placilo s Stripe je na voljo SAMO podjetju z
  * veljavnim FURS certifikatom in poslovnim prostorom (ali v predstavitvi,
@@ -28,23 +33,40 @@ export class ConnectNiNastavljen extends Error {}
 export function stripeConnect(): Stripe {
   const kljuc = process.env.STRIPE_CONNECT_SECRET_KEY
   if (!kljuc) throw new ConnectNiNastavljen('Plačila s kartico (Stripe) na strežniku še niso nastavljena.')
-  if (kljuc.startsWith('sk_live_') || kljuc.startsWith('rk_live_')) {
-    if (process.env.STRIPE_CONNECT_DOVOLI_LIVE !== '1') {
-      throw new ConnectNiNastavljen('Stripe Connect je trenutno dovoljen samo v testnem načinu.')
-    }
-  }
   return new Stripe(kljuc, { apiVersion: CONNECT_API_VERZIJA as any, maxNetworkRetries: 2, timeout: 20000 })
 }
 
 export function connectNastavljen(): boolean {
   const k = process.env.STRIPE_CONNECT_SECRET_KEY
-  if (!k) return false
-  if ((k.startsWith('sk_live_') || k.startsWith('rk_live_')) && process.env.STRIPE_CONNECT_DOVOLI_LIVE !== '1') return false
-  return true
+  return !!k
 }
 
 export function jeTestniKljuc(): boolean {
-  return (process.env.STRIPE_CONNECT_SECRET_KEY || '').startsWith('sk_test_')
+  return /^(sk|rk)_test_/.test(process.env.STRIPE_CONNECT_SECRET_KEY || '')
+}
+
+/** Zivi (produkcijski) kljuc - pravi denar. */
+export function jeZiviKljuc(kljuc = process.env.STRIPE_CONNECT_SECRET_KEY || ''): boolean {
+  return /^(sk|rk)_live_/.test(kljuc)
+}
+
+/**
+ * Ali shranjen povezan racun pripada nacinu kljuca na strezniku. Racuni brez
+ * oznake (null) so iz casa pred preletom 363 - vsi testni.
+ */
+export function racunUstrezaNacinu(livemode: boolean | null | undefined, zivo = jeZiviKljuc()): boolean {
+  return (livemode ?? false) === zivo
+}
+
+/**
+ * Razlog, zakaj v ZIVEM nacinu placila s kartico niso mogoca, ali null.
+ * Pravi denar mora vedno dobiti pravo davcno potrditev pri FURS.
+ */
+export function zivoNiDovoljeno(org: { furs_demo_mode?: boolean | null; furs_test_mode?: boolean | null } | null, zivo = jeZiviKljuc()): string | null {
+  if (!zivo) return null
+  if (org?.furs_demo_mode) return 'V predstavitvi pravih plačil s kartico ni — računi tu niso davčno potrjeni pri FURS.'
+  if (org?.furs_test_mode) return 'FURS je v testnem okolju. Za prava plačila s kartico preklopite na produkcijski FURS certifikat.'
+  return null
 }
 
 /**
@@ -89,14 +111,17 @@ export type Pogoji = {
 export async function preveriPogoje(admin: SupabaseClient, orgId: string): Promise<Pogoji> {
   const { data: org } = await admin
     .from('organizations')
-    .select('id, subscription_status, furs_demo_mode, furs_test_mode, stripe_account_id, stripe_charges_enabled')
+    .select('id, subscription_status, furs_demo_mode, furs_test_mode, stripe_account_id, stripe_charges_enabled, stripe_account_livemode')
     .eq('id', orgId)
     .maybeSingle()
   const status = String(org?.subscription_status || 'free')
   const demo = !!org?.furs_demo_mode
   let fursOk = false
   let fursRazlog: string | null = null
-  if (demo) {
+  const zivoOvira = zivoNiDovoljeno(org)
+  if (zivoOvira) {
+    fursRazlog = zivoOvira
+  } else if (demo) {
     fursOk = true
   } else {
     const isTest = org?.furs_test_mode ?? false
@@ -112,16 +137,18 @@ export async function preveriPogoje(admin: SupabaseClient, orgId: string): Promi
     else if (!prostor) fursRazlog = 'Za plačila s kartico mora biti vpisan poslovni prostor pri FURS.'
     else fursOk = true
   }
+  // Racun iz drugega nacina (npr. testni po prehodu na zivo) ne velja.
+  const racun = org?.stripe_account_id && racunUstrezaNacinu(org?.stripe_account_livemode) ? org.stripe_account_id : null
   return {
     nastavljeno: connectNastavljen(),
-    stripePovezan: !!org?.stripe_account_id,
-    stripeAktiven: !!org?.stripe_account_id && !!org?.stripe_charges_enabled,
+    stripePovezan: !!racun,
+    stripeAktiven: !!racun && !!org?.stripe_charges_enabled,
     fursOk,
     fursRazlog,
     demo,
     paketPos: status === 'pro_pos',
     paketPortal: status === 'pro' || status === 'pro_pos',
-    accountId: org?.stripe_account_id ?? null,
+    accountId: racun,
   }
 }
 
