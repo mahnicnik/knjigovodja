@@ -22,6 +22,7 @@
  */
 import Stripe from 'stripe'
 import { createClient as ustvariAdmin, type SupabaseClient } from '@supabase/supabase-js'
+import { prostorZaPortal } from '@/lib/furs-invoice-confirm'
 
 export const CONNECT_API_VERZIJA = '2026-04-22.dahlia'
 
@@ -102,6 +103,9 @@ export type Pogoji = {
   stripeAktiven: boolean        // charges_enabled
   fursOk: boolean               // veljaven certifikat + poslovni prostor (ali demo)
   fursRazlog: string | null
+  /** PRELET 371 (M5): FURS za racune s portala (prostor 'web' ali 'both'). */
+  fursOkPortal: boolean
+  fursRazlogPortal: string | null
   demo: boolean
   paketPos: boolean             // Pro + POS (blagajna)
   paketPortal: boolean          // Pro ali Pro + POS (zahtevki)
@@ -118,24 +122,27 @@ export async function preveriPogoje(admin: SupabaseClient, orgId: string): Promi
   const demo = !!org?.furs_demo_mode
   let fursOk = false
   let fursRazlog: string | null = null
+  let fursOkPortal = false
+  let fursRazlogPortal: string | null = null
   const zivoOvira = zivoNiDovoljeno(org)
   if (zivoOvira) {
     fursRazlog = zivoOvira
+    fursRazlogPortal = zivoOvira
   } else if (demo) {
     fursOk = true
+    fursOkPortal = true
   } else {
     const isTest = org?.furs_test_mode ?? false
     const danes = new Date().toISOString().slice(0, 10)
-    const [{ data: cert }, { data: prostor }] = await Promise.all([
+    const [{ data: cert }, { data: prostori }] = await Promise.all([
       admin.from('furs_certificates').select('id, valid_to')
         .eq('org_id', orgId).eq('is_active', true).eq('is_test', isTest).maybeSingle(),
-      admin.from('business_premises').select('id')
-        .eq('org_id', orgId).eq('is_active', true).limit(1).maybeSingle(),
+      admin.from('business_premises').select('id, channel, is_active')
+        .eq('org_id', orgId).eq('is_active', true),
     ])
-    if (!cert) fursRazlog = 'Za plačila s kartico mora biti naložen veljaven FURS certifikat.'
-    else if (cert.valid_to && String(cert.valid_to) < danes) fursRazlog = 'FURS certifikat je potekel — naložite novega.'
-    else if (!prostor) fursRazlog = 'Za plačila s kartico mora biti vpisan poslovni prostor pri FURS.'
-    else fursOk = true
+    const r = ocenaFurs({ cert, prostori: prostori || [], danes })
+    fursOk = r.fursOk; fursRazlog = r.fursRazlog
+    fursOkPortal = r.fursOkPortal; fursRazlogPortal = r.fursRazlogPortal
   }
   // Racun iz drugega nacina (npr. testni po prehodu na zivo) ne velja.
   const racun = org?.stripe_account_id && racunUstrezaNacinu(org?.stripe_account_livemode) ? org.stripe_account_id : null
@@ -145,11 +152,32 @@ export async function preveriPogoje(admin: SupabaseClient, orgId: string): Promi
     stripeAktiven: !!racun && !!org?.stripe_charges_enabled,
     fursOk,
     fursRazlog,
+    fursOkPortal,
+    fursRazlogPortal,
     demo,
     paketPos: status === 'pro_pos',
     paketPortal: status === 'pro' || status === 'pro_pos',
     accountId: racun,
   }
+}
+
+/**
+ * PRELET 371 (M5): FURS pogoji iz certifikata in prostorov. Blagajna lahko
+ * uporabi katerikoli aktiven prostor (kot potrdiNarociloPriFurs), portal pa
+ * samo prostor po pravilu confirmIssuedInvoiceWithFurs (prostorZaPortal).
+ */
+export function ocenaFurs(o: { cert: { valid_to?: string | null } | null; prostori: { channel?: string | null; is_active?: boolean | null }[]; danes: string }) {
+  let certRazlog: string | null = null
+  if (!o.cert) certRazlog = 'Za plačila s kartico mora biti naložen veljaven FURS certifikat.'
+  else if (o.cert.valid_to && String(o.cert.valid_to) < o.danes) certRazlog = 'FURS certifikat je potekel — naložite novega.'
+  const aktivni = o.prostori.filter(p => p.is_active !== false)
+  const fursRazlog = certRazlog || (aktivni.length === 0 ? 'Za plačila s kartico mora biti vpisan poslovni prostor pri FURS.' : null)
+  const fursRazlogPortal = certRazlog || (!prostorZaPortal(aktivni)
+    ? (aktivni.length === 0
+      ? 'Za plačila s kartico mora biti vpisan poslovni prostor pri FURS.'
+      : 'Za račune s portala mora imeti poslovni prostor kanal »splet« ali »oboje« (prostor samo za blagajno ne velja).')
+    : null)
+  return { fursOk: !fursRazlog, fursRazlog, fursOkPortal: !fursRazlogPortal, fursRazlogPortal }
 }
 
 // ─────────────────────────────────────────────────────────────────

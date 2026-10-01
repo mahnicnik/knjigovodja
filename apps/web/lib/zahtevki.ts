@@ -532,6 +532,9 @@ export type PogojiZahtevka = {
   stripePovezan?: boolean
   fursOk: boolean
   fursRazlog: string | null
+  /** PRELET 371 (M5): FURS za portal (prostor 'web'/'both'); ce manjka, velja fursOk. */
+  fursOkPortal?: boolean
+  fursRazlogPortal?: string | null
   paketPortal: boolean
 }
 
@@ -552,7 +555,9 @@ export function razlogNedostopnosti(p: PogojiZahtevka | null | undefined): { raz
       povezava: '/nastavitve?razdelek=placila', gumb: 'Plačila s kartico',
     }
   }
-  if (!p.fursOk) return { razlog: (p.fursRazlog || 'Davčno potrjevanje ni nastavljeno.') + ' Vsak račun, plačan s kartico, se vedno davčno potrdi.', povezava: '/nastavitve?razdelek=blagajna', gumb: 'Nastavitve FURS' }
+  const fursOk = p.fursOkPortal ?? p.fursOk
+  const fursRazlog = p.fursOkPortal === undefined ? p.fursRazlog : p.fursRazlogPortal
+  if (!fursOk) return { razlog: (fursRazlog || 'Davčno potrjevanje ni nastavljeno.') + ' Vsak račun, plačan s kartico, se vedno davčno potrdi.', povezava: '/nastavitve?razdelek=blagajna', gumb: 'Nastavitve FURS' }
   return null
 }
 

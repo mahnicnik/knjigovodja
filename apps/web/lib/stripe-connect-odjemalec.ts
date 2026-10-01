@@ -25,6 +25,8 @@ export type StripePogoji = {
   stripeAktiven: boolean
   fursOk: boolean
   fursRazlog: string | null
+  fursOkPortal?: boolean
+  fursRazlogPortal?: string | null
   demo: boolean
   paketPos: boolean
   paketPortal: boolean

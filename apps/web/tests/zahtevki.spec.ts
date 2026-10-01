@@ -291,3 +291,29 @@ test('M3: placano PO velja_do - racuna ni, denar se vrne', async () => {
   expect(m.racuni).toHaveLength(0)
   expect(m.vracila).toEqual(['pi_test_1'])
 })
+
+// ═══════════════════ M5 (prelet 371): ISTO PRAVILO PROSTORA ═══════════════════
+
+import { ocenaFurs } from '../lib/stripe-connect'
+import { prostorZaPortal } from '../lib/furs-invoice-confirm'
+
+test('M5: prostor samo za blagajno (pos) ne omogoci zahtevkov, blagajno pa', () => {
+  const cert = { valid_to: '2030-01-01' }
+  const r = ocenaFurs({ cert, prostori: [{ channel: 'pos', is_active: true }], danes: '2026-10-01' })
+  expect(r.fursOk).toBe(true)          // blagajna: katerikoli aktiven prostor
+  expect(r.fursOkPortal).toBe(false)   // portal: samo web/both, kot confirmIssuedInvoiceWithFurs
+  expect(r.fursRazlogPortal).toMatch(/splet/)
+  expect(razlogNedostopnosti({ ...vseOk, fursOk: r.fursOk, fursRazlog: r.fursRazlog, fursOkPortal: r.fursOkPortal, fursRazlogPortal: r.fursRazlogPortal })?.razlog).toMatch(/splet/)
+})
+
+test('M5: pravilo je isto kot pri davcni potrditvi - web pred both', () => {
+  const prostori = [{ id: 'b', channel: 'both', is_active: true }, { id: 'w', channel: 'web', is_active: true }, { id: 'p', channel: 'pos', is_active: true }]
+  expect(prostorZaPortal(prostori)?.id).toBe('w')
+  expect(prostorZaPortal(prostori.filter(p => p.id !== 'w'))?.id).toBe('b')
+  expect(prostorZaPortal([{ id: 'p', channel: 'pos', is_active: true }])).toBeNull()
+  const ok = ocenaFurs({ cert: { valid_to: '2030-01-01' }, prostori: [{ channel: 'both', is_active: true }], danes: '2026-10-01' })
+  expect(ok.fursOkPortal).toBe(true)
+  const potekel = ocenaFurs({ cert: { valid_to: '2026-01-01' }, prostori: [{ channel: 'web', is_active: true }], danes: '2026-10-01' })
+  expect(potekel.fursOkPortal).toBe(false)
+  expect(potekel.fursRazlogPortal).toMatch(/potekel/)
+})

@@ -17,6 +17,17 @@ export type FursRezervacija = {
   issuedAt: string
 }
 
+/**
+ * PRELET 371 (M5): poslovni prostor za racune s portala - ENO pravilo za
+ * davcno potrditev (tu) in za pogoje placil s kartico (preveriPogoje).
+ * Prednost ima prostor s kanalom 'web', sicer 'both'; prostor samo za
+ * blagajno ('pos') za portal ne velja.
+ */
+export function prostorZaPortal<T extends { channel?: string | null; is_active?: boolean | null }>(prostori: T[] | null | undefined): T | null {
+  const aktivni = (prostori || []).filter(p => p.is_active !== false)
+  return aktivni.find(p => p.channel === 'web') || aktivni.find(p => p.channel === 'both') || null
+}
+
 /** Zamenljivi zunanji klici (testi). */
 export type FursOdvisnosti = {
   posli?: typeof confirmWithFurs
@@ -142,14 +153,9 @@ export async function confirmIssuedInvoiceWithFurs(
         .eq('org_id', orgId).eq('is_active', true).eq('id', requestedPremiseId).maybeSingle()
       premise = data
     } else {
-      const { data: webPremise } = await supabase.from('business_premises').select('*')
-        .eq('org_id', orgId).eq('is_active', true).eq('channel', 'web').limit(1).maybeSingle()
-      premise = webPremise
-      if (!premise) {
-        const { data: bothPremise } = await supabase.from('business_premises').select('*')
-          .eq('org_id', orgId).eq('is_active', true).eq('channel', 'both').limit(1).maybeSingle()
-        premise = bothPremise
-      }
+      const { data: prostori } = await supabase.from('business_premises').select('*')
+        .eq('org_id', orgId).eq('is_active', true)
+      premise = prostorZaPortal(prostori)
     }
     if (!premise) { await sprosti(); return { success: false, error: 'Poslovni prostor ni dodan' } }
 
