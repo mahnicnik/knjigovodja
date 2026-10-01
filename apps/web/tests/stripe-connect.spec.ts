@@ -276,3 +276,26 @@ test('H2: centi brez napake plavajoce vejice', () => {
   expect(centiNarocila(19.99)).toBe(1999)
   expect(centiNarocila('0.29')).toBe(29)
 })
+
+// ═══════════════════ M6 (prelet 367): KDO SME VRNITI DENAR ═══════════════════
+
+import { vraciloDovoljeno } from '../lib/pos-stripe'
+
+test('M6: blagajnik brez pravice storna ne sme vrniti denarja', () => {
+  const r = vraciloDovoljeno({ lastnik: false, dovoljenjaOsebja: { sale: true, voidReceipt: false, refund: false }, zakljuceno: true, statusRacuna: 'voided' })
+  expect(r.ok).toBe(false)
+  expect((r as any).status).toBe(403)
+  expect(vraciloDovoljeno({ lastnik: false, dovoljenjaOsebja: null, zakljuceno: true, statusRacuna: 'voided' }).ok).toBe(false)
+})
+
+test('M6: zakljucen racun mora biti storniran pred vracilom', () => {
+  const r = vraciloDovoljeno({ lastnik: true, dovoljenjaOsebja: null, zakljuceno: true, statusRacuna: 'paid' })
+  expect(r.ok).toBe(false)
+  expect((r as any).status).toBe(409)
+  expect(vraciloDovoljeno({ lastnik: true, dovoljenjaOsebja: null, zakljuceno: true, statusRacuna: 'voided' }).ok).toBe(true)
+})
+
+test('M6: vodja s pravico storna sme; nezakljuceno placilo (ni racuna) brez storna', () => {
+  expect(vraciloDovoljeno({ lastnik: false, dovoljenjaOsebja: { voidReceipt: true }, zakljuceno: true, statusRacuna: 'voided' }).ok).toBe(true)
+  expect(vraciloDovoljeno({ lastnik: false, dovoljenjaOsebja: { voidReceipt: true }, zakljuceno: false, statusRacuna: 'open' }).ok).toBe(true)
+})

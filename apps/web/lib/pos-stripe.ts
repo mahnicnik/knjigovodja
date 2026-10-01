@@ -421,3 +421,42 @@ export async function zapriSejo(stripe: any, sessionId: string | null, stripeAcc
     return { stanje: 'napaka', napaka: e?.message || String(e) }
   }
 }
+
+// ─────────────────────────────────────────────────────────────────
+// PRELET 367 (M6): KDO SME VRNITI DENAR PREK STRIPE
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Vracilo prek Stripe je dovoljeno:
+ *  - lastniku/administratorju podjetja ALI osebju blagajne s pravico
+ *    "Storno racuna" (voidReceipt) oz. "Vracilo" (refund), IN
+ *  - za ZAKLJUCEN racun samo, ce je racun ze storniran (orders.status =
+ *    'voided') - denar ne gre nazaj za veljaven, davcno potrjen racun;
+ *  - za placilo, ki ga ni bilo mogoce zakljuciti (racuna ni), brez storna.
+ */
+export function vraciloDovoljeno(o: {
+  lastnik: boolean
+  dovoljenjaOsebja: Record<string, any> | null
+  zakljuceno: boolean
+  statusRacuna: string | null
+}): { ok: true } | { ok: false; razlog: string; status: number } {
+  const imaPravico = o.lastnik || !!(o.dovoljenjaOsebja?.voidReceipt || o.dovoljenjaOsebja?.refund)
+  if (!imaPravico) return { ok: false, status: 403, razlog: 'Vračilo lahko izvede lastnik ali osebje s pravico »Storno računa«.' }
+  if (o.zakljuceno && o.statusRacuna !== 'voided') {
+    return { ok: false, status: 409, razlog: 'Račun ni storniran. Najprej ga stornirajte (storno pri FURS), nato vrnite denar.' }
+  }
+  return { ok: true }
+}
+
+/** Dovoljenja osebja (staff) blagajne podjetja - enako kot pin_login. */
+export async function dovoljenjaOsebja(admin: SupabaseClient, orgId: string, staffId: string | null | undefined) {
+  if (!staffId || !/^[0-9a-f-]{36}$/i.test(staffId)) return null
+  const { data: org } = await admin.from('organizations').select('pos_business_id').eq('id', orgId).maybeSingle()
+  if (!org?.pos_business_id) return null
+  const { data: st } = await admin.from('staff').select('role, permissions, active')
+    .eq('id', staffId).eq('business_id', org.pos_business_id).maybeSingle()
+  if (!st || st.active === false) return null
+  if (st.permissions) return st.permissions as Record<string, any>
+  const { data } = await admin.rpc('role_default_permissions', { p_role: st.role })
+  return (data as Record<string, any>) || null
+}

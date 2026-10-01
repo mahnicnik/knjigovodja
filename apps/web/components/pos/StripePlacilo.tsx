@@ -117,8 +117,10 @@ export type StripePlaciloStanje = {
 
 const eur = (c: number) => (c / 100).toLocaleString('sl-SI', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'
 
-export function StripeQrZaslon({ placilo, onPlacano, onPreklici, onNovaKoda, T }: {
+export function StripeQrZaslon({ placilo, onPlacano, onPreklici, onNovaKoda, T, osebjeId }: {
   placilo: StripePlaciloStanje
+  /** PIN-prijavljeno osebje (pravica za vracilo preverja streznik, prelet 367). */
+  osebjeId?: string | null
   onPlacano: (p: StripePlaciloStanje) => void
   onPreklici: () => void
   onNovaKoda: () => void
@@ -186,7 +188,7 @@ export function StripeQrZaslon({ placilo, onPlacano, onPreklici, onNovaKoda, T }
   async function vrniDenar() {
     if (!confirm(`Vrnem ${eur(stanje.znesekCenti)} stranki na kartico?`)) return
     setVracam(true); setNapaka(null)
-    const r = await klicStripe('/api/pos/stripe/vracilo', { id: placilo.id })
+    const r = await klicStripe('/api/pos/stripe/vracilo', { id: placilo.id, staff_id: osebjeId || null })
     setVracam(false)
     if (!r.ok) { setNapaka(r.data.error || 'Vračilo ni uspelo.'); return }
     const s2 = await klicStripe<StripePlaciloStanje>('/api/pos/stripe/placilo?id=' + placilo.id)
