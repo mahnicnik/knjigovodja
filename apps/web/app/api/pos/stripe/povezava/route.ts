@@ -134,7 +134,14 @@ export async function POST(req: Request) {
           },
           metadata: { org_id: s.orgId, vir: 'racunko' },
           include: ['configuration.merchant'],
-        } as any, { idempotencyKey: `connect-v2-racun-${s.orgId}-${new Date().toISOString().slice(0, 13)}` })
+        } as any, {
+          // PRELET 381: kljuc velja le minuto. Stripe shrani tudi NAPAKO pod
+          // idempotency kljucem in jo vraca vsem nadaljnjim poskusom - z urnim
+          // kljucem je napaka "account must be activated" ostala uro po tem,
+          // ko je bila platforma ze aktivirana. Minuta se vedno prepreci
+          // podvojen racun ob dvojnem kliku.
+          idempotencyKey: `connect-v2-racun-${s.orgId}-${new Date().toISOString().slice(0, 16)}`,
+        })
         accountId = acct.id
         const st = stanjeV2(acct)
         const { error } = await admin.from('organizations').update({
