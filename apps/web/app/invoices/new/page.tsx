@@ -11,6 +11,9 @@ import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 import { VAT_EXEMPTIONS, VAT_EXEMPTION_GROUPS, vatExemptionText, findVatExemption } from '@/lib/vat-exemptions'
 import { formatEurNumber } from '@/lib/format'
+// PRELET 360: zahtevek za placilo (Stripe) iz istega obrazca.
+import { VrstaDokumenta, ZahtevekPoShranitvi, ZahtevekQrZaslon, useZahtevkiNaVoljo, type ZahtevekPortal } from '@/components/zahtevki/Zahtevek'
+import { klicStripe } from '@/lib/stripe-connect-odjemalec'
 
 interface LineItem {
   description: string
@@ -58,6 +61,53 @@ export default function NewInvoicePage() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const router = useRouter()
   const supabase = createClient()
+
+  /**
+   * PRELET 360: ZAHTEVEK ZA PLACILO (Stripe).
+   * Isti obrazec (stranka, postavke, DDV, popusti, oprostitve), a namesto
+   * racuna se shrani zahtevek; racun izda streznik SELE po placilu.
+   */
+  const [vrsta, setVrsta] = useState<'racun' | 'zahtevek'>('racun')
+  const zahtevkiNaVoljo = useZahtevkiNaVoljo()
+  const [shranjenZahtevek, setShranjenZahtevek] = useState<ZahtevekPortal | null>(null)
+  const [qrZahtevek, setQrZahtevek] = useState<ZahtevekPortal | null>(null)
+  const [partnerId, setPartnerId] = useState<string | null>(null)
+  const jeZahtevek = vrsta === 'zahtevek'
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('vrsta') === 'zahtevek') setVrsta('zahtevek')
+  }, [])
+  useEffect(() => {
+    if (vrsta === 'zahtevek' && !zahtevkiNaVoljo.nalaga && zahtevkiNaVoljo.nedostopno) setVrsta('racun')
+  }, [vrsta, zahtevkiNaVoljo])
+
+  async function ustvariZahtevek() {
+    if (!org || loading) return
+    if (!clientName.trim() || unknownPayer) { alert('Vpišite ime stranke.'); return }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(clientEmail.trim())) { alert('Vpišite e-poštni naslov stranke — nanj pošljemo račun po plačilu.'); return }
+    setLoading(true)
+    const r = await klicStripe<{ zahtevek: ZahtevekPortal }>('/api/zahtevki', {
+      stranka_ime: clientName, stranka_email: clientEmail, stranka_naslov: clientAddress, stranka_davcna: clientTaxNumber,
+      partner_id: partnerId, postavke: items, opomba: notes,
+      vat_exemption_code: vatExemptionCode || null, vat_exemption_custom: vatExemptionCustom || null,
+      service_date: serviceDate || null, service_date_to: serviceDateTo || null, header_text: headerText || null,
+    })
+    setLoading(false)
+    if (!r.ok) { alert(r.data.error || 'Zahtevka ni bilo mogoče shraniti.'); return }
+    posthog.capture('payment_request_created', { amount_total: r.data.zahtevek.znesek })
+    setShranjenZahtevek(r.data.zahtevek)
+  }
+  const glavniKlik = () => (jeZahtevek ? ustvariZahtevek() : handleSave('sent'))
+  const glavniOnemogocen = loading || !clientName || (jeZahtevek && !clientEmail)
+  const glavnoBesedilo = loading ? 'Shranjujem...' : jeZahtevek ? '💳 Ustvari zahtevek za plačilo' : '📄 Izdaj račun'
+  const zahtevekOkna = (
+    <>
+      {shranjenZahtevek && !qrZahtevek && (
+        <ZahtevekPoShranitvi zahtevek={shranjenZahtevek} onQr={z => setQrZahtevek(z)} onKonec={() => router.push('/invoices/zahtevki')} />
+      )}
+      {qrZahtevek && <ZahtevekQrZaslon zahtevek={qrZahtevek} onZapri={() => router.push('/invoices/zahtevki')} />}
+    </>
+  )
+  const vrstaIzbira = <VrstaDokumenta vrsta={vrsta} onVrsta={setVrsta} naVoljo={zahtevkiNaVoljo} />
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -149,6 +199,7 @@ export default function NewInvoicePage() {
 
   function selectPartner(id: string) {
     const p = partners.find(p => p.id === id)
+    setPartnerId(p?.id ?? null)
     if (p) {
       setClientName(p.name || '')
       setClientEmail(p.email || '')
@@ -322,7 +373,7 @@ export default function NewInvoicePage() {
         </label>
       </div>
       <div>
-        <label style={{ fontSize:'11px', color:'#888', display:'block', marginBottom:'4px' }}>Email stranke</label>
+        <label style={{ fontSize:'11px', color:'#888', display:'block', marginBottom:'4px' }}>Email stranke{jeZahtevek ? ' * — nanj pošljemo zahtevek in račun' : ''}</label>
         <input value={clientEmail} onChange={e => setClientEmail(e.target.value)} placeholder="info@agencija.si" type="email" className={inp} />
       </div>
       <div>
@@ -373,16 +424,17 @@ export default function NewInvoicePage() {
         <div style={{ background:'#fff', borderBottom:'0.5px solid rgba(0,0,0,0.08)', padding:'12px 16px', position:'sticky', top:0, zIndex:10 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
             <Link href="/invoices" style={{ textDecoration:'none', fontSize:'13px', color:'#888' }}>← Računi</Link>
-            <div style={{ fontSize:'15px', fontWeight:'500', color:'#0D1F12' }}>Nov račun</div>
-            <button onClick={() => handleSave('draft')} disabled={loading} style={{ fontSize:'12px', color:'#888', background:'none', border:'0.5px solid rgba(0,0,0,0.15)', borderRadius:'8px', padding:'6px 12px', cursor:'pointer' }}>Osnutek</button>
+            <div style={{ fontSize:'15px', fontWeight:'500', color:'#0D1F12' }}>{jeZahtevek ? 'Zahtevek za plačilo' : 'Nov račun'}</div>
+            {jeZahtevek ? <span style={{ width: 70 }} /> : <button onClick={() => handleSave('draft')} disabled={loading} style={{ fontSize:'12px', color:'#888', background:'none', border:'0.5px solid rgba(0,0,0,0.15)', borderRadius:'8px', padding:'6px 12px', cursor:'pointer' }}>Osnutek</button>}
           </div>
         </div>
         <div style={{ padding:'12px 16px', display:'flex', flexDirection:'column', gap:'10px' }}>
+          {vrstaIzbira}
           <div style={{ background:'#fff', borderRadius:'12px', border:'0.5px solid rgba(0,0,0,0.08)', padding:'16px' }}>
             <div style={{ fontSize:'13px', fontWeight:'500', color:'#0D1F12', marginBottom:'12px' }}>Stranka</div>
             {PartnerSection}
           </div>
-          <div style={{ background:'#fff', borderRadius:'12px', border:'0.5px solid rgba(0,0,0,0.08)', padding:'16px' }}>
+          {!jeZahtevek && <div style={{ background:'#fff', borderRadius:'12px', border:'0.5px solid rgba(0,0,0,0.08)', padding:'16px' }}>
             <div style={{ fontSize:'13px', fontWeight:'500', color:'#0D1F12', marginBottom:'12px' }}>Datumi</div>
             <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
               <div>
@@ -394,7 +446,7 @@ export default function NewInvoicePage() {
                 <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={inp} />
               </div>
             </div>
-          </div>
+          </div>}
           <div style={{ background:'#fff', borderRadius:'12px', border:'0.5px solid rgba(0,0,0,0.08)', padding:'16px' }}>
             <div style={{ fontSize:'13px', fontWeight:'500', color:'#0D1F12', marginBottom:'12px' }}>Storitve in blago</div>
             <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
@@ -533,10 +585,16 @@ export default function NewInvoicePage() {
           </div>
         </div>
         <div style={{ position:'fixed', bottom:0, left:0, right:0, background:'#fff', borderTop:'0.5px solid rgba(0,0,0,0.08)', padding:'12px 16px', paddingBottom:'calc(12px + env(safe-area-inset-bottom))' }}>
-          <button onClick={() => handleSave('sent')} disabled={loading || !clientName} style={{ width:'100%', padding:'14px', borderRadius:'12px', background: (!clientName || loading) ? '#ccc' : '#0D1F12', color:'#fff', border:'none', fontSize:'15px', fontWeight:'500', cursor: (!clientName || loading) ? 'not-allowed' : 'pointer' }}>
-            {loading ? 'Shranjujem...' : '📄 Izdaj račun'}
+          {jeZahtevek && (
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px', marginBottom:'8px', color:'#0D1F12' }}>
+              <span>Za plačilo (z DDV)</span><strong data-testid="zahtevek-skupaj">€{formatEurNumber(total)}</strong>
+            </div>
+          )}
+          <button data-testid="glavni-gumb" onClick={glavniKlik} disabled={glavniOnemogocen} style={{ width:'100%', padding:'14px', borderRadius:'12px', background: glavniOnemogocen ? '#ccc' : '#0D1F12', color:'#fff', border:'none', fontSize:'15px', fontWeight:'500', cursor: glavniOnemogocen ? 'not-allowed' : 'pointer' }}>
+            {glavnoBesedilo}
           </button>
         </div>
+        {zahtevekOkna}
       </div>
     )
   }
@@ -555,17 +613,18 @@ export default function NewInvoicePage() {
       <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
         <div>
           <Link href="/invoices" className="text-sm text-gray-500 hover:text-gray-900">← Računi</Link>
-          <h1 className="font-semibold text-gray-900 mt-0.5">Nov račun</h1>
+          <h1 className="font-semibold text-gray-900 mt-0.5">{jeZahtevek ? 'Zahtevek za plačilo' : 'Nov račun'}</h1>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => handleSave('draft')} disabled={loading} className="border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm">Shrani osnutek</button>
-          <button onClick={() => handleSave('sent')} disabled={loading || !clientName} className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-40">
-            {loading ? 'Shranjujem...' : 'Izdaj račun'}
+          {!jeZahtevek && <button onClick={() => handleSave('draft')} disabled={loading} className="border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm">Shrani osnutek</button>}
+          <button onClick={glavniKlik} disabled={glavniOnemogocen} className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-40">
+            {loading ? 'Shranjujem...' : jeZahtevek ? 'Ustvari zahtevek' : 'Izdaj račun'}
           </button>
         </div>
       </div>
       <div className="max-w-4xl mx-auto px-6 py-8 grid grid-cols-3 gap-6">
         <div className="col-span-2 space-y-6">
+          {vrstaIzbira}
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
             <h3 className="font-medium text-gray-900 mb-4">Podatki stranke</h3>
             {PartnerSection}
@@ -573,6 +632,7 @@ export default function NewInvoicePage() {
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
             <h3 className="font-medium text-gray-900 mb-4">Datumi</h3>
             <div className="grid grid-cols-2 gap-3">
+              {!jeZahtevek && <>
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Datum računa</label>
                 <input type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} className={inp} />
@@ -581,6 +641,7 @@ export default function NewInvoicePage() {
                 <label className="text-xs text-gray-500 block mb-1">Rok plačila</label>
                 <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={inp} />
               </div>
+              </>}
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Datum opravljene storitve (od)</label>
                 <input type="date" value={serviceDate} onChange={e => setServiceDate(e.target.value)} className={inp} />
@@ -793,12 +854,14 @@ export default function NewInvoicePage() {
           <div className="bg-white rounded-2xl border border-gray-100 p-6 sticky top-4">
             <h3 className="font-medium text-gray-900 mb-4">Povzetek</h3>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between text-gray-500"><span>Št. računa</span><span className="font-mono">{invoiceNumber}</span></div>
+              {jeZahtevek
+                ? <div className="text-xs text-gray-500 leading-relaxed">Številko računa dobi račun šele po plačilu.</div>
+                : <div className="flex justify-between text-gray-500"><span>Št. računa</span><span className="font-mono">{invoiceNumber}</span></div>}
               <div className="flex justify-between text-gray-500"><span>Osnova</span><span>€{formatEurNumber(subtotal)}</span></div>
               <div className="flex justify-between text-gray-500"><span>DDV</span><span>€{formatEurNumber(vatAmount)}</span></div>
               <div className="border-t border-gray-100 pt-2 mt-2 flex justify-between font-semibold text-gray-900"><span>Skupaj</span><span>€{formatEurNumber(total)}</span></div>
             </div>
-            <div className="mt-4 pt-4 border-t border-gray-100">
+            {!jeZahtevek && <div className="mt-4 pt-4 border-t border-gray-100">
               <div className="text-xs text-gray-500 mb-1">Sklic</div>
               <input
                 className="font-mono text-xs bg-gray-50 rounded-lg px-3 py-2 w-full border border-gray-200 outline-none"
@@ -810,7 +873,7 @@ export default function NewInvoicePage() {
                 }}
                 placeholder={`SI00 ${invoiceNumber}`}
               />
-            </div>
+            </div>}
             {org && (
               <div className="mt-4 pt-4 border-t border-gray-100">
                 <div className="text-xs text-gray-500 mb-2">Izdajatelj</div>
@@ -827,13 +890,14 @@ export default function NewInvoicePage() {
                 </div>
               </div>
             )}
-            <button onClick={() => handleSave('sent')} disabled={loading || !clientName} className="w-full bg-gray-900 text-white rounded-xl py-3 text-sm font-medium mt-6 disabled:opacity-40">
-              {loading ? 'Shranjujem...' : '📄 Izdaj račun'}
+            <button data-testid="glavni-gumb" onClick={glavniKlik} disabled={glavniOnemogocen} className="w-full bg-gray-900 text-white rounded-xl py-3 text-sm font-medium mt-6 disabled:opacity-40">
+              {glavnoBesedilo}
             </button>
           </div>
         </div>
       </div>
     </div>
+    {zahtevekOkna}
     </>
     </AppLayout>
   )

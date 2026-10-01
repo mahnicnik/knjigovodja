@@ -13,6 +13,8 @@ import { GET as contributionsGET } from '../contributions/route'
 // DODANO (17.8.2026): uvodna e-posta novim uporabnikom. Ta datoteka je bila v
 // mapi "crom" namesto "cron", zato se ni nikoli izvajala.
 import { GET as uvodnaPostaGET } from '@/app/api/email/cron/route'
+// PRELET 360: zahtevki za placilo (potekli, naknadna davcna potrditev).
+import { GET as zahtevkiGET } from '../zahtevki/route'
 
 /**
  * En sam dnevni cron, ki zaporedoma pokliCe vse stiri loceno testirane
@@ -91,6 +93,13 @@ export async function GET(request: NextRequest) {
     results.uvodnaPosta = await res.json()
   } catch (e: any) {
     results.uvodnaPosta = { error: e.message }
+  }
+
+  try {
+    const res = await zahtevkiGET(request)
+    results.zahtevki = await res.json()
+  } catch (e: any) {
+    results.zahtevki = { error: e.message }
   }
 
   return NextResponse.json({ success: true, results })

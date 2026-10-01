@@ -55,14 +55,20 @@ interface Props {
   org: any
   qrDataUrl: string
   fursQrDataUrl?: string
+  /**
+   * PRELET 360: predogled ZAHTEVKA ZA PLACILO (Stripe). To NI racun - naslov
+   * je "ZAHTEVEK ZA PLAČILO", namesto UPN je QR koda do /placaj/[zeton].
+   * Brez tega parametra je PDF racuna nespremenjen.
+   */
+  zahtevek?: { url: string; qrDataUrl: string; veljaDo: string | null }
 }
 
 // C7 (22.8.2026): zneski so bili izpisani s PIKO (36.89) in znakom PRED
 // stevilko. Slovenski zapis je "36,89 €".
-export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
-  const isStorno = invoice.amount_total < 0
-  const isDobropis = invoice.invoice_number?.includes('-D')
-  const docType = isDobropis ? 'DOBROPIS' : isStorno ? 'STORNO' : 'RAČUN'
+export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl, zahtevek }: Props) {
+  const isStorno = !zahtevek && invoice.amount_total < 0
+  const isDobropis = !zahtevek && invoice.invoice_number?.includes('-D')
+  const docType = zahtevek ? 'ZAHTEVEK' : isDobropis ? 'DOBROPIS' : isStorno ? 'STORNO' : 'RAČUN'
   const lineItems = invoice.line_items || []
   // POPRAVLJENO (29.9.2026): popust je bil na izdanem racunu neviden, znesek
   // vrstice pa prikazan BREZ popusta (vsota spodaj je bila pravilna, vrstice
@@ -111,8 +117,10 @@ export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
             )}
             <Text style={[styles.invoiceTitleH1, { color: isStorno || isDobropis ? '#c00' : '#111' }]}>{docType}</Text>
             <View style={styles.invoiceMeta}>
+              {zahtevek && <Text style={{ fontWeight: 700, color: '#111' }}>ZA PLAČILO — to ni račun</Text>}
               <Text>Številka: {invoice.invoice_number}</Text>
               <Text>Datum: {new Date(invoice.issue_date).toLocaleDateString('sl-SI')}</Text>
+              {zahtevek?.veljaDo && <Text>Velja do: {new Date(zahtevek.veljaDo).toLocaleDateString('sl-SI')}</Text>}
               {/* DODANO (30.7.2026): datum opravljene storitve/dobave je po
                   ZDDV-1 obvezen, ce se razlikuje od datuma izdaje racuna. */}
               {invoice.service_date && (
@@ -122,7 +130,7 @@ export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
                     : `Opravljeno: ${new Date(invoice.service_date).toLocaleDateString('sl-SI')}`}
                 </Text>
               )}
-              {invoice.due_date && <Text>Rok plačila: {new Date(invoice.due_date).toLocaleDateString('sl-SI')}</Text>}
+              {!zahtevek && invoice.due_date && <Text>Rok plačila: {new Date(invoice.due_date).toLocaleDateString('sl-SI')}</Text>}
             </View>
           </View>
         </View>
@@ -251,7 +259,25 @@ export function InvoicePDF({ invoice, org, qrDataUrl, fursQrDataUrl }: Props) {
             </Text>
           </View>
         )}
-        {!isStorno && !isDobropis && invoice.status !== 'paid' && (
+        {zahtevek && (
+          <View style={styles.bottomSection}>
+            <View style={{ maxWidth: '62%' }}>
+              <Text style={styles.payTitle}>Plačilo s kartico</Text>
+              <Text style={{ fontSize: 10, lineHeight: 1.5, marginBottom: 6 }}>
+                Kodo poslikajte s telefonom ali odprite povezavo in plačajte s kartico, Apple Pay ali Google Pay.
+              </Text>
+              <Text style={{ fontSize: 8, color: '#1f6b3a', marginBottom: 8 }}>{zahtevek.url}</Text>
+              <Text style={{ fontSize: 8, color: '#666', lineHeight: 1.5 }}>
+                Davčno potrjen račun vam pošljemo po e-pošti takoj po plačilu.
+              </Text>
+            </View>
+            <View>
+              <Image src={zahtevek.qrDataUrl} style={styles.qrImage} />
+              <Text style={styles.qrLabel}>Plačaj s kartico</Text>
+            </View>
+          </View>
+        )}
+        {!zahtevek && !isStorno && !isDobropis && invoice.status !== 'paid' && (
           <View style={styles.bottomSection}>
             <View>
               <Text style={styles.payTitle}>Plačilni podatki</Text>

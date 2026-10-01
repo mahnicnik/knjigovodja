@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import SendInvoiceModal from '@/components/SendInvoiceModal'
 import { getActiveMembership } from '@/lib/active-org'
+import { klicStripe } from '@/lib/stripe-connect-odjemalec'
 import AppLayout from '@/components/AppLayout'
 import { formatEurNumber } from '@/lib/format'
 import PeriodFilter from '@/components/PeriodFilter'
@@ -194,7 +195,38 @@ export default function InvoicesPage() {
     await load()
   }
 
+  /**
+   * PRELET 360: racun iz ZAHTEVKA ZA PLACILO (placan s kartico prek Stripe).
+   * Storno gre prek streznika: storno se davcno potrdi (izvirnik je bil
+   * potrjen) in ponudi se vracilo denarja prek Stripe - kot v blagajni.
+   * Ostali racuni gredo po nespremenjeni poti spodaj.
+   */
+  async function stornoZahtevka(inv: any) {
+    const vracilo = confirm(
+      `Račun ${inv.invoice_number} je stranka plačala s kartico prek Stripe.\n\n`
+      + `V redu = storniram račun IN vrnem ${Number(inv.amount_total).toFixed(2).replace('.', ',')} € stranki na kartico.\n`
+      + 'Prekliči = izberem drugače.'
+    )
+    if (!vracilo && !confirm(`Storniram račun ${inv.invoice_number} BREZ vračila denarja prek Stripe?`)) return
+    setActionLoading('storno_' + inv.id)
+    try {
+      const { ok, data: d } = await klicStripe<any>('/api/zahtevki/storno', { invoice_id: inv.id, vracilo })
+      if (!ok && !d.storno) alert(d.error || d.napaka || 'Storna ni bilo mogoče izvesti.')
+      else alert([
+        d.storno ? 'Račun je storniran' + (d.furs ? ' in storno davčno potrjen.' : '.') : null,
+        d.vracilo ? 'Denar je vrnjen stranki prek Stripe.' : null,
+        d.napaka ? '⚠ ' + d.napaka : null,
+      ].filter(Boolean).join('\n'))
+    } catch (e: any) {
+      alert('Storna ni bilo mogoče izvesti: ' + (e?.message || e))
+    }
+    await load()
+    setActionLoading('')
+    setActionInv(null)
+  }
+
   async function storno(inv: any) {
+    if (String(inv.external_reference || '').startsWith('stripe-zahtevek-')) return stornoZahtevka(inv)
     setActionLoading('storno_' + inv.id)
     const stornoNumber = `${inv.invoice_number}-S`
     const lineItems = (inv.line_items || []).map((item: any) => ({
@@ -445,6 +477,12 @@ export default function InvoicesPage() {
               <Link href="/invoices/import" className="border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap">
                 Uvozi iz PDF
               </Link>
+              {/* PRELET 360: zahtevki za placilo s kartico (Stripe) - Pro in Pro + POS. */}
+              {['pro', 'pro_pos'].includes(org?.subscription_status) && (
+                <Link href="/invoices/zahtevki" data-testid="povezava-zahtevki" className="border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap">
+                  💳 Zahtevki za plačilo
+                </Link>
+              )}
               {canCreate && (
                 <Link href="/invoices/new" className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap">
                   + Nov račun
