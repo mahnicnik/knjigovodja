@@ -70,3 +70,39 @@ test('H1: izjema pri klicu FURS ne porabi nove številke ob naslednjem poskusu',
   await confirmIssuedInvoiceWithFurs(baza, 'o1', 'inv1', 'card', undefined, { posli: pada as any, kljuc })
   expect(porabljene()).toBe(1)
 })
+
+// ═══════════════════ L4 (prelet 374): CERTIFIKAT PRED STEVILKO ═══════════════════
+
+import { potrdiNarociloPriFurs } from '../lib/pos-stripe'
+
+const napacnoGeslo = () => { throw new Error('Invalid password?') }
+
+test('L4: blagajna - napacno geslo certifikata ne porabi zaporedne stevilke (3 poskusi)', async () => {
+  let stevilk = 0
+  const baza = laznaBaza({
+    orders: [{ id: 'ord1', business_id: 'b1', total: 5, invoice_number: null, order_lines: [{ total: 5, qty: 1, unit_price: 5, vat_rate: 22, voided: false }] }],
+    payments: [{ id: 'pay1', furs_zoi: null, furs_eor: null }],
+    organizations: [{ id: 'o1', tax_number: '12345678', furs_demo_mode: false }],
+    business_premises: [{ id: 'p1', org_id: 'o1', is_active: true, premise_id: 'PP1' }],
+    electronic_devices: [{ id: 'd1', premise_id: 'p1', is_active: true, device_id: 'NAP1' }],
+  }, { next_invoice_number: () => ++stevilk })
+  const deps = { kljuc: napacnoGeslo, certifikat: (async () => ({ cert: { certificate_data: '', tax_number: '12345678' }, isTest: false })) as any }
+  for (let i = 0; i < 3; i++) {
+    const r = await potrdiNarociloPriFurs(baza as any, { orgId: 'o1', orderId: 'ord1', premiseUuid: null, paymentId: 'pay1', issuedAt: '2026-10-01T10:00:00Z' }, deps)
+    expect(r.success).toBe(false)
+    expect(r.napaka).toMatch(/certifikata/)
+  }
+  expect(stevilk).toBe(0)
+  expect(baza.tabele.orders[0].invoice_number).toBeNull()
+})
+
+test('L4: portal - napacno geslo certifikata ne porabi stevilke in sprosti kljucavnico', async () => {
+  const { baza, porabljene } = pripravi()
+  for (let i = 0; i < 3; i++) {
+    const r = await confirmIssuedInvoiceWithFurs(baza, 'o1', 'inv1', 'card', undefined, { kljuc: napacnoGeslo })
+    expect(r.error).toMatch(/certifikata/)
+  }
+  expect(porabljene()).toBe(0)
+  expect(baza.tabele.issued_invoices[0].furs_rezervacija).toBeNull()
+  expect(baza.tabele.issued_invoices[0].furs_confirming_at).toBeNull()
+})

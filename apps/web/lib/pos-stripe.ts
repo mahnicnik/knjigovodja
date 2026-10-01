@@ -258,6 +258,7 @@ export function supabaseShramba(admin: SupabaseClient): PosShramba {
 export async function potrdiNarociloPriFurs(
   admin: SupabaseClient,
   a: { orgId: string; orderId: string; premiseUuid: string | null; paymentId: string; issuedAt: string },
+  deps: { kljuc?: (cert: any) => { privateKeyPem: string; certificatePem: string }; posli?: typeof confirmWithFurs; certifikat?: typeof getFursCertificate } = {},
 ): Promise<FursIzid> {
   const { data: order } = await admin.from('orders')
     .select('*, order_lines(total, qty, unit_price, vat_rate, voided)')
@@ -294,7 +295,7 @@ export async function potrdiNarociloPriFurs(
     return { success: true, zoi: demoKoda, eor: demoKoda, invoiceNumber: stevilka, issuedAt: a.issuedAt, napaka: null }
   }
 
-  const { cert, isTest } = await getFursCertificate(admin, a.orgId)
+  const { cert, isTest } = await (deps.certifikat ?? getFursCertificate)(admin, a.orgId)
   if (!cert) return { success: false, zoi: null, eor: null, invoiceNumber: null, issuedAt: null, napaka: `FURS ${isTest ? 'testni' : 'produkcijski'} certifikat ni naložen.` }
 
   let pq = admin.from('business_premises').select('*').eq('org_id', a.orgId).eq('is_active', true)
@@ -304,6 +305,15 @@ export async function potrdiNarociloPriFurs(
   const { data: device } = await admin.from('electronic_devices').select('*')
     .eq('premise_id', premise.id).eq('is_active', true).limit(1).maybeSingle()
   const deviceIdCode = device?.device_id ?? 'RACUNKO01'
+
+  // PRELET 374 (L4): certifikat desifriramo PRED rezervacijo stevilke -
+  // napacno geslo certifikata ne sme porabiti stevilke ob vsakem poskusu.
+  let kljuci: { privateKeyPem: string; certificatePem: string }
+  try {
+    kljuci = (deps.kljuc ?? ((c: any) => extractFromP12(Buffer.from(c.certificate_data, 'base64'), c.certificate_password ?? '')))(cert)
+  } catch (e: any) {
+    return { success: false, zoi: null, eor: null, invoiceNumber: null, issuedAt: null, napaka: 'FURS certifikata ni mogoče odpreti (geslo?): ' + (e?.message || e) }
+  }
 
   const { data: seqData, error: seqError } = await admin.rpc('next_invoice_number', {
     p_business_id: order.business_id, p_premise_id: premise.id, p_device_id: device?.id ?? null, p_leto: null,
@@ -345,8 +355,7 @@ export async function potrdiNarociloPriFurs(
     customerVatNumber: order.buyer_tax_number || null,
   } as FursInvoiceData
 
-  const p12 = Buffer.from(cert.certificate_data, 'base64')
-  const { privateKeyPem, certificatePem } = extractFromP12(p12, cert.certificate_password ?? '')
+  const { privateKeyPem, certificatePem } = kljuci
   const config: FursConfig = {
     taxNumber: cert.tax_number || org.tax_number,
     premiseId: premise.premise_id,
@@ -363,7 +372,7 @@ export async function potrdiNarociloPriFurs(
 
   let result: Awaited<ReturnType<typeof confirmWithFurs>>
   try {
-    result = await confirmWithFurs(config, fursData)
+    result = await (deps.posli ?? confirmWithFurs)(config, fursData)
   } catch (e: any) {
     result = { success: false, zoi: null, eor: null, errorMessage: e?.message || 'Povezava s FURS ni uspela', responseTime: null }
   }

@@ -235,7 +235,13 @@ export async function confirmIssuedInvoiceWithFurs(
     }).sort((a, b) => b.rate - a.rate)
   }
 
-  const { privateKeyPem, certificatePem } = kljuc(cert)
+  // Certifikat PRED rezervacijo stevilke (napacno geslo ne porabi stevilke).
+  let kljuci: { privateKeyPem: string; certificatePem: string }
+  try { kljuci = kljuc(cert) } catch (e: any) {
+    await sprosti()
+    return { success: false, error: 'FURS certifikata ni mogoče odpreti (geslo?): ' + (e?.message || e) }
+  }
+  const { privateKeyPem, certificatePem } = kljuci
   let rez: FursRezervacija
   if (obstojeca) {
     rez = obstojeca
