@@ -2,7 +2,7 @@
 /**
  * NASTAVITVE → PLAČILA S KARTICO (STRIPE) (prelet 357)
  *
- * Povezava podjetja s Stripe Connect (Express). Stripe provizije zaračuna
+ * Povezava podjetja s Stripe Connect (račun s polno Stripe nadzorno ploščo). Stripe provizije zaračuna
  * neposredno podjetju, Računko ne zaračuna ničesar. Povezava velja za
  * blagajno (plačilo prek QR kode) in portal (zahtevek za plačilo).
  */
@@ -131,7 +131,7 @@ export default function PlacilaStripe() {
         ) : (
           <>
             <p style={{ fontSize: 13, color: '#555', margin: '0 0 14px', lineHeight: 1.6 }}>
-              Pri Stripe odprete brezplačen račun (Express) in vpišete podatke podjetja ter TRR za izplačila. Traja nekaj minut.
+              Pri Stripe odprete brezplačen račun (ali se prijavite v obstoječega) in vpišete podatke podjetja ter TRR za izplačila. Traja nekaj minut. Plačila in izplačila nato vidite v svoji Stripe nadzorni plošči.
             </p>
             {s?.lahkoUreja
               ? <button style={gumb()} disabled={!!dela || !p?.nastavljeno} onClick={() => akcija('povezi')}>{dela === 'povezi' ? 'Odpiram Stripe…' : 'Poveži Stripe'}</button>

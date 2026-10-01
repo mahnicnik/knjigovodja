@@ -1,12 +1,13 @@
 export const dynamic = 'force-dynamic'
 /**
- * PRELET 357: povezava podjetja s Stripe Connect (Express).
+ * PRELET 357: povezava podjetja s Stripe Connect (od preleta 360 račun s polno
+ * Stripe nadzorno ploščo - provizije plača podjetje neposredno Stripu).
  *
  * GET  → stanje povezave in pogoji za plačila s kartico (blagajna, portal,
  *        nastavitve). ?osvezi=1 prebere stanje računa iz Stripa.
- * POST { akcija: 'povezi' }    → ustvari Express račun (če ga še ni) in vrne
+ * POST { akcija: 'povezi' }    → ustvari Stripe račun (če ga še ni) in vrne
  *                                 povezavo za vpis podatkov pri Stripe
- *      { akcija: 'nadzorna' }  → enkratna povezava v Stripe nadzorno ploščo
+ *      { akcija: 'nadzorna' }  → povezava na Stripe nadzorno ploščo
  *      { akcija: 'prekini' }   → prekine povezavo (Računko računa ne uporablja več)
  *
  * Povezava velja za CELO podjetje (organizations) - blagajna in portal jo
@@ -84,19 +85,20 @@ export async function POST(req: Request) {
       let accountId = org?.stripe_account_id as string | null
       if (!accountId) {
         // "Stripe handles pricing": provizije zaračuna Stripe neposredno
-        // povezanemu računu (fees.payer = account), izgube nosi Stripe,
-        // uporabnik ima Express nadzorno ploščo. Računko nima stroškov.
+        // povezanemu računu (fees.payer = account), izgube nosi Stripe.
+        // PRELET 360: Stripe to kombinacijo dovoli SAMO s polno nadzorno
+        // ploščo (stripe_dashboard = full, enako kot račun Standard). Z
+        // Express ploščo vrne napako "your platform must collect fees and be
+        // liable for negative balances". Zmožnosti (card_payments) dobi
+        // tak račun samodejno, zato jih ne zahtevamo posebej.
         const acct = await stripe.accounts.create({
           country: 'SI',
           email: org?.email || s.user.email || undefined,
           controller: {
             fees: { payer: 'account' },
             losses: { payments: 'stripe' },
-            stripe_dashboard: { type: 'express' },
-          },
-          capabilities: {
-            card_payments: { requested: true },
-            transfers: { requested: true },
+            requirement_collection: 'stripe',
+            stripe_dashboard: { type: 'full' },
           },
           business_profile: { name: org?.name || undefined },
           metadata: { org_id: s.orgId, vir: 'racunko' },
@@ -121,8 +123,9 @@ export async function POST(req: Request) {
 
     if (akcija === 'nadzorna') {
       if (!org?.stripe_account_id) return NextResponse.json({ error: 'Stripe še ni povezan.' }, { status: 400 })
-      const login = await stripe.accounts.createLoginLink(org.stripe_account_id)
-      return NextResponse.json({ url: login.url })
+      // PRELET 360: računi s polno nadzorno ploščo nimajo enkratnih povezav
+      // (login link je samo za Express) - uporabnik se prijavi v Stripe sam.
+      return NextResponse.json({ url: 'https://dashboard.stripe.com/' })
     }
 
     if (akcija === 'prekini') {
