@@ -210,6 +210,14 @@ export async function POST(req: Request) {
     // PRELET 379: napako Stripa zapisemo tudi v dnevnik (Vercel), da jo lahko
     // preverimo brez posnetka zaslona. Brez kljucev in osebnih podatkov.
     console.error('Stripe povezava:', akcija, s.orgId, e?.type || '', e?.code || '', e?.statusCode || '', e?.message || e)
+    // PRELET 380 (diagnostika): kateremu Stripe racunu pripada Connect kljuc
+    // in ali je aktiviran. Samo ID in zastavice - brez kljuca.
+    if (e?.code === 'account_create_activation_required') {
+      try {
+        const a: any = await stripeConnect().accounts.retrieveCurrent()
+        console.error('Stripe povezava diag:', a?.id, a?.settings?.dashboard?.display_name || a?.business_profile?.name || '', 'charges', a?.charges_enabled, 'details', a?.details_submitted, 'payouts', a?.payouts_enabled, 'due', JSON.stringify(a?.requirements?.currently_due || []), 'disabled', a?.requirements?.disabled_reason || '')
+      } catch (d: any) { console.error('Stripe povezava diag napaka:', d?.code || '', d?.message || d) }
+    }
     return NextResponse.json({ error: e?.message || 'Napaka pri povezavi s Stripe' }, { status })
   }
 }
