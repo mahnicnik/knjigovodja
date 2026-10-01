@@ -106,3 +106,18 @@ test('L4: portal - napacno geslo certifikata ne porabi stevilke in sprosti kljuc
   expect(baza.tabele.issued_invoices[0].furs_rezervacija).toBeNull()
   expect(baza.tabele.issued_invoices[0].furs_confirming_at).toBeNull()
 })
+
+// ═══════════════════ PRELET 376: RACUN Z REZERVACIJO SE NE UREJA ═══════════════════
+
+import { zaklenjenZaUrejanje } from '../lib/racun-zaklep'
+
+test('Urejanje: racun z davcno rezervacijo je zaklenjen, brez nje ne', async () => {
+  expect(zaklenjenZaUrejanje({ furs_rezervacija: null })).toBe(false)
+  expect(zaklenjenZaUrejanje({})).toBe(false)
+  // po prvem (tudi neuspelem) poskusu davcne potrditve ima racun rezervacijo
+  const { baza } = pripravi()
+  await confirmIssuedInvoiceWithFurs(baza, 'o1', 'inv1', 'card', undefined, {
+    kljuc, posli: async (_c: any, d: any) => ({ success: false, zoi: d.presetZoi, eor: null, errorMessage: 'Timeout', responseTime: null }) as any,
+  })
+  expect(zaklenjenZaUrejanje(baza.tabele.issued_invoices[0])).toBe(true)
+})

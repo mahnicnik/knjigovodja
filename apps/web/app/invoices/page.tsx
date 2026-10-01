@@ -7,6 +7,7 @@ import Link from 'next/link'
 import SendInvoiceModal from '@/components/SendInvoiceModal'
 import { getActiveMembership } from '@/lib/active-org'
 import { klicStripe } from '@/lib/stripe-connect-odjemalec'
+import { zaklenjenZaUrejanje } from '@/lib/racun-zaklep'
 import AppLayout from '@/components/AppLayout'
 import { formatEurNumber } from '@/lib/format'
 import PeriodFilter from '@/components/PeriodFilter'
@@ -647,13 +648,14 @@ export default function InvoicesPage() {
                           ↩ Razveljavi plačilo
                         </button>
                       )}
-                      <button
+                      {/* PRELET 376: racun z davcno rezervacijo se ne ureja (storno). */}
+                      {!zaklenjenZaUrejanje(inv) && <button
                         onClick={() => window.location.href = '/invoices/edit/' + inv.id}
                         style={{ width: '100%', padding: '10px 16px', textAlign: 'left', fontSize: '13px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
                         className="hover:bg-gray-50"
                       >
                         ✏️ Uredi račun
-                      </button>
+                      </button>}
                       <button
                         onClick={() => podvoji(inv)}
                         disabled={actionLoading === 'podvoji_' + inv.id}
@@ -723,7 +725,7 @@ export default function InvoicesPage() {
                           racun nikoli ni bil resnicno potrjen pri FURS,
                           hramba se ne uporablja. */}
                       {(() => {
-                        const neverFiscalized = !inv.zoi || inv.zoi.startsWith('DEMO-')
+                        const neverFiscalized = (!inv.zoi || inv.zoi.startsWith('DEMO-')) && !zaklenjenZaUrejanje(inv) // PRELET 376: rezervirana davcna stevilka
                         const canDelete = neverFiscalized && (inv.status === 'draft' || inv.status === 'cancelled')
                         if (!canDelete) {
                           return (

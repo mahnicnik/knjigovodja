@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { zaklenjenZaUrejanje, ZAKLENJEN_SPOROCILO } from '@/lib/racun-zaklep'
 import { lokalniDatum } from '@/lib/tax-constants'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
@@ -25,6 +26,9 @@ export default function EditInvoicePage() {
   const router = useRouter()
   const [org, setOrg] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  // PRELET 376: racun z davcno rezervacijo (stevilka + ZOI sta ze izdana ali
+  // poslana FURS) se ne ureja - popravek gre prek storna.
+  const [zaklenjen, setZaklenjen] = useState(false)
   const [invoiceNumber, setInvoiceNumber] = useState('')
   const [clientName, setClientName] = useState('')
   const [clientEmail, setClientEmail] = useState('')
@@ -84,6 +88,7 @@ export default function EditInvoicePage() {
         if (invoiceId) {
           const { data: inv } = await supabase.from('issued_invoices').select('*').eq('id', invoiceId).single()
           if (inv) {
+            if (zaklenjenZaUrejanje(inv)) setZaklenjen(true)
             setInvoiceNumber(inv.invoice_number || '')
             setClientName(inv.client_name || '')
             setClientEmail(inv.client_email || '')
@@ -145,6 +150,7 @@ export default function EditInvoicePage() {
 
   async function handleSave(status: 'draft' | 'sent') {
     if (!org) return
+    if (zaklenjen) { alert(ZAKLENJEN_SPOROCILO); return }
     setLoading(true)
     const invoiceData = {
       org_id: org.id, invoice_number: invoiceNumber, invoice_type: 'invoice',
@@ -193,6 +199,11 @@ export default function EditInvoicePage() {
   if (isMobile) {
     return (
       <div style={{ minHeight:'100vh', background:'#F7F6F2', paddingBottom:'80px' }}>
+        {zaklenjen && (
+          <div data-testid="racun-zaklenjen" style={{ margin:'12px 16px 0', padding:'12px 14px', borderRadius:10, background:'#FFF6E5', color:'#8A5A00', fontSize:13, lineHeight:1.5 }}>
+            🔒 {ZAKLENJEN_SPOROCILO}
+          </div>
+        )}
 
         {/* Header */}
         <div style={{ background:'#fff', borderBottom:'0.5px solid rgba(0,0,0,0.08)', padding:'12px 16px', position:'sticky', top:0, zIndex:10 }}>
@@ -483,6 +494,11 @@ export default function EditInvoicePage() {
         sredi dela - enako, kot je bilo pri integracijah. */}
 
     <div className="min-h-screen bg-gray-50">
+      {zaklenjen && (
+          <div data-testid="racun-zaklenjen" style={{ margin:'12px 24px 0', padding:'12px 14px', borderRadius:10, background:'#FFF6E5', color:'#8A5A00', fontSize:13, lineHeight:1.5 }}>
+            🔒 {ZAKLENJEN_SPOROCILO}
+          </div>
+        )}
       <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
         <div>
           <Link href="/invoices" className="text-sm text-gray-500 hover:text-gray-900">← Računi</Link>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { createClient as createAdmin } from '@supabase/supabase-js'
 import { confirmIssuedInvoiceWithFurs } from '@/lib/furs-invoice-confirm'
 import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 
@@ -49,8 +50,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'FURS fiskalizacija je na voljo samo v Pro paketu.' }, { status: 403 })
     }
 
+    // PRELET 376: davcne podatke racuna (rezervacija, ZOI, EOR) zapisuje
+    // samo streznik (trigger zasciti_davcno_rezervacijo) - po preverbi
+    // prijave, clanstva in paketa zgoraj klic tece s service role. Racun je
+    // omejen na organizacijo clana (org_id v poizvedbi).
     const result = await confirmIssuedInvoiceWithFurs(
-      supabase,
+      createAdmin(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } }),
       member.org_id,
       invoiceId,
       paymentType ?? 'cash',

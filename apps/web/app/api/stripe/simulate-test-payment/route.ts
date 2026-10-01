@@ -1,3 +1,4 @@
+import { createClient as createAdmin } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { lokalniDatum } from '@/lib/tax-constants'
 import { createServerClient } from '@supabase/ssr'
@@ -161,7 +162,7 @@ export async function POST(req: NextRequest) {
     // ── FURS potrditev (uporabi demo nacin, ce je vklopljen) ──
     let fursResult: Awaited<ReturnType<typeof confirmIssuedInvoiceWithFurs>> | null = null
     try {
-      fursResult = await confirmIssuedInvoiceWithFurs(supabase, orgId, invoice.id, 'card')
+      fursResult = await confirmIssuedInvoiceWithFurs(createAdmin(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } }), orgId, invoice.id, 'card') // PRELET 376: davcne podatke pise samo streznik
     } catch (fursErr: any) {
       console.error('Simulacija — FURS potrditev nepricakovana napaka:', fursErr.message)
     }
