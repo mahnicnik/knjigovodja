@@ -22,6 +22,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { confirmWithFurs, extractFromP12, type FursConfig, type FursInvoiceData } from '@/lib/furs'
 import { getFursCertificate } from '@/lib/furs-cert'
+import { centiNarocila } from '@/lib/stripe-connect'
 
 export type PlaciloVrstica = {
   id: string
@@ -147,7 +148,8 @@ export function supabaseShramba(admin: SupabaseClient): PosShramba {
         throw new Error('Račun je bil medtem že zaključen drugače. Plačilo s kartico vrnite stranki (Storno → vračilo prek Stripe).')
       }
       const znesek = p.znesek_centi / 100
-      if (Math.abs(Number(order.total) - znesek) > 0.005) {
+      // PRELET 365 (H2): primerjava v celih centih, enakost.
+      if (centiNarocila(order.total) !== p.znesek_centi) {
         throw new Error(`Znesek računa (${Number(order.total).toFixed(2)} €) se ne ujema s plačanim (${znesek.toFixed(2)} €).`)
       }
       const { data, error } = await admin.rpc('pay_order', {

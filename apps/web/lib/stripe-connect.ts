@@ -202,6 +202,28 @@ export function izracunajZnesekNarocila(order: NarociloZaZnesek, vrstice: Vrstic
   }
 }
 
+/** Znesek racuna v CELIH centih (orders.total je numeric(…,2)). */
+export function centiNarocila(total: number | string | null | undefined): number {
+  return Math.round(Number(total || 0) * 100)
+}
+
+/**
+ * PRELET 365 (H2): ZNESEK ZA STRIPE = orders.total iz baze.
+ *
+ * orders.total racuna sprozilec trg_recalc_order_total iz order_lines.total
+ * (popusti na vrsticah, modifikatorji ...); isti znesek uporabita pay_order in
+ * davcna potrditev. Lasten izracun iz unit_price + mods se je lahko razlikoval
+ * za cent (3 × 2,00 € s popustom 1,00 €: racun 5,00 €, Stripe 5,01 €) - zakljucek
+ * je nato padel, webhook je vracal 500, Stripe je ponavljal 3 dni.
+ * Izracun iz postavk ostane le za opis postavk v Checkoutu; ce se vsota ne
+ * ujema na cent, gre ena postavka s tocnim zneskom racuna.
+ */
+export function znesekZaStripe(order: NarociloZaZnesek & { total: number | string }, vrstice: VrsticaNarocila[]) {
+  const izracun = izracunajZnesekNarocila(order, vrstice)
+  const centi = centiNarocila(order.total)
+  return { ...izracun, centi, skupaj: centi / 100, postavkeSeUjemajo: izracun.centi === centi }
+}
+
 /**
  * Postavke za Stripe Checkout. Kadar na racunu ni popusta ali napitnine in se
  * vsota postavk ujema na cent, gre vsaka postavka posebej (stranka vidi, kaj

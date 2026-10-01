@@ -202,3 +202,45 @@ test('Ponovni poskus po napaki ne zapise placila se enkrat', async () => {
   expect(b.stanje).toBe('zakljuceno')
   expect(klici.placaj).toBe(1)
 })
+
+// ═══════════════════ H2 (prelet 365): ZNESEK = orders.total ═══════════════════
+
+import { znesekZaStripe, centiNarocila } from '../lib/stripe-connect'
+
+/** Kot sprozilec trg_recalc_order_total: vsota order_lines.total, popust, napitnina. */
+function totalKotBaza(o: { discount_pct?: number; discount_fixed?: number; tip_amount?: number }, vrstice: { total: number }[]) {
+  const sub = vrstice.reduce((s, v) => s + v.total, 0)
+  const popust = Math.min(sub, Math.round(sub * (o.discount_pct || 0) / 100 * 100) / 100 + (o.discount_fixed || 0))
+  return Math.round((sub - popust + (o.tip_amount || 0)) * 100) / 100
+}
+const vsotaCheckout = (li: any[]) => li.reduce((s, p) => s + p.price_data.unit_amount * p.quantity, 0)
+
+test('H2: 3 × 2,00 € s popustom 1,00 € → Stripe zaracuna tocno 5,00 € (orders.total)', () => {
+  const vrstice = [{ name: 'Kava', qty: 3, unit_price: 2, total: 6 }]
+  const order = { discount_fixed: 1, total: 5.0 }
+  expect(totalKotBaza(order, vrstice)).toBe(5)
+  const z = znesekZaStripe(order, vrstice)
+  expect(z.centi).toBe(500)
+  expect(centiNarocila(order.total)).toBe(z.centi) // isto kot pay_order in FURS
+  expect(vsotaCheckout(postavkeZaCheckout(z, 'Racun'))).toBe(500)
+})
+
+test('H2: popust % na modifikatorjih pri qty 2 - znesek je orders.total, ne lasten izracun', () => {
+  // Vrstica v bazi: (1,80 + 0,35 mleko) × 2 = 4,30, popust 15 % na vrstici -> 3,655 -> 3,66 (total v order_lines)
+  const vrstice = [
+    { name: 'Kava z mlekom', qty: 2, unit_price: 1.8, mods: [{ name: 'Ovseno', delta: 0.35 }], total: 3.66 },
+    { name: 'Rogljic', qty: 1, unit_price: 2.2, total: 2.2 },
+  ]
+  const order = { discount_pct: 10, total: totalKotBaza({ discount_pct: 10 }, vrstice) }
+  const z = znesekZaStripe(order, vrstice)
+  expect(z.centi).toBe(centiNarocila(order.total))
+  expect(z.postavkeSeUjemajo).toBe(false) // lasten izracun bi dal drug znesek
+  const li = postavkeZaCheckout(z, 'Racun')
+  expect(li).toHaveLength(1)
+  expect(vsotaCheckout(li)).toBe(z.centi)
+})
+
+test('H2: centi brez napake plavajoce vejice', () => {
+  expect(centiNarocila(19.99)).toBe(1999)
+  expect(centiNarocila('0.29')).toBe(29)
+})

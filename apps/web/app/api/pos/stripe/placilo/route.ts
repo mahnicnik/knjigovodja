@@ -16,7 +16,7 @@ import { NextResponse } from 'next/server'
 import { sejaInOrganizacija } from '@/lib/stripe-connect-seja'
 import {
   adminSupabase, preveriPogoje, stripeConnect, javniUrl, ConnectNiNastavljen,
-  izracunajZnesekNarocila, postavkeZaCheckout, provizijaCenti, novaKratkaKoda, NAJMANJ_CENTI,
+  znesekZaStripe, postavkeZaCheckout, provizijaCenti, novaKratkaKoda, NAJMANJ_CENTI,
 } from '@/lib/stripe-connect'
 import { supabaseShramba, zakljuciPosPlacilo } from '@/lib/pos-stripe'
 
@@ -72,11 +72,10 @@ export async function POST(req: Request) {
   if (!order || order.business_id !== org.pos_business_id) return NextResponse.json({ error: 'Račun ni najden.' }, { status: 404 })
   if (order.status !== 'open') return NextResponse.json({ error: 'Račun ni več odprt.' }, { status: 409 })
 
-  const izracun = izracunajZnesekNarocila(order, order.order_lines || [])
+  // PRELET 365 (H2): zaracunamo TOCNO orders.total (isti znesek kot pay_order
+  // in FURS), v celih centih - brez tolerance.
+  const izracun = znesekZaStripe(order, order.order_lines || [])
   if (izracun.centi < NAJMANJ_CENTI) return NextResponse.json({ error: 'Najmanjši znesek za plačilo s kartico je 0,50 €.' }, { status: 400 })
-  if (Math.abs(izracun.skupaj - Number(order.total)) > 0.01) {
-    return NextResponse.json({ error: `Znesek postavk (${izracun.skupaj.toFixed(2)} €) se ne ujema z zneskom računa (${Number(order.total).toFixed(2)} €). Osvežite blagajno in poskusite znova.` }, { status: 409 })
-  }
 
   const koda = await kratkaKoda(admin, order.business_id, s.orgId)
 
