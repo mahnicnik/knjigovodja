@@ -5,7 +5,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { stripeConnect, provizijaCenti, racunUstrezaNacinu, zivoNiDovoljeno } from '@/lib/stripe-connect'
-import { obdelajPlacanZahtevek, postavkeZaStripe, konecSessiona, prikazanoStanje } from '@/lib/zahtevki'
+import { postavkeZaStripe, konecSessiona, prikazanoStanje, supabaseZahtevki, casPlacilaSessiona } from '@/lib/zahtevki'
 
 /** Poslan zahtevek, ki je potekel pred vec kot uro (zamik: zamujen webhook placila tik pred potekom). */
 export async function oznaciPotekle(admin: SupabaseClient, orgId?: string) {
@@ -16,30 +16,29 @@ export async function oznaciPotekle(admin: SupabaseClient, orgId?: string) {
 }
 
 /**
- * Rezerva za webhook: ce zahtevek se caka (ali je placan, a racun se ni
- * izdan), vprasaj Stripe in po potrebi zakljuci. Napake pri Stripe ne
- * podrejo klica - vrne se trenutno stanje.
+ * PRELET 364 (H1): GET poti (zaslon s QR kodo, vsake 3 s), javna stran
+ * "Hvala" in preklic SAMO BEREJO stanje pri Stripe: placan session zabelezijo
+ * kot 'placan' (zapis v bazi, brez racuna in BREZ klica FURS). Racun izda in
+ * davcno potrdi samo webhook, dnevni cron (z razmikom) ali gumb "Potrdi zdaj".
+ * Prej je vsak klic tu sprozil ponovno davcno potrditev - ob neodzivnem FURS
+ * je QR zaslon vsake 3 s porabil novo zaporedno stevilko.
  */
 export async function preveriPriStripe(admin: SupabaseClient, z: any): Promise<void> {
-  const nedokoncan = z.status === 'placan' && (!z.invoice_id || !z.racun_poslan_ob) &&
-    (!z.izdajanje_od || new Date(z.izdajanje_od).getTime() < Date.now() - 2 * 60_000)
-  if (z.status !== 'poslan' && !nedokoncan) return
-  if (!z.checkout_session_id) return
+  if (z.status !== 'poslan' || !z.checkout_session_id) return
   try {
-    if (nedokoncan) {
-      await obdelajPlacanZahtevek(admin, z.id, { sessionId: z.checkout_session_id, paymentIntentId: z.payment_intent_id })
-      return
-    }
     const { data: org } = await admin.from('organizations').select('stripe_account_id').eq('id', z.org_id).single()
     if (!org?.stripe_account_id) return
     const sess = await stripeConnect().checkout.sessions.retrieve(z.checkout_session_id, {}, { stripeAccount: org.stripe_account_id })
-    if (sess.payment_status === 'paid') {
-      const pi = typeof sess.payment_intent === 'string' ? sess.payment_intent : sess.payment_intent?.id || null
-      await obdelajPlacanZahtevek(admin, z.id, { sessionId: sess.id, paymentIntentId: pi })
-    }
+    if (sess.payment_status === 'paid') await zabeleziPlacilo(admin, z.id, sess)
   } catch (e: any) {
     console.warn('Zahtevek - preverba pri Stripe:', z.id, e?.message)
   }
+}
+
+/** poslan -> placan iz placanega Stripe sessiona (brez izdaje racuna). */
+export async function zabeleziPlacilo(admin: SupabaseClient, zahtevekId: string, sess: any) {
+  const pi = typeof sess.payment_intent === 'string' ? sess.payment_intent : sess.payment_intent?.id || null
+  await supabaseZahtevki(admin).oznaciPlacan(zahtevekId, { sessionId: sess.id, paymentIntentId: pi, placanoOb: casPlacilaSessiona(sess) })
 }
 
 export class ZahtevekNeVelja extends Error {}
@@ -62,8 +61,7 @@ export async function checkoutZaZahtevek(admin: SupabaseClient, z: any, osnova: 
   if (z.checkout_session_id) {
     const star = await stripe.checkout.sessions.retrieve(z.checkout_session_id, {}, racun).catch(() => null)
     if (star?.payment_status === 'paid') {
-      const pi = typeof star.payment_intent === 'string' ? star.payment_intent : star.payment_intent?.id || null
-      await obdelajPlacanZahtevek(admin, z.id, { sessionId: star.id, paymentIntentId: pi })
+      await zabeleziPlacilo(admin, z.id, star)
       throw new ZahtevekNeVelja('placan')
     }
     if (star?.status === 'open' && star.url && star.expires_at * 1000 > Date.now() + 10 * 60_000) return star.url

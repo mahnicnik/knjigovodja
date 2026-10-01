@@ -22,8 +22,12 @@ export async function GET(request: NextRequest) {
     .order('placano_ob', { ascending: true }).limit(40)
   const izidi: any[] = []
   const zacetek = Date.now()
+  // PRELET 364: razmik med poskusi davcne potrditve (FURS ne odgovarja ->
+  // ne obremenjujemo ga ob vsakem zagonu).
+  const razmik = Date.now() - 30 * 60_000
   for (const z of odprti || []) {
     if (Date.now() - zacetek > 90_000) break
+    if (z.furs_poskus_ob && new Date(z.furs_poskus_ob).getTime() > razmik) continue
     try { izidi.push({ id: z.id, ...(await dokoncajZahtevek(admin, z)) }) } catch (e: any) { izidi.push({ id: z.id, napaka: e?.message }) }
   }
   return NextResponse.json({ obdelanih: izidi.length, izidi })

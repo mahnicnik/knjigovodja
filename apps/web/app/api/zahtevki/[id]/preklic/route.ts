@@ -7,8 +7,8 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { sejaInOrganizacija } from '@/lib/stripe-connect-seja'
 import { adminSupabase, stripeConnect, javniUrl } from '@/lib/stripe-connect'
-import { BREZ_PRAVIC, obdelajPlacanZahtevek } from '@/lib/zahtevki'
-import { zaPortal } from '@/lib/zahtevki-streznik'
+import { BREZ_PRAVIC } from '@/lib/zahtevki'
+import { zaPortal, zabeleziPlacilo } from '@/lib/zahtevki-streznik'
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -27,9 +27,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       const racun = { stripeAccount: org.stripe_account_id }
       const sess = await stripe.checkout.sessions.retrieve(z.checkout_session_id, {}, racun).catch(() => null)
       if (sess?.payment_status === 'paid') {
-        const pi = typeof sess.payment_intent === 'string' ? sess.payment_intent : sess.payment_intent?.id || null
-        await obdelajPlacanZahtevek(admin, z.id, { sessionId: sess.id, paymentIntentId: pi })
-        return NextResponse.json({ error: 'Stranka je že plačala — preklic ni mogoč, račun je izdan.' }, { status: 409 })
+        await zabeleziPlacilo(admin, z.id, sess)
+        return NextResponse.json({ error: 'Stranka je že plačala — preklic ni mogoč. Račun se izda in davčno potrdi samodejno.' }, { status: 409 })
       }
       if (sess?.status === 'open') {
         try {
@@ -37,9 +36,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         } catch (e: any) {
           const znova = await stripe.checkout.sessions.retrieve(sess.id, {}, racun).catch(() => null)
           if (znova?.payment_status === 'paid') {
-            const pi = typeof znova.payment_intent === 'string' ? znova.payment_intent : znova.payment_intent?.id || null
-            await obdelajPlacanZahtevek(admin, z.id, { sessionId: znova.id, paymentIntentId: pi })
-            return NextResponse.json({ error: 'Stranka je že plačala — preklic ni mogoč, račun je izdan.' }, { status: 409 })
+            await zabeleziPlacilo(admin, z.id, znova)
+            return NextResponse.json({ error: 'Stranka je že plačala — preklic ni mogoč. Račun se izda in davčno potrdi samodejno.' }, { status: 409 })
           }
           if (znova?.status !== 'expired') return NextResponse.json({ error: 'Preklic pri Stripe ni uspel: ' + (e?.message || e) }, { status: 502 })
         }

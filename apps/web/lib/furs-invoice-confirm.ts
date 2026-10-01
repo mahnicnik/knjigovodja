@@ -1,4 +1,27 @@
-import { confirmWithFurs, extractFromP12, type FursConfig, type FursInvoiceData } from './furs'
+import { confirmWithFurs, extractFromP12, calculateZoi, type FursConfig, type FursInvoiceData } from './furs'
+
+/**
+ * PRELET 364 (H1): rezervacija davcne stevilke racuna. Ustvari se ENKRAT,
+ * pred prvim klicem FURS, in se shrani na racun (issued_invoices.
+ * furs_rezervacija). Ponovni poskusi (FURS ni odgovoril) posljejo ISTO
+ * stevilko, ISTI ZOI in isti cas izdaje z oznako SubsequentSubmit - tako kot
+ * blagajna (lib/pos-stripe.ts). Prej je vsak poskus porabil novo zaporedno
+ * stevilko (luknje v zaporedju, en racun pod vec stevilkami).
+ */
+export type FursRezervacija = {
+  premiseId: string
+  deviceId: string
+  sequence: number
+  invoiceNumber: string
+  zoi: string
+  issuedAt: string
+}
+
+/** Zamenljivi zunanji klici (testi). */
+export type FursOdvisnosti = {
+  posli?: typeof confirmWithFurs
+  kljuc?: (cert: any) => { privateKeyPem: string; certificatePem: string }
+}
 
 /**
  * Skupna logika za davcno potrjevanje 'issued_invoices' pri FURS.
@@ -25,7 +48,10 @@ export async function confirmIssuedInvoiceWithFurs(
   invoiceId: string,
   paymentType: 'cash' | 'card' = 'cash',
   requestedPremiseId?: string,
+  deps: FursOdvisnosti = {},
 ): Promise<ConfirmIssuedInvoiceResult> {
+  const posli = deps.posli ?? confirmWithFurs
+  const kljuc = deps.kljuc ?? ((c: any) => extractFromP12(Buffer.from(c.certificate_data, 'base64'), c.certificate_password ?? ''))
   const { data: invoice } = await supabase
     .from('issued_invoices')
     .select('*')
@@ -102,59 +128,65 @@ export async function confirmIssuedInvoiceWithFurs(
     .maybeSingle()
   if (!cert) return { success: false, error: 'FURS certifikat ni nalozen' }
 
-  // POPRAVLJENO 21.7.2026: prednostno uporabi prostor/napravo oznaceno za
-  // 'web' kanal (locena od POS-a). Ce nic ni oznaceno kot 'web', pade nazaj
-  // na 'both' - IDENTICNO obnasanje kot prej (deli napravo s POS-om).
-  let premise: any = null
-  if (requestedPremiseId) {
-    const { data } = await supabase.from('business_premises').select('*')
-      .eq('org_id', orgId).eq('is_active', true).eq('id', requestedPremiseId).maybeSingle()
-    premise = data
-  } else {
-    const { data: webPremise } = await supabase.from('business_premises').select('*')
-      .eq('org_id', orgId).eq('is_active', true).eq('channel', 'web').limit(1).maybeSingle()
-    premise = webPremise
-    if (!premise) {
-      const { data: bothPremise } = await supabase.from('business_premises').select('*')
-        .eq('org_id', orgId).eq('is_active', true).eq('channel', 'both').limit(1).maybeSingle()
-      premise = bothPremise
+  const sprosti = () => supabase.from('issued_invoices').update({ furs_confirming_at: null }).eq('id', invoiceId)
+
+  // PRELET 364: obstojeca rezervacija ima prednost - ista stevilka, isti ZOI.
+  const obstojeca: FursRezervacija | null = invoice.furs_rezervacija?.sequence ? invoice.furs_rezervacija : null
+  async function novaStevilka(): Promise<{ premiseId: string; deviceId: string; sequence: number } | ConfirmIssuedInvoiceResult> {
+    // POPRAVLJENO 21.7.2026: prednostno uporabi prostor/napravo oznaceno za
+    // 'web' kanal (locena od POS-a). Ce nic ni oznaceno kot 'web', pade nazaj
+    // na 'both' - IDENTICNO obnasanje kot prej (deli napravo s POS-om).
+    let premise: any = null
+    if (requestedPremiseId) {
+      const { data } = await supabase.from('business_premises').select('*')
+        .eq('org_id', orgId).eq('is_active', true).eq('id', requestedPremiseId).maybeSingle()
+      premise = data
+    } else {
+      const { data: webPremise } = await supabase.from('business_premises').select('*')
+        .eq('org_id', orgId).eq('is_active', true).eq('channel', 'web').limit(1).maybeSingle()
+      premise = webPremise
+      if (!premise) {
+        const { data: bothPremise } = await supabase.from('business_premises').select('*')
+          .eq('org_id', orgId).eq('is_active', true).eq('channel', 'both').limit(1).maybeSingle()
+        premise = bothPremise
+      }
     }
-  }
-  if (!premise) return { success: false, error: 'Poslovni prostor ni dodan' }
+    if (!premise) { await sprosti(); return { success: false, error: 'Poslovni prostor ni dodan' } }
 
-  const { data: webDevice } = await supabase.from('electronic_devices').select('*')
-    .eq('premise_id', premise.id).eq('is_active', true).eq('channel', 'web').limit(1).maybeSingle()
-  let device: any = webDevice
-  if (!device) {
-    const { data: bothDevice } = await supabase.from('electronic_devices').select('*')
-      .eq('premise_id', premise.id).eq('is_active', true).eq('channel', 'both').limit(1).maybeSingle()
-    device = bothDevice
-  }
-  const deviceIdCode = device?.device_id ?? 'RACUNKO01'
-  const usesWebSequence = device?.channel === 'web'
+    const { data: webDevice } = await supabase.from('electronic_devices').select('*')
+      .eq('premise_id', premise.id).eq('is_active', true).eq('channel', 'web').limit(1).maybeSingle()
+    let device: any = webDevice
+    if (!device) {
+      const { data: bothDevice } = await supabase.from('electronic_devices').select('*')
+        .eq('premise_id', premise.id).eq('is_active', true).eq('channel', 'both').limit(1).maybeSingle()
+      device = bothDevice
+    }
+    const deviceIdCode = device?.device_id ?? 'RACUNKO01'
+    const usesWebSequence = device?.channel === 'web'
 
-  // POPRAVLJENO 21.7.2026 (revizija): prejsnji izracun je stel potrjene
-  // issued_invoices (lastno zaporedje od 1) z neatomarnim count+1 vzorcem.
-  // Ker POS in issued_invoices posiljata pod ISTIM prostorom+napravo
-  // (SIRBFB01-RACUNKO01), bi to povzrocilo trcenje z ze zasedenimi POS
-  // stevilkami pri FURS. Po ZDavPR je zaporedje ENO na prostor+napravo -
-  // zato uporabimo isti atomaren RPC kot POS in storno.
-  const { data: seqData, error: seqError } = usesWebSequence
-    ? await supabase.rpc('get_next_web_invoice_number')
-    : await (async () => {
-        // POPRAVLJENO (16.8.2026): stevilka se dodeli PO PODJETJU. Racuni iz
-        // portala niso vezani na POS blagajno, zato jo poiscemo prek organizacije.
-        const { data: orgRow } = await supabase
-          .from('organizations').select('pos_business_id').eq('id', orgId).maybeSingle()
-        return supabase.rpc('get_next_pos_invoice_number', {
-          p_business_id: orgRow?.pos_business_id ?? orgId,
-        })
-      })()
-  if (seqError) {
-    return { success: false, error: 'Napaka pri generiranju stevilke racuna: ' + seqError.message }
+    // POPRAVLJENO 21.7.2026 (revizija): prejsnji izracun je stel potrjene
+    // issued_invoices (lastno zaporedje od 1) z neatomarnim count+1 vzorcem.
+    // Ker POS in issued_invoices posiljata pod ISTIM prostorom+napravo
+    // (SIRBFB01-RACUNKO01), bi to povzrocilo trcenje z ze zasedenimi POS
+    // stevilkami pri FURS. Po ZDavPR je zaporedje ENO na prostor+napravo -
+    // zato uporabimo isti atomaren RPC kot POS in storno.
+    const { data: seqData, error: seqError } = usesWebSequence
+      ? await supabase.rpc('get_next_web_invoice_number')
+      : await (async () => {
+          // POPRAVLJENO (16.8.2026): stevilka se dodeli PO PODJETJU. Racuni iz
+          // portala niso vezani na POS blagajno, zato jo poiscemo prek organizacije.
+          const { data: orgRow } = await supabase
+            .from('organizations').select('pos_business_id').eq('id', orgId).maybeSingle()
+          return supabase.rpc('get_next_pos_invoice_number', {
+            p_business_id: orgRow?.pos_business_id ?? orgId,
+          })
+        })()
+    if (seqError) {
+      await sprosti()
+      return { success: false, error: 'Napaka pri generiranju stevilke racuna: ' + seqError.message }
+    }
+    return { premiseId: premise.premise_id as string, deviceId: deviceIdCode as string, sequence: seqData as number }
   }
-  const sequenceNumber = seqData as number
-  const invoiceNumberFull = `${premise.premise_id}-${deviceIdCode}-${sequenceNumber}`
 
   // DODANO (16.8.2026): razclenitev po stopnjah DDV iz postavk racuna. Prej se
   // je celoten racun prijavil FURS-u po 22%, tudi ce so postavke po 9,5% ali
@@ -197,22 +229,42 @@ export async function confirmIssuedInvoiceWithFurs(
     }).sort((a, b) => b.rate - a.rate)
   }
 
+  const { privateKeyPem, certificatePem } = kljuc(cert)
+  let rez: FursRezervacija
+  if (obstojeca) {
+    rez = obstojeca
+  } else {
+    const st = await novaStevilka()
+    if (!('sequence' in st)) return st
+    const issued = invoice.issue_date ? new Date(invoice.issue_date) : new Date()
+    const zoi = calculateZoi(
+      { taxNumber: org.tax_number, premiseId: st.premiseId, deviceId: st.deviceId, privateKeyPem, certificatePem, isTest: org?.furs_test_mode ?? true },
+      { invoiceNumber: st.sequence, issueDateTime: issued, amountTotal: znesekSkupaj, paymentType, invoiceType: invoice.invoice_type === 'credit_note' ? 'credit_note' : 'invoice' },
+    )
+    rez = { ...st, invoiceNumber: `${st.premiseId}-${st.deviceId}-${st.sequence}`, zoi, issuedAt: issued.toISOString() }
+    // Rezervacija na racun PRED klicem FURS. Ce je ni mogoce shraniti, FURS
+    // NE klicemo (stevilka bi se izgubila brez sledi).
+    const { error: rezErr } = await supabase.from('issued_invoices').update({ furs_rezervacija: rez }).eq('id', invoiceId)
+    if (rezErr) { await sprosti(); return { success: false, error: 'Davčne številke ni bilo mogoče shraniti: ' + rezErr.message } }
+  }
+  const sequenceNumber = rez.sequence
+  const invoiceNumberFull = rez.invoiceNumber
+
   const fursData: FursInvoiceData = {
     invoiceNumber: sequenceNumber,
-    issueDateTime: invoice.issue_date ? new Date(invoice.issue_date) : new Date(),
+    issueDateTime: new Date(rez.issuedAt),
     amountTotal: znesekSkupaj,
     vatBreakdown,
     paymentType,
     invoiceType: invoice.invoice_type === 'credit_note' ? 'credit_note' : 'invoice',
+    presetZoi: rez.zoi,
+    ...(obstojeca ? { subsequentSubmit: true } : {}),
   }
-
-  const p12Buffer = Buffer.from(cert.certificate_data, 'base64')
-  const { privateKeyPem, certificatePem } = extractFromP12(p12Buffer, cert.certificate_password ?? '')
 
   const config: FursConfig = {
     taxNumber: org.tax_number,
-    premiseId: premise.premise_id,
-    deviceId: deviceIdCode,
+    premiseId: rez.premiseId,
+    deviceId: rez.deviceId,
     privateKeyPem,
     certificatePem,
     isTest: org?.furs_test_mode ?? true,
@@ -228,15 +280,21 @@ export async function confirmIssuedInvoiceWithFurs(
         source: 'issued_invoice',
         invoiceNumber: sequenceNumber,
         invoiceNumberFull,
-        premiseId: premise.premise_id,
-        deviceId: deviceIdCode,
+        premiseId: rez.premiseId,
+        deviceId: rez.deviceId,
         paymentType,
+        naknadno: !!obstojeca,
       },
     })
     .select('id')
     .single()
 
-  const result = await confirmWithFurs(config, fursData)
+  let result: Awaited<ReturnType<typeof confirmWithFurs>>
+  try {
+    result = await posli(config, fursData)
+  } catch (e: any) {
+    result = { success: false, zoi: rez.zoi, eor: null, errorMessage: e?.message || 'Povezava s FURS ni uspela', responseTime: null } as any
+  }
 
   await supabase
     .from('furs_log')
@@ -264,10 +322,7 @@ export async function confirmIssuedInvoiceWithFurs(
 
   // Sprosti kljucavnico ob neuspehu, da je takojsnji rocni retry mozen
   // (ob uspehu sproscanje ni potrebno - eor blokira ze na vrhu funkcije).
-  await supabase
-    .from('issued_invoices')
-    .update({ furs_confirming_at: null })
-    .eq('id', invoiceId)
+  await sprosti()
 
   return {
     success: false,

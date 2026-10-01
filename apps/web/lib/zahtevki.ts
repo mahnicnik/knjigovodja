@@ -197,7 +197,7 @@ export type FursRezultat = { success: boolean; napaka: string | null }
 export interface ZahtevkiShramba {
   preberi(id: string): Promise<ZahtevekVrstica | null>
   /** poslan -> placan. Vrne true, ce je TA klic spremenil stanje. */
-  oznaciPlacan(id: string, o: { sessionId: string; paymentIntentId: string | null }): Promise<boolean>
+  oznaciPlacan(id: string, o: PodatkiPlacila): Promise<boolean>
   /** Zaklene izdajo (izdajanje_od). null = zaklenjeno drugje. */
   zakleni(id: string): Promise<ZahtevekVrstica | null>
   /** Izda racun ali vrne ze izdanega za ta zahtevek (enolicna referenca). */
@@ -212,6 +212,14 @@ export interface ZahtevkiShramba {
   vrniPlaciloBrezRacuna(z: ZahtevekVrstica, paymentIntentId: string | null, razlog: string): Promise<void>
 }
 
+/** Placilo iz Stripe: session, PaymentIntent in cas placila (ISO). */
+export type PodatkiPlacila = { sessionId: string; paymentIntentId: string | null; placanoOb?: string | null }
+
+/** Cas placila sessiona: Stripe ga v sessionu ne hrani - velja cas preverbe. */
+export function casPlacilaSessiona(_sess: any, zdaj = Date.now()) {
+  return new Date(zdaj).toISOString()
+}
+
 export type IzidZahtevka = {
   stanje: 'izdan' | 'ze' | 'napaka' | 'preskoceno' | 'v_teku'
   napaka?: string
@@ -222,7 +230,7 @@ export type IzidZahtevka = {
 export async function obdelajPlacanZahtevekZ(
   s: ZahtevkiShramba,
   zahtevekId: string,
-  o: { sessionId: string; paymentIntentId: string | null },
+  o: PodatkiPlacila,
 ): Promise<IzidZahtevka> {
   const z = await s.preberi(zahtevekId)
   if (!z) return { stanje: 'preskoceno', napaka: 'Zahtevek ne obstaja' }
@@ -294,7 +302,7 @@ export function supabaseZahtevki(
     async oznaciPlacan(id, p) {
       const { data } = await admin.from('placilni_zahtevki').update({
         status: 'placan',
-        placano_ob: new Date().toISOString(),
+        placano_ob: p.placanoOb || new Date().toISOString(),
         checkout_session_id: p.sessionId,
         ...(p.paymentIntentId ? { payment_intent_id: p.paymentIntentId } : {}),
       }).eq('id', id).eq('status', 'poslan').select('id')
@@ -391,6 +399,8 @@ export function supabaseZahtevki(
       if (error) throw new Error('Vpis v knjigo prihodkov ni uspel: ' + error.message)
     },
     async potrdiFurs(z, invoiceId) {
+      // Cas poskusa: cron poskusa znova sele z razmikom (PRELET 364).
+      await admin.from('placilni_zahtevki').update({ furs_poskus_ob: new Date().toISOString() }).eq('id', z.id)
       try {
         const r = await confirmIssuedInvoiceWithFurs(admin, z.org_id, invoiceId, 'card')
         return { success: !!r.success, napaka: r.success ? null : (r.error || 'FURS ni potrdil računa') }
@@ -459,13 +469,14 @@ export async function posljiRacunStranki(admin: SupabaseClient, invoiceId: strin
 
 /**
  * Klican iz Connect webhooka (app/api/pos/stripe/webhook) ob
- * checkout.session.completed z metadata.vrsta = 'zahtevek', in iz rezervnih
- * preverb (portal, stran "Hvala"). Idempotentno.
+ * checkout.session.completed z metadata.vrsta = 'zahtevek', iz dnevnega crona
+ * in z gumbom "Potrdi zdaj" (PRELET 364: GET poti in javna stran je NE
+ * klicejo - samo berejo stanje). Idempotentno.
  */
 export async function obdelajPlacanZahtevek(
   admin: SupabaseClient,
   zahtevekId: string,
-  o: { sessionId: string; paymentIntentId: string | null; osnova?: string },
+  o: PodatkiPlacila & { osnova?: string },
 ): Promise<{ stanje: 'izdan' | 'ze' | 'napaka' | 'preskoceno'; napaka?: string; invoiceId?: string | null }> {
   const izid = await obdelajPlacanZahtevekZ(supabaseZahtevki(admin, {
     vrniDenar: async (orgId, pi, kljuc) => {
@@ -477,7 +488,7 @@ export async function obdelajPlacanZahtevek(
       )
       return r.id
     },
-  }), zahtevekId, { sessionId: o.sessionId, paymentIntentId: o.paymentIntentId })
+  }), zahtevekId, { sessionId: o.sessionId, paymentIntentId: o.paymentIntentId, placanoOb: o.placanoOb })
   // Vzporedna obdelava: 500 -> Stripe dogodek ponovi, takrat je ze 'ze'.
   if (izid.stanje === 'v_teku') return { stanje: 'napaka', napaka: 'Izdaja računa za ta zahtevek že poteka.' }
   return izid as any
