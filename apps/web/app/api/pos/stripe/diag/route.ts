@@ -51,5 +51,36 @@ export async function GET(req: Request) {
     const r: any = await stripe.accounts.list({ limit: 5 })
     return (r?.data || []).map((x: any) => ({ id: x.id, type: x.type, created: x.created, charges_enabled: x.charges_enabled }))
   })
-  return NextResponse.json({ cas: new Date().toISOString(), v1, v2seznam, v2platforma, v1seznam })
+  // ?poskus=1: poskusi ustvariti testni racun v razlicicah; ob prvem uspehu
+  // ga takoj zapre in ustavi.
+  const poskusi_: any[] = []
+  if (new URL(req.url).searchParams.get('poskus') === '1') {
+    const email = 'mahnic.nik+racunkodiag@gmail.com'
+    const osnova = { contact_email: email, display_name: 'Racunko diagnostika', identity: { country: 'si' } }
+    const v2variante: [string, any][] = [
+      ['v2-minimal-brez-konfiguracije', { ...osnova, dashboard: 'full', defaults: { responsibilities: { fees_collector: 'stripe', losses_collector: 'stripe' } } }],
+      ['v2-kot-racunko', { ...osnova, dashboard: 'full', configuration: { merchant: { capabilities: { card_payments: { requested: true } } } }, defaults: { currency: 'eur', locales: ['sl-SI'], responsibilities: { fees_collector: 'stripe', losses_collector: 'stripe' } } }],
+    ]
+    for (const [ime, params] of v2variante) {
+      const r: any = await poskusi(() => stripe.v2.core.accounts.create(params))
+      const zapis: any = { ime, ok: r.ok, id: r.rezultat?.id, napaka: r.napaka ? { code: r.napaka.code, message: r.napaka.message, requestId: r.napaka.requestId } : undefined }
+      if (r.ok) {
+        const z: any = await poskusi(() => (stripe.v2.core.accounts as any).close(r.rezultat.id, {}))
+        zapis.zaprt = z.ok ? true : z.napaka?.message
+        poskusi_.push(zapis)
+        break
+      }
+      poskusi_.push(zapis)
+    }
+    if (!poskusi_.some(p => p.ok)) {
+      const r: any = await poskusi(() => stripe.accounts.create({ type: 'standard', country: 'SI', email } as any))
+      const zapis: any = { ime: 'v1-standard', ok: r.ok, id: r.rezultat?.id, napaka: r.napaka ? { code: r.napaka.code, message: r.napaka.message, requestId: r.napaka.requestId } : undefined }
+      if (r.ok) {
+        const z: any = await poskusi(() => stripe.accounts.del(r.rezultat.id))
+        zapis.zaprt = z.ok ? true : z.napaka?.message
+      }
+      poskusi_.push(zapis)
+    }
+  }
+  return NextResponse.json({ cas: new Date().toISOString(), v1, v2seznam, v2platforma, v1seznam, poskusi: poskusi_ })
 }
