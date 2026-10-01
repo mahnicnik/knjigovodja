@@ -317,3 +317,29 @@ test('M5: pravilo je isto kot pri davcni potrditvi - web pred both', () => {
   expect(potekel.fursOkPortal).toBe(false)
   expect(potekel.fursRazlogPortal).toMatch(/potekel/)
 })
+
+// ═══════════════════ PRELET 372: ZIVI NACIN SAMO ZA DOVOLJENE ORGANIZACIJE ═══════════════════
+
+import { dovoljenaVZivem } from '../lib/stripe-connect'
+
+test('Zivi nacin: samo organizacije s seznama STRIPE_CONNECT_DOVOLJENE_ORG', () => {
+  const seznam = ' 11111111-aaaa-bbbb-cccc-000000000001 ,22222222-aaaa-bbbb-cccc-000000000002'
+  expect(dovoljenaVZivem('11111111-aaaa-bbbb-cccc-000000000001', true, seznam)).toBe(true)
+  expect(dovoljenaVZivem('22222222-AAAA-bbbb-cccc-000000000002', true, seznam)).toBe(true)
+  expect(dovoljenaVZivem('33333333-aaaa-bbbb-cccc-000000000003', true, seznam)).toBe(false)
+  expect(dovoljenaVZivem(null, true, seznam)).toBe(false)
+})
+
+test('Zivi nacin: prazen seznam = nihce', () => {
+  expect(dovoljenaVZivem('11111111-aaaa-bbbb-cccc-000000000001', true, '')).toBe(false)
+  expect(dovoljenaVZivem('11111111-aaaa-bbbb-cccc-000000000001', true, ' , ')).toBe(false)
+})
+
+test('Testni nacin: seznam ne velja - vse organizacije', () => {
+  expect(dovoljenaVZivem('33333333-aaaa-bbbb-cccc-000000000003', false, '')).toBe(true)
+  expect(dovoljenaVZivem('33333333-aaaa-bbbb-cccc-000000000003', false, '11111111-aaaa-bbbb-cccc-000000000001')).toBe(true)
+})
+
+test('Ni na seznamu: zahtevki pokazejo "Placila s kartico — kmalu na voljo"', () => {
+  expect(razlogNedostopnosti({ ...vseOk, kmalu: true, nastavljeno: false, stripeAktiven: false })?.razlog).toBe('Plačila s kartico — kmalu na voljo.')
+})

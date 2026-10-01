@@ -93,7 +93,11 @@ export default function PlacilaStripe() {
         </div>
       )}
 
-      {p && !p.nastavljeno && (
+      {p?.kmalu ? (
+        <div data-testid="placila-kmalu" style={{ ...kartica, background: 'rgba(184,140,40,0.08)', fontSize: 14, color: '#8A5A00', fontWeight: 600 }}>
+          Plačila s kartico — kmalu na voljo.
+        </div>
+      ) : p && !p.nastavljeno && (
         <div style={{ ...kartica, background: 'rgba(184,140,40,0.08)', fontSize: 13, color: '#8A5A00' }}>
           Plačila s kartico na strežniku še niso vklopljena. Poskusite znova kasneje.
         </div>

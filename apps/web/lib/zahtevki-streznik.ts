@@ -5,7 +5,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { zapriSejo } from '@/lib/pos-stripe'
-import { stripeConnect, provizijaCenti, racunUstrezaNacinu, zivoNiDovoljeno } from '@/lib/stripe-connect'
+import { stripeConnect, provizijaCenti, racunUstrezaNacinu, zivoNiDovoljeno, dovoljenaVZivem } from '@/lib/stripe-connect'
 import { postavkeZaStripe, konecSessiona, prikazanoStanje, supabaseZahtevki, casPlacilaSessiona } from '@/lib/zahtevki'
 
 /** Poslan zahtevek, ki je potekel pred vec kot uro (zamik: zamujen webhook placila tik pred potekom). */
@@ -53,7 +53,7 @@ export async function checkoutZaZahtevek(admin: SupabaseClient, z: any, osnova: 
   if (prikazanoStanje(z) !== 'poslan') throw new ZahtevekNeVelja(prikazanoStanje(z))
   const { data: org } = await admin.from('organizations')
     .select('id, name, stripe_account_id, stripe_charges_enabled, stripe_account_livemode, furs_demo_mode, furs_test_mode').eq('id', z.org_id).single()
-  if (!org?.stripe_account_id || !org.stripe_charges_enabled || !racunUstrezaNacinu(org.stripe_account_livemode) || zivoNiDovoljeno(org)) {
+  if (!org?.stripe_account_id || !org.stripe_charges_enabled || !racunUstrezaNacinu(org.stripe_account_livemode) || zivoNiDovoljeno(org) || !dovoljenaVZivem(org.id)) {
     throw new Error('Podjetje trenutno ne sprejema plačil s kartico.')
   }
   const stripe = stripeConnect()

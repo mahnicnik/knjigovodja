@@ -60,6 +60,24 @@ export function racunUstrezaNacinu(livemode: boolean | null | undefined, zivo = 
 }
 
 /**
+ * PRELET 372: v ZIVEM nacinu smejo Stripe povezati in sprejemati placila samo
+ * organizacije s seznama STRIPE_CONNECT_DOVOLJENE_ORG (org_id-ji, locene z
+ * vejico). Prazen seznam = nihce. V testnem nacinu seznam ne velja.
+ * Ostali vidijo "Placila s kartico — kmalu na voljo".
+ */
+export function dovoljenaVZivem(
+  orgId: string | null | undefined,
+  zivo = jeZiviKljuc(),
+  seznam = process.env.STRIPE_CONNECT_DOVOLJENE_ORG || '',
+): boolean {
+  if (!zivo) return true
+  if (!orgId) return false
+  return seznam.split(',').map(x => x.trim().toLowerCase()).filter(Boolean).includes(orgId.toLowerCase())
+}
+
+export const KMALU_NA_VOLJO = 'Plačila s kartico — kmalu na voljo.'
+
+/**
  * Razlog, zakaj v ZIVEM nacinu placila s kartico niso mogoca, ali null.
  * Pravi denar mora vedno dobiti pravo davcno potrditev pri FURS.
  */
@@ -110,6 +128,8 @@ export type Pogoji = {
   paketPos: boolean             // Pro + POS (blagajna)
   paketPortal: boolean          // Pro ali Pro + POS (zahtevki)
   accountId: string | null
+  /** PRELET 372: zivi nacin, organizacija ni na seznamu - "kmalu na voljo". */
+  kmalu: boolean
 }
 
 export async function preveriPogoje(admin: SupabaseClient, orgId: string): Promise<Pogoji> {
@@ -144,10 +164,13 @@ export async function preveriPogoje(admin: SupabaseClient, orgId: string): Promi
     fursOk = r.fursOk; fursRazlog = r.fursRazlog
     fursOkPortal = r.fursOkPortal; fursRazlogPortal = r.fursRazlogPortal
   }
+  // PRELET 372: zivi nacin samo za organizacije s seznama.
+  const kmalu = !dovoljenaVZivem(orgId)
   // Racun iz drugega nacina (npr. testni po prehodu na zivo) ne velja.
-  const racun = org?.stripe_account_id && racunUstrezaNacinu(org?.stripe_account_livemode) ? org.stripe_account_id : null
+  const racun = !kmalu && org?.stripe_account_id && racunUstrezaNacinu(org?.stripe_account_livemode) ? org.stripe_account_id : null
   return {
-    nastavljeno: connectNastavljen(),
+    kmalu,
+    nastavljeno: connectNastavljen() && !kmalu,
     stripePovezan: !!racun,
     stripeAktiven: !!racun && !!org?.stripe_charges_enabled,
     fursOk,

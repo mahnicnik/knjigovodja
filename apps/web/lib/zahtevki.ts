@@ -527,6 +527,7 @@ export function klavzula(koda: string | null | undefined, lastno: string | null 
 // ─────────────────────────────────────────────────────────────────
 
 export type PogojiZahtevka = {
+  kmalu?: boolean
   nastavljeno: boolean
   stripeAktiven: boolean
   stripePovezan?: boolean
@@ -546,6 +547,7 @@ export type PogojiZahtevka = {
 export function razlogNedostopnosti(p: PogojiZahtevka | null | undefined): { razlog: string; povezava: string; gumb: string } | null {
   if (!p) return { razlog: 'Preverjam nastavitve plačil …', povezava: '/nastavitve?razdelek=placila', gumb: 'Nastavitve' }
   if (!p.paketPortal) return { razlog: 'Zahtevki za plačilo s kartico so na voljo v paketih Pro in Pro + POS.', povezava: '/nastavitve?razdelek=plan', gumb: 'Paketi' }
+  if (p.kmalu) return { razlog: 'Plačila s kartico — kmalu na voljo.', povezava: '/nastavitve?razdelek=placila', gumb: 'Več' }
   if (!p.nastavljeno) return { razlog: 'Plačila s kartico (Stripe) na strežniku še niso nastavljena.', povezava: '/nastavitve?razdelek=placila', gumb: 'Plačila s kartico' }
   if (!p.stripeAktiven) {
     return {

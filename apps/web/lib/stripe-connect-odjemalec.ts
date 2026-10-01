@@ -20,6 +20,7 @@ export async function klicStripe<T = any>(pot: string, telo?: any, metoda?: stri
 }
 
 export type StripePogoji = {
+  kmalu?: boolean
   nastavljeno: boolean
   stripePovezan: boolean
   stripeAktiven: boolean

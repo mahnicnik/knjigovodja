@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { sejaInOrganizacija, jeLastnik } from '@/lib/stripe-connect-seja'
 import { supabaseShramba, zakljuciPosPlacilo, zapriSejo } from '@/lib/pos-stripe'
-import { adminSupabase, preveriPogoje, stripeConnect, javniUrl, ConnectNiNastavljen, jeTestniKljuc, jeZiviKljuc, racunUstrezaNacinu } from '@/lib/stripe-connect'
+import { adminSupabase, preveriPogoje, stripeConnect, javniUrl, ConnectNiNastavljen, jeTestniKljuc, jeZiviKljuc, racunUstrezaNacinu, dovoljenaVZivem, KMALU_NA_VOLJO } from '@/lib/stripe-connect'
 
 /** PRELET 361: stanje računa Accounts v2 (configuration.merchant). */
 function stanjeV2(acct: any) {
@@ -55,7 +55,7 @@ export async function GET(req: Request) {
     .select('stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, stripe_povezano_ob, stripe_account_livemode')
     .eq('id', s.orgId).maybeSingle()
   // PRELET 363: racun iz drugega nacina (testni po prehodu na zivo) ne velja.
-  const veljaven = !!org?.stripe_account_id && racunUstrezaNacinu(org?.stripe_account_livemode)
+  const veljaven = !!org?.stripe_account_id && racunUstrezaNacinu(org?.stripe_account_livemode) && dovoljenaVZivem(s.orgId)
   if (veljaven && url.searchParams.get('osvezi') === '1') {
     try {
       const st = await osveziIzStripa(admin, s.orgId, org.stripe_account_id)
@@ -103,6 +103,8 @@ export async function POST(req: Request) {
     const stripe = stripeConnect()
 
     if (akcija === 'povezi') {
+      // PRELET 372: v zivem nacinu samo organizacije s seznama STRIPE_CONNECT_DOVOLJENE_ORG.
+      if (!dovoljenaVZivem(s.orgId)) return NextResponse.json({ error: KMALU_NA_VOLJO, kmalu: true }, { status: 403 })
       let accountId = org?.stripe_account_id as string | null
       if (!accountId) {
         // PRELET 361: Stripe novim Connect platformam ne dovoli več ustvarjanja
