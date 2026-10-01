@@ -207,6 +207,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Neznana akcija' }, { status: 400 })
   } catch (e: any) {
     const status = e instanceof ConnectNiNastavljen ? 503 : 500
+    // PRELET 379: napako Stripa zapisemo tudi v dnevnik (Vercel), da jo lahko
+    // preverimo brez posnetka zaslona. Brez kljucev in osebnih podatkov.
+    console.error('Stripe povezava:', akcija, s.orgId, e?.type || '', e?.code || '', e?.statusCode || '', e?.message || e)
     return NextResponse.json({ error: e?.message || 'Napaka pri povezavi s Stripe' }, { status })
   }
 }
