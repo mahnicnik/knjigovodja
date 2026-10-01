@@ -15,6 +15,8 @@ import { GET as contributionsGET } from '../contributions/route'
 import { GET as uvodnaPostaGET } from '@/app/api/email/cron/route'
 // PRELET 360: zahtevki za placilo (potekli, naknadna davcna potrditev).
 import { GET as zahtevkiGET } from '../zahtevki/route'
+// PRELET 370: placana, a nezakljucena placila v blagajni (Stripe).
+import { GET as posStripeGET } from '../pos-stripe/route'
 
 /**
  * En sam dnevni cron, ki zaporedoma pokliCe vse stiri loceno testirane
@@ -100,6 +102,13 @@ export async function GET(request: NextRequest) {
     results.zahtevki = await res.json()
   } catch (e: any) {
     results.zahtevki = { error: e.message }
+  }
+
+  try {
+    const res = await posStripeGET(request)
+    results.posStripe = await res.json()
+  } catch (e: any) {
+    results.posStripe = { error: e.message }
   }
 
   return NextResponse.json({ success: true, results })

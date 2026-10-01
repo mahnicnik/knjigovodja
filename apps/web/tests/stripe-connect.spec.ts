@@ -315,3 +315,32 @@ test('M2: seja se zakljuci samo ob ujemanju org, seje, zneska in valute', () => 
   expect(neujemanjeSeje(null, sess, 'o1')).toMatch(/ne obstaja/)
   expect(neujemanjeSeje({ ...v, checkout_session_id: null }, sess, 'o1')).toMatch(/seja/)
 })
+
+// ═══════════════════ M1 (prelet 370): v_teku -> 500, cron dokonca ═══════════════════
+
+import { statusWebhooka, zaDokoncanje } from '../lib/pos-stripe'
+
+test('M1: webhook vrne 500 za v_teku in napako (Stripe ponovi), 200 sicer', () => {
+  expect(statusWebhooka({ stanje: 'v_teku' })).toBe(500)
+  expect(statusWebhooka({ stanje: 'napaka', napaka: 'x' })).toBe(500)
+  expect(statusWebhooka({ stanje: 'vrnjeno', napaka: 'x' })).toBe(200)
+  expect(statusWebhooka({ stanje: 'ni_placano', status: 'preklicano' })).toBe(200)
+})
+
+test('M1: cron dokonca placana nezakljucena placila s prosto ali potekla kljucavnico', async () => {
+  const zdaj = Date.parse('2026-10-01T10:00:00Z')
+  const vrstice = [
+    { id: 'a', status: 'placano', zakljuceno_ob: null, zakljucevanje_od: null },
+    { id: 'b', status: 'placano', zakljuceno_ob: null, zakljucevanje_od: '2026-10-01T09:59:30Z' }, // obdeluje se
+    { id: 'c', status: 'placano', zakljuceno_ob: null, zakljucevanje_od: '2026-10-01T09:50:00Z' }, // kljucavnica potekla
+    { id: 'd', status: 'placano', zakljuceno_ob: '2026-10-01T09:00:00Z', zakljucevanje_od: null },
+    { id: 'e', status: 'cakanje', zakljuceno_ob: null, zakljucevanje_od: null },
+  ]
+  expect(zaDokoncanje(vrstice, zdaj).map(v => v.id)).toEqual(['a', 'c'])
+  // dokoncanje po padcu: placano, kljucavnica potekla -> zakljuci ENKRAT
+  const { s, klici, vrstica } = lazna('placano')
+  vrstica.payment_intent_id = 'pi_1'
+  const r = await zakljuciPosPlacilo(s, 'p1', vrstica.payment_intent_id)
+  expect(r.stanje).toBe('zakljuceno')
+  expect(klici.placaj).toBe(1)
+})

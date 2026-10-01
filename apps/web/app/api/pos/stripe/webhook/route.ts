@@ -21,7 +21,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { adminSupabase, CONNECT_API_VERZIJA, jeZiviKljuc, neujemanjeSeje, stripeConnect } from '@/lib/stripe-connect'
-import { supabaseShramba, zakljuciPosPlacilo } from '@/lib/pos-stripe'
+import { supabaseShramba, zakljuciPosPlacilo, statusWebhooka } from '@/lib/pos-stripe'
 import { obdelajPlacanZahtevek, oznaciZahtevekVrnjen } from '@/lib/zahtevki'
 
 export const maxDuration = 120
@@ -75,9 +75,9 @@ export async function POST(req: Request) {
         }
         if (md.vrsta === 'pos' && md.placilo_id) {
           izid = await zakljuciPosPlacilo(supabaseShramba(admin), md.placilo_id, pi)
-          if (izid.stanje === 'napaka') {
-            // 500 -> Stripe dogodek ponovi (prehodna napaka baze ipd.).
-            return NextResponse.json({ error: izid.napaka }, { status: 500 })
+          // 500 -> Stripe dogodek ponovi (prehodna napaka baze, vzporedna obdelava - prelet 370).
+          if (statusWebhooka(izid) === 500) {
+            return NextResponse.json({ error: (izid as any).napaka || 'Zaključek plačila že poteka.' }, { status: 500 })
           }
         } else if (md.vrsta === 'zahtevek' && md.zahtevek_id) {
           // PRELET 369 (M3): cas placila = cas dogodka (ne cas dostave webhooka).

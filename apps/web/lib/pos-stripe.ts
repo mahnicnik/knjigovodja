@@ -460,3 +460,24 @@ export async function dovoljenjaOsebja(admin: SupabaseClient, orgId: string, sta
   const { data } = await admin.rpc('role_default_permissions', { p_role: st.role })
   return (data as Record<string, any>) || null
 }
+
+// ─────────────────────────────────────────────────────────────────
+// PRELET 370 (M1): ODZIV WEBHOOKA IN DOKONCANJE V CRONU
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * HTTP status webhooka za izid zakljucka. 'v_teku' (vzporedna obdelava drzi
+ * kljucavnico) in 'napaka' vrneta 500 - Stripe dogodek ponovi, ko je
+ * zakljucek koncan ali kljucavnica potekla. Prej je 'v_teku' vracal 200 in
+ * placilo je ostalo nezakljuceno, ce je prvi obdelovalec padel.
+ */
+export function statusWebhooka(izid: IzidZakljucka): 200 | 500 {
+  return izid.stanje === 'napaka' || izid.stanje === 'v_teku' ? 500 : 200
+}
+
+/** Placane, a nezakljucene vrstice, ki jih nihce ne obdeluje (kljucavnica prosta ali potekla). */
+export function zaDokoncanje<T extends { status: string; zakljuceno_ob: string | null; zakljucevanje_od?: string | null }>(vrstice: T[], zdaj = Date.now()): T[] {
+  const meja = zdaj - 2 * 60_000
+  return vrstice.filter(v => v.status === 'placano' && !v.zakljuceno_ob &&
+    (!v.zakljucevanje_od || new Date(v.zakljucevanje_od).getTime() < meja))
+}
