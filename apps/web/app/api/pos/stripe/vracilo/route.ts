@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
  */
 import { NextResponse } from 'next/server'
 import { sejaInOrganizacija, jeLastnik } from '@/lib/stripe-connect-seja'
-import { vraciloDovoljeno, dovoljenjaOsebja } from '@/lib/pos-stripe'
+import { vraciloDovoljeno, dovoljenjaPoPinu } from '@/lib/pos-stripe'
 import { adminSupabase, stripeConnect } from '@/lib/stripe-connect'
 
 async function najdi(s: any, orderId: string | null, placiloId?: string | null) {
@@ -49,13 +49,17 @@ export async function POST(req: Request) {
   const admin = adminSupabase()
   // PRELET 367 (M6): pravica (lastnik ali osebje s stornom) in storniran racun.
   const { data: racun } = await admin.from('orders').select('status').eq('id', p.order_id).maybeSingle()
+  // PRELET 373: lastnik/admin iz SEJE ali osebje, preverjeno s PIN-om (pin_login).
+  const lastnik = jeLastnik(s.role)
   const pravilo = vraciloDovoljeno({
-    lastnik: jeLastnik(s.role),
-    dovoljenjaOsebja: jeLastnik(s.role) ? null : await dovoljenjaOsebja(admin, s.orgId, telo.staff_id),
+    lastnik,
+    dovoljenjaOsebja: lastnik ? null : await dovoljenjaPoPinu(admin, s.orgId, telo.pin),
     zakljuceno: !!p.zakljuceno_ob,
     statusRacuna: racun?.status ?? null,
   })
-  if ('razlog' in pravilo) return NextResponse.json({ error: pravilo.razlog }, { status: pravilo.status })
+  if ('razlog' in pravilo) {
+    return NextResponse.json({ error: pravilo.status === 403 && !telo.pin ? 'Vračilo potrdi lastnik ali osebje s pravico »Storno računa« s PIN-om.' : pravilo.razlog, potrebenPin: pravilo.status === 403 }, { status: pravilo.status })
+  }
   const { data: org } = await admin.from('organizations').select('stripe_account_id').eq('id', p.org_id).single()
   if (!org?.stripe_account_id) return NextResponse.json({ error: 'Stripe ni več povezan — vračilo izvedite v Stripe nadzorni plošči.' }, { status: 400 })
   try {

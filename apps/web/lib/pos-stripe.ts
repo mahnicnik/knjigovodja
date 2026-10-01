@@ -448,17 +448,21 @@ export function vraciloDovoljeno(o: {
   return { ok: true }
 }
 
-/** Dovoljenja osebja (staff) blagajne podjetja - enako kot pin_login. */
-export async function dovoljenjaOsebja(admin: SupabaseClient, orgId: string, staffId: string | null | undefined) {
-  if (!staffId || !/^[0-9a-f-]{36}$/i.test(staffId)) return null
+/**
+ * PRELET 373 (M6): dovoljenja osebja, preverjena s PIN-om - ENAKO kot prijava
+ * v blagajno (RPC pin_login). staff_id iz telesa zahteve NE velja (lahko ga
+ * poslje kdorkoli). Vrne dovoljenja ali null (napacen PIN, ni blagajne).
+ */
+export async function dovoljenjaPoPinu(admin: SupabaseClient, orgId: string, pin: unknown) {
+  if (typeof pin !== 'string' || !/^\d{1,8}$/.test(pin)) return null
   const { data: org } = await admin.from('organizations').select('pos_business_id').eq('id', orgId).maybeSingle()
   if (!org?.pos_business_id) return null
-  const { data: st } = await admin.from('staff').select('role, permissions, active')
-    .eq('id', staffId).eq('business_id', org.pos_business_id).maybeSingle()
-  if (!st || st.active === false) return null
-  if (st.permissions) return st.permissions as Record<string, any>
-  const { data } = await admin.rpc('role_default_permissions', { p_role: st.role })
-  return (data as Record<string, any>) || null
+  const { data, error } = await admin.rpc('pin_login', { p_business_id: org.pos_business_id, p_pin: pin })
+  if (error) return null
+  const osebje = Array.isArray(data) ? data : data ? [data] : []
+  // Isti PIN pri vec osebah: identiteta ni enolicna - ne dovolimo.
+  if (osebje.length !== 1) return null
+  return (osebje[0]?.permissions as Record<string, any>) || null
 }
 
 // ─────────────────────────────────────────────────────────────────

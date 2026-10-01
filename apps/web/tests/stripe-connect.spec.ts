@@ -344,3 +344,33 @@ test('M1: cron dokonca placana nezakljucena placila s prosto ali potekla kljucav
   expect(r.stanje).toBe('zakljuceno')
   expect(klici.placaj).toBe(1)
 })
+
+// ═══════════════════ PRELET 373 (M6): PRAVICA S PIN-om, NE staff_id ═══════════════════
+
+import { dovoljenjaPoPinu } from '../lib/pos-stripe'
+import { laznaBaza } from './pomoc/lazna-baza'
+
+function bazaOsebja() {
+  const osebje = [
+    { pin: '1111', permissions: { voidReceipt: true } },      // vodja
+    { pin: '2222', permissions: { voidReceipt: false } },     // blagajnik
+    { pin: '3333', permissions: { voidReceipt: true } }, { pin: '3333', permissions: { voidReceipt: false } },
+  ]
+  return laznaBaza({ organizations: [{ id: 'o1', pos_business_id: 'b1' }] }, {
+    pin_login: ({ p_business_id, p_pin }: any) => p_business_id === 'b1' ? osebje.filter(o => o.pin === p_pin) : [],
+  })
+}
+
+test('M6: pravico osebja preveri streznik s PIN-om (pin_login), kot prijavo v blagajno', async () => {
+  const b = bazaOsebja() as any
+  const vodja = await dovoljenjaPoPinu(b, 'o1', '1111')
+  expect(vraciloDovoljeno({ lastnik: false, dovoljenjaOsebja: vodja, zakljuceno: true, statusRacuna: 'voided' }).ok).toBe(true)
+  const blagajnik = await dovoljenjaPoPinu(b, 'o1', '2222')
+  expect(vraciloDovoljeno({ lastnik: false, dovoljenjaOsebja: blagajnik, zakljuceno: true, statusRacuna: 'voided' }).ok).toBe(false)
+  expect(await dovoljenjaPoPinu(b, 'o1', '9999')).toBeNull()             // napacen PIN
+  expect(await dovoljenjaPoPinu(b, 'o1', '3333')).toBeNull()             // PIN ni enolicen
+  expect(await dovoljenjaPoPinu(b, 'o1', undefined)).toBeNull()          // brez PIN-a
+  expect(await dovoljenjaPoPinu(b, 'o1', '1111; drop')).toBeNull()       // ni PIN
+  // staff_id iz telesa nima vpliva: brez PIN-a in brez lastnika ni pravice
+  expect(vraciloDovoljeno({ lastnik: false, dovoljenjaOsebja: await dovoljenjaPoPinu(b, 'o1', undefined), zakljuceno: true, statusRacuna: 'voided' }).ok).toBe(false)
+})

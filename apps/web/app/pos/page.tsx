@@ -34,7 +34,7 @@ import { dodajVVrsto } from '@/lib/offline-vrsta'
 import { useJeTelefon, POS_TELEFON_CSS, SpodnjaNavigacija, SpodnjiList, VrsticaLista } from '@/components/pos/TelefonPostavitev'
 import { jeElektron, preberiKontekst, naslednjaLokalnaStevilka, zabeleziIzPolneStevilke, zaznanaPovezava } from '@/lib/offline-prodaja'
 import { useStripePogoji, StripeIzbira, StripeQrZaslon, type StripePlaciloStanje } from '@/components/pos/StripePlacilo'
-import { klicStripe } from '@/lib/stripe-connect-odjemalec'
+import { klicStripe, vrniPrekStripe } from '@/lib/stripe-connect-odjemalec'
 
 // ================================================================
 // TEMA
@@ -2163,7 +2163,7 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         </div>
       </div>
       {stripePlacilo && (
-        <StripeQrZaslon key={stripePlacilo.id} placilo={stripePlacilo} T={T} osebjeId={auth?.user?.id || null}
+        <StripeQrZaslon key={stripePlacilo.id} placilo={stripePlacilo} T={T}
           onPlacano={zakljuciStripe}
           onPreklici={poPreklicuStripe}
           onNovaKoda={() => { setStripePlacilo(null); zacniStripe() }}/>
@@ -9328,7 +9328,7 @@ function VoidModal({ order, lines, payment, posData, auth, onClose, onVoided }) 
       // PRELET 357: vracilo denarja prek Stripe (storno pri FURS je ze opravljen
       // zgoraj po obstojecem postopku). Neuspeh storna ne razveljavi - povemo.
       if (stripeVracilo?.stripe && stripeVracilo.status === 'placano' && vrniPrekStripe) {
-        const vr = await klicStripe('/api/pos/stripe/vracilo', { order_id: order.id, staff_id: auth?.user?.id || null })
+        const vr = await vrniPrekStripe({ order_id: order.id })
         if (vr.ok) setStripeIzid('Denar je vrnjen stranki prek Stripe.')
         else {
           setStripeIzid(null)

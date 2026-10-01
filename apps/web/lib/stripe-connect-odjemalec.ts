@@ -32,3 +32,18 @@ export type StripePogoji = {
   paketPos: boolean
   paketPortal: boolean
 }
+
+/**
+ * PRELET 373: vracilo prek Stripe. Ce streznik zahteva potrditev (uporabnik
+ * seje ni lastnik/admin), vprasa za PIN osebja s pravico "Storno racuna" in
+ * poskusi znova - streznik PIN preveri enako kot prijavo v blagajno.
+ */
+export async function vrniPrekStripe(telo: { order_id?: string; id?: string }) {
+  let r = await klicStripe<any>('/api/pos/stripe/vracilo', telo)
+  if (!r.ok && r.data?.potrebenPin) {
+    const pin = typeof window !== 'undefined' ? window.prompt('Vračilo potrdi oseba s pravico »Storno računa«.\n\nVpišite PIN:') : null
+    if (!pin) return r
+    r = await klicStripe<any>('/api/pos/stripe/vracilo', { ...telo, pin: pin.trim() })
+  }
+  return r
+}

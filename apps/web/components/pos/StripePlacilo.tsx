@@ -17,7 +17,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import QRCode from 'qrcode'
 import { createClient } from '@/lib/supabase'
-import { klicStripe, type StripePogoji } from '@/lib/stripe-connect-odjemalec'
+import { klicStripe, vrniPrekStripe, type StripePogoji } from '@/lib/stripe-connect-odjemalec'
 
 type Barve = { accent: string; accentSoft: string; muted: string; danger: string; chipBg: string; line: string }
 
@@ -117,10 +117,8 @@ export type StripePlaciloStanje = {
 
 const eur = (c: number) => (c / 100).toLocaleString('sl-SI', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'
 
-export function StripeQrZaslon({ placilo, onPlacano, onPreklici, onNovaKoda, T, osebjeId }: {
+export function StripeQrZaslon({ placilo, onPlacano, onPreklici, onNovaKoda, T }: {
   placilo: StripePlaciloStanje
-  /** PIN-prijavljeno osebje (pravica za vracilo preverja streznik, prelet 367). */
-  osebjeId?: string | null
   onPlacano: (p: StripePlaciloStanje) => void
   onPreklici: () => void
   onNovaKoda: () => void
@@ -188,7 +186,7 @@ export function StripeQrZaslon({ placilo, onPlacano, onPreklici, onNovaKoda, T, 
   async function vrniDenar() {
     if (!confirm(`Vrnem ${eur(stanje.znesekCenti)} stranki na kartico?`)) return
     setVracam(true); setNapaka(null)
-    const r = await klicStripe('/api/pos/stripe/vracilo', { id: placilo.id, staff_id: osebjeId || null })
+    const r = await vrniPrekStripe({ id: placilo.id })
     setVracam(false)
     if (!r.ok) { setNapaka(r.data.error || 'Vračilo ni uspelo.'); return }
     const s2 = await klicStripe<StripePlaciloStanje>('/api/pos/stripe/placilo?id=' + placilo.id)
