@@ -17,14 +17,30 @@ import { NextResponse } from 'next/server'
 import { sejaInOrganizacija, jeLastnik } from '@/lib/stripe-connect-seja'
 import { adminSupabase, preveriPogoje, stripeConnect, javniUrl, ConnectNiNastavljen, jeTestniKljuc } from '@/lib/stripe-connect'
 
+/** PRELET 361: stanje računa Accounts v2 (configuration.merchant). */
+function stanjeV2(acct: any) {
+  const m = acct?.configuration?.merchant
+  const vnosi: any[] = acct?.requirements?.entries || []
+  const odUporabnika = vnosi.filter(e => e?.awaiting_action_from === 'user')
+  return {
+    chargesEnabled: m?.capabilities?.card_payments?.status === 'active',
+    payoutsEnabled: m?.capabilities?.stripe_balance?.payouts?.status === 'active',
+    detailsSubmitted: odUporabnika.length === 0,
+    requirements: odUporabnika.map(e => String(e?.description || '')).filter(Boolean),
+    ime: acct?.display_name || null,
+    email: acct?.contact_email || null,
+  }
+}
+
 async function osveziIzStripa(admin: any, orgId: string, accountId: string) {
   const stripe = stripeConnect()
-  const acct = await stripe.accounts.retrieve(accountId)
+  const acct = await stripe.v2.core.accounts.retrieve(accountId, { include: ['configuration.merchant', 'requirements'] } as any)
+  const st = stanjeV2(acct)
   await admin.from('organizations').update({
-    stripe_charges_enabled: !!acct.charges_enabled,
-    stripe_payouts_enabled: !!acct.payouts_enabled,
+    stripe_charges_enabled: st.chargesEnabled,
+    stripe_payouts_enabled: st.payoutsEnabled,
   }).eq('id', orgId)
-  return acct
+  return st
 }
 
 export async function GET(req: Request) {
@@ -39,12 +55,12 @@ export async function GET(req: Request) {
     .eq('id', s.orgId).maybeSingle()
   if (org?.stripe_account_id && url.searchParams.get('osvezi') === '1') {
     try {
-      const acct = await osveziIzStripa(admin, s.orgId, org.stripe_account_id)
+      const st = await osveziIzStripa(admin, s.orgId, org.stripe_account_id)
       podrobnosti = {
-        details_submitted: acct.details_submitted,
-        requirements: acct.requirements?.currently_due || [],
-        ime: acct.business_profile?.name || acct.settings?.dashboard?.display_name || null,
-        email: acct.email || null,
+        details_submitted: st.detailsSubmitted,
+        requirements: st.requirements,
+        ime: st.ime,
+        email: st.email,
       }
     } catch (e: any) {
       napaka = e instanceof ConnectNiNastavljen ? e.message : 'Stanja pri Stripe ni bilo mogoče prebrati: ' + (e?.message || e)
@@ -84,40 +100,55 @@ export async function POST(req: Request) {
     if (akcija === 'povezi') {
       let accountId = org?.stripe_account_id as string | null
       if (!accountId) {
-        // "Stripe handles pricing": provizije zaračuna Stripe neposredno
-        // povezanemu računu (fees.payer = account), izgube nosi Stripe.
-        // PRELET 360: Stripe to kombinacijo dovoli SAMO s polno nadzorno
-        // ploščo (stripe_dashboard = full, enako kot račun Standard). Z
-        // Express ploščo vrne napako "your platform must collect fees and be
-        // liable for negative balances". Zmožnosti (card_payments) dobi
-        // tak račun samodejno, zato jih ne zahtevamo posebej.
-        const acct = await stripe.accounts.create({
-          country: 'SI',
-          email: org?.email || s.user.email || undefined,
-          controller: {
-            fees: { payer: 'account' },
-            losses: { payments: 'stripe' },
-            requirement_collection: 'stripe',
-            stripe_dashboard: { type: 'full' },
+        // PRELET 361: Stripe novim Connect platformam ne dovoli več ustvarjanja
+        // računov prek Accounts v1 ("Create connected accounts with POST
+        // /v2/core/accounts instead"). Zato Accounts v2:
+        //  - configuration.merchant: podjetje je prodajalec (direct charges),
+        //  - fees_collector = stripe: provizije Stripe zaračuna podjetju,
+        //  - losses_collector = stripe: izgube nosi Stripe,
+        //  - dashboard = full: polna Stripe nadzorna plošča.
+        // Računko tako nima stroškov ne tveganja ("Stripe handles pricing").
+        // Račun v2 ima običajen acct_ ID, ki deluje z Checkout Sessions
+        // (Stripe-Account), vračili in webhooki kot prej.
+        const email = org?.email || s.user.email || undefined
+        if (!email) throw new Error('Za povezavo s Stripe potrebujemo e-poštni naslov podjetja (Nastavitve → Podjetje).')
+        const acct = await stripe.v2.core.accounts.create({
+          contact_email: email,
+          display_name: org?.name || undefined,
+          dashboard: 'full',
+          identity: { country: 'si' },
+          configuration: {
+            merchant: { capabilities: { card_payments: { requested: true } } },
           },
-          business_profile: { name: org?.name || undefined },
+          defaults: {
+            currency: 'eur',
+            locales: ['sl-SI'],
+            responsibilities: { fees_collector: 'stripe', losses_collector: 'stripe' },
+          },
           metadata: { org_id: s.orgId, vir: 'racunko' },
-        }, { idempotencyKey: `connect-racun-${s.orgId}-${org?.stripe_account_id ?? 'nov'}-${new Date().toISOString().slice(0, 13)}` })
+          include: ['configuration.merchant'],
+        } as any, { idempotencyKey: `connect-v2-racun-${s.orgId}-${new Date().toISOString().slice(0, 13)}` })
         accountId = acct.id
+        const st = stanjeV2(acct)
         const { error } = await admin.from('organizations').update({
           stripe_account_id: accountId,
-          stripe_charges_enabled: !!acct.charges_enabled,
-          stripe_payouts_enabled: !!acct.payouts_enabled,
+          stripe_charges_enabled: st.chargesEnabled,
+          stripe_payouts_enabled: st.payoutsEnabled,
           stripe_povezano_ob: new Date().toISOString(),
         }).eq('id', s.orgId)
         if (error) throw new Error('Povezave ni bilo mogoče shraniti: ' + error.message)
       }
-      const link = await stripe.accountLinks.create({
+      const link = await stripe.v2.core.accountLinks.create({
         account: accountId,
-        type: 'account_onboarding',
-        refresh_url: `${osnova}/nastavitve?razdelek=placila&stripe=osvezi`,
-        return_url: `${osnova}/nastavitve?razdelek=placila&stripe=vrnjen`,
-      })
+        use_case: {
+          type: 'account_onboarding',
+          account_onboarding: {
+            configurations: ['merchant'],
+            refresh_url: `${osnova}/nastavitve?razdelek=placila&stripe=osvezi`,
+            return_url: `${osnova}/nastavitve?razdelek=placila&stripe=vrnjen`,
+          },
+        },
+      } as any)
       return NextResponse.json({ url: link.url })
     }
 
