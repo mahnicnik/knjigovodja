@@ -33,6 +33,8 @@ import ZgodovinaCen from '@/components/pos/ZgodovinaCen'
 import { dodajVVrsto } from '@/lib/offline-vrsta'
 import { useJeTelefon, POS_TELEFON_CSS, SpodnjaNavigacija, SpodnjiList, VrsticaLista } from '@/components/pos/TelefonPostavitev'
 import { jeElektron, preberiKontekst, naslednjaLokalnaStevilka, zabeleziIzPolneStevilke, zaznanaPovezava } from '@/lib/offline-prodaja'
+import { useStripePogoji, StripeIzbira, StripeQrZaslon, type StripePlaciloStanje } from '@/components/pos/StripePlacilo'
+import { klicStripe } from '@/lib/stripe-connect-odjemalec'
 
 // ================================================================
 // TEMA
@@ -944,6 +946,91 @@ function ModalHeader({ title, onClose }) {
   )
 }
 
+/**
+ * Vrstice kosarice v obliki za pos.orders.replaceLines. Izlusceno iz
+ * submitPayment (prelet 357), da jih pot s Stripe zapise NATANKO enako.
+ */
+function vrsticeZaNarocilo(cart) {
+  return cart.map(line => ({
+    itemId: line.id,
+    name: line.name,
+    qty: line.qty,
+    unitPrice: line.happyHourApplied ? line.price * (1 - Number(line.happyHourPct ?? 20) / 100) : line.price,
+    vatRate: line.vat_rate ?? 22,
+    // PRELET 201: popust na posamezno postavko - zmnozen s Happy hour.
+    discountPct: Number((line as any).discountPct ?? 0) || 0,
+    // PRELET 203: znesek popusta se v ceno postavke porazdeli na kos
+    // (`/ qty`), da zmnozek s kolicino spet da pravi znesek vrstice.
+    discountEur: Number((line as any).discountEur ?? 0) || 0,
+    // POPRAVLJENO (16.8.2026, OBRACUN): popust se je prej obracunal SAMO na
+    // osnovno ceno, doplacila modifikatorjev pa so ostala nepopustena -
+    // znesek narocila v bazi se ni ujemal s tistim v kosarici in na racunu
+    // (npr. 3,80 EUR namesto 3,50 EUR). Zdaj popust velja za oboje.
+    mods: (line.mods || []).map((m:any) => ({
+      ...m,
+      // PRELET 201: popust velja tudi za doplacila modifikatorjev, sicer
+      // se znesek v kosarici ne bi ujemal z zneskom v bazi.
+      delta: (line.happyHourApplied ? Number(m.delta || 0) * (1 - Number(line.happyHourPct ?? 20) / 100) : Number(m.delta || 0))
+        * (1 - (Number((line as any).discountPct ?? 0) || 0) / 100),
+    })),
+    note: line.note || null,
+  }))
+}
+
+/**
+ * Odstevanje surovin za artikle z normativom. Izlusceno iz submitPayment
+ * (prelet 357) brez spremembe - klice ga tudi zakljucek placila s Stripe.
+ */
+async function odstejNormative(cart) {
+  try {
+    // POPRAVLJENO (17.8.2026): prej gnezdena zanka z LOCENIM klicem na bazo
+    // za vsak recept in nato za vsako sestavino - pri desetih izdelkih s po
+    // petimi sestavinami je to petdeset zaporednih klicev, vsak s svojo
+    // zakasnitvijo. Blagajna je pri vecji kosarici opazno cakala PO tem, ko
+    // je bila prodaja ze zakljucena.
+    //
+    // Zdaj: normativi vseh receptov v ENI poizvedbi, odstevanja pa vzporedno.
+    // VAROVALKA (21.8.2026): `item_type` se v kosarici ni prenasal, zato je
+    // bil ta seznam VEDNO prazen in normativi se niso odsteli nikoli -
+    // brez sledi. Ce vrstica vrste nima, jo poiscemo v katalogu; ce je
+    // recept in normativa ni, to zabelezimo, da napaka ne ostane tiha.
+    // POPRAVLJENO (21.8.2026): varovalka iz preleta 70 je uporabljala
+    // `posData`, ki ga ta komponenta NE prejme - ob vrstici brez
+    // `item_type` bi vrgla "posData is not defined" sredi placila.
+    // Kosarica zdaj vrsto vedno nosi (prelet 70), zato zadosca preverba,
+    // manjkajoco vrsto pa le zabelezimo.
+    const recepti = cart.filter(l => {
+      if (l.item_type) return l.item_type === 'recipe'
+      console.warn('Vrstica brez item_type — normativi zanjo ne bodo odsteti:', l.name)
+      return false
+    })
+    if (recepti.length > 0) {
+      const db = createClient()
+      const { data: vsiNormativi } = await db
+        .from('item_ingredients')
+        .select('item_id, ingredient_id, qty_used')
+        .in('item_id', recepti.map(l => l.id))
+
+      // Sestej porabo po sestavini: ce se ista sestavina pojavi v vec
+      // receptih, jo odstejemo ENKRAT s skupno kolicino.
+      const poSestavini = new Map<string, number>()
+      for (const linija of recepti) {
+        for (const nl of (vsiNormativi || [])) {
+          if (nl.item_id !== linija.id) continue
+          const skupaj = (poSestavini.get(nl.ingredient_id) || 0) + Number(nl.qty_used) * linija.qty
+          poSestavini.set(nl.ingredient_id, skupaj)
+        }
+      }
+
+      // POPRAVLJENO (16.8.2026): odstevanje atomarno v bazi - prej
+      // SELECT + izracun + UPDATE, kar je pri dveh hkratnih blagajnah
+      // pomenilo, da je druga povozila prvo.
+      await Promise.all(Array.from(poSestavini.entries()).map(([id, qty]) =>
+        db.rpc('decrement_ingredient_stock', { p_ingredient_id: id, p_qty: qty })
+      ))
+    }
+  } catch(normErr) { console.warn('Normativ odštevanje ni uspelo:', normErr) }
+}
 // ================================================================
 // PAYMENT MODAL — real Supabase order + payment
 // ================================================================
@@ -965,12 +1052,19 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
   const [strankineKartice, setStrankineKartice] = useState<any[]>([])
   const [izbranaKartica, setIzbranaKartica] = useState('')
   const [stanjePredplacila, setStanjePredplacila] = useState<number | null>(null)
+  // PRELET 357: placilo s Stripe prek QR kode. Narocilo, odprto za placilo s
+  // Stripe, si zapomnimo: ob preklicu in ponovnem poskusu (ali prehodu na
+  // gotovino) se uporabi ISTO narocilo, ne nastane novo.
+  const stripe = useStripePogoji(!!open)
+  const [stripePlacilo, setStripePlacilo] = useState<StripePlaciloStanje | null>(null)
+  const stripeNarociloRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (!open) { setMethod('cash'); setTipPct(0); setGiven(''); setDiscount(0); setDiscountEur(''); setFurs(true); setError(null); setProcessing(false); setNaPodjetje(false); setKupec({ name:'', address:'', tax:'' }) }
     if (open && typeof open === 'object') { if(open.discount) setDiscount(open.discount) }
     if (!open) setCardConfirmed(false)
     if (!open) { setStrankineKartice([]); setIzbranaKartica(''); setStanjePredplacila(null) }
+    if (!open) { setStripePlacilo(null); stripeNarociloRef.current = null }
   }, [open])
 
   // Nalozi aktivne kartice izbrane stranke (21.8.2026).
@@ -1194,6 +1288,9 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
         return
       }
     }
+    // PRELET 357: placilo s Stripe gre po svoji poti - racun zakljuci in
+    // davcno potrdi streznik, ko Stripe potrdi placilo.
+    if (method === 'stripe') { await zacniStripe(); return }
     setProcessing(true)
     setError(null)
     try {
@@ -1248,7 +1345,8 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
       const cashierId = auth.user.id || null
 
       // 1. Odpri naročilo
-      const orderId = await pos.orders.openOrder({
+      // PRELET 357: narocilo, pripravljeno za (preklicano) placilo s Stripe, se uporabi znova.
+      const orderId = stripeNarociloRef.current || await pos.orders.openOrder({
         tableId: activeTable?.id,
         // POPRAVLJENO (21.8.2026): pri prodaji paketa je bila stranka izbrana
         // v oknu paketa, ne na zaslonu Prodaja - `activeCustomer` je bil zato
@@ -1276,30 +1374,7 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
       // podvojile, orders.total bi bil napacen, in pay_order() ne bi nikoli
       // oznacil narocila kot placano (SUM(placil) < napacno visok total) -
       // to je bil pravi koren izgubljenih/obticanih miznih racunov.
-      await pos.orders.replaceLines(orderId, cart.map(line => ({
-        itemId: line.id,
-        name: line.name,
-        qty: line.qty,
-        unitPrice: line.happyHourApplied ? line.price * (1 - Number(line.happyHourPct ?? 20) / 100) : line.price,
-        vatRate: line.vat_rate ?? 22,
-        // PRELET 201: popust na posamezno postavko - zmnozen s Happy hour.
-        discountPct: Number((line as any).discountPct ?? 0) || 0,
-        // PRELET 203: znesek popusta se v ceno postavke porazdeli na kos
-        // (`/ qty`), da zmnozek s kolicino spet da pravi znesek vrstice.
-        discountEur: Number((line as any).discountEur ?? 0) || 0,
-        // POPRAVLJENO (16.8.2026, OBRACUN): popust se je prej obracunal SAMO na
-        // osnovno ceno, doplacila modifikatorjev pa so ostala nepopustena -
-        // znesek narocila v bazi se ni ujemal s tistim v kosarici in na racunu
-        // (npr. 3,80 EUR namesto 3,50 EUR). Zdaj popust velja za oboje.
-        mods: (line.mods || []).map((m:any) => ({
-          ...m,
-          // PRELET 201: popust velja tudi za doplacila modifikatorjev, sicer
-          // se znesek v kosarici ne bi ujemal z zneskom v bazi.
-          delta: (line.happyHourApplied ? Number(m.delta || 0) * (1 - Number(line.happyHourPct ?? 20) / 100) : Number(m.delta || 0))
-            * (1 - (Number((line as any).discountPct ?? 0) || 0) / 100),
-        })),
-        note: line.note || null,
-      })))
+      await pos.orders.replaceLines(orderId, vrsticeZaNarocilo(cart))
 
       // 3. Plačaj + FURS
       /**
@@ -1544,54 +1619,7 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
       // hkratnih blagajnah je to povozilo tuje spremembe (lost update).
       // Odstevanje zdaj v celoti opravi baza: atomarno, brez zastarelih vrednosti.
       // Odštej surovine za recipe artikle
-      try {
-        // POPRAVLJENO (17.8.2026): prej gnezdena zanka z LOCENIM klicem na bazo
-        // za vsak recept in nato za vsako sestavino - pri desetih izdelkih s po
-        // petimi sestavinami je to petdeset zaporednih klicev, vsak s svojo
-        // zakasnitvijo. Blagajna je pri vecji kosarici opazno cakala PO tem, ko
-        // je bila prodaja ze zakljucena.
-        //
-        // Zdaj: normativi vseh receptov v ENI poizvedbi, odstevanja pa vzporedno.
-        // VAROVALKA (21.8.2026): `item_type` se v kosarici ni prenasal, zato je
-        // bil ta seznam VEDNO prazen in normativi se niso odsteli nikoli -
-        // brez sledi. Ce vrstica vrste nima, jo poiscemo v katalogu; ce je
-        // recept in normativa ni, to zabelezimo, da napaka ne ostane tiha.
-        // POPRAVLJENO (21.8.2026): varovalka iz preleta 70 je uporabljala
-        // `posData`, ki ga ta komponenta NE prejme - ob vrstici brez
-        // `item_type` bi vrgla "posData is not defined" sredi placila.
-        // Kosarica zdaj vrsto vedno nosi (prelet 70), zato zadosca preverba,
-        // manjkajoco vrsto pa le zabelezimo.
-        const recepti = cart.filter(l => {
-          if (l.item_type) return l.item_type === 'recipe'
-          console.warn('Vrstica brez item_type — normativi zanjo ne bodo odsteti:', l.name)
-          return false
-        })
-        if (recepti.length > 0) {
-          const db = createClient()
-          const { data: vsiNormativi } = await db
-            .from('item_ingredients')
-            .select('item_id, ingredient_id, qty_used')
-            .in('item_id', recepti.map(l => l.id))
-
-          // Sestej porabo po sestavini: ce se ista sestavina pojavi v vec
-          // receptih, jo odstejemo ENKRAT s skupno kolicino.
-          const poSestavini = new Map<string, number>()
-          for (const linija of recepti) {
-            for (const nl of (vsiNormativi || [])) {
-              if (nl.item_id !== linija.id) continue
-              const skupaj = (poSestavini.get(nl.ingredient_id) || 0) + Number(nl.qty_used) * linija.qty
-              poSestavini.set(nl.ingredient_id, skupaj)
-            }
-          }
-
-          // POPRAVLJENO (16.8.2026): odstevanje atomarno v bazi - prej
-          // SELECT + izracun + UPDATE, kar je pri dveh hkratnih blagajnah
-          // pomenilo, da je druga povozila prvo.
-          await Promise.all(Array.from(poSestavini.entries()).map(([id, qty]) =>
-            db.rpc('decrement_ingredient_stock', { p_ingredient_id: id, p_qty: qty })
-          ))
-        }
-      } catch(normErr) { console.warn('Normativ odštevanje ni uspelo:', normErr) }
+      await odstejNormative(cart)
 
       // Pridobi org + premise + device + cashier za izpis računa
       let orgInfo = null
@@ -1711,10 +1739,188 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
     }
   }
 
+  // ═══ PRELET 357: PLACILO S STRIPE PREK QR KODE ══════════════════════
+  //
+  // 1. Narocilo pripravimo ENAKO kot pri obicajnem placilu (vrstice, kupec,
+  //    popust, napitnina, klavzule) - brez placila in brez FURS.
+  // 2. Streznik iz vrstic izracuna znesek in odpre Stripe Checkout.
+  // 3. Ko Stripe potrdi placilo, streznik zapise placilo (kartica) in racun
+  //    davcno potrdi. Blagajna samo prikaze in natisne rezultat.
+  async function zacniStripe() {
+    if (!stripe.naSpletu) { setError('Brez interneta plačilo s Stripe ni mogoče.'); return }
+    if (!auth?.user?.id) { setError('Ni prijavljenega blagajnika'); return }
+    setProcessing(true)
+    setError(null)
+    try {
+      let sejaOk = false
+      try {
+        const seja = await createClient().auth.refreshSession()
+        sejaOk = !seja.error && !!seja.data?.session
+      } catch {}
+      if (!sejaOk) throw new Error('Seja je potekla ali ni povezave. Preverite internet in poskusite znova.')
+
+      const db = createClient()
+      const cashierId = auth.user.id
+      let orderId = stripeNarociloRef.current
+      if (orderId) {
+        const { data: o } = await db.from('orders').select('status').eq('id', orderId).maybeSingle()
+        if (o?.status !== 'open') orderId = null
+      }
+      if (!orderId) {
+        orderId = await pos.orders.openOrder({
+          tableId: activeTable?.id,
+          customerId: (typeof open === 'object' && (open as any)?.customerId) || activeCustomer?.id,
+          cashierId,
+        })
+      }
+      stripeNarociloRef.current = orderId
+
+      if (naPodjetje) {
+        await db.from('orders').update({
+          buyer_name: kupec.name.trim(),
+          buyer_address: kupec.address.trim() || null,
+          buyer_tax_number: kupec.tax.replace(/[^0-9]/g, ''),
+        }).eq('id', orderId)
+      }
+      await pos.orders.replaceLines(orderId, vrsticeZaNarocilo(cart))
+
+      const klavzuleRacuna = Array.from(new Set(
+        (cart || [])
+          .filter((l: any) => Number(l.vat_rate ?? 22) === 0)
+          .map((l: any) => vatExemptionText(l.vat_exemption_code, l.vat_exemption_custom_text))
+          .filter(Boolean)
+      )) as string[]
+      if (klavzuleRacuna.length > 0) {
+        await db.from('orders').update({ vat_exemption_text: klavzuleRacuna.join('\n') }).eq('id', orderId)
+      }
+      // Napitnina in popust VEDNO (tudi 0) - znesek, ki ga placa stranka,
+      // izracuna streznik iz narocila, zato mora biti narocilo tocno.
+      const napitnina = Math.round(total * tipPct / 100 * 100) / 100
+      const { error: tipErr } = await db.from('orders').update({
+        tip_amount: napitnina,
+        discount_pct: discount || 0,
+        discount_fixed: discountEurVal || 0,
+      }).eq('id', orderId)
+      if (tipErr) throw new Error('Napitnine oziroma popusta ni bilo mogoče zapisati: ' + tipErr.message)
+
+      const r = await klicStripe<StripePlaciloStanje>('/api/pos/stripe/placilo', {
+        order_id: orderId,
+        premise_id: getActivePremise()?.id || null,
+        staff_id: cashierId,
+      })
+      if (!r.ok) throw new Error(r.data.error || 'Plačila s Stripe ni bilo mogoče pripraviti.')
+      setStripePlacilo(r.data)
+    } catch (e: any) {
+      setError(e?.message || 'Napaka pri pripravi plačila s Stripe')
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  async function zakljuciStripe(p: StripePlaciloStanje) {
+    const orderId = stripeNarociloRef.current
+    const r = p.rezultat || {}
+    let kuhinjskaStevilka = null
+    try {
+      const { data: kh } = await createClient().rpc('dodeli_kuhinjsko_stevilko', { p_order_id: orderId })
+      kuhinjskaStevilka = kh ?? null
+    } catch (e) { console.warn('Kuhinjska stevilka:', e) }
+    await odstejNormative(cart)
+
+    let orgInfo = null, premiseInfo = null, deviceInfo = null
+    try {
+      const sb = createClient()
+      const mem = await getActiveMembership()
+      if (mem) {
+        const { data: o } = await sb.from('organizations').select('*').eq('id', mem.org_id).single()
+        orgInfo = o
+        const { data: pr } = await sb.from('business_premises').select('*').eq('org_id', mem.org_id).eq('is_active', true).limit(1).maybeSingle()
+        premiseInfo = pr
+        if (pr) {
+          const { data: d } = await sb.from('electronic_devices').select('*').eq('premise_id', pr.id).eq('is_active', true).maybeSingle()
+          deviceInfo = d
+        }
+      }
+    } catch (e) { console.warn('Receipt meta load:', e) }
+
+    if (!r.success) {
+      alert(
+        'Račun ' + (r.invoiceNumber || '') + ' je plačan s kartico (Stripe) in izdan, DAVČNO POTRJEVANJE pa NI uspelo.\n\n' +
+        'Razlog: ' + (r.napaka || p.napaka || 'FURS ni odgovoril') + '\n\n' +
+        'Račun je v naknadnem potrjevanju — potrdite ga prek zvonca v glavi blagajne (gumb "Pošlji v potrditev"). ' +
+        'Po zakonu v dveh delovnih dneh.'
+      )
+    }
+
+    const napitnina = Math.round(total * tipPct / 100 * 100) / 100
+    const popust = Math.round((total * discount / 100 + discountEurVal) * 100) / 100
+    stripeNarociloRef.current = null
+    setStripePlacilo(null)
+    onComplete({
+      method: 'card',
+      placanoSStripe: true,
+      total: p.znesekCenti / 100,
+      subtotal: total,
+      discount_amount: popust,
+      tip: napitnina,
+      furs: true,
+      kitchenNumber: kuhinjskaStevilka,
+      buyer: naPodjetje ? { name: kupec.name.trim(), address: kupec.address.trim(), tax_number: kupec.tax.replace(/[^0-9]/g, '') } : null,
+      eor: r.eor || null,
+      zoi: r.zoi || null,
+      issuedAt: r.issuedAt || null,
+      orderId,
+      invoiceNumber: r.invoiceNumber || `RAC-${orderId ? orderId.slice(-5).toUpperCase() : ''}`,
+      org: orgInfo ? {
+        name: orgInfo.name, address: orgInfo.address, post_code: orgInfo.post_code, city: orgInfo.city,
+        tax_number: orgInfo.tax_number, vat_registered: orgInfo.vat_registered,
+      } : null,
+      premiseId: premiseInfo?.premise_id || '',
+      deviceId: deviceInfo?.device_id || 'RACUNKO01',
+      cashierName: auth?.user?.name || '',
+      lines: cart.map(l => ({
+        name: l.name,
+        qty: l.qty,
+        unitPrice: (() => { const b = l.price + (l.mods || []).reduce((s, m) => s + (m.delta || 0), 0); return l.happyHourApplied ? b * (1 - Number(l.happyHourPct ?? 20) / 100) : b })(),
+        unit_price: (() => { const b = l.price + (l.mods || []).reduce((s, m) => s + (m.delta || 0), 0); return l.happyHourApplied ? b * (1 - Number(l.happyHourPct ?? 20) / 100) : b })(),
+        vat_rate: l.vat_rate ?? 22,
+      })),
+    })
+  }
+
+  /** Po preklicu: narocilo ostane odprto za nov poskus, popust/napitnina/kupec se ponastavijo. */
+  async function poPreklicuStripe() {
+    setStripePlacilo(null)
+    const ref = stripeNarociloRef.current
+    if (ref) {
+      await createClient().from('orders').update({
+        tip_amount: 0, discount_pct: 0, discount_fixed: 0,
+        buyer_name: null, buyer_address: null, buyer_tax_number: null,
+      }).eq('id', ref).eq('status', 'open')
+    }
+  }
+
+  /** Zapri okno. Narocilo brez mize, pripravljeno le za Stripe, ne sme ostati odprto. */
+  async function zapriOkno() {
+    if (processing) return
+    const ref = stripeNarociloRef.current
+    stripeNarociloRef.current = null
+    if (ref && !activeTable?.id) {
+      try {
+        const { data: o } = await createClient().from('orders').select('status').eq('id', ref).maybeSingle()
+        if (o?.status === 'open') {
+          await pos.orders.replaceLines(ref, [])
+          await createClient().from('orders').update({ status: 'cancelled' }).eq('id', ref).eq('status', 'open')
+        }
+      } catch (e) { console.warn('Pripravljenega narocila ni bilo mogoce zapreti:', e) }
+    }
+    onCancel()
+  }
+
   if (!open) return null
   return (
-    <Modal open={open} onClose={processing ? undefined : onCancel} width={620}>
-      <ModalHeader title="Zaključi račun" onClose={onCancel}/>
+    <Modal open={open} onClose={processing ? undefined : zapriOkno} width={620}>
+      <ModalHeader title="Zaključi račun" onClose={zapriOkno}/>
       <div className="pos-placilo-mreza" style={{ display:'grid', gridTemplateColumns:'1fr 220px' }}>
         <div style={{ padding:22, display:'flex', flexDirection:'column', gap:16 }}>
           <div>
@@ -1726,6 +1932,9 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
                 </button>
               ))}
             </div>
+            {/* PRELET 357: placilo s Stripe prek QR kode */}
+            <StripeIzbira izbrano={method === 'stripe'} onIzberi={() => { setMethod('stripe'); setCardConfirmed(false) }}
+              stanje={stripe} znesek={finalTotal} T={T}/>
           </div>
           {/* UNOVCENJE KARTE OBISKOV (21.8.2026) */}
           {method === 'pkg' && (
@@ -1918,7 +2127,8 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
       </div>
       <div className="pos-placilo-noga" style={{ padding:'12px 22px 20px', borderTop:'1px solid rgba(0,0,0,0.06)', display:'flex', alignItems:'center', gap:10 }}>
         <label style={{ display:'flex', alignItems:'center', gap:7, fontSize:12, fontWeight:500, color:T.muted, cursor:'pointer' }}>
-          <input type="checkbox" checked={furs} onChange={e => setFurs(e.target.checked)} disabled={processing} style={{ accentColor:T.accent, width:15, height:15 }}/>
+          {/* PRELET 357: racun, placan s Stripe, se VEDNO davcno potrdi. */}
+          <input type="checkbox" checked={furs || method === 'stripe'} onChange={e => setFurs(e.target.checked)} disabled={processing || method === 'stripe'} style={{ accentColor:T.accent, width:15, height:15 }}/>
           Davčno potrdi (FURS)
         </label>
         {/* PRELET 175: racun na podjetje. Davcna gre na listek IN v prijavo
@@ -1928,7 +2138,7 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
           Račun na podjetje
         </label>
         <div className="pos-placilo-gumbi" style={{ marginLeft:'auto', display:'flex', gap:8 }}>
-          <button onClick={onCancel} disabled={processing} style={{ padding:'10px 14px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'1px solid rgba(0,0,0,0.12)', background:'transparent', fontWeight:600, fontSize:13, opacity: processing ? 0.4 : 1 }}>Prekliči</button>
+          <button onClick={zapriOkno} disabled={processing} style={{ padding:'10px 14px', borderRadius:9, cursor:'pointer', fontFamily:'inherit', border:'1px solid rgba(0,0,0,0.12)', background:'transparent', fontWeight:600, fontSize:13, opacity: processing ? 0.4 : 1 }}>Prekliči</button>
           {/* DODANO (22.8.2026): gumb je ostal videti aktiven tudi, kadar
               unovcenje ni mogoce (stranka brez kartice) - napaka se je pokazala
               sele PO kliku. Zdaj je onemogocen in pove, zakaj. */}
@@ -1945,12 +2155,19 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
                 style={{ padding:'10px 22px', borderRadius:9, cursor: processing ? 'wait' : zaklenjen ? 'not-allowed' : 'pointer', fontFamily:'inherit', border:'none', background: zaklenjen && !processing ? '#B8B4AC' : T.accent, color:'#fff', fontWeight:700, fontSize:14, display:'flex', alignItems:'center', gap:6, opacity: processing ? 0.7 : 1 }}>
                 {processing ? '⏳ Obdelujem...'
                   : nedovoljeno ? nedovoljeno
+                  : method === 'stripe' ? <>📱 Pokaži QR kodo {eur(finalTotal)}</>
                   : <><KI name="check" size={16}/> Zaključi {eur(finalTotal)}</>}
               </button>
             )
           })()}
         </div>
       </div>
+      {stripePlacilo && (
+        <StripeQrZaslon key={stripePlacilo.id} placilo={stripePlacilo} T={T}
+          onPlacano={zakljuciStripe}
+          onPreklici={poPreklicuStripe}
+          onNovaKoda={() => { setStripePlacilo(null); zacniStripe() }}/>
+      )}
     </Modal>
   )
 }
@@ -9036,6 +9253,17 @@ function VoidModal({ order, lines, payment, posData, auth, onClose, onVoided }) 
   const [saving, setSaving] = React.useState(false)
   const [done, setDone] = React.useState(false)
   const [error, setError] = React.useState('')
+  // PRELET 357: racun, placan s Stripe - ob stornu ponudimo vracilo prek Stripe.
+  const [stripeVracilo, setStripeVracilo] = React.useState<{ stripe: boolean; status?: string; znesekCenti?: number } | null>(null)
+  const [vrniPrekStripe, setVrniPrekStripe] = React.useState(true)
+  const [stripeIzid, setStripeIzid] = React.useState<string | null>(null)
+  React.useEffect(() => {
+    let velja = true
+    klicStripe('/api/pos/stripe/vracilo?order_id=' + order.id)
+      .then(r => { if (velja && r.ok) setStripeVracilo(r.data) })
+      .catch(() => {})
+    return () => { velja = false }
+  }, [order.id])
 
   async function handleVoid() {
     // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
@@ -9096,6 +9324,17 @@ function VoidModal({ order, lines, payment, posData, auth, onClose, onVoided }) 
       // POPRAVLJENO (16.8.2026): prej brez preverbe - ce oznaka storna spodleti,
       // je uporabnik vseeno videl potrdilo, racun pa je ostal veljaven.
       if (voidErr) throw new Error('Storna ni bilo mogoče zabeležiti: ' + voidErr.message)
+
+      // PRELET 357: vracilo denarja prek Stripe (storno pri FURS je ze opravljen
+      // zgoraj po obstojecem postopku). Neuspeh storna ne razveljavi - povemo.
+      if (stripeVracilo?.stripe && stripeVracilo.status === 'placano' && vrniPrekStripe) {
+        const vr = await klicStripe('/api/pos/stripe/vracilo', { order_id: order.id })
+        if (vr.ok) setStripeIzid('Denar je vrnjen stranki prek Stripe.')
+        else {
+          setStripeIzid(null)
+          alert('Račun je storniran, VRAČILO prek Stripe pa ni uspelo.\n\n' + (vr.data.error || '') + '\n\nVračilo izvedite v Stripe nadzorni plošči (Nastavitve → Plačila s kartico).')
+        }
+      }
 
       // 4. VRNI ZALOGO (21.8.2026)
       //
@@ -9198,6 +9437,7 @@ function VoidModal({ order, lines, payment, posData, auth, onClose, onVoided }) 
           <div style={{ textAlign:'center', padding:24 }}>
             <div style={{ fontSize:40, marginBottom:8 }}>✅</div>
             <div style={{ fontSize:16, fontWeight:700 }}>Račun storniran</div>
+            {stripeIzid && <div data-testid="storno-stripe-vrnjeno" style={{ fontSize:13, color:T.accent, marginTop:6 }}>{stripeIzid}</div>}
           </div>
         ) : (<>
           <div style={{ background:'rgba(168,50,50,0.08)', border:'1px solid rgba(168,50,50,0.2)', borderRadius:10, padding:'12px 14px' }}>
@@ -9217,6 +9457,19 @@ function VoidModal({ order, lines, payment, posData, auth, onClose, onVoided }) 
               <span>Skupaj:</span><span>€{Number(order.total).toFixed(2)}</span>
             </div>
           </div>
+
+          {stripeVracilo?.stripe && (
+            <div data-testid="storno-stripe" style={{ background:T.accentSoft, borderRadius:10, padding:'10px 14px', fontSize:12, lineHeight:1.5 }}>
+              {stripeVracilo.status === 'vrnjeno' ? (
+                <>💳 Račun je bil plačan s Stripe — denar je <strong>že vrnjen</strong>.</>
+              ) : (
+                <label style={{ display:'flex', gap:8, alignItems:'flex-start', cursor:'pointer' }}>
+                  <input type="checkbox" checked={vrniPrekStripe} onChange={e => setVrniPrekStripe(e.target.checked)} style={{ accentColor:T.accent, width:16, height:16, marginTop:1 }}/>
+                  <span>💳 Račun je bil plačan s Stripe. <strong>Vrni €{((stripeVracilo.znesekCenti || 0) / 100).toFixed(2)} stranki prek Stripe</strong> (na isto kartico, v 5–10 dneh).</span>
+                </label>
+              )}
+            </div>
+          )}
 
           <div>
             <div style={{ fontSize:12, fontWeight:600, marginBottom:6 }}>Razlog storna</div>

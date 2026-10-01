@@ -17,6 +17,7 @@ import IntegracijeSekcija from '@/components/nastavitve/Integracije'
 import DvostopenjskaPrijava from '@/components/DvostopenjskaPrijava'
 import EmailSkeniranjeSekcija from '@/components/nastavitve/EmailSkeniranje'
 import Logotip from '@/components/nastavitve/Logotip'
+import PlacilaStripeSekcija from '@/components/nastavitve/PlacilaStripe'
 import posthog from 'posthog-js'
 import UpgradeButton from '@/components/UpgradeButton'
 import ManageSubscriptionButton from '@/components/ManageSubscriptionButton'
@@ -53,6 +54,8 @@ const SECTIONS = [
   { id: 'ddv',          icon: '📊', label: 'DDV & prispevki',    desc: 'DDV status, razred' },
   { id: 'banka',        icon: '🏦', label: 'Bančni podatki',     desc: 'IBAN, BIC/SWIFT' },
   { id: 'blagajna',     icon: '🧾', label: 'Davčna blagajna',    desc: 'FURS, certifikat' },
+  // PRELET 357: placila strank s kartico prek Stripe Connect.
+  { id: 'placila',      icon: '💳', label: 'Plačila s kartico',  desc: 'Stripe — QR v blagajni, zahtevki' },
   { id: 'ekipa',        icon: '👥', label: 'Ekipa',              desc: 'Uporabniki, dostop' },
   // PRELET 231: razdelek zdaj vsebuje tudi dvostopenjsko prijavo.
   { id: 'geslo',        icon: '🔐', label: 'Prijava & varnost',  desc: 'Geslo in dvostopenjska prijava' },
@@ -677,6 +680,7 @@ export default function NastavitevPage() {
 
         {/* RAZDELKI, KI SO BILI PREJ SVOJE STRANI (19.8.2026) */}
         {activeSection === 'blagajna'    && <BlagajnaSekcija />}
+        {activeSection === 'placila'     && <PlacilaStripeSekcija />}
         {activeSection === 'ekipa'       && <EkipaSekcija />}
         {/* Portal racunovodje ni nastavitev, ampak LOCEN portal, kamor se
             prijavi racunovodja. Zato ostaja svoja stran - tu je samo vstop. */}
