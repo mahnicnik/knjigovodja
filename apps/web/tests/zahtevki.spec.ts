@@ -142,8 +142,9 @@ function pomnilnik(zacetek: ZahtevekVrstica, o: { fursUspe?: boolean; zamik?: nu
   const s: ZahtevkiShramba = {
     async preberi() { await pocakaj(); return { ...z } },
     async oznaciPlacan(_id, p) {
-      if (z.status !== 'poslan') return false
-      z.status = 'placan'; z.placano_ob = new Date().toISOString(); z.checkout_session_id = p.sessionId; z.payment_intent_id = p.paymentIntentId
+      const pravocasno = !!p.placanoOb && !!z.velja_do && p.placanoOb <= z.velja_do
+      if (!(z.status === 'poslan' || (z.status === 'potekel' && pravocasno))) return false
+      z.status = 'placan'; z.placano_ob = p.placanoOb || new Date().toISOString(); z.checkout_session_id = p.sessionId; z.payment_intent_id = p.paymentIntentId
       return true
     },
     async zakleni() {
@@ -269,4 +270,24 @@ test('Zivi nacin: brez pravih placil v predstavitvi in s FURS testnim okoljem', 
   expect(zivoNiDovoljeno({ furs_test_mode: true }, true)).toMatch(/testnem okolju/)
   expect(zivoNiDovoljeno({ furs_demo_mode: false, furs_test_mode: false }, true)).toBeNull()
   expect(zivoNiDovoljeno({ furs_demo_mode: true }, false)).toBeNull() // testni kljuc: demo dovoljen
+})
+
+// ═══════════════════ M3 (prelet 369): ODLOCA CAS PLACILA ═══════════════════
+
+test('M3: placano pred velja_do, webhook po izteku (cron ze oznacil potekel) - racun se izda, brez vracila', async () => {
+  const m = pomnilnik(zahtevek({ status: 'potekel', velja_do: '2026-10-01T10:00:00.000Z' }))
+  const izid = await obdelajPlacanZahtevekZ(m.s, 'z1', { ...placilo, placanoOb: '2026-10-01T09:59:30.000Z' })
+  expect(izid.stanje).toBe('izdan')
+  expect(m.vracila).toHaveLength(0)
+  expect(m.racuni).toEqual(['r1'])
+  expect(m.z.status).toBe('placan')
+  expect(m.z.placano_ob).toBe('2026-10-01T09:59:30.000Z')
+})
+
+test('M3: placano PO velja_do - racuna ni, denar se vrne', async () => {
+  const m = pomnilnik(zahtevek({ status: 'potekel', velja_do: '2026-10-01T10:00:00.000Z' }))
+  const izid = await obdelajPlacanZahtevekZ(m.s, 'z1', { ...placilo, placanoOb: '2026-10-01T10:00:01.000Z' })
+  expect(izid.stanje).toBe('preskoceno')
+  expect(m.racuni).toHaveLength(0)
+  expect(m.vracila).toEqual(['pi_test_1'])
 })

@@ -80,7 +80,8 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: izid.napaka }, { status: 500 })
           }
         } else if (md.vrsta === 'zahtevek' && md.zahtevek_id) {
-          izid = await obdelajPlacanZahtevek(admin, md.zahtevek_id, { sessionId: sess.id, paymentIntentId: pi, osnova: new URL(req.url).origin })
+          // PRELET 369 (M3): cas placila = cas dogodka (ne cas dostave webhooka).
+          izid = await obdelajPlacanZahtevek(admin, md.zahtevek_id, { sessionId: sess.id, paymentIntentId: pi, placanoOb: new Date(event.created * 1000).toISOString(), osnova: new URL(req.url).origin })
           if (izid.stanje === 'napaka') return NextResponse.json({ error: izid.napaka }, { status: 500 })
         }
         break

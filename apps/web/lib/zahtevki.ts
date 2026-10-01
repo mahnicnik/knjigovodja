@@ -180,6 +180,7 @@ export type ZahtevekVrstica = {
   service_date_to: string | null
   header_text: string | null
   status: 'poslan' | 'placan' | 'potekel' | 'preklican'
+  velja_do?: string | null
   checkout_session_id: string | null
   payment_intent_id: string | null
   invoice_id: string | null
@@ -215,6 +216,12 @@ export interface ZahtevkiShramba {
 /** Placilo iz Stripe: session, PaymentIntent in cas placila (ISO). */
 export type PodatkiPlacila = { sessionId: string; paymentIntentId: string | null; placanoOb?: string | null }
 
+/** Ali je bilo placilo opravljeno do vkljucno velja_do (M3). */
+export function jePlacanPravocasno(veljaDo: string | null | undefined, placanoOb: string | null | undefined) {
+  if (!veljaDo || !placanoOb) return false
+  return new Date(placanoOb).getTime() <= new Date(veljaDo).getTime()
+}
+
 /** Cas placila sessiona: Stripe ga v sessionu ne hrani - velja cas preverbe. */
 export function casPlacilaSessiona(_sess: any, zdaj = Date.now()) {
   return new Date(zdaj).toISOString()
@@ -235,7 +242,11 @@ export async function obdelajPlacanZahtevekZ(
   const z = await s.preberi(zahtevekId)
   if (!z) return { stanje: 'preskoceno', napaka: 'Zahtevek ne obstaja' }
   if (z.invoice_id && z.racun_poslan_ob) return { stanje: 'ze', invoiceId: z.invoice_id }
-  if (!z.invoice_id && (z.status === 'preklican' || z.status === 'potekel')) {
+  // PRELET 369 (M3): o poteku odloca CAS PLACILA, ne cas prihoda webhooka.
+  // Placilo pred velja_do je veljavno, tudi ce je cron zahtevek medtem oznacil
+  // kot potekel.
+  const pravocasno = jePlacanPravocasno(z.velja_do, o.placanoOb)
+  if (!z.invoice_id && (z.status === 'preklican' || (z.status === 'potekel' && !pravocasno))) {
     await s.vrniPlaciloBrezRacuna(z, o.paymentIntentId, z.status === 'preklican'
       ? 'Stranka je plačala že preklican zahtevek — denar je bil samodejno vrnjen, račun ni bil izdan.'
       : 'Stranka je plačala potekel zahtevek — denar je bil samodejno vrnjen, račun ni bil izdan.')
@@ -305,7 +316,10 @@ export function supabaseZahtevki(
         placano_ob: p.placanoOb || new Date().toISOString(),
         checkout_session_id: p.sessionId,
         ...(p.paymentIntentId ? { payment_intent_id: p.paymentIntentId } : {}),
-      }).eq('id', id).eq('status', 'poslan').select('id')
+      }).eq('id', id)
+        // PRELET 369 (M3): tudi 'potekel', ce je bilo placano do velja_do.
+        .or(p.placanoOb ? `status.eq.poslan,and(status.eq.potekel,velja_do.gte.${p.placanoOb})` : 'status.eq.poslan')
+        .select('id')
       return !!data && data.length > 0
     },
     async zakleni(id) {
