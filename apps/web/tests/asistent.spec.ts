@@ -68,7 +68,7 @@ test('stalni del poziva je determinističen in brez spremenljivih podatkov (prom
   expect(bloki1[0].cache_control).toEqual({ type: 'ephemeral', ttl: '1h' })
   expect(bloki1[1].cache_control).toBeUndefined()
   expect(bloki2[1].text).toContain('blagajnik')
-  expect(MODEL_ASISTENTA).toBe('claude-opus-5-5')
+  expect(MODEL_ASISTENTA).toBe('claude-sonnet-5-5')
 })
 
 test('kontekst strani usmeri na prave dokumente', () => {

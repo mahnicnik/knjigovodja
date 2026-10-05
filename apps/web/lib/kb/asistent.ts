@@ -16,7 +16,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import { BAZA_ZNANJA, type KbDokument } from './baza.generated'
 
-export const MODEL_ASISTENTA = 'claude-opus-5-5'
+export const MODEL_ASISTENTA = 'claude-sonnet-5-5'
 
 const NAVODILA = `Si Računko asistent – pomočnik za UPORABO aplikacije Računko (računko.si). Odgovarjaš na vprašanja, kje in kako se v aplikaciji kaj naredi, nastavi, doda ali popravi.
 
