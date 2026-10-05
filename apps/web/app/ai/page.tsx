@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
-import { izracunajDdv, obdobjeZaPrijavo, oznakaObdobja, shemaObracuna } from '@/lib/ddv'
+import { izracunajDdv, obdobjeZaPrijavo, oznakaObdobja, shemaObracuna, jeMesecOddaje } from '@/lib/ddv'
 
 
 interface Message {
@@ -106,6 +106,7 @@ export default function AIPage() {
       expenses,
       vatDue: ddv?.obveznost ?? 0,
       vatDueObdobje: oznakaObdobja(ddvObdobje),
+      ddvMesecOddaje: jeMesecOddaje(now, shemaObracuna(o.vat_period)),
       unpaidCount: unpaid.length,
       unpaidAmount: unpaid.reduce((s: number, i: any) => s + Number(i.amount_total), 0),
       overdueCount: overdue.length,
@@ -168,8 +169,8 @@ export default function AIPage() {
 
   const now = new Date()
   const daysUntil15 = 15 - now.getDate()
-  const month = now.getMonth()
-  const ddvMonths = [4,7,10,1]
+  // Revizija K3: mesec oddaje DDV-O iz lib/ddv (tudi mesecna shema).
+  const jeMesecDdvO = jeMesecOddaje(now, shemaObracuna(org?.vat_period))
 
   return (
     <AppLayout org={org}>
@@ -197,7 +198,7 @@ export default function AIPage() {
             {orgData.unpaidCount > 0 && <span style={{ color:'#854F0B' }}>⏳ Neplačano: <strong>€{orgData.unpaidAmount?.toFixed(0)}</strong></span>}
             {orgData.overdueCount > 0 && <span style={{ color:'#A32D2D' }}>⚠️ Zamude: <strong>{orgData.overdueCount}</strong></span>}
             {daysUntil15 >= 0 && daysUntil15 <= 7 && <span style={{ color:'#854F0B' }}>⏰ Prispevki: <strong>čez {daysUntil15} dni</strong></span>}
-            {ddvMonths.includes(month+1) && orgData.vat_registered && <span style={{ color:'#A32D2D' }}>🔴 <strong>DDV-O ta mesec!</strong></span>}
+            {jeMesecDdvO && orgData.vat_registered && <span style={{ color:'#A32D2D' }}>🔴 <strong>DDV-O za {orgData.vatDueObdobje} ta mesec!</strong></span>}
           </div>
         )}
 

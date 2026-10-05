@@ -9,8 +9,15 @@ import {
   razcleniIzdanRacun,
   razcleniNarocilo,
   lokalniDanIzCasa,
+  obdobjeZaPrijavo,
+  tekoceObdobje,
+  rokOddaje,
+  jeMesecOddaje,
+  oznakaObdobja,
+  razponObdobja,
   type DdvPodatki,
 } from '../lib/ddv'
+import { vatPeriodsInWindow } from '../lib/cash-flow'
 import { generateAccountingXLSX } from '../lib/accounting-export'
 import { sestaviDdvOXml } from '../lib/ddv-o'
 import { VAT_RATES } from '../lib/tax-constants'
@@ -235,6 +242,76 @@ test('K2: mesecna shema - XML nosi Mesec namesto Kvartal', () => {
   expect(polje(xml, 'Kvartal')).toBeNull()
   expect(polje(xml, 'ObdobjeOd')).toBe('2026-09-01')
   expect(polje(xml, 'P53')).toBe('24.40')
+})
+
+// ─────────────── K3: opomnik roka DDV-O ───────────────
+
+const dan = (l: number, m: number, d: number) => new Date(l, m - 1, d, 10, 0, 0)
+
+test('K3: oktobra se prijavi Q3 (ne Q4); rok 31.10.', () => {
+  const o = obdobjeZaPrijavo(dan(2026, 10, 5), 'quarterly')
+  expect(o).toEqual({ leto: 2026, cetrtletje: 3 })
+  expect(oznakaObdobja(o)).toBe('Q3 2026')
+  expect(rokOddaje(o)).toBe('2026-10-31')
+  expect(tekoceObdobje(dan(2026, 10, 5), 'quarterly')).toEqual({ leto: 2026, cetrtletje: 4 })
+})
+
+test('K3: januarja se prijavi Q4 PRETEKLEGA leta, rok 31.1.', () => {
+  const o = obdobjeZaPrijavo(dan(2027, 1, 10), 'quarterly')
+  expect(o).toEqual({ leto: 2026, cetrtletje: 4 })
+  expect(rokOddaje(o)).toBe('2027-01-31')
+})
+
+test('K3: april -> Q1, julij -> Q2', () => {
+  expect(obdobjeZaPrijavo(dan(2026, 4, 2), 'quarterly')).toEqual({ leto: 2026, cetrtletje: 1 })
+  expect(obdobjeZaPrijavo(dan(2026, 7, 2), 'quarterly')).toEqual({ leto: 2026, cetrtletje: 2 })
+  expect(rokOddaje({ leto: 2026, cetrtletje: 1 })).toBe('2026-04-30')
+})
+
+test('K3: opomnik samo v mesecu oddaje (jan, apr, jul, okt) pri cetrtletni shemi', () => {
+  const meseci = Array.from({ length: 12 }, (_, i) => i + 1).filter(m => jeMesecOddaje(dan(2026, m, 15), 'quarterly'))
+  expect(meseci).toEqual([1, 4, 7, 10])
+})
+
+test('K3: mesecna shema - vsak mesec se prijavi PRETEKLI mesec', () => {
+  expect(obdobjeZaPrijavo(dan(2026, 10, 5), 'monthly')).toEqual({ leto: 2026, mesec: 9 })
+  expect(obdobjeZaPrijavo(dan(2027, 1, 5), 'monthly')).toEqual({ leto: 2026, mesec: 12 })
+  expect(rokOddaje({ leto: 2026, mesec: 12 })).toBe('2027-01-31')
+  expect(Array.from({ length: 12 }, (_, i) => jeMesecOddaje(dan(2026, i + 1, 15), 'monthly')).every(Boolean)).toBe(true)
+})
+
+test('K3: test s.p. 5.10.2026 - opomnik kaze 123,37 (Q3), tekoca ocena Q4 je locena (0,00)', () => {
+  const danes = dan(2026, 10, 5)
+  const zaPrijavo = izracunajDdvIzPodatkov(testSp, obdobjeZaPrijavo(danes, 'quarterly'))
+  const tekoce = izracunajDdvIzPodatkov(testSp, tekoceObdobje(danes, 'quarterly'))
+  expect(zaPrijavo.obveznost).toBe(123.37)
+  expect(tekoce.obveznost).toBe(0)
+})
+
+test('K3: napoved pretoka (vatPeriodsInWindow) in opomnik obravnavata ISTO obdobje in rok', () => {
+  const danes = dan(2026, 10, 5)
+  const opomnik = obdobjeZaPrijavo(danes, 'quarterly')
+  const { od, do: konec } = razponObdobja(opomnik)
+  const vNapovedi = vatPeriodsInWindow(danes, 'quarterly')
+  expect(vNapovedi).toContainEqual(expect.objectContaining({ start: od, end: konec, deadline: rokOddaje(opomnik), ended: true }))
+  expect(vatPeriodsInWindow(dan(2026, 10, 5), 'monthly')).toContainEqual(expect.objectContaining({ start: '2026-09-01', end: '2026-09-30', deadline: '2026-10-31' }))
+})
+
+test('K3: nadzorna plosca in AI ne racunata cetrtletja za oddajo po svoje', () => {
+  for (const pot of ['app/dashboard/page.tsx', 'app/ai/page.tsx']) {
+    const vir = readFileSync(join(__dirname, '..', pot), 'utf8')
+    expect(vir).not.toMatch(/\[\s*4\s*,\s*7\s*,\s*10\s*,\s*1\s*\]/)
+    expect(vir).not.toMatch(/const ddvQuarter\s*=/)
+    expect(vir).toMatch(/jeMesecOddaje/)
+  }
+  // opomnik prikaze znesek za PRIJAVO, ne tekoce ocene
+  const plosca = readFileSync(join(__dirname, '..', 'app/dashboard/page.tsx'), 'utf8')
+  const ddvVrstice = plosca.split('\n').filter(v => /name: `DDV-O/.test(v))
+  expect(ddvVrstice.length).toBe(2)
+  for (const v of ddvVrstice) {
+    expect(v).toMatch(/data\.vatZaPrijavo/)
+    expect(v).not.toMatch(/data\.vatDue\b/)
+  }
 })
 
 // ─────────────── K1: ista stevilka v izvozu za racunovodjo ───────────────

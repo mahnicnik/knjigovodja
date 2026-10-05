@@ -9,7 +9,8 @@ import LegalUpdatesWidget from '@/components/LegalUpdatesWidget'
 import { calculateNetIncome, projectMonthlyRevenue, checkNormirancePragRisk, getTaxSystemLabel, type LegalForm, type TaxSystem } from '@/lib/tax-calculator'
 import { generateCashFlow, formatEur, vatPeriodsInWindow, estimateDailyIncomeByWeekday, detectRecurringExpenses, type OpenInvoice, type Obligation, type RecurringExpense } from '@/lib/cash-flow'
 import { getActiveMembership } from '@/lib/active-org'
-import { naloziDdvPodatke, izracunajDdvIzPodatkov, razponObdobja, tekoceObdobje, shemaObracuna } from '@/lib/ddv'
+import { formatEurNumber } from '@/lib/format'
+import { naloziDdvPodatke, izracunajDdvIzPodatkov, razponObdobja, tekoceObdobje, shemaObracuna, obdobjeZaPrijavo, oznakaObdobja, rokOddaje, jeMesecOddaje } from '@/lib/ddv'
 import OrgSwitcher from '@/components/OrgSwitcher'
 import AppLayout from '@/components/AppLayout'
 
@@ -244,7 +245,7 @@ export default function DashboardPage() {
   const [virPrihodka, setVirPrihodka] = useState<'skupaj' | 'portal' | 'blagajna' | 'drugo'>('skupaj')
 
   const [data, setData] = useState({
-    revenue: 0, expenses: 0, vatDue: 0, kpoReceivedMonth: 0,
+    revenue: 0, expenses: 0, vatDue: 0, vatZaPrijavo: 0, kpoReceivedMonth: 0,
     // PRELET 217: prihodek po virih (portal / blagajna / drugo).
     prihodekPortal: 0, prihodekBlagajna: 0, prihodekDrugo: 0,
     unpaidCount: 0, unpaidAmount: 0,
@@ -295,9 +296,16 @@ export default function DashboardPage() {
   const daysUntil15 = 20 - dayOfMonth
   const daysUntil25 = 25 - dayOfMonth
   const daysUntilEndMonth = new Date(year,month+1,0).getDate() - dayOfMonth
-  const ddvMonths = [4,7,10,1] // jan, apr, jul, oct (kvartal sledeč mesec)
-  const showDDVAlert = ddvMonths.includes(month+1)
-  const ddvQuarter = Math.ceil((month+1)/3)
+  // POPRAVLJENO (revizija K3, oktober 2026): opomnik za DDV-O se nanasa na
+  // PRETEKLO, zakljuceno obdobje - rok 31.10. velja za Q3, ne za Q4. Prej:
+  // ddvQuarter = ceil((mesec+1)/3), torej oktobra "DDV-O Q4" z zneskom Q4 do
+  // danes. Obdobje, rok in mesec oddaje doloca lib/ddv (tudi mesecna shema).
+  const ddvShema = shemaObracuna(org?.vat_period)
+  const ddvObdobjeOddaje = obdobjeZaPrijavo(now, ddvShema)
+  const ddvOznakaOddaje = oznakaObdobja(ddvObdobjeOddaje)
+  const ddvRokOddaje = rokOddaje(ddvObdobjeOddaje)
+  const showDDVAlert = jeMesecOddaje(now, ddvShema)
+  const daysUntilDdvRok = Math.round((new Date(`${ddvRokOddaje}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) / 86400000)
 
   /* ============ THEME / DENSITY load from localStorage ============ */
   useEffect(() => {
@@ -576,13 +584,17 @@ export default function DashboardPage() {
       // Podatke nalozimo ENKRAT za vsa obdobja, ki jih ta stran prikaze
       // (tekoce obdobje + obdobja z rokom placila v naslednjih 30 dneh).
       // Obveznost je lahko NEGATIVNA (vracilo) - ne skrivamo je.
+      // Revizija K3: posebej tudi obdobje ZA PRIJAVO (zadnje zakljuceno), ki ga
+      // prikaze opomnik roka - lociti od tekocega ("ocena do danes").
       const shema = shemaObracuna(o.vat_period)
       const obdobjaRokov = o.vat_registered ? vatPeriodsInWindow(now, shema) : []
       const tekoce = razponObdobja(tekoceObdobje(now, shema))
-      const ddvOd = [tekoce.od, ...obdobjaRokov.map(p => p.start)].sort()[0]
-      const ddvDo = [tekoce.do, ...obdobjaRokov.map(p => p.end)].sort().slice(-1)[0]
+      const zaPrijavo = razponObdobja(obdobjeZaPrijavo(now, shema))
+      const ddvOd = [tekoce.od, zaPrijavo.od, ...obdobjaRokov.map(p => p.start)].sort()[0]
+      const ddvDo = [tekoce.do, zaPrijavo.do, ...obdobjaRokov.map(p => p.end)].sort().slice(-1)[0]
       const ddvPodatki = o.vat_registered ? await naloziDdvPodatke(supabase, o.id, ddvOd, ddvDo) : null
       const ddvTekoce = ddvPodatki ? izracunajDdvIzPodatkov(ddvPodatki, tekoceObdobje(now, shema)) : null
+      const ddvZaPrijavo = ddvPodatki ? izracunajDdvIzPodatkov(ddvPodatki, obdobjeZaPrijavo(now, shema)) : null
       // PRELET 341: DDV po davcnih obdobjih, katerih rok placila pade v
       // naslednjih 30 dni (rok = zadnji dan meseca po koncu obdobja).
       // Vracilo (negativen znesek) napoved pretoka sama izpusti - ni odliv.
@@ -600,7 +612,10 @@ export default function DashboardPage() {
         revenue, expenses, kpoReceivedMonth,
         // PRELET 217: razclenitev za preklop med viri.
         prihodekPortal, prihodekBlagajna, prihodekDrugo,
+        // Tekoce, se odprto obdobje - le ocena do danes.
         vatDue: ddvTekoce?.obveznost ?? 0,
+        // Zadnje zakljuceno obdobje - to se prijavi na DDV-O do roka (K3).
+        vatZaPrijavo: ddvZaPrijavo?.obveznost ?? 0,
         unpaidCount: unpaid.length,
         unpaidAmount: unpaid.reduce((s:number,i:any) => s + Number(i.amount_total), 0),
         overdueAmount: overdue.reduce((s:number,i:any) => s + Number(i.amount_total), 0),
@@ -744,13 +759,13 @@ export default function DashboardPage() {
       items.push({
         id: 'ddv',
         severity: 'info',
-        title: `DDV-O Q${ddvQuarter} čaka oddajo`,
+        title: `DDV-O ${ddvOznakaOddaje} čaka oddajo`,
         subtitle: 'Konec meseca',
         href: '/ddv/evidenca',
       })
     }
     return items
-  }, [data, daysUntil15, showDDVAlert, org, ddvQuarter])
+  }, [data, daysUntil15, showDDVAlert, org, ddvOznakaOddaje])
 
   const notificationCount = notifications.length
 
@@ -894,16 +909,18 @@ export default function DashboardPage() {
     if (data.hasEmployees) {
       candidates.push({ name: 'REK-1 + plača', amount: 0, days: daysUntil25, day: 25, href: '/rek1', emoji: '👥' })
     }
-    if (showDDVAlert && org?.vat_registered) {
-      candidates.push({ name: `DDV-O Q${ddvQuarter}`, amount: data.vatDue, days: daysUntilEndMonth, day: new Date(year,month+1,0).getDate(), href: '/ddv/evidenca', emoji: '🔢' })
+    // Znesek ZA PRIJAVO (preteklo obdobje), ne tekoca ocena (K3). Pri vracilu
+    // (negativna obveznost) ni kaj placati - UPN se ne ponudi.
+    if (showDDVAlert && org?.vat_registered && data.vatZaPrijavo > 0) {
+      candidates.push({ name: `DDV-O ${ddvOznakaOddaje}`, amount: data.vatZaPrijavo, days: daysUntilDdvRok, day: Number(ddvRokOddaje.slice(8, 10)), href: '/ddv/evidenca', emoji: '🔢' })
     }
     const upcoming = candidates.filter(c => c.days >= 0).sort((a,b) => a.days - b.days)
     return upcoming[0] || null
-  }, [daysUntil15, daysUntil25, daysUntilEndMonth, data.hasEmployees, showDDVAlert, org, data.vatDue, ddvQuarter, year, month])
+  }, [daysUntil15, daysUntil25, daysUntilEndMonth, data.hasEmployees, showDDVAlert, org, data.vatZaPrijavo, ddvOznakaOddaje, ddvRokOddaje, daysUntilDdvRok, year, month])
 
   /* ============ DEADLINES (right panel) ============ */
   const deadlines = useMemo(() => {
-    const list = [
+    const list: Array<{ name: string; date: string; amount: number; days: number; href: string; urgent: boolean; vracilo?: boolean }> = [
       { name: 'Prispevki s.p.',       date: `20. ${MONTHS_SHORT[month]}`, amount: Number(org?.contrib_piz||0)+Number(org?.contrib_zzzs||0)+Number(org?.contrib_zaposlovanje||0)+Number(org?.contrib_starsevstvo||0), days: daysUntil15, href: '/prispevki', urgent: daysUntil15 <= 7 && daysUntil15 >= 0 },
       { name: 'Akontacija dohodnine', date: `20. ${MONTHS_SHORT[month]}`, amount: Number(org?.contrib_akontacija || 0), days: daysUntil15, href: '/dohodnina', urgent: false }, // POPRAVLJENO 30.7.2026: prej trdo kodirano 84
     ]
@@ -911,10 +928,11 @@ export default function DashboardPage() {
       list.push({ name: 'REK-1 + plača', date: `25. ${MONTHS_SHORT[month]}`, amount: 0, days: daysUntil25, href: '/rek1', urgent: daysUntil25 <= 7 && daysUntil25 >= 0 })
     }
     if (showDDVAlert && org?.vat_registered) {
-      list.push({ name: `DDV-O Q${ddvQuarter}`, date: `Konec ${MONTHS_SHORT[month]}`, amount: data.vatDue, days: daysUntilEndMonth, href: '/ddv/evidenca', urgent: false })
+      // Oddaja je obvezna tudi pri vracilu - znesek se tedaj izpise kot vracilo.
+      list.push({ name: `DDV-O ${ddvOznakaOddaje}`, date: `Konec ${MONTHS_SHORT[month]}`, amount: data.vatZaPrijavo, days: daysUntilDdvRok, href: '/ddv/evidenca', urgent: false, vracilo: data.vatZaPrijavo < 0 })
     }
     return list.filter(d => d.days >= -2)
-  }, [month, daysUntil15, daysUntil25, daysUntilEndMonth, data, showDDVAlert, org, ddvQuarter])
+  }, [month, daysUntil15, daysUntil25, daysUntilEndMonth, data, showDDVAlert, org, ddvOznakaOddaje, daysUntilDdvRok])
 
   /* ============ HEADER greet ============ */
   const greet = useMemo(() => {
@@ -1082,7 +1100,7 @@ export default function DashboardPage() {
             <div>
               <div className="rk-focus-eyebrow">Fokus tedna · {dayOfMonth}.–{Math.min(dayOfMonth + 7, new Date(year,month+1,0).getDate())}. {MONTHS_SHORT[month]}</div>
               <div className="rk-focus-text">
-                {focus.name}{focus.amount > 0 ? <> (<b>€{focus.amount}</b>)</> : null} zapadejo <b>{focus.days === 0 ? 'danes' : focus.days === 1 ? 'jutri' : `čez ${focus.days} dni`}</b>. Vse je pripravljeno za UPN nakazilo.
+                {focus.name}{focus.amount > 0 ? <> (<b>€{formatEurNumber(focus.amount)}</b>)</> : null} zapadejo <b>{focus.days === 0 ? 'danes' : focus.days === 1 ? 'jutri' : `čez ${focus.days} dni`}</b>. Vse je pripravljeno za UPN nakazilo.
               </div>
             </div>
             <button className="rk-focus-cta" onClick={() => window.location.href='/prispevki'}>Plačaj zdaj →</button>
@@ -1502,7 +1520,8 @@ export default function DashboardPage() {
                       <div className="rk-dl-when">{d.date}</div>
                     </div>
                     <div>
-                      {d.amount > 0 && <div className="rk-dl-amt">€{d.amount}</div>}
+                      {d.amount > 0 && <div className="rk-dl-amt">€{formatEurNumber(d.amount)}</div>}
+                      {d.vracilo && <div className="rk-dl-amt">vračilo €{formatEurNumber(Math.abs(d.amount))}</div>}
                       <div className="rk-dl-countdown">
                         {d.days < 0 ? 'Zamuda' : d.days === 0 ? 'Danes' : `čez ${d.days} ${d.days === 1 ? 'dan' : 'dni'}`}
                       </div>
@@ -1675,7 +1694,7 @@ export default function DashboardPage() {
               <div className="rk-upn-eyebrow">UPN nakazilo · pripravljeno</div>
               <h3>{focus.name} — {MONTHS_LONG[month]} {year}</h3>
               <div className="rk-upn-fields">
-                <div className="rk-upn-field"><span className="l">Znesek</span><span className="v amount">€{focus.amount},00</span></div>
+                <div className="rk-upn-field"><span className="l">Znesek</span><span className="v amount">€{formatEurNumber(focus.amount)}</span></div>
                 <div className="rk-upn-field"><span className="l">Prejemnik</span><span className="v">FURS — Finančna uprava RS</span></div>
                 <div className="rk-upn-field"><span className="l">IBAN</span><span className="v iban">SI56 0110 0888 8000 030</span></div>
                 <div className="rk-upn-field"><span className="l">Sklic</span><span className="v iban">SI19 {org?.tax_number || '12345678'}-44008</span></div>

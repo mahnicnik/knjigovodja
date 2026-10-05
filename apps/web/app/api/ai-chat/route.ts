@@ -43,8 +43,11 @@ export async function POST(request: NextRequest) {
     const day = now.getDate()
     const months = ['januar','februar','marec','april','maj','junij','julij','avgust','september','oktober','november','december']
     const daysUntil15 = 15 - day
-    const ddvMonths = [4,7,10,1]
-    const isDdvMonth = ddvMonths.includes(month + 1)
+    // Revizija K3: mesec oddaje DDV-O izracuna odjemalec z lib/ddv (upošteva
+    // mesecno shemo); brez podatka ostane dosedanje cetrtletno pravilo.
+    const isDdvMonth = typeof orgData?.ddvMesecOddaje === 'boolean'
+      ? orgData.ddvMesecOddaje
+      : [4, 7, 10, 1].includes(month + 1)
 
     const systemPrompt = `Si izkušen slovenski računovodja in davčni svetovalec. Odgovarjaš SAMO v slovenščini. Si prijazen, jasen in praktičen kot dober računovodja.
 
@@ -72,7 +75,7 @@ NORMIRANI S.P. — NOV SISTEM OD 1.1.2026 (zakon ZPZR) — POZOR, TO SE JE SPREM
 
 ROKE TA MESEC (${months[month]}):
 - ${daysUntil15 > 0 ? `Prispevki in akontacija zapadejo čez ${daysUntil15} dni (15. ${months[month]})` : daysUntil15 === 0 ? 'DANES je rok za prispevke in akontacijo!' : 'Prispevki in akontacija so že zapadli!'}
-${isDdvMonth ? `- POZOR: DDV-O je treba oddati ta mesec!` : ''}
+${isDdvMonth ? `- POZOR: DDV-O${orgData?.vatDueObdobje ? ` za ${orgData.vatDueObdobje}` : ''} je treba oddati ta mesec!` : ''}
 
 ${orgData ? `PODATKI O STRANKI:
 - Podjetje: ${orgData.name}
