@@ -9,6 +9,7 @@ import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 import { formatEurNumber, idZaDdv } from '@/lib/format'
 import { naloziDdvPodatke, izracunajDdvIzPodatkov } from '@/lib/ddv'
+import DdvDolgPloscica from '@/components/DdvDolgPloscica'
 
 // POPRAVLJENO 30.7.2026 (audit): stari seznam razredov je imel MOCNO
 // zastarele vrednosti (razred 1 = 215 EUR/mes, privzeti razred 8 = 450
@@ -178,6 +179,7 @@ export default function LentniPregledPage() {
       invoices, receipts, kpo, employees, monthly,
       expensesByCategory, totalRevenue, totalExpenses,
       totalVatOut, totalVatIn, vatDue,
+      ddv: ddvLeta, // celoten rezultat - razclenitev na ploscici "DDV dolg letno"
       annualContributions, salaryExpense,
       taxableBase, adjustedBase, incomeTax, netIncome,
       generalRelief,
@@ -417,17 +419,14 @@ ${data.receipts.length > 0 ? `
               <div className="bg-white rounded-2xl border border-gray-100 p-5">
                 <div className="text-xs text-gray-500 mb-1">Letni prihodki</div>
                 <div className="text-xl font-semibold text-green-600">€{formatEurNumber(data.totalRevenue)}</div>
-                <div className="text-xs text-gray-400 mt-1">{data.invoices.length} računov</div>
+                <div className="text-xs text-gray-400 mt-1">{data.invoices.length} računov · brez DDV</div>
               </div>
               <div className="bg-white rounded-2xl border border-gray-100 p-5">
                 <div className="text-xs text-gray-500 mb-1">Letni odhodki</div>
                 <div className="text-xl font-semibold text-red-500">€{formatEurNumber(data.totalExpenses)}</div>
-                <div className="text-xs text-gray-400 mt-1">{data.receipts.length} stroškov</div>
+                <div className="text-xs text-gray-400 mt-1">{data.receipts.length} stroškov · brez DDV</div>
               </div>
-              <div className="bg-white rounded-2xl border border-gray-100 p-5">
-                <div className="text-xs text-gray-500 mb-1">DDV dolg letno</div>
-                <div className="text-xl font-semibold text-orange-500">€{formatEurNumber(data.vatDue)}</div>
-              </div>
+              <DdvDolgPloscica ddv={data.ddv} naslov="DDV dolg letno" oznakaObdobja={data.ddv.oznaka} />
             </div>
 
             {/* DDD povzetek */}

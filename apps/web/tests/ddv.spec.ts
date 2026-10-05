@@ -20,6 +20,7 @@ import {
 import { vatPeriodsInWindow } from '../lib/cash-flow'
 import { generateAccountingXLSX } from '../lib/accounting-export'
 import { sestaviDdvOXml } from '../lib/ddv-o'
+import { razclenitevDdv } from '../lib/ddv-razclenitev'
 import { VAT_RATES } from '../lib/tax-constants'
 import fiksturaTestSp from './fiksture/ddv-test-sp.json'
 
@@ -314,6 +315,45 @@ test('K3: nadzorna plosca in AI ne racunata cetrtletja za oddajo po svoje', () =
   }
 })
 
+// ─────────────── Razclenitev na ploscici "DDV dolg" (/kpo, /letni-pregled) ───────────────
+
+test('Razclenitev: test s.p. Q3 2026 - viri se sestejejo v glavno stevilko 123,37', () => {
+  const r = razclenitevDdv(izracunajDdvIzPodatkov(testSp, Q3_2026))
+  const ddv = (viri: { kljuc: string; ddv: number }[]) => Object.fromEntries(viri.map(v => [v.kljuc, v.ddv]))
+  expect(ddv(r.izstopni.viri)).toEqual({ izdaniRacuni: 151.4, blagajna: 3.88, kpo: 0 })
+  expect(ddv(r.vstopni.viri)).toEqual({ prejetiRacuni: 31.91, kpo: 0 })
+  expect(r.izstopni.skupaj).toBe(155.28)
+  expect(r.vstopni.skupaj).toBe(31.91)
+  expect(r.obveznost).toBe(123.37)
+  expect(r.ujemanje).toBe(true)
+  // po stopnjah: POS ima 22 % in 9,5 %, prazne stopnje se ne prikazejo
+  const pos = r.izstopni.viri.find(v => v.kljuc === 'blagajna')!
+  expect(pos.poStopnjah.map(s => [s.stopnja, s.ddv])).toEqual([['22', 2.16], ['9.5', 1.72]])
+})
+
+test('Razclenitev: kontrola zazna, ce se vsota virov ne ujema z obveznostjo', () => {
+  const rez = izracunajDdvIzPodatkov(testSp, Q3_2026)
+  expect(razclenitevDdv({ ...rez, obveznost: rez.obveznost + 0.01 }).ujemanje).toBe(false)
+  expect(razclenitevDdv({ ...rez, izstopniDdv: { ...rez.izstopniDdv, skupaj: 155.29 } }).ujemanje).toBe(false)
+})
+
+test('Razclenitev: vracilo (negativna obveznost) se ujema in ni skrito', () => {
+  const p = prazniPodatki()
+  p.prejeti.push({ receipt_date: '2026-08-01', amount_net: 100, vat_amount: 22, vat_rate: 22 })
+  const r = razclenitevDdv(izracunajDdvIzPodatkov(p, Q3_2026))
+  expect(r.obveznost).toBe(-22)
+  expect(r.ujemanje).toBe(true)
+})
+
+test('/kpo: ploscica "DDV dolg" prikazuje izracunajDdv, ne lastnega sestevka vrstic', () => {
+  const vir = readFileSync(join(__dirname, '..', 'app/kpo/page.tsx'), 'utf8')
+  expect(vir).toMatch(/izracunajDdv\(org\.id, \{ od: from, do: to \}/)
+  expect(vir).toMatch(/<DdvDolgPloscica ddv=\{ddv\}/)
+  expect(vir).not.toMatch(/totalVatOut\s*-\s*totalVatIn/)
+  const letni = readFileSync(join(__dirname, '..', 'app/letni-pregled/page.tsx'), 'utf8')
+  expect(letni).toMatch(/<DdvDolgPloscica ddv=\{data\.ddv\}/)
+})
+
 // ─────────────── K1: ista stevilka v izvozu za racunovodjo ───────────────
 
 test('K1: izvoz XLSX - "DDV za placilo" je enak izracunajDdv (test s.p. Q3 2026)', () => {
@@ -340,6 +380,7 @@ test('K1: izvoz XLSX - "DDV za placilo" je enak izracunajDdv (test s.p. Q3 2026)
  */
 const POTROSNIKI = [
   'app/dashboard/page.tsx',
+  'app/kpo/page.tsx',
   'app/ddv/page.tsx',
   'app/ddv/evidenca/page.tsx',
   'app/porocila/page.tsx',
@@ -395,5 +436,18 @@ test.describe('K1 nad bazo', () => {
     expect(r.vstopniDdv.skupaj).toBe(1370.81)
     expect(r.obveznost).toBe(1778.22)
     expect(r.stevilo.narocila).toBeGreaterThan(1000) // branje po straneh deluje
+  })
+
+  test('test s.p. in SIRM Q3 2026: razclenitev po virih se ujema z glavno stevilko', async () => {
+    const db = createClient(URL!, KEY!)
+    for (const [orgId, obveznost] of [
+      ['3a46b81e-97dc-486d-be7a-d08f993704f1', 123.37],
+      ['1d406efe-58d0-4573-8679-d9f666fce964', 1778.22],
+    ] as const) {
+      const r = razclenitevDdv(await izracunajDdv(orgId, Q3_2026, db))
+      const vsota = (viri: { ddv: number }[]) => Math.round(viri.reduce((s, v) => s + v.ddv * 100, 0)) / 100
+      expect(r.ujemanje).toBe(true)
+      expect(Math.round((vsota(r.izstopni.viri) - vsota(r.vstopni.viri)) * 100) / 100).toBe(obveznost)
+    }
   })
 })

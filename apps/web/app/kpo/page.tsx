@@ -1,11 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 import { formatEurNumber } from '@/lib/format'
+import { izracunajDdv, type DdvRezultat } from '@/lib/ddv'
+import DdvDolgPloscica from '@/components/DdvDolgPloscica'
 
 const MONTHS = ['Januar', 'Februar', 'Marec', 'April', 'Maj', 'Junij', 'Julij', 'Avgust', 'September', 'Oktober', 'November', 'December']
 
@@ -23,6 +25,10 @@ export default function KPOPage() {
   const [entries, setEntries] = useState<any[]>([])
   const [org, setOrg] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  // DDV obveznost za izbrano obdobje - iz lib/ddv.ts (glej loadEntries).
+  const [ddv, setDdv] = useState<DdvRezultat | null>(null)
+  const [ddvNapaka, setDdvNapaka] = useState<string | null>(null)
+  const ddvZahteva = useRef(0)
   const supabase = createClient()
 
   const now = new Date()
@@ -97,6 +103,18 @@ export default function KPOPage() {
   async function loadEntries() {
     setLoading(true)
     const { from, to } = getEffectiveRange()
+    // POPRAVLJENO (oktober 2026): ploscica "DDV dolg" je racunala obveznost
+    // sama iz vrstic te tabele (vat_out - vat_in) - brez POS prometa, ki ga
+    // KPO tabela ne prikazuje, in z drugacnimi pravili kot lib/ddv.ts.
+    // Zdaj, kot vse ostale strani (revizija K1), prikazuje izracunajDdv za
+    // ISTI razpon [from, to]; ta rezultat ze vsebuje razclenitev po virih in
+    // stopnjah, ki jo pokaze DdvDolgPloscica.
+    const zahteva = ++ddvZahteva.current
+    setDdv(null)
+    setDdvNapaka(null)
+    izracunajDdv(org.id, { od: from, do: to }, supabase)
+      .then(r => { if (zahteva === ddvZahteva.current) setDdv(r) })
+      .catch(() => { if (zahteva === ddvZahteva.current) setDdvNapaka('DDV ni bilo mogoče izračunati.') })
     const { data } = await supabase
       .from('kpo_entries')
       .select('*')
@@ -178,6 +196,16 @@ export default function KPOPage() {
   const totalVatOut = entries.reduce((s, e) => s + (e.vat_out || 0), 0)
   const totalVatIn = entries.reduce((s, e) => s + (e.vat_in || 0), 0)
   const profit = totalIncome - totalExpense
+
+  // Oznaka obdobja za razclenitev DDV - isto obdobje kot glavna stevilka.
+  function oznakaIzbranegaObdobja() {
+    if (obdobjeTip === 'mesec') return `${MONTHS[selectedMonth]} ${selectedYear}`
+    if (obdobjeTip === 'cetrtletje') return `Q${selectedQuarter + 1} ${selectedYear}`
+    if (obdobjeTip === 'leto') return `Leto ${selectedYear}`
+    if (obdobjeTip === 'ytd') return `${selectedYear} do danes`
+    if (obdobjeTip === 'teden') return 'Teden'
+    return 'Izbrani interval'
+  }
 
   if (loading && !org) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -273,10 +301,12 @@ export default function KPOPage() {
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-xs text-gray-500 mb-1">Prihodki</div>
             <div className="text-xl font-semibold text-green-600">€{formatEurNumber(totalIncome)}</div>
+            <div className="text-xs text-gray-400 mt-1">brez DDV</div>
           </div>
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-xs text-gray-500 mb-1">Odhodki</div>
             <div className="text-xl font-semibold text-red-500">€{formatEurNumber(totalExpense)}</div>
+            <div className="text-xs text-gray-400 mt-1">brez DDV</div>
           </div>
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-xs text-gray-500 mb-1">Dobiček</div>
@@ -284,12 +314,7 @@ export default function KPOPage() {
               €{formatEurNumber(profit)}
             </div>
           </div>
-          <div className="bg-white rounded-2xl border border-gray-100 p-5">
-            <div className="text-xs text-gray-500 mb-1">DDV dolg</div>
-            <div className="text-xl font-semibold text-orange-500">
-              €{formatEurNumber((totalVatOut - totalVatIn))}
-            </div>
-          </div>
+          <DdvDolgPloscica ddv={ddv} nalagam={!ddvNapaka} napaka={ddvNapaka} oznakaObdobja={oznakaIzbranegaObdobja()} />
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
