@@ -16177,6 +16177,13 @@ function KlasikApp() {
             <WorkStatusBar key={wsRefreshKey} posData={posData} onRequestClockIn={()=>setShowClockIn(true)}/>
           </div>
           <BellNotifications notifications={posData.notifications} notifOpen={notifOpen} setNotifOpen={setNotifOpen} posData={posData} orderListOpen={orderListOpen} setOrderListOpen={setOrderListOpen}/>
+          {/* Računko asistent - diskreten gumb v glavi poleg zvonca (ne lebdi cez
+              blagajno, kjer je plavajoci gumb prekrival "Skupaj"). */}
+          <button className="pos-ni-telefon" aria-label="Računko asistent" title="Računko asistent – pomoč pri uporabi blagajne"
+            onClick={()=>window.dispatchEvent(new CustomEvent('racunko-pomoc', { detail: { zavihek: 'klepet' } }))}
+            style={{ width:36, height:36, borderRadius:10, background:'rgba(255,255,255,0.08)', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:T.headerInk, fontSize:16, fontWeight:800, fontFamily:'inherit' }}>
+            ?
+          </button>
           {orderListOpen && <OrderListModal posData={posData} onClose={()=>setOrderListOpen(false)}/>}
           <button className="pos-ni-telefon" onClick={async()=>{
             const orders = await pos.orders.getHeldOrders()
@@ -16245,6 +16252,8 @@ function KlasikApp() {
         )}
         <VrsticaLista T={T} ikona={<KI name="bell" size={20}/>} napis="Opozorila" desno={steviloOpozoril > 0 ? steviloOpozoril : null}
           onClick={()=>{ setMeniTelefonOdprt(false); setNotifOpen(true) }}/>
+        <VrsticaLista T={T} ikona={<span style={{ fontSize:18 }}>💬</span>} napis="Računko asistent (pomoč)"
+          onClick={()=>{ setMeniTelefonOdprt(false); window.dispatchEvent(new CustomEvent('racunko-pomoc', { detail: { zavihek: 'klepet' } })) }}/>
         <VrsticaLista T={T} ikona={<span style={{ fontSize:18 }}>💾</span>} napis="Shranjeni računi" desno={heldOrders.length > 0 ? heldOrders.length : null}
           onClick={async()=>{ setMeniTelefonOdprt(false); const orders = await pos.orders.getHeldOrders(); setHeldOrders(orders); setHeldOrdersOpen(true) }}/>
         {cashSession && (

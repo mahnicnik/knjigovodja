@@ -428,6 +428,15 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
                   </div>
                 </Link>
               ))}
+              {/* Računko asistent: vedno viden gumb v vrstici "Hitro" - ne lebdi
+                  cez vsebino (plavajoci gumb je bil v preletu 237 odstranjen,
+                  ker je prekrival vsebino). Odpre okno pomoci na zavihku klepeta. */}
+              <button onClick={() => window.dispatchEvent(new CustomEvent('racunko-pomoc', { detail: { zavihek: 'klepet' } }))}
+                title="Računko asistent – pomoč pri uporabi aplikacije"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, border: '0.5px solid rgba(29,158,117,0.4)', background: 'rgba(29,158,117,0.08)', color: '#0E5E3B', cursor: 'pointer', fontFamily: 'inherit' }}>
+                <span style={{ fontSize: '14px' }}>💬</span>
+                Asistent
+              </button>
               <div style={{ flex: 1 }} />
               <Link href="/invoices/new" style={{ textDecoration: 'none' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: '500', background: '#0D1F12', color: '#fff', cursor: 'pointer' }}>
@@ -445,9 +454,16 @@ export default function AppLayout({ children, org }: { children: React.ReactNode
         <div style={{ minHeight: '100vh', background: '#F7F6F2', paddingBottom: '64px' }}>
           <div style={{ position: 'sticky', top: 0, zIndex: 50, background: '#0D1F12', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ color: '#fff', fontSize: '15px', fontWeight: '500' }}>Računko.si</div>
-            <button onClick={() => setShowMobileMenu(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}>
-              <Icon name="ti-menu-2" style={{ fontSize: '22px', color: '#fff' }} />
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <button onClick={() => window.dispatchEvent(new CustomEvent('racunko-pomoc', { detail: { zavihek: 'klepet' } }))}
+                aria-label="Računko asistent" title="Računko asistent"
+                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: '8px', color: '#fff', fontSize: '13px', fontFamily: 'inherit' }}>
+                💬 Asistent
+              </button>
+              <button onClick={() => setShowMobileMenu(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}>
+                <Icon name="ti-menu-2" style={{ fontSize: '22px', color: '#fff' }} />
+              </button>
+            </div>
           </div>
 
           <main>{children}</main>

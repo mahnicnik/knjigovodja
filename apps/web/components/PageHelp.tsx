@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { usePathname } from 'next/navigation'
+import { KB_FAQ } from '@/lib/kb/faq.generated'
 
 interface HelpStep {
   icon: string
@@ -272,7 +273,7 @@ const DEFAULT_HELP: PageHelpContent = {
   tip: 'Za pomoč pišite na support@računko.si',
 }
 
-const CHAT_GREETING = 'Pozdravljeni! Sem pomočnik za uporabo Računka - vprašajte me karkoli o nastavitvah, računih, POS blagajni ali drugih funkcijah aplikacije.'
+const CHAT_GREETING = 'Pozdravljeni! Sem Računko asistent - vprašajte me karkoli o uporabi aplikacije: nastavitve, računi, POS blagajna, paketi, DDV, izvoz ...'
 
 export default function PageHelp() {
   const pathname = usePathname()
@@ -306,11 +307,25 @@ export default function PageHelp() {
         // pogovora z modelom - izpustimo ga, tako kot na strani /ai.
         body: JSON.stringify({ messages: novaZgodovina.slice(1), currentPath: pathname }),
       })
-      const data = await res.json()
-      if (!res.ok) {
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}))
         setChatMessages(prev => [...prev, { role: 'assistant', content: data.error || 'Prišlo je do napake. Poskusite znova.' }])
       } else {
-        setChatMessages(prev => [...prev, { role: 'assistant', content: data.response }])
+        // Odgovor se pretaka (text/plain) - izpisujemo ga sproti.
+        setChatMessages(prev => [...prev, { role: 'assistant', content: '' }])
+        const bralnik = res.body.getReader()
+        const dek = new TextDecoder()
+        for (;;) {
+          const { done, value } = await bralnik.read()
+          if (done) break
+          const kos = dek.decode(value, { stream: true })
+          setChatMessages(prev => {
+            const nova = [...prev]
+            const zadnje = nova[nova.length - 1]
+            nova[nova.length - 1] = { ...zadnje, content: zadnje.content + kos }
+            return nova
+          })
+        }
       }
     } catch {
       setChatMessages(prev => [...prev, { role: 'assistant', content: 'Oprostite, prišlo je do napake. Poskusite znova.' }])
@@ -343,7 +358,13 @@ export default function PageHelp() {
    * ne kaze tam, kjer bi bila mrtva.
    */
   useEffect(() => {
-    const odpri = () => setOpen(true)
+    // Dogodek lahko izbere zavihek: detail { zavihek: 'klepet' } odpre asistenta
+    // (gumb v glavi portala in blagajne), brez detail pa navodila za stran.
+    const odpri = (e: Event) => {
+      const zavihek = (e as CustomEvent)?.detail?.zavihek
+      if (zavihek === 'klepet' || zavihek === 'navodila') setTab(zavihek)
+      setOpen(true)
+    }
     window.addEventListener('racunko-pomoc', odpri)
     window.dispatchEvent(new CustomEvent('racunko-pomoc-na-voljo', { detail: true }))
     return () => {
@@ -489,7 +510,7 @@ export default function PageHelp() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
                 <div>
                   <div style={{ fontSize: 18, fontWeight: 700, color: '#0D1F12' }}>{tab === 'klepet' ? '💬 Vprašaj Računko' : help.title}</div>
-                  <div style={{ fontSize: 13, color: '#888', marginTop: 4, lineHeight: 1.5 }}>{tab === 'klepet' ? 'AI pomočnik, ki pozna vse funkcije aplikacije.' : help.description}</div>
+                  <div style={{ fontSize: 13, color: '#888', marginTop: 4, lineHeight: 1.5 }}>{tab === 'klepet' ? 'Asistent za uporabo aplikacije – pozna vse funkcije Računka.' : help.description}</div>
                 </div>
                 <button
                   onClick={() => setOpen(false)}
@@ -554,7 +575,7 @@ export default function PageHelp() {
               <>
                 {/* Sporočila klepeta */}
                 <div className="pagehelp-msgs" style={{ flex: 1, overflowY: 'auto', padding: '0 28px' }}>
-                  {chatMessages.map((msg, i) => (
+                  {chatMessages.map((msg, i) => !msg.content ? null : (
                     <div key={i} style={{ marginBottom: 12, display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
                       <div style={{
                         maxWidth: '85%',
@@ -570,7 +591,22 @@ export default function PageHelp() {
                       </div>
                     </div>
                   ))}
-                  {chatLoading && (
+                  {/* Pogosta vprasanja iz baze znanja (docs/knowledge-base/_index.md) -
+                      najprej tista za blagajno oziroma portal, glede na stran. */}
+                  {chatMessages.length === 1 && !chatLoading && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                      {[...KB_FAQ]
+                        .sort((a, b) => Number(b.kontekst === (jeBlagajna ? 'pos' : 'portal')) - Number(a.kontekst === (jeBlagajna ? 'pos' : 'portal')))
+                        .slice(0, 5)
+                        .map(q => (
+                          <button key={q.vprasanje} onClick={() => posljiSporocilo(q.vprasanje)}
+                            style={{ textAlign: 'left', padding: '6px 10px', borderRadius: 999, border: '1px solid #e5e7eb', background: '#fff', color: '#0D1F12', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', lineHeight: 1.35 }}>
+                            {q.vprasanje}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                  {chatLoading && (chatMessages[chatMessages.length - 1]?.role === 'user' || !chatMessages[chatMessages.length - 1]?.content) && (
                     <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'flex-start' }}>
                       <div style={{ background: '#F7F6F2', borderRadius: 12, padding: '9px 13px', display: 'flex', gap: 4 }}>
                         {[0, 150, 300].map(d => (
@@ -607,12 +643,12 @@ export default function PageHelp() {
                       onChange={e => setChatInput(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && !e.shiftKey && posljiSporocilo()}
                       placeholder="Vprašajte karkoli o uporabi Računka..."
-                      style={{ flex: 1, border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 10, padding: '9px 12px', fontSize: 13, outline: 'none', color: '#0D1F12', fontFamily: 'inherit' }}
+                      style={{ flex: 1, minWidth: 0, border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 10, padding: '9px 12px', fontSize: 13, outline: 'none', color: '#0D1F12', fontFamily: 'inherit' }}
                     />
                     <button
                       onClick={() => posljiSporocilo()}
                       disabled={chatLoading || !chatInput.trim()}
-                      style={{ background: '#0D1F12', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', opacity: (chatLoading || !chatInput.trim()) ? 0.4 : 1 }}
+                      style={{ flexShrink: 0, whiteSpace: 'nowrap', background: '#0D1F12', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', opacity: (chatLoading || !chatInput.trim()) ? 0.4 : 1 }}
                     >
                       Pošlji
                     </button>
