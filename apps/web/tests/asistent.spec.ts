@@ -107,3 +107,18 @@ test('baza znanja vsebuje ključne pasti (regresija)', () => {
   expect(v('pos-zakljucek-z-porocilo')).toMatch(/samo obračun/)
   expect(v('pos-racuni-storno-vracila')).toMatch(/samo isti dan/)
 })
+
+test('kb-vpliv: sprememba POS najde POS dokumente, API ni uporabniška datoteka, nova stran je nepokrita', async () => {
+  // @ts-ignore – .mjs brez tipov
+  const { analiziraj } = await import('../scripts/kb-vpliv.mjs')
+  const r = analiziraj([
+    'apps/web/app/pos/page.tsx',
+    'apps/web/app/api/support-chat/route.ts',
+    'apps/web/app/nova-stran/page.tsx',
+    'apps/web/lib/kb/baza.generated.ts',
+  ])
+  expect(r.uporabniske).toEqual(['apps/web/app/pos/page.tsx', 'apps/web/app/nova-stran/page.tsx'])
+  expect(Object.keys(r.prizadeti)).toContain('pos-normativi-surovine.md')
+  expect(r.nepokrite).toEqual(['apps/web/app/nova-stran/page.tsx'])
+  expect(r.dokumentiSpremenjeni).toEqual([])
+})

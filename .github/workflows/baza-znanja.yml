@@ -1,0 +1,70 @@
+name: Baza znanja asistenta
+
+# Opomnik (NE blokira deploya): ce push na main spremeni uporabniske strani
+# ali komponente, baza znanja (docs/knowledge-base) pa v istem pushu ni
+# posodobljena, doda opozorilo in komentar na commit. Asistent bere bazo ob
+# vsakem buildu (prebuild), zato zastarel dokument pomeni napacen odgovor.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write        # komentar na commit
+  pull-requests: write   # komentar na PR
+
+jobs:
+  preveri:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Katere dokumente zadeva sprememba
+        id: vpliv
+        env:
+          OD: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          DO: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [ -z "$OD" ] || [ "$OD" = "0000000000000000000000000000000000000000" ]; then OD="$DO~1"; fi
+          node apps/web/scripts/kb-vpliv.mjs "$OD..$DO" --json > vpliv.json || echo '{}' > vpliv.json
+          node apps/web/scripts/kb-vpliv.mjs "$OD..$DO" > vpliv.txt || true
+          node -e '
+            const r = JSON.parse(require("fs").readFileSync("vpliv.json","utf8"))
+            const opozori = (r.uporabniske||[]).length > 0 && (r.dokumentiSpremenjeni||[]).length === 0
+            require("fs").appendFileSync(process.env.GITHUB_OUTPUT, `opozori=${opozori}\n`)
+          '
+          { echo '## Baza znanja asistenta'; echo '```'; cat vpliv.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Je zapakirana baza ažurna?
+        run: node apps/web/scripts/zgradi-bazo-znanja.mjs --preveri || echo "::warning::lib/kb/baza.generated.ts ni ažurna - ob deployu se zgradi znova, a poženi node apps/web/scripts/zgradi-bazo-znanja.mjs"
+
+      - name: Opozorilo in komentar
+        if: steps.vpliv.outputs.opozori == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "::warning::Spremenjene so uporabniške strani/komponente, baza znanja (docs/knowledge-base) pa ne. Poženi /update-kb ali posodobi ustrezne dokumente."
+          {
+            echo "**Baza znanja Računko asistenta morda ni ažurna.**"
+            echo
+            echo "Ta sprememba spreminja uporabniške strani ali komponente, dokumenti v \`docs/knowledge-base/\` pa niso posodobljeni. Asistent bo odgovarjal po starem, dokler jih ne posodobiš (v Claude Code: \`/update-kb\`)."
+            echo
+            echo '```'
+            cat vpliv.txt
+            echo '```'
+            echo
+            echo "_Samodejni opomnik – deploya ne ustavi._"
+          } > komentar.md
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            gh pr comment "${{ github.event.pull_request.number }}" --body-file komentar.md || true
+          else
+            gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/comments" -F body=@komentar.md || true
+          fi
