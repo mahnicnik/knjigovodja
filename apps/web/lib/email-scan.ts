@@ -28,6 +28,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { decryptToken, encryptToken } from '@/lib/token-crypto'
 import { najdiUjemanje, STROSEK_POLJA } from '@/lib/strosek-ujemanje'
 import { navodiloRazvrscanja, dopolniRazvrstitev, prejsnjaRazvrstitev, kontekstPodjetja } from '@/lib/konti'
+import { NAVODILO_DDV, normalizirajAiDdv } from '@/lib/prejeti-ddv'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -46,10 +47,7 @@ export type IzidSkeniranja = {
 const promptZa = (kontekst: string | null) => `Analiziraj ta dokument in vrni JSON z naslednjimi polji:
 - vendor: ime dobavitelja/izdajatelja
 - date: datum racuna v formatu YYYY-MM-DD
-- amount_net: znesek brez DDV (samo stevilo)
-- vat_rate: stopnja DDV (22, 9.5, ali 0)
-- vat_amount: znesek DDV (samo stevilo)
-- amount_total: skupni znesek za placilo (samo stevilo)
+${NAVODILO_DDV}
 - description: kratek opis
 ${navodiloRazvrscanja(kontekst)}
 - invoice_number: stevilka racuna, kot je izpisana (ali null)
@@ -220,7 +218,8 @@ export async function skenirajPovezavo(
         const text = ai.content[0]?.type === 'text' ? ai.content[0].text : ''
         const json = text.match(/\{[\s\S]*\}/)
         if (!json) throw new Error('AI ni vrnil podatkov')
-        extracted = { ...JSON.parse(json[0]), ...oznaka }
+        // REVIZIJA V6: razclenitev DDV po stopnjah (tudi 5 %) + pavsalno nadomestilo
+        extracted = { ...normalizirajAiDdv(JSON.parse(json[0])), ...oznaka }
         extracted = dopolniRazvrstitev(extracted, await prejsnjaRazvrstitev(supabase, conn.org_id, extracted))
         // PRELET 335: dokument z davcno stevilko izdajatelja in zneskom je skoraj
         // vedno racun, tudi ce ga AI ni tako poimenoval - gre v pregled
