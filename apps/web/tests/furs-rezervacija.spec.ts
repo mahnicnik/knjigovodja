@@ -16,6 +16,7 @@ const kljuc = () => ({ privateKeyPem: privateKey.export({ type: 'pkcs8', format:
 
 function pripravi() {
   let zaporedna = 40
+  const klici: any[] = []
   const baza = laznaBaza({
     issued_invoices: [{
       id: 'inv1', org_id: 'o1', invoice_number: '2026-005', invoice_type: 'invoice', issue_date: '2026-10-01',
@@ -26,8 +27,11 @@ function pripravi() {
     furs_certificates: [{ id: 'c1', org_id: 'o1', is_active: true }],
     business_premises: [{ id: 'p1', org_id: 'o1', is_active: true, channel: 'both', premise_id: 'PP1' }],
     electronic_devices: [{ id: 'd1', premise_id: 'p1', is_active: true, channel: 'both', device_id: 'NAP1' }],
-  }, { get_next_pos_invoice_number: () => ++zaporedna })
-  return { baza, porabljene: () => zaporedna - 40 }
+  }, {
+    // Revizija K4: portal klice ISTO funkcijo kot blagajna, s prostorom in napravo.
+    next_invoice_number: (a: any) => { klici.push(a); return ++zaporedna },
+  })
+  return { baza, porabljene: () => zaporedna - 40, klici }
 }
 
 test('H1: FURS ne odgovori 5× zapored → ena sama številka in en ZOI, ponovitve so naknadne', async () => {
@@ -120,4 +124,14 @@ test('Urejanje: racun z davcno rezervacijo je zaklenjen, brez nje ne', async () 
     kljuc, posli: async (_c: any, d: any) => ({ success: false, zoi: d.presetZoi, eor: null, errorMessage: 'Timeout', responseTime: null }) as any,
   })
   expect(zaklenjenZaUrejanje(baza.tabele.issued_invoices[0])).toBe(true)
+})
+
+test('K4: portal dobi stevilko iz next_invoice_number s prostorom in napravo (isto zaporedje kot blagajna)', async () => {
+  const { baza, klici } = pripravi()
+  const ok = await confirmIssuedInvoiceWithFurs(baza, 'o1', 'inv1', 'card', undefined, {
+    kljuc,
+    posli: async (_c: any, d: any) => ({ success: true, zoi: d.presetZoi, eor: 'EOR-1', errorMessage: null, responseTime: new Date() }) as any,
+  })
+  expect(ok).toMatchObject({ success: true, invoiceNumber: 'PP1-NAP1-41' })
+  expect(klici).toEqual([{ p_business_id: 'b1', p_premise_id: 'p1', p_device_id: 'd1', p_leto: null }])
 })
