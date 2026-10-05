@@ -358,6 +358,10 @@ test('Ploscica "DDV dolg": razclenitev je privzeto odprta (zaprto jo je uporabni
   const vir = readFileSync(join(__dirname, '..', 'components/DdvDolgPloscica.tsx'), 'utf8')
   expect(vir).toMatch(/privzetoOdprto = true/)
   expect(vir).toMatch(/useState\(privzetoOdprto\)/)
+  // cela ploscica je gumb in jasno pove, da se nekaj odpre
+  expect(vir).toMatch(/role=\{ddv \? 'button'/)
+  expect(vir).toMatch(/aria-expanded=\{ddv \? odprto/)
+  expect(vir).toMatch(/'Podrobnosti'/)
 })
 
 // ─────────────── K1: ista stevilka v izvozu za racunovodjo ───────────────

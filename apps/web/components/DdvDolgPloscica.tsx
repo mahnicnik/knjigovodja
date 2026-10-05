@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { DdvRezultat } from '@/lib/ddv'
 import { razclenitevDdv, type StranDdv } from '@/lib/ddv-razclenitev'
 import { formatEurNumber } from '@/lib/format'
@@ -14,10 +14,14 @@ import { formatEurNumber } from '@/lib/format'
  *
  * Vse številke so iz `ddv` (izracunajDdv, lib/ddv.ts) — tu se nič ne računa.
  *
- * Razčlenitev je PRIVZETO ODPRTA: zaprta za majhno povezavo jo je uporabnik
- * spregledal. Izhodni (+) in vhodni (−) DDV sta poleg tega vedno vidna tudi
- * na sami ploščici.
+ * VIDNOST (uporabnik razčlenitve za majhno sivo povezavo ni opazil):
+ * - cela ploščica je gumb (kazalec, oranžna obroba ob prehodu z miško),
+ * - izrazit gumb "Podrobnosti DDV" s puščico, ki se obrne,
+ * - na ploščici je vedno viden povzetek izhodni (+) / vhodni (−),
+ * - odprta ploščica in razčlenitev imata isto oranžno obrobo (povezani),
+ * - privzeto odprto; zapomni si, če jo uporabnik zapre (localStorage).
  */
+const KLJUC_SHRAMBE = 'ddv-razclenitev-odprta'
 export default function DdvDolgPloscica({ ddv, nalagam, napaka, naslov = 'DDV dolg', oznakaObdobja, privzetoOdprto = true }: {
   ddv: DdvRezultat | null
   nalagam?: boolean
@@ -28,12 +32,32 @@ export default function DdvDolgPloscica({ ddv, nalagam, napaka, naslov = 'DDV do
   privzetoOdprto?: boolean
 }) {
   const [odprto, setOdprto] = useState(privzetoOdprto)
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem(KLJUC_SHRAMBE)
+      if (v === '0' || v === '1') setOdprto(v === '1')
+    } catch {}
+  }, [])
+  function preklopi() {
+    setOdprto(o => {
+      try { localStorage.setItem(KLJUC_SHRAMBE, o ? '0' : '1') } catch {}
+      return !o
+    })
+  }
   const r = ddv ? razclenitevDdv(ddv) : null
   const datumi = ddv ? `${fmtDatum(ddv.od)} – ${fmtDatum(ddv.do)}` : ''
 
   return (
     <>
-      <div className="bg-white rounded-2xl border border-gray-100 p-5 min-w-0">
+      <div
+        role={ddv ? 'button' : undefined}
+        tabIndex={ddv ? 0 : undefined}
+        aria-expanded={ddv ? odprto : undefined}
+        onClick={ddv ? preklopi : undefined}
+        onKeyDown={ddv ? (e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); preklopi() } }) : undefined}
+        className={`bg-white rounded-2xl border p-5 min-w-0 text-left transition-colors ${
+          ddv ? 'cursor-pointer hover:border-orange-300 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300' : ''
+        } ${odprto && ddv ? 'border-orange-300' : 'border-gray-100'}`}>
         <div className="text-xs text-gray-500 mb-1">{naslov}</div>
         <div className="text-xl font-semibold text-orange-500">
           {ddv ? `€${formatEurNumber(ddv.obveznost)}` : nalagam ? '…' : '—'}
@@ -41,22 +65,23 @@ export default function DdvDolgPloscica({ ddv, nalagam, napaka, naslov = 'DDV do
         {ddv && ddv.obveznost < 0 && <div className="text-xs text-green-600 mt-1">Negativno = vračilo DDV</div>}
         {r && (
           <div className="mt-1.5 space-y-0.5 text-xs tabular-nums">
-            <div className="flex justify-between gap-2"><span className="text-gray-500">Izhodni</span><span className="text-orange-600">+ €{formatEurNumber(r.izstopni.skupaj)}</span></div>
-            <div className="flex justify-between gap-2"><span className="text-gray-500">Vhodni</span><span className="text-emerald-600">− €{formatEurNumber(r.vstopni.skupaj)}</span></div>
+            <div className="flex flex-wrap justify-between gap-x-2"><span className="text-gray-500 whitespace-nowrap">Izhodni</span><span className="ml-auto text-orange-600 whitespace-nowrap">+&nbsp;€{formatEurNumber(r.izstopni.skupaj)}</span></div>
+            <div className="flex flex-wrap justify-between gap-x-2"><span className="text-gray-500 whitespace-nowrap">Vhodni</span><span className="ml-auto text-emerald-600 whitespace-nowrap">−&nbsp;€{formatEurNumber(r.vstopni.skupaj)}</span></div>
           </div>
         )}
         {napaka && <div className="text-xs text-red-500 mt-1">{napaka}</div>}
         {ddv && (
-          <button type="button" onClick={() => setOdprto(o => !o)} aria-expanded={odprto}
-            className="mt-2 text-xs font-medium text-gray-700 hover:text-gray-900 underline underline-offset-2 inline-flex items-center gap-1">
-            {odprto ? 'Skrij razčlenitev' : 'Pokaži razčlenitev'}
-            <span aria-hidden className={`inline-block transition-transform text-[10px] ${odprto ? 'rotate-180' : ''}`}>▼</span>
-          </button>
+          <span className={`mt-3 inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+            odprto ? 'bg-orange-500 text-white' : 'bg-orange-50 text-orange-700 ring-1 ring-orange-200'
+          }`}>
+            <span aria-hidden className={`inline-block text-[9px] transition-transform ${odprto ? 'rotate-180' : ''}`}>▼</span>
+            {odprto ? 'Skrij' : 'Podrobnosti'}<span className="hidden sm:inline">{odprto ? ' podrobnosti' : ' DDV'}</span>
+          </span>
         )}
       </div>
 
       {odprto && ddv && r && (
-        <div className="col-span-full bg-white rounded-2xl border border-gray-100 p-4 sm:p-5 min-w-0">
+        <div className="col-span-full bg-white rounded-2xl border border-orange-300 p-4 sm:p-5 min-w-0">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-4">
             <div className="text-sm font-semibold text-gray-900">Razčlenitev DDV</div>
             <div className="text-xs text-gray-500">
