@@ -15,6 +15,7 @@ import {
 import { resend, FROM_EMAIL, posiljateljZa } from '@/lib/resend'
 import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 import { kontoZa } from '@/lib/konti'
+import { izracunajDdv } from '@/lib/ddv'
 
 const MONTHS = [
   'januar', 'februar', 'marec', 'april', 'maj', 'junij',
@@ -211,6 +212,9 @@ export async function POST(req: NextRequest) {
       konto: e.entry_type === 'expense' ? kontoZa(e.category).konto : null, // PRELET 339
     }))
 
+    // Revizija K1 (oktober 2026): DDV iz skupne funkcije, ne iz lastnega sestevka.
+    const ddv = await izracunajDdv(org.id, { od: periodFrom, do: periodTo }, supabase)
+
     const exportInput: ExportInput = {
       orgName: org.name,
       orgTaxNumber: org.tax_number,
@@ -222,6 +226,7 @@ export async function POST(req: NextRequest) {
       receipts,
       kpoEntries,
       zReports: zReportsData,
+      ddv,
     }
 
     // ===== Save accountant info =====
@@ -290,8 +295,8 @@ export async function POST(req: NextRequest) {
 
       const totalRevenue = issuedInvoices.reduce((s, i) => s + i.amount_net, 0)
       const totalExpenses = receipts.reduce((s, r) => s + (r.amount_net ?? 0), 0)
-      const vatOut = issuedInvoices.reduce((s, i) => s + i.vat_amount, 0)
-      const vatIn = receipts.reduce((s, r) => s + (r.vat_amount ?? 0), 0)
+      const vatOut = ddv.izstopniDdv.skupaj
+      const vatIn = ddv.vstopniDdv.skupaj
 
       const emailHtml = `
 <!DOCTYPE html>
@@ -343,7 +348,7 @@ export async function POST(req: NextRequest) {
       </tr>
       <tr style="background: #E1F5EE;">
         <td style="padding: 10px 12px; font-weight: 600;">DDV bilanca</td>
-        <td style="padding: 10px 12px; font-weight: 600; text-align: right;">€${(vatOut - vatIn).toFixed(2)}</td>
+        <td style="padding: 10px 12px; font-weight: 600; text-align: right;">€${ddv.obveznost.toFixed(2)}</td>
       </tr>
     </table>
     

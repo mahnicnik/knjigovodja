@@ -1,0 +1,38 @@
+{
+  "_opis": "Surovi podatki organizacije 'test s.p.' (3a46b81e-97dc-486d-be7a-d08f993704f1), izvozeni iz baze 5.10.2026 za regresijski test DDV (revizija K1/K3). Pricakovana obveznost za Q3 2026: 123,37 EUR.",
+  "imaBlagajno": true,
+  "racuni": [
+    {"issue_date": "2026-08-27", "amount_net": 40.00, "vat_amount": 8.80, "line_items": [{"quantity": 1, "vat_rate": 22, "unit_price": 40, "description": "trening", "discount_pct": 0}]},
+    {"issue_date": "2026-08-31", "amount_net": 550.00, "vat_amount": 121.00, "line_items": [{"quantity": 11, "vat_rate": 22, "unit_price": 50, "description": "sdfsdf", "discount_pct": 0}]},
+    {"issue_date": "2026-09-13", "amount_net": 16.39, "vat_amount": 3.60, "line_items": [{"quantity": 1, "vat_rate": 22, "amount_net": 16.39, "unit_price": 16.39, "vat_amount": 3.6, "description": "Stripe plačilo"}]},
+    {"issue_date": "2026-09-13", "amount_net": 16.39, "vat_amount": 3.60, "line_items": [{"quantity": 1, "vat_rate": 22, "amount_net": 16.39, "unit_price": 16.39, "vat_amount": 3.6, "description": "Stripe plačilo"}]},
+    {"issue_date": "2026-09-13", "amount_net": 16.39, "vat_amount": 3.60, "line_items": [{"quantity": 1, "vat_rate": 22, "amount_net": 16.39, "unit_price": 16.39, "vat_amount": 3.6, "description": "Stripe plačilo"}]},
+    {"issue_date": "2026-09-13", "amount_net": 16.39, "vat_amount": 3.60, "line_items": [{"quantity": 1, "vat_rate": 22, "amount_net": 16.39, "unit_price": 16.39, "vat_amount": 3.6, "description": "Stripe plačilo"}]},
+    {"issue_date": "2026-09-24", "amount_net": 16.39, "vat_amount": 3.60, "line_items": [{"quantity": 1, "vat_rate": 22, "amount_net": 16.39, "unit_price": 16.39, "vat_amount": 3.6, "description": "Stripe plačilo"}]},
+    {"issue_date": "2026-09-24", "amount_net": 16.39, "vat_amount": 3.60, "line_items": [{"quantity": 1, "vat_rate": 22, "amount_net": 16.39, "unit_price": 16.39, "vat_amount": 3.6, "description": "Stripe plačilo"}]}
+  ],
+  "prejeti": [
+    {"receipt_date": "2024-09-27", "amount_net": 12.79, "vat_amount": 2.81, "vat_rate": 22.00},
+    {"receipt_date": "2026-08-25", "amount_net": 335.90, "vat_amount": 31.91, "vat_rate": 9.50}
+  ],
+  "kpo": [
+    {"entry_date": "2024-09-27", "entry_type": "expense", "category": "Prehrana", "income": 0, "expense": 12.79, "vat_out": 0, "vat_in": 2.81, "vat_rate": null, "invoice_id": null, "receipt_id": "9c75ac8f-16c0-492d-8629-1eb3f39d6129"},
+    {"entry_date": "2026-08-25", "entry_type": "expense", "category": "Prehrana", "income": 0, "expense": 335.90, "vat_out": 0, "vat_in": 31.91, "vat_rate": null, "invoice_id": null, "receipt_id": "ab672f88-1f7f-4940-89ae-cd643d158923"},
+    {"entry_date": "2026-09-13", "entry_type": "income", "category": "spletna_prodaja", "income": 16.39, "expense": 0, "vat_out": 3.60, "vat_in": 0, "vat_rate": null, "invoice_id": "742bdcc9-df2e-49c4-aad8-a38a6c0df807", "receipt_id": null},
+    {"entry_date": "2026-09-13", "entry_type": "income", "category": "spletna_prodaja", "income": 16.39, "expense": 0, "vat_out": 3.60, "vat_in": 0, "vat_rate": null, "invoice_id": "62ca2927-83e4-434c-a42d-0850014c1e0c", "receipt_id": null},
+    {"entry_date": "2026-09-13", "entry_type": "income", "category": "spletna_prodaja", "income": 16.39, "expense": 0, "vat_out": 3.60, "vat_in": 0, "vat_rate": null, "invoice_id": "0877fc61-3902-4fc3-b82a-83c5c43b4671", "receipt_id": null},
+    {"entry_date": "2026-09-13", "entry_type": "income", "category": "spletna_prodaja", "income": 16.39, "expense": 0, "vat_out": 3.60, "vat_in": 0, "vat_rate": null, "invoice_id": "8f93b0d2-f23d-41ab-af81-fd69b7ee7b32", "receipt_id": null},
+    {"entry_date": "2026-09-24", "entry_type": "income", "category": "spletna_prodaja", "income": 16.39, "expense": 0, "vat_out": 3.60, "vat_in": 0, "vat_rate": null, "invoice_id": "88816433-f88d-4fa2-8ed1-135d3c7e4969", "receipt_id": null},
+    {"entry_date": "2026-09-24", "entry_type": "income", "category": "spletna_prodaja", "income": 16.39, "expense": 0, "vat_out": 3.60, "vat_in": 0, "vat_rate": null, "invoice_id": "681d065c-31ac-42e6-aee2-0abcc1d80e88", "receipt_id": null}
+  ],
+  "narocila": [
+    {"closed_at": "2026-08-31T17:17:43.092456+00:00", "total": 3.00, "tip_amount": 0, "invoice_number": "SIRBFB01-RACUNKO01-1", "order_lines": [{"total": 3.00, "qty": 1, "unit_price": 3.00, "vat_rate": 22.00, "voided": false}], "payments": [{"method": "cash"}]},
+    {"closed_at": "2026-08-31T18:37:55.579621+00:00", "total": 3.00, "tip_amount": 0, "invoice_number": "SIRBFB01-RACUNKO01-2", "order_lines": [{"total": 3.00, "qty": 1, "unit_price": 3.00, "vat_rate": 22.00, "voided": false}], "payments": [{"method": "cash"}]},
+    {"closed_at": "2026-09-01T06:17:48.225575+00:00", "total": 3.00, "tip_amount": 0, "invoice_number": "SIRBFB01-RACUNKO01-3", "order_lines": [{"total": 3.00, "qty": 1, "unit_price": 3.00, "vat_rate": 22.00, "voided": false}], "payments": [{"method": "cash"}]},
+    {"closed_at": "2026-09-02T13:17:41.964613+00:00", "total": 3.00, "tip_amount": 0, "invoice_number": null, "order_lines": [{"total": 3.00, "qty": 1, "unit_price": 3.00, "vat_rate": 22.00, "voided": false}], "payments": [{"method": "cash"}]},
+    {"closed_at": "2026-09-03T07:21:38.638799+00:00", "total": 5.00, "tip_amount": 0, "invoice_number": null, "order_lines": [{"total": 5.00, "qty": 1, "unit_price": 5.00, "vat_rate": 9.50, "voided": false}], "payments": [{"method": "cash"}]},
+    {"closed_at": "2026-09-03T07:31:59.334203+00:00", "total": 5.00, "tip_amount": 0, "invoice_number": null, "order_lines": [{"total": 5.00, "qty": 1, "unit_price": 5.00, "vat_rate": 9.50, "voided": false}], "payments": [{"method": "cash"}]},
+    {"closed_at": "2026-09-10T10:52:09.470813+00:00", "total": 5.00, "tip_amount": 0, "invoice_number": null, "order_lines": [{"total": 5.00, "qty": 1, "unit_price": 5.00, "vat_rate": 9.50, "voided": false}], "payments": [{"method": "cash"}]},
+    {"closed_at": "2026-09-10T10:52:19.129214+00:00", "total": 5.00, "tip_amount": 0, "invoice_number": null, "order_lines": [{"total": 5.00, "qty": 1, "unit_price": 5.00, "vat_rate": 9.50, "voided": false}], "payments": [{"method": "cash"}]}
+  ]
+}

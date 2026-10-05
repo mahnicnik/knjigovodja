@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import { izracunajDdv, obdobjeZaPrijavo, oznakaObdobja, shemaObracuna } from '@/lib/ddv'
 
 
 interface Message {
@@ -90,10 +91,11 @@ export default function AIPage() {
       + kpoIncome.reduce((s: number, e: any) => s + Number(e.income || 0), 0)
     const expenses = receipts.reduce((s: number, r: any) => s + Number(r.amount_net), 0)
       + kpoExpense.reduce((s: number, e: any) => s + Number(e.expense || 0), 0)
-    const vatOut = invoices.reduce((s: number, i: any) => s + Number(i.vat_amount), 0)
-      + kpoIncome.reduce((s: number, e: any) => s + Number(e.vat_out || 0), 0)
-    const vatIn = receipts.reduce((s: number, r: any) => s + Number(r.vat_amount), 0)
-      + kpoExpense.reduce((s: number, e: any) => s + Number(e.vat_in || 0), 0)
+    // Revizija K1 (oktober 2026): DDV iz lib/ddv.ts za obdobje, ki ga je treba
+    // PRIJAVITI (zadnje zakljuceno). Prej: vsota od zacetka poslovanja in
+    // Math.max(0, ...) - AI je dobil stevilko, ki ni ustrezala nobenemu obdobju.
+    const ddvObdobje = obdobjeZaPrijavo(now, shemaObracuna(o.vat_period))
+    const ddv = o.vat_registered ? await izracunajDdv(o.id, ddvObdobje, supabase).catch(() => null) : null
     const unpaid = invoices.filter((i: any) => i.status === 'sent')
     const overdue = invoices.filter((i: any) => i.status === 'sent' && i.due_date < today)
 
@@ -102,7 +104,8 @@ export default function AIPage() {
       vat_registered: o.vat_registered,
       revenue,
       expenses,
-      vatDue: Math.max(0, vatOut - vatIn),
+      vatDue: ddv?.obveznost ?? 0,
+      vatDueObdobje: oznakaObdobja(ddvObdobje),
       unpaidCount: unpaid.length,
       unpaidAmount: unpaid.reduce((s: number, i: any) => s + Number(i.amount_total), 0),
       overdueCount: overdue.length,

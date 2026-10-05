@@ -7,6 +7,7 @@ import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 import { formatEurNumber } from '@/lib/format'
 import { VAT_REGISTRATION_THRESHOLD, lokalniDatum } from '@/lib/tax-constants'
+import { izracunajDdv, razponObdobja, rokOddaje, shemaObracuna, oznakaObdobja, type DdvObdobje, type DdvRezultat } from '@/lib/ddv'
 
 // POPRAVLJENO (29.7.2026, audit portala):
 //  1. VHODNI DDV: prej trdo kodiran na €0.00 (s komentarjem "za zdaj brez
@@ -18,26 +19,13 @@ import { VAT_REGISTRATION_THRESHOLD, lokalniDatum } from '@/lib/tax-constants'
 //     "Q3 2026". Zdaj se filtrira po dejansko izbranem kvartalu.
 //  3. Dodana izbira kvartala/leta (prej vedno samo tekoci).
 
-const QUARTER_LABELS: Record<number, string> = {
-  1: '30. april', 2: '31. julij', 3: '31. oktober', 4: '31. januar'
-}
-
-function quarterRange(quarter: number, year: number) {
-  const startMonth = (quarter - 1) * 3
-  const from = `${year}-${String(startMonth + 1).padStart(2, '0')}-01`
-  const endMonth = startMonth + 2
-  const lastDay = new Date(year, endMonth + 1, 0).getDate()
-  const to = `${year}-${String(endMonth + 1).padStart(2, '0')}-${lastDay}`
-  return { from, to }
-}
-
 export default function DDVPage() {
   const [org, setOrg] = useState<any>(null)
   const [invoices, setInvoices] = useState<any[]>([])
   const [receipts, setReceipts] = useState<any[]>([])
-  const [kpoExpenses, setKpoExpenses] = useState<any[]>([])
-  // DODANO (16.8.2026): izstopni DDV iz knjige (POS blagajna, banka, kartice)
-  const [kpoIncome, setKpoIncome] = useState<any[]>([])
+  // Revizija K1 (oktober 2026): DDV racuna SAMO lib/ddv.ts - ista stevilka
+  // kot na nadzorni plosci, v evidenci DDV-O, porocilih, izvozu in API.
+  const [ddv, setDdv] = useState<DdvRezultat | null>(null)
   const [loading, setLoading] = useState(true)
   // DODANO (20.9.2026): drseči 12-mesečni promet za nezavezance, da vidijo,
   // koliko manjka do zakonske meje za OBVEZNO registracijo v sistem DDV
@@ -53,6 +41,13 @@ export default function DDVPage() {
   const now = new Date()
   const [quarter, setQuarter] = useState(Math.ceil((now.getMonth() + 1) / 3))
   const [year, setYear] = useState(now.getFullYear())
+  // Mesecna shema obracuna (organizations.vat_period = 'monthly').
+  const [mesec, setMesec] = useState(now.getMonth() === 0 ? 12 : now.getMonth())
+  const mesecno = shemaObracuna(org?.vat_period) === 'monthly'
+  const obdobje: DdvObdobje = mesecno
+    ? { leto: year, mesec }
+    : { leto: year, cetrtletje: quarter as 1 | 2 | 3 | 4 }
+  const oznaka = oznakaObdobja(obdobje)
 
   useEffect(() => {
     async function loadOrg() {
@@ -68,7 +63,7 @@ export default function DDVPage() {
   useEffect(() => {
     if (!org) return
     loadPeriod()
-  }, [org, quarter, year])
+  }, [org, quarter, year, mesec])
 
   useEffect(() => {
     // DODANO (20.9.2026): samo za nezavezance racunamo drsece 12-mesecno
@@ -110,9 +105,10 @@ export default function DDVPage() {
 
   async function loadPeriod() {
     setLoading(true)
-    const { from, to } = quarterRange(quarter, year)
+    const { od: from, do: to } = razponObdobja(obdobje)
 
-    const [invRes, recRes, kpoExpRes, kpoIncRes] = await Promise.all([
+    // Seznama racunov sta le za prikaz; ZNESKI DDV pridejo iz izracunajDdv.
+    const [invRes, recRes, rezultat] = await Promise.all([
       supabase
         .from('issued_invoices')
         .select('*')
@@ -128,47 +124,20 @@ export default function DDVPage() {
         .gte('receipt_date', from)
         .lte('receipt_date', to)
         .order('receipt_date', { ascending: false }),
-      // DODANO (30.7.2026): KPO stroski (bancni odlivi, place,
-      // provizije...) - SAMO brez receipt_id, da se ze rocno vneseni
-      // stroski ne stejejo dvakrat (ista varovalka kot na /porocila,
-      // /letni-pregled, /statistika).
-      supabase
-        .from('kpo_entries')
-        .select('vat_in, entry_date')
-        .eq('org_id', org.id)
-        .eq('entry_type', 'expense')
-        .is('receipt_id', null)
-        .gte('entry_date', from)
-        .lte('entry_date', to),
-      // DODANO (16.8.2026, KRITICNO): IZSTOPNI DDV iz knjige prihodkov.
-      // Obracun je bral izstopni DDV SAMO iz izdanih racunov, promet iz POS
-      // blagajne (in bancni ter karticni prilivi) pa se knjizi v kpo_entries -
-      // njihov DDV v obracunu NI bil zajet. Podjetje bi FURS-u prijavilo
-      // PREMALO izstopnega DDV. Filter invoice_id IS NULL prepreci dvojno
-      // stetje racunov, ki so ze zajeti zgoraj.
-      supabase
-        .from('kpo_entries')
-        .select('vat_out, entry_date')
-        .eq('org_id', org.id)
-        .eq('entry_type', 'income')
-        .is('invoice_id', null)
-        .gte('entry_date', from)
-        .lte('entry_date', to),
+      izracunajDdv(org.id, obdobje, supabase).catch((e) => { console.error(e); return null }),
     ])
 
     setInvoices(invRes.data || [])
     setReceipts(recRes.data || [])
-    setKpoExpenses(kpoExpRes.data || [])
-    setKpoIncome(kpoIncRes.data || [])
+    setDdv(rezultat)
     setLoading(false)
   }
 
-  const vatOut = invoices.reduce((s, i) => s + Number(i.vat_amount || 0), 0)
-    + kpoIncome.reduce((s, e) => s + Number(e.vat_out || 0), 0)
-  const vatIn = receipts.reduce((s, r) => s + Number(r.vat_amount || 0), 0)
-    + kpoExpenses.reduce((s, e) => s + Number(e.vat_in || 0), 0)
-  const vatDue = vatOut - vatIn
+  const vatOut = ddv?.izstopniDdv.skupaj ?? 0
+  const vatIn = ddv?.vstopniDdv.skupaj ?? 0
+  const vatDue = ddv?.obveznost ?? 0
   const isRefund = vatDue < 0
+  const rok = new Date(`${rokOddaje(obdobje)}T00:00:00`).toLocaleDateString('sl-SI', { day: 'numeric', month: 'long', year: 'numeric' })
 
   if (loading && !org) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -184,10 +153,19 @@ export default function DDVPage() {
           <h1 className="font-semibold text-gray-900 mt-0.5">DDV obračun</h1>
         </div>
         <div className="flex items-center gap-2">
-          <select value={quarter} onChange={e => setQuarter(Number(e.target.value))}
-            className="border border-gray-200 rounded-xl px-3 py-2 text-sm">
-            {[1,2,3,4].map(q => <option key={q} value={q}>Q{q}</option>)}
-          </select>
+          {mesecno ? (
+            <select value={mesec} onChange={e => setMesec(Number(e.target.value))}
+              className="border border-gray-200 rounded-xl px-3 py-2 text-sm">
+              {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                <option key={m} value={m}>{new Date(2000, m - 1, 1).toLocaleDateString('sl-SI', { month: 'long' })}</option>
+              ))}
+            </select>
+          ) : (
+            <select value={quarter} onChange={e => setQuarter(Number(e.target.value))}
+              className="border border-gray-200 rounded-xl px-3 py-2 text-sm">
+              {[1,2,3,4].map(q => <option key={q} value={q}>Q{q}</option>)}
+            </select>
+          )}
           <select value={year} onChange={e => setYear(Number(e.target.value))}
             className="border border-gray-200 rounded-xl px-3 py-2 text-sm">
             {[now.getFullYear(), now.getFullYear()-1, now.getFullYear()-2].map(y => <option key={y} value={y}>{y}</option>)}
@@ -248,15 +226,15 @@ export default function DDVPage() {
             {/* Rok opomnik */}
             <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4 mb-6 flex justify-between items-center">
               <div>
-                <div className="font-medium text-orange-800 text-sm">Q{quarter} {year} — rok oddaje</div>
-                <div className="text-orange-600 text-xs mt-0.5">{QUARTER_LABELS[quarter]} {quarter === 4 ? year + 1 : year}</div>
+                <div className="font-medium text-orange-800 text-sm">{oznaka} — rok oddaje</div>
+                <div className="text-orange-600 text-xs mt-0.5">{rok}</div>
               </div>
               <div className="text-orange-500 text-xs font-medium">DDV-O obrazec</div>
             </div>
 
             {/* Izračun */}
             <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
-              <h3 className="font-medium text-gray-900 mb-4">Q{quarter} {year} — izračun</h3>
+              <h3 className="font-medium text-gray-900 mb-4">{oznaka} — izračun</h3>
               {loading ? (
                 <p className="text-gray-400 text-sm text-center py-4">Nalagam...</p>
               ) : (
@@ -265,6 +243,19 @@ export default function DDVPage() {
                     <span className="text-sm text-gray-600">DDV izhod (od prodaj)</span>
                     <span className="font-semibold text-red-500">€{formatEurNumber(vatOut)}</span>
                   </div>
+                  {ddv && (() => {
+                    const vsota = (p: Record<string, { ddv: number }>) => Object.values(p).reduce((s, x) => s + x.ddv, 0)
+                    const vrstice = [
+                      ['Izdani računi', vsota(ddv.izstopniDdv.izdaniRacuni)],
+                      ['Blagajna (POS)', vsota(ddv.izstopniDdv.blagajna)],
+                      ['Knjiga (banka, kartice, drugo)', vsota(ddv.izstopniDdv.kpo)],
+                    ].filter(([, v]) => Number(v) !== 0) as [string, number][]
+                    return vrstice.length > 1 ? vrstice.map(([l, v]) => (
+                      <div key={l} className="flex justify-between items-center pl-3 text-xs text-gray-500">
+                        <span>{l}</span><span>€{formatEurNumber(v)}</span>
+                      </div>
+                    )) : null
+                  })()}
                   <div className="flex justify-between items-center py-2 border-b border-gray-50">
                     <span className="text-sm text-gray-600">DDV vhod (od nakupov)</span>
                     <span className="font-semibold text-green-600">−€{formatEurNumber(vatIn)}</span>
@@ -301,7 +292,7 @@ export default function DDVPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Namen</span>
-                    <span className="text-xs">DDV obračun Q{quarter}/{year}</span>
+                    <span className="text-xs">DDV obračun {oznaka}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Znesek</span>
@@ -313,7 +304,7 @@ export default function DDVPage() {
 
             {/* Izdani računi */}
             <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
-              <h3 className="font-medium text-gray-900 mb-4">Izdani računi — Q{quarter} {year}</h3>
+              <h3 className="font-medium text-gray-900 mb-4">Izdani računi — {oznaka}</h3>
               {invoices.length === 0 ? (
                 <p className="text-gray-500 text-sm text-center py-4">Ni računov v tem kvartalu</p>
               ) : (
@@ -334,7 +325,7 @@ export default function DDVPage() {
 
             {/* Prejeti računi (vhodni DDV) */}
             <div className="bg-white rounded-2xl border border-gray-100 p-6">
-              <h3 className="font-medium text-gray-900 mb-4">Prejeti računi (vhodni DDV) — Q{quarter} {year}</h3>
+              <h3 className="font-medium text-gray-900 mb-4">Prejeti računi (vhodni DDV) — {oznaka}</h3>
               {receipts.length === 0 ? (
                 <p className="text-gray-500 text-sm text-center py-4">Ni prejetih računov v tem kvartalu</p>
               ) : (

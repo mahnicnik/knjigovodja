@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import { naloziDdvPodatke, izracunajDdvIzPodatkov } from '@/lib/ddv'
 
 // POPRAVLJENO (17.8.2026): slovenski zapis zneska namesto angleskega.
 const _eur = (n: number) => new Intl.NumberFormat('sl-SI', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0)
@@ -58,7 +59,7 @@ export default function PoslovnaPorocila() {
       const yearStart = `${year}-01-01`
       const yearEnd = `${year}-12-31`
 
-      const [invRes, expRes, kpoRes, kpoExpRes] = await Promise.all([
+      const [invRes, expRes, kpoRes, kpoExpRes, ddvPodatki] = await Promise.all([
         supabase.from('issued_invoices').select('*').eq('org_id', member.org_id).gte('issue_date', yearStart).lte('issue_date', yearEnd).neq('status', 'draft').or('zoi.is.null,zoi.not.like.DEMO-%'),
         supabase.from('receipts').select('id, org_id, vendor, vendor_tax_num, receipt_date, receipt_number, amount_net, vat_rate, vat_amount, amount_total, category, description, is_deductible, status, kpo_entry_id, created_at, updated_at, attachment_type, attachment_path, image_url').eq('org_id', member.org_id).gte('receipt_date', yearStart).lte('receipt_date', yearEnd),
         // DODANO (30.7.2026): KPO prihodki (POS promet, banka, kartice...)
@@ -69,6 +70,10 @@ export default function PoslovnaPorocila() {
         // provizije...) - SIMETRICNO s prihodki zgoraj. SAMO brez
         // receipt_id, da se ze rocno vneseni stroski ne stejejo dvakrat.
         supabase.from('kpo_entries').select('expense, vat_in, entry_date').eq('org_id', member.org_id).eq('entry_type', 'expense').is('receipt_id', null).gte('entry_date', yearStart).lte('entry_date', yearEnd),
+        // Revizija K1 (oktober 2026): DDV racuna SAMO lib/ddv.ts. Prej je stran
+        // stela izstopni DDV le iz izdanih racunov - brez POS blagajne (pri
+        // SIRM Q3 2026 je manjkalo 2.252,91 EUR in stran je kazala vracilo).
+        naloziDdvPodatke(supabase, member.org_id, yearStart, yearEnd),
       ])
 
       const invoices = invRes.data ?? []
@@ -87,9 +92,9 @@ export default function PoslovnaPorocila() {
           + monthKpo.reduce((s, e) => s + Number(e.income || 0), 0)
         const expenses = monthExp.reduce((s, r) => s + Number(r.amount_net ?? 0), 0)
           + monthKpoExp.reduce((s, e) => s + Number(e.expense || 0), 0)
-        const vatOut = monthInv.reduce((s, i) => s + Number(i.vat_amount), 0)
-        const vatIn = monthExp.reduce((s, r) => s + Number(r.vat_amount ?? 0), 0)
-          + monthKpoExp.reduce((s, e) => s + Number(e.vat_in || 0), 0)
+        const ddvMeseca = izracunajDdvIzPodatkov(ddvPodatki, { leto: year, mesec: i + 1 })
+        const vatOut = ddvMeseca.izstopniDdv.skupaj
+        const vatIn = ddvMeseca.vstopniDdv.skupaj
         return { month: i, revenue, expenses, profit: revenue - expenses, vatOut, vatIn }
       })
       setMonthlyData(monthly)
@@ -97,15 +102,16 @@ export default function PoslovnaPorocila() {
       // Skupni seštevki
       const totalRevenue = monthly.reduce((s, m) => s + m.revenue, 0)
       const totalExpenses = monthly.reduce((s, m) => s + m.expenses, 0)
-      const totalVatOut = monthly.reduce((s, m) => s + m.vatOut, 0)
-      const totalVatIn = monthly.reduce((s, m) => s + m.vatIn, 0)
+      const ddvLeta = izracunajDdvIzPodatkov(ddvPodatki, { leto: year })
+      const totalVatOut = ddvLeta.izstopniDdv.skupaj
+      const totalVatIn = ddvLeta.vstopniDdv.skupaj
       setTotals({
         revenue: totalRevenue,
         expenses: totalExpenses,
         profit: totalRevenue - totalExpenses,
         vatOut: totalVatOut,
         vatIn: totalVatIn,
-        vatDue: totalVatOut - totalVatIn, // POPRAVLJENO 30.7.2026: prej Math.max(0,...) skril upravicenost do vracila
+        vatDue: ddvLeta.obveznost, // POPRAVLJENO 30.7.2026: prej Math.max(0,...) skril upravicenost do vracila
       })
 
       // Po strankah
@@ -361,7 +367,7 @@ export default function PoslovnaPorocila() {
                     </td>
                     {org?.vat_registered && (
                       <td style={{ padding: '10px 16px', fontSize: 12, textAlign: 'right', color: '#888' }}>
-                        {m.vatOut > 0 ? fmt(Math.max(0, m.vatOut - m.vatIn)) : '—'}
+                        {m.vatOut !== 0 || m.vatIn !== 0 ? fmtN(m.vatOut - m.vatIn) : '—'}
                       </td>
                     )}
                   </tr>

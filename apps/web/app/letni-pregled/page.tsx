@@ -8,6 +8,7 @@ import { SP_MIN_CONTRIBUTIONS_YEAR, EMPLOYEE_CONTRIBUTIONS, EMPLOYER_CONTRIBUTIO
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 import { formatEurNumber, idZaDdv } from '@/lib/format'
+import { naloziDdvPodatke, izracunajDdvIzPodatkov } from '@/lib/ddv'
 
 // POPRAVLJENO 30.7.2026 (audit): stari seznam razredov je imel MOCNO
 // zastarele vrednosti (razred 1 = 215 EUR/mes, privzeti razred 8 = 450
@@ -95,7 +96,7 @@ export default function LentniPregledPage() {
     const yearStart = `${selectedYear}-01-01`
     const yearEnd = `${selectedYear}-12-31`
 
-    const [invoicesRes, receiptsRes, kpoRes, employeesRes] = await Promise.all([
+    const [invoicesRes, receiptsRes, kpoRes, employeesRes, ddvPodatki] = await Promise.all([
       supabase.from('issued_invoices').select('*').eq('org_id', org.id)
         .neq('status', 'draft').or('zoi.is.null,zoi.not.like.DEMO-%').gte('issue_date', yearStart).lte('issue_date', yearEnd),
       supabase.from('receipts').select('id, org_id, vendor, vendor_tax_num, receipt_date, receipt_number, amount_net, vat_rate, vat_amount, amount_total, category, description, is_deductible, status, kpo_entry_id, created_at, updated_at, attachment_type, attachment_path, image_url').eq('org_id', org.id)
@@ -103,6 +104,9 @@ export default function LentniPregledPage() {
       supabase.from('kpo_entries').select('*').eq('org_id', org.id)
         .gte('entry_date', yearStart).lte('entry_date', yearEnd),
       supabase.from('employees').select('*').eq('org_id', org.id),
+      // Revizija K1 (oktober 2026): DDV racuna SAMO lib/ddv.ts (z blagajno,
+      // ki je tu prej manjkala).
+      naloziDdvPodatke(supabase, org.id, yearStart, yearEnd),
     ])
 
     const invoices = invoicesRes.data || []
@@ -130,9 +134,9 @@ export default function LentniPregledPage() {
         + monthKpo.reduce((s: number, e: any) => s + Number(e.income || 0), 0)
       const expenses = monthExp.reduce((s: number, r: any) => s + Number(r.amount_net), 0)
         + monthKpoExp.reduce((s: number, e: any) => s + Number(e.expense || 0), 0)
-      const vatOut = monthInv.reduce((s: number, i: any) => s + Number(i.vat_amount), 0)
-      const vatIn = monthExp.reduce((s: number, r: any) => s + Number(r.vat_amount), 0)
-        + monthKpoExp.reduce((s: number, e: any) => s + Number(e.vat_in || 0), 0)
+      const ddvMeseca = izracunajDdvIzPodatkov(ddvPodatki, { leto: selectedYear, mesec: i + 1 })
+      const vatOut = ddvMeseca.izstopniDdv.skupaj
+      const vatIn = ddvMeseca.vstopniDdv.skupaj
       return { month: i, revenue, expenses, vatOut, vatIn, profit: revenue - expenses }
     })
 
@@ -148,9 +152,9 @@ export default function LentniPregledPage() {
       + kpoIncomeOnly.reduce((s: number, e: any) => s + Number(e.income || 0), 0)
     const totalExpenses = receipts.reduce((s: number, r: any) => s + Number(r.amount_net), 0)
       + kpoExpenseOnly.reduce((s: number, e: any) => s + Number(e.expense || 0), 0)
-    const totalVatOut = invoices.reduce((s: number, i: any) => s + Number(i.vat_amount), 0)
-    const totalVatIn = receipts.reduce((s: number, r: any) => s + Number(r.vat_amount), 0)
-      + kpoExpenseOnly.reduce((s: number, e: any) => s + Number(e.vat_in || 0), 0)
+    const ddvLeta = izracunajDdvIzPodatkov(ddvPodatki, { leto: selectedYear })
+    const totalVatOut = ddvLeta.izstopniDdv.skupaj
+    const totalVatIn = ddvLeta.vstopniDdv.skupaj
 
     // Prispevki s.p.
     // POPRAVLJENO 30.7.2026: dejanske nastavitve namesto zastarelega razreda
@@ -168,7 +172,7 @@ export default function LentniPregledPage() {
     const adjustedBase = Math.max(0, taxableBase - generalRelief)
     const incomeTax = calcTax(adjustedBase)
     const netIncome = totalRevenue - totalExpenses - annualContributions - salaryExpense - incomeTax
-    const vatDue = totalVatOut - totalVatIn
+    const vatDue = ddvLeta.obveznost
 
     setData({
       invoices, receipts, kpo, employees, monthly,

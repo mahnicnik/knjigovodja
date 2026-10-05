@@ -9,6 +9,7 @@ import LegalUpdatesWidget from '@/components/LegalUpdatesWidget'
 import { calculateNetIncome, projectMonthlyRevenue, checkNormirancePragRisk, getTaxSystemLabel, type LegalForm, type TaxSystem } from '@/lib/tax-calculator'
 import { generateCashFlow, formatEur, vatPeriodsInWindow, estimateDailyIncomeByWeekday, detectRecurringExpenses, type OpenInvoice, type Obligation, type RecurringExpense } from '@/lib/cash-flow'
 import { getActiveMembership } from '@/lib/active-org'
+import { naloziDdvPodatke, izracunajDdvIzPodatkov, razponObdobja, tekoceObdobje, shemaObracuna } from '@/lib/ddv'
 import OrgSwitcher from '@/components/OrgSwitcher'
 import AppLayout from '@/components/AppLayout'
 
@@ -283,11 +284,9 @@ export default function DashboardPage() {
     const d = lokalniDatum(new Date(year, month - 7, 1))
     return d < yearStart ? d : yearStart
   })()
-  // DODANO (17.8.2026): obdobje TEKOCEGA CETRTLETJA. Obveznost za DDV se je
-  // racunala iz VSEH racunov od zacetka poslovanja, prikazana pa kot znesek za
-  // tekoce cetrtletje - kar je bilo napacno v obe smeri.
+  // Konec tekocega cetrtletja - samo za okno branja KPO (napoved pretoka).
+  // DDV obdobja doloca lib/ddv.ts (revizija K1).
   const kvartal = Math.floor(month / 3)
-  const quarterStart = `${year}-${String(kvartal * 3 + 1).padStart(2,'0')}-01`
   const quarterEndDate = new Date(year, kvartal * 3 + 3, 0)
   const quarterEnd = `${year}-${String(kvartal * 3 + 3).padStart(2,'0')}-${String(quarterEndDate.getDate()).padStart(2,'0')}`
   // POPRAVLJENO (16.8.2026): prispevki in akontacija zapadejo 20. v mesecu,
@@ -533,34 +532,6 @@ export default function DashboardPage() {
       // karticne provizije, ki so v KPO knjigi in NIMAJO prejetega racuna,
       // niso bili nikjer vsteti - strosek je bil prenizek.
       const expenses = receipts.filter((r:any) => r.receipt_date >= monthStart && r.receipt_date <= monthEnd).reduce((s:number,r:any) => s + Number(r.amount_net), 0) + kpoOdhodekMesec
-      // POPRAVLJENO (17.8.2026): DDV samo za TEKOCE CETRTLETJE. Prej so se
-      // sestevali VSI racuni in stroski od zacetka poslovanja, rezultat pa se
-      // je prikazal kot obveznost za tekoce cetrtletje - torej povsem druga
-      // stevilka. Pri Niku je vsota padla v minus, zato je Dashboard kazal
-      // niclo namesto 470,87 EUR.
-      // POPRAVLJENO (19.8.2026): obracunani DDV je stel SAMO izdane racune iz
-      // portala. Promet iz POS blagajne ima svoj DDV zapisan v KPO knjigi
-      // (vat_out), a ga tu ni bilo - kdor prodaja prek blagajne, je videl
-      // prenizko obveznost za DDV. To je davcna stevilka, zato je vazno.
-      const kpoVatOutQuarter = kpoVsi
-        .filter((e:any) => !e.invoice_id && e.entry_date >= quarterStart && e.entry_date <= quarterEnd)
-        .reduce((s:number,e:any) => s + Number(e.vat_out || 0), 0)
-      // POPRAVLJENO (prelet 295): simetricno kot pri vatOut zgoraj - vhodni DDV
-      // iz KPO vnosov brez receipt_id (npr. e-postno skeniranje, banka, kartice)
-      // se ni pristeval, zato je bila obveznost za DDV precenjena. Glej isti
-      // vzorec v letni-pregled/page.tsx in porocila/page.tsx.
-      const kpoVatInQuarter = kpoVsi
-        .filter((e:any) => !e.receipt_id && e.entry_date >= quarterStart && e.entry_date <= quarterEnd)
-        .reduce((s:number,e:any) => s + Number(e.vat_in || 0), 0)
-
-      const vatOut = invoices
-        .filter((i:any) => i.issue_date >= quarterStart && i.issue_date <= quarterEnd)
-        .reduce((s:number,i:any) => s + Number(i.vat_amount), 0)
-        + kpoVatOutQuarter
-      const vatIn = receipts
-        .filter((r:any) => r.receipt_date >= quarterStart && r.receipt_date <= quarterEnd)
-        .reduce((s:number,r:any) => s + Number(r.vat_amount), 0)
-        + kpoVatInQuarter
       const unpaid = invoices.filter((i:any) => i.status === 'sent')
       const overdue = invoices.filter((i:any) => i.status === 'sent' && i.due_date < today)
       const recent = [...invoices].sort((a:any,b:any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 5)
@@ -600,23 +571,25 @@ export default function DashboardPage() {
         : ['normirani_80', 'normirani_40', 'dejanski'].includes(o.tax_system) ? 'sp'
         : null
 
+      // DDV (revizija K1, oktober 2026): racuna SAMO lib/ddv.ts - isti izracun
+      // kot na /ddv, /ddv/evidenca, /porocila, /letni-pregled, izvozu in API.
+      // Podatke nalozimo ENKRAT za vsa obdobja, ki jih ta stran prikaze
+      // (tekoce obdobje + obdobja z rokom placila v naslednjih 30 dneh).
+      // Obveznost je lahko NEGATIVNA (vracilo) - ne skrivamo je.
+      const shema = shemaObracuna(o.vat_period)
+      const obdobjaRokov = o.vat_registered ? vatPeriodsInWindow(now, shema) : []
+      const tekoce = razponObdobja(tekoceObdobje(now, shema))
+      const ddvOd = [tekoce.od, ...obdobjaRokov.map(p => p.start)].sort()[0]
+      const ddvDo = [tekoce.do, ...obdobjaRokov.map(p => p.end)].sort().slice(-1)[0]
+      const ddvPodatki = o.vat_registered ? await naloziDdvPodatke(supabase, o.id, ddvOd, ddvDo) : null
+      const ddvTekoce = ddvPodatki ? izracunajDdvIzPodatkov(ddvPodatki, tekoceObdobje(now, shema)) : null
       // PRELET 341: DDV po davcnih obdobjih, katerih rok placila pade v
       // naslednjih 30 dni (rok = zadnji dan meseca po koncu obdobja).
-      const ddvZaObdobje = (od: string, do_: string) => {
-        const izh = invoices.filter((i: any) => i.issue_date >= od && i.issue_date <= do_)
-          .reduce((s: number, i: any) => s + Number(i.vat_amount || 0), 0)
-          + kpoVsi.filter((e: any) => !e.invoice_id && e.entry_date >= od && e.entry_date <= do_)
-            .reduce((s: number, e: any) => s + Number(e.vat_out || 0), 0)
-        const vst = receipts.filter((r: any) => r.receipt_date >= od && r.receipt_date <= do_)
-          .reduce((s: number, r: any) => s + Number(r.vat_amount || 0), 0)
-          + kpoVsi.filter((e: any) => !e.receipt_id && e.entry_date >= od && e.entry_date <= do_)
-            .reduce((s: number, e: any) => s + Number(e.vat_in || 0), 0)
-        return Math.max(0, izh - vst)
-      }
-      const vatObligations: Obligation[] = o.vat_registered
-        ? vatPeriodsInWindow(now, o.vat_period === 'monthly' ? 'monthly' : 'quarterly').map(p => ({
+      // Vracilo (negativen znesek) napoved pretoka sama izpusti - ni odliv.
+      const vatObligations: Obligation[] = ddvPodatki
+        ? obdobjaRokov.map(p => ({
             date: p.deadline,
-            amount: ddvZaObdobje(p.start, p.end),
+            amount: izracunajDdvIzPodatkov(ddvPodatki, { od: p.start, do: p.end }).obveznost,
             label: p.ended ? p.label : `${p.label} (ocena do danes)`,
           }))
         : []
@@ -627,7 +600,7 @@ export default function DashboardPage() {
         revenue, expenses, kpoReceivedMonth,
         // PRELET 217: razclenitev za preklop med viri.
         prihodekPortal, prihodekBlagajna, prihodekDrugo,
-        vatDue: Math.max(0, vatOut - vatIn),
+        vatDue: ddvTekoce?.obveznost ?? 0,
         unpaidCount: unpaid.length,
         unpaidAmount: unpaid.reduce((s:number,i:any) => s + Number(i.amount_total), 0),
         overdueAmount: overdue.reduce((s:number,i:any) => s + Number(i.amount_total), 0),

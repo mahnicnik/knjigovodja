@@ -12,6 +12,7 @@
  */
 
 import * as XLSX from 'xlsx'
+import type { DdvRezultat } from '@/lib/ddv'
 
 export interface IssuedInvoiceRow {
   invoice_number: string
@@ -88,6 +89,10 @@ export interface ExportInput {
   // racunovodja NI dobil nikjer - v KPO se zapise samo ena vrstica dnevnega
   // prihodka, razclenitev po DDV stopnjah pa je ostala zaprta v z_reports.
   zReports?: ZReportRow[]
+  // Revizija K1 (oktober 2026): DDV bilanca iz lib/ddv.ts (izracunajDdv) -
+  // ista stevilka kot na nadzorni plosci in v evidenci DDV-O. Izvoz je NE
+  // racuna sam (prej: samo izdani in prejeti racuni, brez blagajne in KPO).
+  ddv: DdvRezultat
 }
 
 export interface ZReportRow {
@@ -316,9 +321,10 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
   XLSX.utils.book_append_sheet(wb, wsKpr, 'Prejeti računi (KPR)')
 
   // ===== SHEET 3: REKAPITULACIJA =====
-  const vatOut22 = input.issuedInvoices.reduce((s, i) => s + Number(i.vat_amount), 0)
-  const vatIn22 = input.receipts.reduce((s, r) => s + Number(r.vat_amount ?? 0), 0)
-  const vatBalance = vatOut22 - vatIn22
+  const vatOutSkupaj = input.ddv.izstopniDdv.skupaj
+  const vatInSkupaj = input.ddv.vstopniDdv.skupaj
+  const vatBalance = input.ddv.obveznost
+  const vsotaDdv = (p: Record<string, { ddv: number }>) => Object.values(p).reduce((s, x) => s + x.ddv, 0)
 
   const sumRows = [
     [`MESEČNA REKAPITULACIJA — ${input.periodLabel}`],
@@ -328,18 +334,23 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
     ['PRIHODKI', '', ''],
     ['Št. izdanih računov', input.issuedInvoices.length, ''],
     ['Skupaj prihodki (brez DDV)', formatAmount(totalNet), 'EUR'],
-    ['DDV izhodni (skupaj)', formatAmount(totalVat), 'EUR'],
+    ['DDV na izdanih računih', formatAmount(totalVat), 'EUR'],
     ['Skupaj prihodki z DDV', formatAmount(totalGross), 'EUR'],
     [],
     ['ODHODKI / STROŠKI', '', ''],
     ['Št. prejetih računov', input.receipts.length, ''],
     ['Skupaj stroški (brez DDV)', formatAmount(totalKprNet), 'EUR'],
-    ['DDV vstopni (skupaj)', formatAmount(totalKprVat), 'EUR'],
+    ['DDV na prejetih računih', formatAmount(totalKprVat), 'EUR'],
     ['Skupaj stroški z DDV', formatAmount(totalKprGross), 'EUR'],
     [],
     ['DDV BILANCA', '', ''],
-    ['DDV izhodni', formatAmount(vatOut22), 'EUR'],
-    ['DDV vstopni', formatAmount(vatIn22), 'EUR'],
+    ['DDV izhodni', formatAmount(vatOutSkupaj), 'EUR'],
+    ['  od tega izdani računi', formatAmount(vsotaDdv(input.ddv.izstopniDdv.izdaniRacuni)), 'EUR'],
+    ['  od tega blagajna (POS)', formatAmount(vsotaDdv(input.ddv.izstopniDdv.blagajna)), 'EUR'],
+    ['  od tega knjiga (banka, kartice, drugo)', formatAmount(vsotaDdv(input.ddv.izstopniDdv.kpo)), 'EUR'],
+    ['DDV vstopni', formatAmount(vatInSkupaj), 'EUR'],
+    ['  od tega prejeti računi', formatAmount(vsotaDdv(input.ddv.vstopniDdv.prejetiRacuni)), 'EUR'],
+    ['  od tega knjiga', formatAmount(vsotaDdv(input.ddv.vstopniDdv.kpo)), 'EUR'],
     ['DDV za plačilo (oz. vračilo če negativen)', formatAmount(vatBalance), 'EUR'],
     [],
     ['POSLOVNI REZULTAT', '', ''],

@@ -20,6 +20,7 @@
 
 import type { LegalForm, TaxSystem } from './tax-calculator'
 import { lokalniDatum } from '@/lib/tax-constants'
+import { razponObdobja, rokOddaje, type DdvObdobje } from '@/lib/ddv'
 
 export interface OpenInvoice {
   id: string
@@ -167,19 +168,24 @@ export function vatPeriodsInWindow(
   m = Math.floor(m / len) * len
   while (m < 0) { m += 12; y -= 1 }
   for (let i = 0; i < 12; i++) {
-    const start = new Date(y, m, 1)
-    const end = new Date(y, m + len, 0)
-    const deadline = new Date(y, m + len + 1, 0)
+    // Meje obdobja in rok iz lib/ddv - ista definicija kot pri izracunu DDV
+    // in opomniku za oddajo (revizija K1/K3).
+    const obdobje: DdvObdobje = period === 'monthly'
+      ? { leto: y, mesec: m + 1 }
+      : { leto: y, cetrtletje: (Math.floor(m / 3) + 1) as 1 | 2 | 3 | 4 }
+    const { od, do: konec } = razponObdobja(obdobje)
+    const rok = rokOddaje(obdobje)
+    const deadline = new Date(`${rok}T00:00:00`)
     if (deadline >= today && deadline <= windowEnd) {
       const label = period === 'monthly'
-        ? `DDV za ${start.toLocaleDateString('sl-SI', { month: 'long', year: 'numeric' })}`
+        ? `DDV za ${new Date(y, m, 1).toLocaleDateString('sl-SI', { month: 'long', year: 'numeric' })}`
         : `DDV za ${Math.floor(m / 3) + 1}. četrtletje ${y}`
       out.push({
-        start: lokalniDatum(start),
-        end: lokalniDatum(end),
-        deadline: lokalniDatum(deadline),
+        start: od,
+        end: konec,
+        deadline: rok,
         label,
-        ended: end < today,
+        ended: new Date(`${konec}T00:00:00`) < today,
       })
     }
     m += len

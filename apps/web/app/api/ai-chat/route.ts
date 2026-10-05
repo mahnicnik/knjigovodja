@@ -80,7 +80,7 @@ ${orgData ? `PODATKI O STRANKI:
 - Letni prihodki YTD: €${orgData.revenue?.toFixed(2) || '0.00'}
 - Letni odhodki YTD: €${orgData.expenses?.toFixed(2) || '0.00'}
 - Neto dobiček YTD: €${((orgData.revenue || 0) - (orgData.expenses || 0)).toFixed(2)}
-- DDV dolg: €${orgData.vatDue?.toFixed(2) || '0.00'}
+- DDV obveznost za ${orgData.vatDueObdobje || 'zadnje obdobje'}: €${orgData.vatDue?.toFixed(2) || '0.00'} (negativno = vračilo)
 - Neplačani računi: ${orgData.unpaidCount || 0} računov za €${orgData.unpaidAmount?.toFixed(2) || '0.00'}
 - Zamude: ${orgData.overdueCount || 0} računov v zamudi
 - Zaposleni: ${orgData.hasEmployees ? 'Da' : 'Ne'}
