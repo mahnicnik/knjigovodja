@@ -1,0 +1,425 @@
+// SAMODEJNO GENERIRANO - NE UREJAJ ROCNO.
+// Vir: docs/knowledge-base/*.md · skripta: apps/web/scripts/zgradi-bazo-znanja.mjs
+// Spremeni .md dokument in pozeni "node scripts/zgradi-bazo-znanja.mjs" (ali npm run build).
+
+export interface KbDokument { modul: string; naslov: string; poti: string[]; vloge: string[]; posodobljeno: string; vsebina: string }
+export interface KbFaq { vprasanje: string; modul: string; kontekst: 'pos' | 'portal' | 'vse' }
+
+export const BAZA_ZNANJA: { verzija: string; kazalo: string; dokumenti: KbDokument[]; faq: KbFaq[] } = {
+  "verzija": "f5f97c22a1a6",
+  "kazalo": "# Računko – baza znanja asistenta\n\nRačunko je slovenska aplikacija za s.p. in manjša podjetja: **portal** (računi, stroški, KPO, DDV, davki, plače, izvoz za računovodjo) in **POS davčna blagajna** (prodaja, mize, paketi in članarine, zaloga z normativi, koledar, Z-poročila) v enem programu. Deluje v brskalniku, kot namizna aplikacija za Windows in na Androidu.\n\n## Splošno (velja povsod)\n\n- **Paketi**: Free (do 5 računov skupaj, brez AI in e-pošte), **Pro** (12,99 €/mes – neomejeni računi, pošiljanje po e-pošti, AI skeniranje in AI branja PDF, AI računovodja), **Pro + POS** (29,99 €/mes – plus POS blagajna, koledar, paketi, zaloga). Nadgradnja: Nastavitve → Naročnina.\n- **Nastavitve portala** odpreš s klikom na **ime podjetja spodaj v levem meniju**. **Nastavitve blagajne** so v blagajni: levi meni → **Nastavitve**. To sta različni mesti.\n- **Vloge v portalu**: Lastnik, Admin, Blagajnik (samo POS), Gledalec, Računovodja. **Osebje blagajne** se prijavlja s PIN-om (Lastnik, Vodja, Blagajnik, Trener, Terapevt).\n- **Meni** prikazuje samo module, izbrane ob registraciji; manjkajoč modul vklopiš z **Prilagodi meni**.\n- Davčno potrjenega računa ni mogoče izbrisati – popravek je storno, vračilo ali dobropis.\n- Asistent pomaga pri uporabi aplikacije. Za davčne nasvete je **AI računovodja** (Pro); za hrošče gumb **Pošlji podpori**.\n\n## Moduli\n\n| Dokument | Vsebina |\n|---|---|\n| pos-osnove.md | zagon blagajne, prostor in naprava, PIN, zaklepanje, meni zaslonov, odpri/vmesno stanje/zaključi, shranjena naročila |\n| pos-artikli-ddv.md | kategorije, artikli, tipi artiklov, DDV stopnja artikla, oprostitve, modifikatorji, množične cene, uvoz cenika z AI, happy hour |\n| pos-normativi-surovine.md | normativi (recepti), surovine, odštevanje zaloge, pogoste napake |\n| pos-prodaja-placila.md | košarica, popusti, razdelitev računa, predračun, odpis/lastna poraba/reprezentanca, načini plačila, Stripe QR, račun na podjetje |\n| pos-racuni-storno-vracila.md | zaslon Računi, ponovni izpis, sprememba plačila, storno, vračilo |\n| pos-mize.md | prostori, mize, prenos, združevanje |\n| pos-paketi-clanarine.md | vrste paketov, samodejna obnova, prodaja, obroki, zamrznitev, podaljšanje, predplačilo, unovčenje |\n| pos-zakljucek-z-porocilo.md | zaključek izmene, Z-poročilo, vmesno stanje, poročila, dnevni zaključki |\n| pos-zaloga-dobavnice-inventura.md | zaloga, uvoz dobavnic z AI, ujemanje artiklov in surovin, inventura |\n| pos-koledar-storitve-kuhinja.md | storitve, koledar, stranke, kuhinja (KDS), obveščanje strank, opravila, interni akt |\n| furs-fiskalizacija.md | certifikat, poslovni prostori, naprave, test/produkcija, nastavitve FURS na blagajni |\n| ekipa-vloge-osebje.md | vabila v ekipo, vloge, osebje blagajne s PIN-om, dovoljenja |\n| portal-racuni.md | izdani računi, nov račun, plačila, storno, dobropis, e-račun XML, uvoz iz PDF, zahtevki za plačilo |\n| portal-predracuni-dobavnice-avansni-ponavljajoci.md | predračuni, dobavnice, avansni in ponavljajoči računi, e-račun 2028 |\n| portal-stroski-banka-kartice.md | stroški, AI skeniranje, e-mail skeniranje (Gmail), bančni uvoz, kartični obračuni |\n| portal-kpo-ddv-davki.md | KPO knjiga, DDV obračun, DDV-O, prispevki QR, dohodnina, normirani, letni pregled |\n| portal-zaposleni.md | plače, plačilne liste, REK-1, dopust, potni stroški, regres, potni nalogi, evidenca časa |\n| portal-evidence-porocila.md | poročila, statistika, kilometrina, zaloge v portalu, amortizacija, reprezentanca, službeni avto |\n| izvoz-racunovodja.md | izvoz XLSX/CSV (Vasco, Pantheon), portal računovodje, povabilo računovodje |\n| portal-stripe.md | Stripe na treh mestih: plačila s kartico, integracija (uvoz plačil), naročnina |\n| portal-nastavitve.md | razdelki nastavitev, profil in logotip, DDV & prispevki, 2FA, API ključi, prenosi |\n| portal-pregled-ai.md | nadzorna plošča, vodič, rokovnik, opomniki, AI računovodja, pomoč, onboarding |\n\n## Pogosta vprašanja\n\nTa seznam asistent prikaže kot hitre bližnjice (vrstni red je pomemben, prvih nekaj je vidnih).\n\n- Kako dodam artikel z normativom (recept) na blagajni? | pos-normativi-surovine.md | pos\n- Kako naredim Z-poročilo ob koncu dneva? | pos-zakljucek-z-porocilo.md | pos\n- Kje nastavim DDV stopnjo za artikel? | pos-artikli-ddv.md | pos\n- Kako vklopim samodejno podaljševanje paketa ali članarine? | pos-paketi-clanarine.md | pos\n- Kako storniram račun na blagajni? | pos-racuni-storno-vracila.md | pos\n- Kako razdelim račun med več oseb? | pos-prodaja-placila.md | pos\n- Kje v portalu najdem nastavitve za Stripe? | portal-stripe.md | portal\n- Kako izdam nov račun? | portal-racuni.md | portal\n- Kako povežem FURS certifikat in poslovni prostor? | furs-fiskalizacija.md | portal\n- Kako uvozim bančni izpisek? | portal-stroski-banka-kartice.md | portal\n- Kako oddam DDV-O? | portal-kpo-ddv-davki.md | portal\n- Kako povabim računovodjo? | izvoz-racunovodja.md | portal",
+  "dokumenti": [
+    {
+      "modul": "ekipa-vloge-osebje",
+      "naslov": "Ekipa v portalu (vabila, vloge) in osebje blagajne (PIN, vloge, dovoljenja)",
+      "poti": [
+        "/nastavitve?tab=ekipa",
+        "/nastavitve/ekipa",
+        "/pos",
+        "/invite/[id]"
+      ],
+      "vloge": [
+        "lastnik",
+        "admin"
+      ],
+      "posodobljeno": "2026-10-05",
+      "vsebina": "# Ekipa in vloge\n\nV Računku sta **dve ločeni ravni** dostopa – to je pogost vir zmede:\n\n1. **Člani ekipe v portalu** – osebe z lastnim e-mailom in geslom za Računko (**Nastavitve → Ekipa**).\n2. **Osebje blagajne** – osebe, ki se na blagajno prijavijo s **PIN-om** (**POS → Nastavitve → Zaposleni & PIN**). Nimajo nujno lastnega računa v Računku.\n\n## 1. Člani ekipe v portalu\n\n**Nastavitve → Ekipa** → vpiši e-mail, izberi vlogo, **Pošlji povabilo**. Oseba prejme e-mail s povezavo (velja 7 dni), ustvari račun ali se prijavi in takoj dobi dostop.\n\n| Vloga | Dostop |\n|---|---|\n| Lastnik | vse |\n| Admin | vse razen nastavitev plačil in brisanja organizacije |\n| Blagajnik | samo POS blagajna (`/pos`) |\n| Gledalec | samo ogled (portal računovodje, izvoz, blagajna), brez urejanja |\n| Računovodja | ogled in izvoz: portal računovodje, izvoz, KPO knjiga, računi, stroški – brez izdajanja ali urejanja računov |\n\nVlogo člana spremeniš ali ga odstraniš na istem mestu; čakajoče povabilo lahko prekličeš.\n\n## 2. Osebje blagajne (PIN)\n\n1. **POS → Nastavitve → Zaposleni & PIN** (razdelek vidi samo lastnik) → **Nov zaposleni**.\n2. **Ime in priimek**, **Vloga**, **PIN koda** (1–4 števke, ne iz samih enakih števk, ne sme biti enaka PIN-u drugega zaposlenega), barva.\n3. **Dovoljenja** – privzeto po vlogi; posamezne pravice lahko spremeniš (oznaka »Odstopa od vloge«).\n4. **Shrani**.\n\nIsto osebje lahko urejaš tudi v portalu: **Nastavitve → Davčna blagajna → Osebje blagajne**.\n\n### Privzete pravice po vlogah blagajne\n\n| Vloga | Prodaja | Odpri blagajno | Storno | Vračilo | Dnevni zaključek | Termini |\n|---|---|---|---|---|---|---|\n| Lastnik | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |\n| Vodja | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |\n| Blagajnik | ✓ | ✓ | – | – | – | ✓ |\n| Trener | – | – | – | – | – | ✓ |\n| Terapevt | – | – | – | – | – | ✓ |\n\nSkupine dovoljenj v obrazcu: Blagajna & Prodaja (prodaja, odpri blagajno, storno, vračilo, ročni popust, dnevni zaključek), Člani & Termini, Finance (promet, prihodki, poročila, izvoz), Nastavitve (cenik, zaposleni, prostori & mize, sistem).\n\nZaposleni z vlogo **Trener** ali **Terapevt** se pojavijo v koledarju in kot filter v poročilih.\n\n## Omejitve in opozorila\n\n- Razdelki blagajne **Zaposleni & PIN**, **Prostori & Mize**, **FURS & DDV** in **Interni akt** so vidni samo lastniku.\n- Blagajna dejansko preverja pravice za **storno**, **vračilo**, **dnevni zaključek** in **prikaz prometa** v glavi; ostale pravice v obrazcu so zaenkrat informativne.\n- PIN ni geslo za internet – do blagajne pride samo uporabnik, ki je že prijavljen v Računko; PIN loči osebje za pultom."
+    },
+    {
+      "modul": "furs-fiskalizacija",
+      "naslov": "FURS davčno potrjevanje – certifikat, poslovni prostori, naprave, test/produkcija, nastavitve na blagajni",
+      "poti": [
+        "/nastavitve?tab=blagajna",
+        "/pos"
+      ],
+      "vloge": [
+        "lastnik"
+      ],
+      "posodobljeno": "2026-10-05",
+      "vsebina": "# FURS davčno potrjevanje (fiskalizacija)\n\nRačuni za gotovino in kartice (blagajna, Stripe) se morajo davčno potrditi pri FURS. Računko pošlje račun FURS in na račun natisne **EOR** (enkratna identifikacijska oznaka, ki jo vrne FURS) in **ZOI** (zaščitna oznaka izdajatelja).\n\n## Nastavitev (enkrat) – portal: Nastavitve → Davčna blagajna\n\nRazdelek ima zavihke: **🔐 Certifikat**, **🏢 Poslovni prostori**, **🖨️ Naprave**, **👥 Osebje blagajne**, **🧪 Test povezave**.\n\n1. **Pridobi certifikat**: na eDavki (eDavki.durs.si → Davčna blagajna → Registracija certifikata); izda ga SIGEN-CA brezplačno, datoteka `.p12`.\n2. **Naloži certifikat**: zavihek Certifikat → klikni polje in izberi `.p12` datoteko → vpiši **geslo certifikata**. En certifikat pokriva vse lokacije. Prikažeta se naziv in »Velja do«.\n3. **Poslovni prostor**: zavihek Poslovni prostori → **Nov poslovni prostor** → **ID poslovnega prostora** (npr. SIRBFB01), naslov, poštna številka, kraj in katastrski podatki → shrani. Prostor se prijavi pri FURS. Vsak lokal mora biti registriran.\n4. **Naprava**: zavihek Naprave → **Nova naprava** → ID naprave (npr. RACUNK001), prostor in uporaba: »Oboje (POS in Stripe/PDF) – privzeto«, »Samo POS terminal« ali »Samo Stripe/PDF računi« (ločeno zaporedno številčenje).\n5. **Test povezave**: zavihek Test povezave pošlje testni račun – prikazati se morata **EOR** in **ZOI**.\n\n### Test način ali produkcija\n\nNa vrhu razdelka je stikalo **Test način**:\n- **🧪 TEST način (FURS Playground)** – računi gredo na testni FURS strežnik, **ne na pravi FURS**. Za preizkušanje.\n- **✅ PRODUKCIJSKI način (blagajne.fu.gov.si)** – računi se davčno potrjujejo pri FURS. Za pravo poslovanje mora biti test način **izklopljen**.\n\n## Nastavitve na blagajni – POS → Nastavitve → FURS & DDV (samo lastnik)\n\n- Stanje: ali je bil zadnji račun pri FURS uspešno potrjen in razlog morebitne napake.\n- **Privzeto davčno potrdi vsak račun** – kljukica »Davčno potrdi« pri plačilu je privzeto označena.\n- **Pokaži gumb »Tiskaj brez FURS« v plačilu** – blagajnik lahko izda račun brez davčne potrditve (npr. interni).\n- **Zahteva potrditev PIN za netiskane račune** – za vsak račun brez FURS mora vodja ali lastnik vpisati PIN.\n- Pregled DDV stopenj v Sloveniji (0 %, 5 %, 9,5 %, 22 %) s primeri.\n\n## Številčenje računov\n\nDavčne številke računov imajo **en sam števec** za blagajno, portal in storno (oblika poslovni prostor–naprava–zaporedna številka). Naprava »Samo Stripe/PDF računi« ima ločeno zaporedje.\n\n## Ko FURS ne odgovori\n\nRačun se izda, natisne se ZOI, račun pa gre v **vrsto za ponovno pošiljanje**. Na blagajni ga vidiš v obvestilih (zvonec) z gumbom za ponovno pošiljanje. Po zakonu ga je treba naknadno potrditi v **dveh delovnih dneh**.\n\n## Omejitve in opozorila\n\n- Asistent fiskalizacijo samo **opisuje**; računov ne potrjuje in nastavitev ne spreminja.\n- Brez naloženega certifikata in prijavljenega poslovnega prostora blagajna ne more izbrati prostora (»Dodaj jih v Nastavitve → FURS → Poslovni prostori«).\n- Davčno potrjenega računa ni mogoče izbrisati (10-letna hramba) – popravek je storno ali dobropis.\n- Če certifikat poteče, potrjevanje ne deluje – pravočasno naloži novega."
+    },
+    {
+      "modul": "izvoz-racunovodja",
+      "naslov": "Izvoz za računovodjo (XLSX, CSV za Vasco/Pantheon), portal računovodje, povabilo računovodje",
+      "poti": [
+        "/izvoz",
+        "/racunovodja",
+        "/racunovodja/[orgId]",
+        "/za-racunovodje"
+      ],
+      "vloge": [
+        "lastnik",
+        "admin",
+        "računovodja"
+      ],
+      "posodobljeno": "2026-10-05",
+      "vsebina": "# Izvoz za računovodjo in portal računovodje\n\n## Izvoz podatkov – Računovodstvo → Izvoz podatkov\n\n1. Izberi **obdobje** in kaj izvoziti: izdani računi, prejeti računi, prihodki, odhodki.\n2. Izberi **format**:\n   - **Excel (XLSX)** – priporočeno; listi: Izdani računi (KIR), Prejeti računi (KPR), Rekapitulacija ter (kjer so podatki) KPO evidenca in Dnevni zaključki blagajne.\n   - **CSV (podpičje)** – 2 datoteki, primerni za uvoz v **Vasco, Pantheon, Minimax, e-računi**.\n   - **Excel + CSV (oboje)** – računovodja izbere, kar mu ustreza.\n3. **📥 Prenesi datoteke** ali **📧 Pošlji računovodji** (e-mail računovodje in neobvezno ime).\n\nKIR/KPR sta razčlenjena po dejanskih stopnjah DDV (22 %, 9,5 %, 5 %, 0 %, pavšalno nadomestilo 8 %); »DDV za plačilo« v rekapitulaciji je enak kot na strani DDV obračun.\n\n## Povabilo računovodje (lastnik)\n\n**Nastavitve → Ekipa** → vpiši e-mail računovodje → vloga **Računovodja** → **Pošljite povabilo**. Računovodja dobi e-mail (povabilo velja 7 dni), se prijavi ali ustvari račun in dobi dostop samo za branje in izvoz: portal računovodje, izvoz, KPO knjiga, računi in stroški (brez izdajanja ali urejanja računov).\n\n## Portal računovodje – Računovodstvo → Portal strank (vloga Računovodja)\n\nRačunovodja vidi seznam strank (zamudniki, nepotrjeni stroški, DDV), išče po imenu ali davčni številki in odpre pregled posamezne stranke (računi, stroški, statistika, POS promet, bančni prilivi, kartični obračuni iz KPO, dnevni zaključki), izvozi XLSX in dodaja opombe. Na vrhu je **povezava za stranke**, ki jo lahko pošlje strankam, da ga povabijo.\n\n## Omejitve in opozorila\n\n- Izvoz v obliki **VOD XML** (omenjen na predstavitveni strani »Za računovodje«) v aplikaciji trenutno **ni** na voljo – na voljo sta XLSX in CSV.\n- Računko nima glavne knjige ali dvostavnega knjigovodstva; izvoz je osnova, ki jo računovodja uvozi v svoj program.\n- Računovodja ne more izdajati ali urejati računov."
+    },
+    {
+      "modul": "portal-evidence-porocila",
+      "naslov": "Portal – poročila, statistika, kilometrina, zaloge (portal), amortizacija, reprezentanca, službeni avto",
+      "poti": [
+        "/porocila",
+        "/statistika",
+        "/kilometrina",
+        "/zaloge",
+        "/zaloga",
+        "/amortizacija",
+        "/reprezentanca",
+        "/avto"
+      ],
+      "vloge": [
+        "lastnik",
+        "admin"
+      ],
+      "posodobljeno": "2026-10-05",
+      "vsebina": "# Portal – evidence in poročila (meni Evidenca)\n\n## Poročila – Evidenca → Poročila\n\nPloščice: prihodki, odhodki, dobiček, **DDV dolgovan** ali **DDV za vračilo**, marža. Zavihki: **📊 Izkaz P&L** (neto prihodki, DDV, bruto; stroški), **📅 Mesečno**, **👥 Po strankah**, **🗂 Po kategorijah** (tudi po DDV stopnjah).\n\n## Statistika – Pregled → Statistika\n\nGrafi prihodkov in odhodkov po mesecih, odhodki po kategorijah, skupaj fakturirano, top stranke.\n\n## Kilometrina – Evidenca → Kilometrina\n\n**Nov potni nalog** za lastnika: datum, namen, odhod iz, cilj, razdalja (enosmerno), povratna pot, **vrsta poti**:\n- **Službena pot** (obisk stranke, sejem, teren) – 0,43 €/km neobdavčeno, potreben potni nalog;\n- **Prevoz na delo** (dom ↔ stalno delovno mesto) – 0,21 €/km.\nStran izračuna km in znesek ter natisne potni nalog. (Potni nalogi za **zaposlene** so v **Zaposleni → Potni nalogi**.)\n\n## Zaloge (portal) – Evidenca → Zaloga\n\nEnostavna zaloga v portalu (ločena od zaloge POS blagajne): artikli (SKU, kategorija, enota, nabavna in prodajna cena, DDV, minimalna zaloga), gibanja **⬆ Prevzem**, **⬇ Izdaja**, **⚖ Popravek**, **📄 Uvozi dobavnico**, **✍️ Ročni vnos** dobavnice, statistika (vrednost nabave in prodaje, marža, top artikli, »Potrebno naročiti«).\n\nZaloga POS blagajne (artikli, surovine, normativi) je ločena – v blagajni na zaslonu **Zaloga** (glej `pos-zaloga-dobavnice-inventura.md`).\n\n## Amortizacija – Evidenca → Amortizacija\n\n**Novo osnovno sredstvo**: naziv, kategorija (IT oprema, osebni avtomobil, stroji, pohištvo, stavba, programska oprema, drugo), nabavna vrednost, datum nakupa → razpored amortizacije in davčno priznani strošek za DDD. Izbris sredstva ne izbriše že poknjiženega stroška v KPO.\n\n## Reprezentanca – Evidenca → Reprezentanca\n\n**Nov reprezentančni strošek**: datum, kategorija (poslovno kosilo, darilo, zabava, nastanitev partnerja, drugo), opis, dobavitelj, **prisotni**, **poslovni namen**, znesek. Davčno je priznano **50 %** – stran pokaže priznani in nepriznani del.\n\n## Službeni avto – Evidenca → Službeni avto\n\nMesečna evidenca km (poslovno / zasebno), nabavna vrednost avta → **boniteta** (1,5 % nabavne vrednosti na mesec × delež zasebne rabe), poslovni delež za odbitek DDV, poročanje bonitete na REK-1 (šifra 1150).\n\n## Omejitve in opozorila\n\n- Zneski kilometrine in reprezentance so po pravilih za leto 2026, kot jih prikaže stran.\n- Za davčne odločitve (npr. ali se splača boniteta) uporabi **AI računovodja** ali vprašaj računovodjo."
+    },
+    {
+      "modul": "portal-kpo-ddv-davki",
+      "naslov": "Portal – KPO knjiga, DDV obračun in DDV-O, prispevki (UPN QR), dohodnina, normirani, letni pregled",
+      "poti": [
+        "/kpo",
+        "/ddv",
+        "/ddv/evidenca",
+        "/prispevki",
+        "/dohodnina",
+        "/normirani",
+        "/letni-pregled"
+      ],
+      "vloge": [
+        "lastnik",
+        "admin",
+        "računovodja"
+      ],
+      "posodobljeno": "2026-10-05",
+      "vsebina": "# Portal – KPO, DDV in davki\n\n## KPO knjiga – Poslovanje → KPO knjiga\n\nKnjiga prihodkov in odhodkov se vodi **samodejno**: izdani računi, potrjeni stroški, promet blagajne (po dnevih), bančni uvoz in kartični obračuni – brez dvojnega štetja.\n\n- Obdobje: **Teden, Mesec, Četrtletje, Leto, YTD, Interval** (izpiše se točen razpon datumov).\n- Ploščice: **Prihodki** in **Odhodki** (brez DDV), **Dobiček**, **DDV dolg**.\n- Ploščica **DDV dolg**: pod zneskom sta izhodni (+) in vhodni (−) DDV; klik na ploščico ali gumb **Podrobnosti DDV** odpre razčlenitev – izhodni DDV po virih (izdani računi, POS promet, ostali prihodki v KPO) in vhodni DDV (prejeti računi, KPO vnosi), vsak vir po stopnjah, z obdobjem. Negativen znesek pomeni vračilo DDV.\n- Tabela vnosov z datumom, opisom, prihodkom, odhodkom in DDV.\n\n## DDV obračun – Davki → DDV obračun\n\nSamo za DDV zavezance (sicer »Niste DDV zavezanec« in prikaz prometa zadnjih 12 mesecev za prag registracije).\n\n- **DDV izhod (od prodaj)**: izdani računi, blagajna (POS), knjiga (banka, kartice, drugo).\n- **DDV vhod (od nakupov)**.\n- Razlika = DDV za plačilo ali »FURS vam vrne«. Spodaj **plačilni podatki FURS** (IBAN, sklic, namen, znesek).\n\nVse strani (nadzorna plošča, DDV, evidenca, KPO, poročila, izvoz) uporabljajo **isti izračun** DDV, zato so številke enake.\n\n## DDV-O evidenca in oddaja – Davki → DDV evidenca\n\n1. Izberi obdobje (Q1–Q4 ali mesec, po shemi obračuna). Prikaže se razčlenitev po stopnjah (22 %, 9,5 %, 5 %, 0 %), B2B / B2C, nabave (P41/P42) in znesek za plačilo ali vračilo (P53).\n2. **⬇ Prenesi DDV-O XML za eDavki** (ali CSV).\n3. Na **edavki.durs.si** → Vloge → DDV → DDV-O obrazec → naloži XML (ali vnesi ročno).\n4. **Rok: do konca meseca po koncu obdobja** (npr. Q3 do 31. 10.). Po oddaji prejmeš UPN za plačilo.\n\nNadzorna plošča v mesecu oddaje opozori na DDV-O za **preteklo, zaključeno** obdobje (npr. oktobra na Q3).\n\n## Prispevki s.p. – Davki → Prispevki QR\n\nUPN nalogi z **QR kodo** za PIZ, ZZZS, zaposlovanje, starševsko varstvo in (neobvezno) akontacijo dohodnine. QR kodo skeniraš v mobilni banki. Rok: **20. v naslednjem mesecu**. Zneske določa prispevna osnova – spremeniš jo v **Nastavitve → DDV & prispevki**. Popoldanski s.p. nastavi zaposlovanje in starševstvo na 0 €.\n\n## Dohodnina – Davki → Dohodnina\n\nKalkulator akontacije: prihodki in odhodki YTD, prispevni razred, vzdrževani otroci, dohodninska lestvica, letni izračun (davčna osnova, splošna olajšava, mesečna akontacija). Dejanski znesek akontacije določi FURS z odločbo – kalkulator je ocena.\n\n## Normirani – Davki → Normirani\n\nPrimerjava **normiranih odhodkov (80 %)** z dejanskimi: vpiši letne prihodke, dejanske stroške in prispevni razred – stran pokaže, kaj je ugodnejše.\n\n## Letni pregled – Davki → Letni pregled\n\nIzberi leto in prispevni razred → **Generiraj**: prihodki po mesecih, odhodki po kategorijah, DDV (izhodni, vhodni, **DDV dolg letno** z razčlenitvijo), **DDD – osnova za dohodninsko napoved**, seznama izdanih in prejetih računov; izvoz v PDF.\n\n## Omejitve in opozorila\n\n- Asistent pomaga pri **uporabi** teh strani; za davčne nasvete (kaj je ugodneje, kako obdavčiti) je v meniju **AI računovodja** (`/ai`, Pro).\n- Prihodki in odhodki v KPO so **brez DDV**.\n- Negativna DDV obveznost je vračilo – ni skrita in ni zaokrožena na 0."
+    },
+    {
+      "modul": "portal-nastavitve",
+      "naslov": "Portal – nastavitve (profil, logotip, DDV & prispevki, bančni podatki, prijava & varnost, API ključi, prenosi, integracije)",
+      "poti": [
+        "/nastavitve",
+        "/api-kljuci",
+        "/integracije",
+        "/prenosi"
+      ],
+      "vloge": [
+        "lastnik",
+        "admin"
+      ],
+      "posodobljeno": "2026-10-05",
+      "vsebina": "# Portal – nastavitve\n\n**Kje so nastavitve?** Klikni **ime podjetja spodaj v levem meniju** (odpre `/nastavitve`). Razdelki na levi:\n\n| Razdelek | Vsebina | Podrobneje |\n|---|---|---|\n| 🏢 Profil podjetja | ime s.p., davčna številka, e-mail, telefon, naslov; **logotip** za račune | spodaj |\n| 📊 DDV & prispevki | DDV status, ID za DDV, obdobje DDV (četrtletno/mesečno), privzet razlog oprostitve, mesečni prispevki | spodaj |\n| 🏦 Bančni podatki | IBAN (TRR), BIC/SWIFT – na računih in UPN QR kodah | spodaj |\n| 🧾 Davčna blagajna | FURS certifikat, poslovni prostori, naprave, osebje blagajne, test | `furs-fiskalizacija.md` |\n| 💳 Plačila s kartico | Stripe Connect (QR na blagajni, zahtevki) | `portal-stripe.md` |\n| 👥 Ekipa | člani, vabila, vloge | `ekipa-vloge-osebje.md` |\n| 🔐 Prijava & varnost | geslo, dvostopenjska prijava | spodaj |\n| ⭐ Naročnina | paket, nadgradnja, Upravljaj naročnino | `portal-stripe.md` |\n| 📒 Računovodja portal | dostop računovodje | `izvoz-racunovodja.md` |\n| 🔑 API ključi | REST API | spodaj |\n| 🔌 Integracije | Stripe, WooCommerce, Shopify | `portal-stripe.md` |\n| 📧 E-mail skeniranje | uvoz stroškov iz Gmaila | `portal-stroski-banka-kartice.md` |\n| ⬇️ Prenosi | aplikacija za Windows in telefon | spodaj |\n\n## Profil podjetja in logotip\n\nVpiši podatke podjetja (obvezno ime in davčna številka – izpišejo se na vseh računih) in shrani. V istem razdelku naložiš **logotip**, ki se izpiše na računih (z urejevalnikom za obrez in postavitev).\n\n## DDV & prispevki\n\n- **DDV zavezanec** (kljukica) in **ID za DDV** (SI…). Zavezanec postaneš pri obdavčljivem prometu nad 60.000 € v zadnjih 12 mesecih (od 1. 1. 2025) ali prostovoljno.\n- **Davčno obdobje za DDV**: četrtletno (običajno do 210.000 € letnega prometa) ali mesečno – od tega so odvisni DDV-O obdobja in opomniki.\n- Privzeto besedilo razloga za neobračunan DDV (kot ga je svetoval računovodja).\n- **Mesečni prispevki**: PIZ, ZZZS, zaposlovanje, starševsko varstvo (€/mes). Kje najti zneske: od računovodje (UPN nalogi) ali na eDavkih (Obračuni → Prispevki za socialno varnost). Sive številke so le primer, ne vnesena vrednost. Zakonski minimum (651,04 €) velja samo za polni s.p.\n\n## Prijava & varnost\n\nSprememba gesla (vsaj 8 znakov) in **🛡️ Dvostopenjska prijava**: **Vklopi dvostopenjsko prijavo** → skeniraj QR kodo z aplikacijo za avtentikacijo → vpiši 6-mestno kodo → **Potrdi in vklopi**. Shrani **rezervne kode** (lahko ustvariš nove). Če koda ni pravilna, preveri, da je ura na telefonu točna.\n\n## API ključi\n\n**🔑 API vmesnik** → vnesi ime ključa → **Generiraj API ključ**. Ključ se prikaže **samo enkrat** – shrani ga takoj. Pošiljaj ga v glavi `Authorization`. Končne točke: seznam izdanih računov, ustvari nov račun, seznam prejetih računov, finančne statistike. Ključ lahko deaktiviraš ali izbrišeš (integracije z njim prenehajo delovati).\n\n## Prenosi (namizna aplikacija in telefon)\n\n**Nastavitve → Prenosi** (`/prenosi`):\n- **Računko POS Desktop za Windows** (Windows 10/11, 64-bit, .exe): prenesi, zaženi namestitev, ob prvem zagonu se prijavi z Računko podatki; posodablja se sama. Podpira neposreden tisk na blagajniški tiskalnik.\n- **Android**: namestitev datoteke (Android 8.0+, dovoli nameščanje iz neznanih virov).\n- Mac: ni na voljo. iOS: prihaja kmalu.\n\n## Omejitve in opozorila\n\n- Spremembe DDV statusa vplivajo na nove račune in obračune, ne na že izdane.\n- Plačila s kartico, Ekipo in Davčno blagajno običajno ureja lastnik; vloga Admin nima dostopa do nastavitev plačil."
+    },
+    {
+      "modul": "portal-predracuni-dobavnice-avansni-ponavljajoci",
+      "naslov": "Portal – predračuni, dobavnice, avansni računi, ponavljajoči računi, e-račun 2028",
+      "poti": [
+        "/predracuni",
+        "/predracuni/new",
+        "/dobavnice",
+        "/dobavnice/new",
+        "/avansni-racuni",
+        "/ponavljajoci-racuni",
+        "/e-racun"
+      ],
+      "vloge": [
+        "lastnik",
+        "admin"
+      ],
+      "posodobljeno": "2026-10-05",
+      "vsebina": "# Portal – predračuni, dobavnice, avansni in ponavljajoči računi\n\n## Predračuni (ponudbe) – Poslovanje → Predračuni\n\n1. **+ Nov predračun** – stranka, postavke, cene, »Veljavno do«.\n2. Status izbereš v spustnem seznamu: Osnutek, Poslano, Sprejeto, Zavrnjeno, Poteklo.\n3. Ko stranka ponudbo sprejme: **→ Račun** – predračun se pretvori v osnutek računa (oznaka »✓ Pretvorjeno«).\n\nPredračun ni davčni dokument. Predračuni, ki čakajo na odgovor, so vedno prikazani ne glede na izbrano obdobje.\n\n## Dobavnice – Poslovanje → Dobavnice\n\n1. **+ Nova dobavnica** – prejemnik in dobavljeno blago.\n2. Neobračunane dobavnice so v sklopu **»Čaka na račun – grupirano po stranki«**.\n3. Gumb **📄 Izstavi račun** pri stranki združi vse njene neobračunane dobavnice v **en osnutek računa**; dobavnice dobijo oznako »Zaračunana«.\n\nDobavnica ni davčni dokument. (POS ima ločen »uvoz dobavnic dobavitelja« za zalogo – glej `pos-zaloga-dobavnice-inventura.md`.)\n\n## Avansni računi – Poslovanje → Avansni računi\n\n1. **+ Nov avansni račun**: stranka, e-mail, opis storitve, **skupna vrednost (€)**, **delež avansa (%)**, datum, rok plačila → **Ustvari avansni račun**.\n2. Ko je storitev opravljena: pri avansu **📄 Finalni račun** → **Ustvari finalni račun**. Finalni račun prikaže celotno vrednost, odbitek že plačanega avansa in **preostanek za plačilo**.\n\nPri izbranem obdobju se odprti avansi zunaj obdobja ne prikažejo – za popoln pregled izberi »Vse«.\n\n## Ponavljajoči računi – Poslovanje → Ponavljajoči računi\n\n1. **+ Nov ponavljajoč račun**: stranka, e-mail stranke, opis storitve, cena, **pogostost** (Tedensko, Mesečno, Četrtletno, Letno), DDV, **naslednja izdaja**, datum konca (neobvezno).\n2. Na zapadli datum je račun v sklopu **»Za izdati danes«** z gumbom **→ Izdaj zdaj**; naslednji datum izdaje se samodejno premakne. Samodejno pripravljeni osnutki čakajo na potrditev (opozorilo »ponavljajoč račun čaka na potrditev« je tudi na nadzorni plošči) – preglej jih, preden se pošljejo.\n3. Ponavljajoč račun lahko **Pavziraj** ali znova **Aktiviraj**.\n\nNa vrhu: število aktivnih naročnin, mesečni prihodek, za izdati danes.\n\n## E-račun (obveza od 1. 1. 2028)\n\nStran **E-račun** (`/e-racun`) pojasni zakon ZIERDED: od 1. januarja 2028 so med podjetji obvezni strukturirani e-računi (eSLOG / EN 16931), PDF po e-pošti ne bo dovolj; velja tudi za s.p. brez DDV. V Računku: **Računi → ··· Več → 🧾 Prenesi e-račun (XML)** in samodejna XML priloga ob pošiljanju poslovni stranki.\n\n## Omejitve in opozorila\n\n- Predračun in dobavnica nista davčna dokumenta.\n- Datoteke e-računa Računko ne odda neposredno na UJP – XML naložiš v spletno banko ali pri ponudniku e-poti."
+    },
+    {
+      "modul": "portal-pregled-ai",
+      "naslov": "Portal – nadzorna plošča, mesečni vodič, rokovnik, opomniki za zamude, AI računovodja, onboarding, pomoč",
+      "poti": [
+        "/dashboard",
+        "/vodic",
+        "/rokovnik",
+        "/opomniki",
+        "/ai",
+        "/onboarding",
+        "/dobrodosli"
+      ],
+      "vloge": [
+        "lastnik",
+        "admin"
+      ],
+      "posodobljeno": "2026-10-05",
+      "vsebina": "# Portal – pregled, roki, AI in pomoč (meni Pregled)\n\n## Nadzorna plošča – Pregled → Dashboard\n\nPrihodki in odhodki meseca (brez DDV; prihodke lahko razdeliš po virih: Računi, Blagajna, Drugo), »Stranke vam dolgujejo« (z zamudami), **pretok denarja za naslednjih 30 dni** (pričakovani prilivi in odlivi; vneseš lahko stanje na računu za realno napoved), opozorila na roke (prispevki do 20., DDV-O v mesecu oddaje, ponavljajoči računi, ki čakajo na potrditev). Spodaj vrstica **Hitro**: Skeniraj strošek, Prispevki QR, Vprašaj AI, Vodič.\n\n## Mesečni vodič – Pregled → Mesečni vodič\n\nSeznam opravil za mesec s kljukicami (20–40 minut): roki, izdani računi, dnevni zaključki blagajne, kartični obračuni, bančni izpisek, prejeti računi, plače in REK-1, prispevki, DDV.\n\n## Rokovnik – Pregled → Rokovnik\n\nDavčni roki meseca z oznako »Opravljeno« in ključni letni roki: prispevki do 20. v naslednjem mesecu, REK-1 pred vsakim izplačilom plače, **DDV-O Q1 do 30. 4., Q2 do 31. 7., Q3 do 31. 10., Q4 do 31. 1.**, regres do 1. 7., DDD napoved do 31. 3., popis zaloge 31. 12.\n\n## Opomniki za zamude – Pregled → Opomniki\n\nSeznam zapadlih neplačanih računov (število, skupni dolg), **zakonske zamudne obresti** (TOM + 8 %) in priprava opomina (1., 2. ali zadnji opomin z rokom plačila) s plačilnimi podatki (TRR, sklic, namen, znesek).\n\n## AI računovodja – Pregled → AI računovodja (Pro)\n\nKlepet za **davčna in računovodska vprašanja** (slovensko davčno pravo 2026), ki pozna podatke podjetja (prihodki YTD, odhodki, dobiček, neplačano, zamude, prispevki). Primeri: »Koliko dohodnine bom plačal letos?«, »Kateri stroški so davčno priznani?«, »Ali mi bolj ustreza s.p. ali d.o.o.?«.\n\nTo je **drugo orodje kot Računko asistent**: asistent pomaga pri *uporabi aplikacije* (kje je gumb, kako se kaj nastavi), AI računovodja svetuje pri *davkih*.\n\n## Pomoč in Računko asistent\n\nV meniju je postavka **Pomoč za to stran**, ki odpre okno z zavihkoma **Navodila** (opis trenutne strani) in **Vprašaj Računko** (asistent za uporabo aplikacije). Če asistent ne zna pomagati, gumb **Pošlji podpori** pošlje pogovor razvijalcem Računka po e-pošti.\n\n## Onboarding (prvi zagon)\n\nOb registraciji vprašalnik: pravna oblika (s.p., d.o.o./d.n.o., zavod/društvo), DDV status, dejavnosti, zaposleni, davčni sistem (normirani 80 %, normirani 40 %, dejanski stroški) in dodatni moduli (službeni avto, potni stroški, zaloga, osnovna sredstva, blagajna/POS, reprezentanca …). Glede na odgovore se v meniju prikažejo samo potrebni moduli – meni lahko kasneje prilagodiš z gumbom **Prilagodi meni** (zgoraj v levem meniju).\n\n## Omejitve in opozorila\n\n- AI računovodja zahteva paket **Pro**; Računko asistent (pomoč pri uporabi) je na voljo vsem paketom.\n- Vprašalnik onboardinga skrije module, ki jih ne potrebuješ (npr. KPO pri d.o.o.); če modula v meniju ni, preveri **Prilagodi meni**."
+    },
+    {
+      "modul": "portal-racuni",
+      "naslov": "Portal – izdani računi, nov račun, plačila, storno, dobropis, e-račun, uvoz iz PDF, zahtevki za plačilo",
+      "poti": [
+        "/invoices",
+        "/invoices/new",
+        "/invoices/edit/[id]",
+        "/invoices/import",
+        "/invoices/zahtevki"
+      ],
+      "vloge": [
+        "lastnik",
+        "admin"
+      ],
+      "posodobljeno": "2026-10-05",
+      "vsebina": "# Portal – izdani računi\n\nMeni **Poslovanje → Računi** (`/invoices`). Na vrhu: Skupaj fakturirano, Plačano, Neplačano; gumbi **Uvozi iz PDF**, **💳 Zahtevki za plačilo**, **+ Nov račun**. Statusi: Osnutek, Izdano, Poslano, Zamuda, Plačano, Storno.\n\n## Nov račun\n\n1. **+ Nov račun** (ali meni **Nov račun**).\n2. **Stranka**: izberi obstoječo ali vpiši novo. Ko vpišeš **davčno številko** (8 števk, s SI ali brez), se ime in naslov izpolnita samodejno iz javnih podatkov o podjetju (ali klikni iskanje oziroma Enter).\n3. **Datumi**: datum računa, rok plačila, (neobvezno) obdobje opravljene storitve od–do.\n4. **Storitve in blago**: opis, količina, cena, DDV (22 %, 9,5 % ali 0 %), popust %. **+ Dodaj postavko** za več vrstic. **Preračunaj iz cene z DDV** izračuna ceno brez DDV; na voljo je tudi **Kalkulator DDV**.\n5. Pri **0 % DDV** izberi **Razlog za neobračunan DDV**; »Zapomni si to izbiro za vse prihodnje račune« jo nastavi kot privzeto.\n6. Neobvezno: **Besedilo nad tabelo** (npr. »Na podlagi pogodbe …«) in **Opombe**.\n7. **Shrani osnutek** ali **Izdaj račun**. Izdan račun dobi zaporedno številko in se zapiše v KPO knjigo.\n\n**Ustvari zahtevek** (namesto računa) ustvari **zahtevek za plačilo** s povezavo/QR za plačilo s kartico (potreben Stripe – glej `portal-stripe.md`); številko računa dobi šele po plačilu.\n\nNezavezanec za DDV vidi samo »0 % (ni zavezanec)«.\n\n## Meni »··· Več« pri računu\n\n| Gumb | Kdaj |\n|---|---|\n| ✅ Označi kot plačano | neplačan, nestorniran račun |\n| 💶 Zabeleži delno plačilo | neplačan, nestorniran račun |\n| ↩ Razveljavi plačilo | plačan račun |\n| ✏️ Uredi račun | samo račun **brez** dodeljene davčne številke (sicer: »Za popravek ga stornirajte in izdajte novega«) |\n| 📋 Podvoji račun | ustvari nov osnutek z istimi postavkami |\n| 🧾 Prenesi e-račun (XML) | izdan račun (eSLOG/EN 16931 – za spletno banko ali ponudnika e-poti) |\n| 📝 Izdaj dobropis | izdan račun (dobropis ima pripono »-D«) |\n| 🚫 Storniraj račun | izdan račun (storno ima pripono »-S«; če je bil plačan s Stripe, se denar vrne) |\n| 📥 Arhiviraj / 📤 Obnovi iz arhiva | skrije račun iz seznama (»Skrij arhivirane«) |\n\nOb računu sta še **⬇ PDF** in **📧 Pošlji** (pošiljanje po e-pošti – samo Pro; poslovni stranki se priloži tudi e-račun XML).\n\n## Uvoz računov iz PDF\n\n**Računi → Uvozi iz PDF**: naloži PDF račune iz drugega (zunanjega) sistema; AI prebere številko, stranko, datum, osnovo in DDV. Uvoženi računi so označeni »Uvoženo iz PDF-ja (zunanji sistem)«.\n\n## Zahtevki za plačilo\n\n**Računi → 💳 Zahtevki za plačilo**: seznam poslanih zahtevkov (poslan, plačan, potekel, preklican) z gumbi Pokaži QR, Pošlji (opomnik), Prekliči in povezavo do izdanega računa.\n\n## Omejitve in opozorila\n\n- **Brisanje** je mogoče samo za osnutke in nefiskalizirane storno zapise. Davčno potrjenega računa ni mogoče izbrisati (10-letna hramba) – uporabi storno ali dobropis.\n- Račun z dodeljeno davčno številko se ne ureja – storniraj in izdaj novega (lahko s **📋 Podvoji račun**).\n- **Brezplačni paket**: največ **5 računov skupaj**; nato se prikaže »Nadgradi →«.\n- Vrzel v zaporedju številk (npr. zaradi izbrisanega osnutka) je prikazana nad seznamom – za davčni pregled jo je dobro znati pojasniti.\n- Pošiljanje po e-pošti zahteva paket Pro.\n- Pri postavkah računa v portalu **5 % DDV ni na izbiro** (samo 22 %, 9,5 %, 0 %); 5 % je le v kalkulatorju DDV. Na blagajni (POS) je 5 % na voljo pri artiklih."
+    },
+    {
+      "modul": "portal-stripe",
+      "naslov": "Stripe v Računku – plačila s kartico (Connect), Stripe integracija (uvoz plačil), naročnina na Računko",
+      "poti": [
+        "/nastavitve?tab=placila",
+        "/integracije",
+        "/nastavitve?tab=plan",
+        "/invoices/zahtevki"
+      ],
+      "vloge": [
+        "lastnik",
+        "admin"
+      ],
+      "posodobljeno": "2026-10-05",
+      "vsebina": "# Stripe v Računku – tri različna mesta\n\n»Stripe« se v Računku pojavi na **treh mestih z različnim namenom**. Najprej ugotovi, kaj uporabnik želi:\n\n| Želim … | Kje |\n|---|---|\n| da mi stranke plačujejo s kartico (QR na blagajni, povezava za plačilo računa) | **Nastavitve → Plačila s kartico** |\n| da se plačila iz moje spletne trgovine / aplikacije, ki že uporablja Stripe, samodejno spremenijo v račune | **Nastavitve → Integracije → Stripe** |\n| plačati ali spremeniti svojo naročnino na Računko | **Nastavitve → Naročnina** |\n\n## 1. Plačila s kartico (Stripe Connect) – Nastavitve → Plačila s kartico\n\nPoveže podjetje s Stripe računom, da stranke plačajo s kartico ali telefonom. Stripe provizije zaračuna neposredno podjetju; Računko ne zaračuna ničesar.\n\n1. **Nastavitve → Plačila s kartico** → **Poveži Stripe**.\n2. Preusmeri te na Stripe: vpiši podatke podjetja in TRR za izplačila. Če prekineš, se kasneje vrneš z **Nadaljuj vpis pri Stripe**.\n3. Po vrnitvi se prikaže stanje: Račun, Plačila (omogočena), Izplačila na TRR, Ime pri Stripe.\n4. Pogoji: urejeno **davčno potrjevanje** (FURS certifikat in poslovni prostor – **Nastavitve FURS →**).\n\nUporaba: **blagajna – plačilo prek QR kode** (v oknu za plačilo »Plačaj s Stripe«) in **portal – zahtevek za plačilo** (povezava ali QR koda za plačilo, ki jo pošlješ stranki; seznam v **Računi → Zahtevki za plačilo**, stanja: poslan, plačan, potekel, preklican; gumbi Pokaži QR, Pošlji opomnik, Prekliči). Povezavo lahko uredi samo lastnik podjetja; **Prekini povezavo** jo odstrani. Oznaka »TESTNI NAČIN« pomeni povezavo s Stripe testnim računom.\n\n## 2. Stripe integracija (uvoz plačil) – Nastavitve → Integracije → Stripe\n\nZa podjetja, ki že prodajajo prek Stripe (lastna aplikacija, spletna stran). Vsako plačilo v Stripu samodejno postane račun v Računku (z davčno potrditvijo in vnosom v KPO).\n\n1. **Nastavitve → Integracije** → kartica **Stripe** → **Kako povežem Stripe?**\n2. Kopiraj **Webhook URL za Stripe**.\n3. V Stripe Dashboard: **Developers → Webhooks → Add endpoint** → prilepi URL; dogodki: `checkout.session.completed`, `invoice.paid`, `payment_intent.succeeded`, `charge.refunded`.\n4. Stripe pokaže **Signing secret** (`whsec_…`) – prilepi ga v polje **Webhook Secret (Stripe Signing secret)** in shrani.\n5. Priporočeno: **Ključ za branje** – v Stripe **Developers → API keys → Create restricted key** (pravice Read), prilepi `rk_live_…` → **Shrani ključ**. Omogoči **Preveri nastavitev**, **Uskladi zadnjih 30 dni** in nočno uskladitev, ter obdelavo vračil in sporov.\n\nPod integracijo je **knjiga plačil**: za vsako Stripe plačilo vidiš, ali ima račun, ali je preskočeno in zakaj (npr. znesek 0 €, račun izda WooCommerce, vrnjeno pred izdajo računa). Gumbi: **Izdaj račun**, **Izdaj na podjetje** (drug kupec kot v Stripu), **Imam ročni račun** / **Nadomesti z davčno potrjenim**, **Poskusi znova**.\n\nNa isti strani sta tudi integraciji **WooCommerce** in **Shopify** (webhook iz trgovine → račun v Računku).\n\n## 3. Naročnina na Računko – Nastavitve → Naročnina\n\n| Paket | Cena | Vsebuje |\n|---|---|---|\n| 🆓 Free | 0 € | izdajanje računov z omejitvijo **5 računov skupaj**, FURS, PDF, prispevki/UPN QR |\n| 💼 Pro | 12,99 €/mes ali 129,90 €/leto | neomejeni računi, pošiljanje po e-pošti, AI skeniranje, dobavnice, AI računovodja |\n| 🖥️ Pro + POS | 29,99 €/mes ali 299,90 €/leto | vse iz Pro + POS blagajna, koledar, člani in paketi, zaloga |\n\nLetno plačilo = 2 meseca brezplačno. Nadgradnja: **Nastavitve → Naročnina** → izberi paket (plačilo prek Stripe). Obstoječo naročnino (kartica, preklic, računi) urejaš z gumbom **⚙️ Upravljaj naročnino** (Stripe portal). Če naročnina ni bila sklenjena prek Stripa, gumb to izpiše.\n\n## Omejitve in opozorila\n\n- Signing secret se začne z `whsec_`; ključ za branje z `rk_`. Testni ključ (`rk_test_`) ne pokaže pravih plačil.\n- API verzija webhooka v Stripu mora biti 2025-02-24 ali starejša, sicer Računko dogodek zavrne (vidno v »Zadnji dogodki«).\n- Ključ za branje mora pripadati **istemu** Stripe računu kot webhook.\n- Plačilo s Stripe na blagajni zahteva internet in urejeno FURS potrjevanje; tak račun se vedno davčno potrdi.\n- Pri brezplačnem paketu se po 5 izdanih računih prikaže »Nadgradi →«. (Opis »do 5 računov/mesec« v Nastavitvah ne drži – šteje se skupno število računov.)\n- Na starejšo stran `/stripe` (Secret Key + webhook) meni ne vodi več – za uvoz plačil uporabljaj **Nastavitve → Integracije → Stripe**."
+    },
+    {
+      "modul": "portal-stroski-banka-kartice",
+      "naslov": "Portal – stroški, skeniranje računov (AI), e-mail skeniranje (Gmail), bančni uvoz, kartični obračuni",
+      "poti": [
+        "/expenses",
+        "/scan",
+        "/nastavitve?tab=email",
+        "/banka",
+        "/kartice"
+      ],
+      "vloge": [
+        "lastnik",
+        "admin"
+      ],
+      "posodobljeno": "2026-10-05",
+      "vsebina": "# Portal – stroški, skeniranje, banka in kartice\n\n## Stroški – Poslovanje → Stroški\n\n1. **Nov strošek / prejet račun**: dobavitelj, datum računa, znesek brez DDV, **DDV stopnja** (22 %, 9,5 %, 0 % brez DDV), kategorija, opis.\n2. **Shrani strošek**. Strošek se zapiše tudi v KPO knjigo; vhodni DDV se upošteva v DDV obračunu (»Odšteje se od DDV dolga«).\n3. Klik na strošek ga odpre za urejanje (**Posodobi strošek**).\n\nNezavezanec za DDV vpiše samo »Znesek stroška« – DDV se ne prikaže. Kategorija (Pisarniški material, Programska oprema, Transport, Prehrana, Marketing …) vpliva na KPO in poročila.\n\n## Skeniranje računa z AI – Skeniraj račun (Pro)\n\n1. Meni **Skeniraj račun** (`/scan`) → fotografiraj ali naloži račun (JPG, PNG, PDF, HEIC z iPhona).\n2. AI prebere dobavitelja, datum, znesek, DDV in kategorijo – kartica »✓ AI je prebral podatke«.\n3. Preveri in po potrebi popravi → **Preverite in potrdite** → strošek je shranjen.\n\n**Paketni uvoz več PDF računov**: izberi več PDF datotek hkrati – AI vsakega prebere in **samodejno doda med stroške** (brez posamične potrditve).\n\n## E-mail skeniranje stroškov (Gmail) – Nastavitve → E-mail skeniranje\n\nSamodejni uvoz stroškov iz e-poštnih prilog.\n\n1. **Nastavitve → E-mail skeniranje** → **+ Poveži Gmail** (prijava z Google računom in dovoljenje za branje pošte).\n2. Pri povezanem računu izberi **Urnik skeniranja**: Dnevno, Tedensko, Mesečno ali Po meri (cron izraz).\n3. Neobvezno: **Specifični pošiljatelji** (npr. racuni@dobavitelj.si) – skenira samo njihove e-maile.\n4. Za pregled za nazaj: **preveri določen datumski razpon** (npr. od začetka leta). Že obdelane priloge se preskočijo – dvojnikov ne bo.\n5. Najdeni računi čakajo v pregledu: **📄 Predogled**, **Potrdi in dodaj med stroške**, **Zavrni**. Če AI meni, da priloga ni račun (dobavnica, izpisek …), je v sklopu »Ostale priloge iz e-pošte« – lahko jo dodaš ročno.\n\nPovezavo odstraniš s **Prekini povezavo**. Zavrnjene predloge lahko obnoviš; pošiljatelja lahko označiš »vedno zavrni«.\n\n## Bančni uvoz – Poslovanje → Bančni uvoz\n\n1. **1. Izberite banko** (NLB, SKB, Nova KBM, Sparkasse, Addiko, Delavska hranilnica, Intesa Sanpaolo, Gorenjska banka …) ali **Samodejno zaznaj**.\n2. **2. Naložite izpisek** – CSV, TXT, XML (camt.053) za vse pakete; **PDF samo Pro** (AI branje). Lahko več datotek naenkrat. **Kako izvoziti izpisek** pokaže navodila za izbrano banko.\n3. Prilivi se samodejno ujemajo z neplačanimi računi (po znesku, datumu, referenci) – »Ujeto z računi« / »Neujeto«.\n4. Za neujete vrstice izberi kategorijo; pri prilivu povej, ali je plačilo prodaje z DDV (0 % = posojilo, polog lastnika, vračilo …). Notranji promet se ne knjiži; plačilo plače se le označi kot plačano (strošek je že iz plačilne liste).\n5. Potrdi knjiženje – ujeti računi se označijo kot plačani, ostalo gre v KPO.\n\n## Kartični obračuni – Poslovanje → Kartice\n\nZa promet prek POS terminalov in procesorjev (SumUp, Worldline/Payten, NLB, SKB, Stripe, drugo).\n\n1. **Vnesi kartični obračun**: procesor, obdobje od–do, **bruto prodaja** (kar so stranke plačale), število transakcij, opombe. Provizija in neto nakazilo na TRR se izračunata.\n2. Shrani: bruto gre v KPO kot prihodek, provizija kot strošek. Izberi **DDV stopnjo kartičnega prometa**.\n3. **Paketni uvoz več izpiskov** (PDF ali slike, Pro) – AI prebere in samodejno knjiži.\n\n## Omejitve in opozorila\n\n- AI skeniranje, PDF bančni izpiski in kartični izpiski z AI zahtevajo paket **Pro**.\n- Če je bilo izplačilo kartičnega obračuna že uvoženo iz banke kot prihodek, ga Računko pretvori v kartični prihodek (bruto) – promet ni štet dvakrat."
+    },
+    {
+      "modul": "portal-zaposleni",
+      "naslov": "Portal – plače in zaposleni, plačilne liste (AI), REK-1, dopust, potni stroški, regres, potni nalogi, evidenca časa",
+      "poti": [
+        "/place",
+        "/rek1",
+        "/dopust",
+        "/potni-stroski",
+        "/regres",
+        "/potni-nalogi",
+        "/cas"
+      ],
+      "vloge": [
+        "lastnik",
+        "admin"
+      ],
+      "posodobljeno": "2026-10-05",
+      "vsebina": "# Portal – zaposleni (meni Zaposleni)\n\n## Plače – Zaposleni → Plače\n\nGumbi: **🧮 Kalkulator**, **📄 Naloži plačilno listo**, **📋 REK-1**, **+ Dodaj zaposlenega**.\n\n1. **+ Dodaj zaposlenega**: ime, davčna številka, IBAN, bruto plača, vrsta zaposlitve (polni ali krajši delovni čas, študentsko delo).\n2. **Plačilna lista** (kalkulator): osnovna plača, nadure (30 %), nočni (30 %), nedeljski (50 %) in praznični (100 %) dodatek → bruto, prispevki delojemalca (ZPIZ 15,50 %, ZZZS 6,36 %, brezposelnost, starševsko, dolgotrajna oskrba 1 %, obvezni zdravstveni prispevek), akontacija dohodnine, potni stroški → **neto izplačilo**; prispevki delodajalca (ZPIZ 8,85 %, ZZZS 6,56 %, poškodbe 0,53 %, starševstvo 0,10 %) → skupni strošek delodajalca.\n3. **📄 Naloži plačilno listo** (Pro): AI prebere PDF ali sliko plačilne liste od računovodje, vključno s »Skupaj strošek v breme podjetja«, ki se poknjiži v KPO. Če je PDF zaščiten z geslom, naloži posnetek zaslona.\n\n## REK-1 – Zaposleni → REK-1\n\nIzberi obdobje: povzetek bruto, prispevkov EE in ER, dohodnine in neto po zaposlenem ter **skupna plačilna naloga FURS** (sklic prepiši s plačilnega naloga računovodje). Podatki so iz naložene plačilne liste (natančno) ali ocena iz kalkulatorja. To je **delovni povzetek**, ne uradna eDavki shema – REK-1 odda računovodja (eDavki → Vloge → REK-1) najkasneje na dan izplačila plače.\n\n## Dopust in odsotnosti – Zaposleni → Dopust\n\n**Nova odsotnost**: zaposleni, tip (Letni dopust, Bolniška do 30 dni, Bolniška – nega otroka, Porodniška, Neplačan dopust), od–do, opomba → **Shrani odsotnost**. Pregled: dopust ostalo, bolniška dni, neplačan.\n\n## Potni stroški – Zaposleni → Potni stroški\n\n**Nov potni strošek**: zaposleni, datumi, destinacija, namen, vrsta (kilometrina, dnevnice SLO po urah, dnevnica tujina, nočnina, malica, parkirnina, cestnina/vinjeta, drugo), količina ali znesek po računu. Stran pokaže **neobdavčene zneske 2026** in natisne obračun povračila.\n\n## Regres – Zaposleni → Regres\n\nZa vsakega aktivnega zaposlenega: zaposlen od, delež leta, **znesek regresa** (opozorilo »Pod minimumom!«), neobdavčeni del; označi kot plačan. Spodaj zakonske obveznosti, kot jih prikaže stran: minimalni regres (= minimalna plača 2026), neobdavčeni del (126 % minimalne plače), rok izplačila 1. julij 2026 (za sezonske do 1. novembra).\n\n## Potni nalogi – Zaposleni → Potni nalogi\n\n**+ Nov potni nalog**: zaposleni, namen, destinacija, prevoz (osebni avto, javni prevoz, letalo, drugo), datum odhoda in vrnitve, kilometri, dnevnica, nastanitev, ostali stroški. Statusi: Osnutek, Odobren, Plačan.\n\n## Evidenca časa – Zaposleni → Evidenca časa\n\n**+ Nov vnos**: opis dela, ure, datum, stranka, projekt, urna postavka (€/h), zaračunljivo ali ne. Gumb **→ Račun** pretvori nefakturirane ure v račun (potrebna je urna postavka); vnos dobi oznako »✓ Fakturirano«.\n\n## Omejitve in opozorila\n\n- AI branje plačilne liste zahteva paket **Pro**.\n- REK-1 iz Računka je informativen povzetek – uradno ga odda računovodja na eDavkih.\n- Mejni zneski (minimalna plača, neobdavčeni zneski) so za leto 2026."
+    },
+    {
+      "modul": "pos-artikli-ddv",
+      "naslov": "POS – kategorije, artikli, DDV stopnja, modifikatorji, uvoz cenika, happy hour",
+      "poti": [
+        "/pos"
+      ],
+      "vloge": [
+        "lastnik",
+        "vodja"
+      ],
+      "posodobljeno": "2026-10-05",
+      "vsebina": "# POS – kategorije, artikli in DDV stopnja\n\nCenik blagajne se ureja v **POS → Nastavitve → Kategorije & Artikli**. Razdelek ima tri zavihke: **Kategorije**, **Artikli** in **Surovine**.\n\n## Dodajanje kategorije\n\n1. **POS → Nastavitve → Kategorije & Artikli → Kategorije**.\n2. Dodaj kategorijo (npr. »Bar, Fitness, Kava«), izberi emoji/barvo, **Shrani**.\n3. Vrstni red kategorij spremeniš tako, da jih povlečeš.\n\n## Dodajanje artikla\n\n1. **POS → Nastavitve → Kategorije & Artikli → Artikli**, gumb **+ Dodaj artikel**.\n2. Izberi **tip artikla**:\n   - **Enostaven** – npr. pivo, vstopnina, kava v kapsuli. Zaloga se vodi na samem artiklu.\n   - **Z normativom** – npr. točeno vino, koktajl, espresso. Ob prodaji se odštejejo surovine po normativu (glej `pos-normativi-surovine.md`).\n   - **Surovina** – npr. vino 1 L, moka 1 kg. **Pozor:** surovine za normative se vodijo v zavihku **Surovine** (ločena tabela). Artikel tipa »Surovina«, ustvarjen v zavihku Artikli, se v izbiri normativa NE pokaže – za normative surovino vedno dodaj v zavihku **Surovine**.\n3. Vpiši ime, prodajno ceno, (neobvezno) nabavno ceno, šifro (npr. K01), kategorijo.\n4. Izberi **DDV stopnjo**: 0 % (oproščeno), 5 % (knjige, časopisi), 9,5 % (gostinstvo, šport), 22 % (splošna).\n5. Pri **0 %** mora DDV zavezanec izbrati **razlog za neobračunan DDV** (ZDDV-1), npr. oprostitev po 42. členu – razlog se izpiše na računu.\n6. **Zaloga v skladišču**: pusti prazno za neomejeno (artikel se nikoli ne pokaže kot razprodan).\n7. **Shrani**.\n\n### Kje nastavim DDV stopnjo za artikel?\n\nV obrazcu artikla (**POS → Nastavitve → Kategorije & Artikli → Artikli → uredi artikel**) v spustnem seznamu DDV. Stopnja velja za vsako prodano postavko posebej, zato je na enem računu lahko več stopenj; Z-poročilo in DDV obračun jih ločita.\n\nSmernice iz **POS → Nastavitve → FURS & DDV**: 0 % zdravstvene storitve po 42. členu, izobraževanje, boni; 5 % knjige in časopisi; 9,5 % gostinske storitve, hrana in brezalkoholne pijače, uporaba športnih objektov (samostojna vadba), nastanitev; 22 % alkoholne pijače, vodena vadba in osebno trenerstvo, blago in večina drugih storitev.\n\nNezavezanec za DDV izbire DDV stopnje ne vidi (vse je 0 %).\n\n## Modifikatorji (dodatki, velikosti)\n\nV obrazcu artikla spodaj: **Nova modifier grupa** (npr. »Mleko«, »Velikost«, »Dodatki«), dodaj možnosti (npr. »Ovseno«, +0,50 €) in **Shrani grupo**. Pri prodaji se ob artiklu pokaže izbira.\n\n## Množična sprememba cen in zgodovina cen\n\nV zavihku Artikli gumb **Množična sprememba cen**: sprememba prodajnih cen več artiklov hkrati (npr. ob podražitvi dobavitelja). Najprej se pokaže predogled »stara → nova cena«, šele nato potrdiš. V istem razdelku je tudi pregled zgodovine cen.\n\n## Uvoz cenika z AI (fotografija ali PDF jedilnika)\n\n1. **POS → Nastavitve → Kategorije & Artikli → Artikli**, gumb **📷 Uvozi iz cenika**.\n2. Povleci sliko ali PDF cenika oziroma jedilnika (JPG, PNG, PDF). AI prebere izdelke in cene.\n3. Označi izdelke za uvoz (**Izberi vse** / **Počisti**), preveri kategorijo in DDV (22 % ali 9,5 %), **Shrani**.\n\nObstaja tudi samostojna stran `/pos/uvoz-cenika` z enakim postopkom.\n\n## Happy hour (samodejni popusti)\n\n**POS → Nastavitve → Happy hour → Novo happy hour pravilo**: ime, dnevi v tednu, čas od–do, popust in kategorije (brez izbrane kategorije velja za vse). Pravilo lahko izklopiš ali vklopiš, ne da bi ga brisal.\n\n## Omejitve in opozorila\n\n- DDV stopnja je del artikla; sprememba stopnje velja le za prihodnje prodaje, izdanih računov ne spremeni.\n- »Izbriši« artikel arhivira (izgine iz cenika in prodaje); izdani računi s tem artiklom ostanejo nespremenjeni.\n- Za normative uporabljaj surovine iz zavihka **Surovine**, ne artiklov tipa »Surovina« (glej zgoraj)."
+    },
+    {
+      "modul": "pos-koledar-storitve-kuhinja",
+      "naslov": "POS – storitve, koledar in termini, stranke, kuhinja (KDS), obveščanje strank, opravila, interni akt",
+      "poti": [
+        "/pos"
+      ],
+      "vloge": [
+        "lastnik",
+        "vodja",
+        "blagajnik",
+        "trener",
+        "terapevt"
+      ],
+      "posodobljeno": "2026-10-05",
+      "vsebina": "# POS – storitve, koledar, stranke, kuhinja in obveščanje\n\n## Storitve (za rezervacije)\n\n**POS → Nastavitve → Storitve & Paketi → + Storitev**: ime (npr. »Masaža«, »Fizioterapija«, »PT«), cena, **trajanje**, DDV (0 % pri zdravstvenih storitvah po 42. členu – obvezen razlog, 9,5 %, 22 %), barva. Storitev se samodejno pojavi tudi v prodaji. Storitev lahko deaktiviraš.\n\n## Koledar in termini\n\n1. Zaslon **Koledar** (pogled dan / teden / mesec, filter po terapevtu ali trenerju).\n2. Klikni prazen termin → izberi **stranko**, **storitev**, zaposlenega, opombo → **Rezerviraj**. Če je termin zaseden, lahko izbereš »Vseeno rezerviraj«.\n3. Status termina: Načrtovano, Potrjeno, **Prišel/a ✓**, **Ni prišel ✗**, Preklicano.\n4. **Uporabi kartico (odšteje obisk ob prihodu)** – ob statusu »Prišel/a« se s kartice stranke odšteje obisk (zamrznjena kartica se ne odšteje).\n5. Stranki lahko pošlješ e-mail opomnik za termin.\n\nKoledar prikazuje zaposlene z vlogo **Terapevt** ali **Trener** – dodaš jih v **POS → Nastavitve → Zaposleni & PIN**.\n\n## Stranke\n\nZaslon **Stranke**: iskanje (ime, telefon, e-mail), filter »Kartica poteče v 7 dneh«, **Pošlji email vsem** (množično obvestilo). Profil stranke ima zavihke: pregled, **Paketi & predplačilo**, zgodovina nakupov, opombe in urejanje profila.\n\n## Kuhinja (KDS) in zaslon za stranke\n\n**POS → Nastavitve → Kuhinja & display**: vklopi **Kuhinjski display** – zaslon **Kuhinja** v meniju nato v realnem času prikazuje aktivna naročila za kuhinjo. Tu je tudi prikaz za stranke (customer display).\n\n## Obveščanje strank (POS → Nastavitve → Obveščanje)\n\n- **Opomniki o poteku kartice** – »Pošlji samodejno« ali »Potrdim sam«.\n- **Obvestila o zalogi** – dnevi in ura pošiljanja (brez izbranih dni obvestil ni).\n- **Rojstnodnevne čestitke** – samodejno pošiljanje; potrebna je privolitev stranke; besedilo je neobvezno.\n\n## Opravila & sporočila\n\nZaslon **Opravila & sporočila**: opravila po fazah izmene (odpiranje, med izmeno, zapiranje), kdo je kaj odkljukal in kdaj, ter sporočila lastnika osebju.\n\n## Avtomatsko zaklepanje in interni akt\n\n- **POS → Nastavitve → Avt. zaklepanje**: čas neaktivnosti, po katerem se blagajna zaklene (15 s – Nikoli).\n- **POS → Nastavitve → Interni akt** (samo lastnik): interni akt o davčnem potrjevanju računov (izpis); opozorilo, dokler ni označen kot oddan v eDavke.\n\n## Omejitve in opozorila\n\n- Zaslon Koledar je v meniju, če ga vsebuje **Tip poslovanja** (npr. Storitve, Restavracija, Vse v enem) ali ga dodaš pri profilu »Po meri«.\n- Za e-mail opomnike in obvestila mora imeti stranka vpisan e-mail."
+    },
+    {
+      "modul": "pos-mize",
+      "naslov": "POS – prostori in mize, prenos naročila, združevanje miz",
+      "poti": [
+        "/pos"
+      ],
+      "vloge": [
+        "lastnik",
+        "vodja",
+        "blagajnik"
+      ],
+      "posodobljeno": "2026-10-05",
+      "vsebina": "# POS – prostori in mize\n\n## Nastavitev prostorov in miz (lastnik)\n\n1. **POS → Nastavitve → Prostori & Mize** (razdelek vidi samo lastnik).\n2. **Nov prostor**: ime (npr. »Bar«, »Terasa«, »VIP«), barva → **Shrani**.\n3. Izberi prostor in dodaj **Novo mizo**: ime (npr. »T1«, »Terasa 3«), število sedežev → **Shrani**.\n\nZaslon **Prostori & mize** v levem meniju nato pokaže tloris po prostorih. Če prostorov še ni, piše »Dodaj prostore in mize v Nastavitvah → Prostori«.\n\n## Delo z mizo\n\n1. Na zaslonu **Prostori & mize** klikni mizo – odpre se Prodaja z mizo (v traku nad prodajo piše »Miza: …«).\n2. Dodajaj artikle; naročilo ostane na mizi, dokler ga ne plačaš.\n3. Mizo zapustiš z gumbom ✕ v traku (naročilo ostane odprto na mizi).\n\n## Upravljanje mize (gumb ⋯ v traku »Miza: …«)\n\n- **🔄 Druga miza** – prenese trenutno naročilo na drugo, **prosto** mizo.\n- **👤 Zaposleni** – prenese odgovornost za naročilo na drugega zaposlenega (npr. ob menjavi izmene).\n- **🔗 Združi** – združi naročilo z druge (zasedene) mize v trenutno naročilo; druga miza se sprosti.\n\nPlačilo po osebah za isto mizo: **Razdeli** v košarici (glej `pos-prodaja-placila.md`).\n\n## Omejitve in opozorila\n\n- Naročila ni mogoče prenesti na mizo, ki že ima odprto naročilo – uporabi **🔗 Združi**.\n- Mize z odprtim naročilom ni mogoče izbrisati; najprej zaključi ali prenesi naročilo.\n- Zaslon Prostori & mize je v meniju le, če ga vsebuje izbrani **Tip poslovanja** (npr. Restavracija, Bar / Kavarna, Vse v enem) ali ga dodaš pri profilu »Po meri«."
+    },
+    {
+      "modul": "pos-normativi-surovine",
+      "naslov": "POS – normativi (recepti, sestavljeni artikli) in surovine",
+      "poti": [
+        "/pos"
+      ],
+      "vloge": [
+        "lastnik",
+        "vodja"
+      ],
+      "posodobljeno": "2026-10-05",
+      "vsebina": "# POS – normativi in surovine\n\n**Normativ** (recept) pove, koliko katere surovine porabi en prodan artikel. Primer: 1 dl točenega vina porabi 0,1 L vina »Refošk«; espresso porabi 0,007 kg kave. Ob prodaji artikla z normativom blagajna samodejno odšteje zalogo surovin.\n\n## 1. korak – dodaj surovine\n\n1. **POS → Nastavitve → Kategorije & Artikli → zavihek Surovine**.\n2. **Nova surovina**: ime (npr. »Refošk«, »Moka«, »Olje«), enota (kos, L, kg, dl, cl, g, ml …), trenutna zaloga, nabavna cena na enoto, dobavitelj (neobvezno), minimalna zaloga za opozorilo.\n3. **Shrani**.\n\nNa vrhu zavihka so povzetki: Skupaj surovin, Nizka zaloga, Artiklov z normativom. Zalogo posamezne surovine popraviš z gumbom **Posodobi zalogo**.\n\n## 2. korak – ustvari artikel z normativom\n\n1. **POS → Nastavitve → Kategorije & Artikli → Artikli → + Dodaj artikel**.\n2. Tip artikla: **Z normativom** (»Točeno vino, koktajl«).\n3. Vpiši ime, prodajno ceno, DDV, kategorijo.\n4. V razdelku normativa klikni dodaj vrstico, v spustnem seznamu **izberi surovino** in vpiši **porabo na en prodan kos** v enoti surovine (npr. 0,1 za 1 dl vina, če se vino vodi v litrih; 0,007 za 7 g kave, če se kava vodi v kg). Dovoljene so poljubne decimalke.\n5. Dodaj toliko vrstic, kolikor je sestavin, nato **Shrani**.\n\nČe spustni seznam surovin ni prikazan, piše »Najprej dodaj surovine …« – surovin še ni; dodaj jih po 1. koraku. (Besedilo v obrazcu omenja »Nastavitve → Sestavine«; dejanska pot je zavihek **Surovine** v razdelku **Kategorije & Artikli**.)\n\n## Kaj se zgodi ob prodaji, stornu in vračilu\n\n- **Prodaja**: po plačilu se zaloga vseh surovin iz normativa zmanjša za porabo × količina.\n- **Storno računa**: poraba surovin se vrne na zalogo. Če vračilo zaloge ne uspe, blagajna to izpiše – zalogo je treba preveriti ročno.\n- **Dobavnica**: dobavljene surovine se prištejejo zalogi surovin (glej `pos-zaloga-dobavnice-inventura.md`). Artikli z normativom na dobavnici ne nastopajo – polnijo se njihove surovine.\n\n## Omejitve in opozorila (pogoste napake)\n\n- **Surovine so v ločeni tabeli od artiklov.** V izbiri normativa so samo surovine iz zavihka **Surovine**. Artikel tipa »Surovina«, ustvarjen v zavihku Artikli, se v normativu ne pokaže.\n- **Pazi na enote.** Poraba se vpisuje v enoti surovine. Če je kava vodena v kg, je 7 g = 0,007 (ne 7).\n- Artikel z normativom nima lastne zaloge – »razprodan« je odvisno od surovin.\n- Nizka zaloga surovin se pokaže v obvestilih (zvonec) na blagajni; pošiljanje obvestil o zalogi nastaviš v **POS → Nastavitve → Obveščanje → Obvestila o zalogi** (dnevi in ura)."
+    },
+    {
+      "modul": "pos-osnove",
+      "naslov": "POS blagajna – zagon, prijava, meni in izmena",
+      "poti": [
+        "/pos"
+      ],
+      "vloge": [
+        "lastnik",
+        "vodja",
+        "blagajnik",
+        "trener",
+        "terapevt"
+      ],
+      "posodobljeno": "2026-10-05",
+      "vsebina": "# POS blagajna – zagon, prijava, meni in izmena\n\nPOS blagajna je del Računka na poti `/pos` (v portalu: meni **Blagajna → POS blagajna**). Na voljo je v paketu **Pro + POS**. Deluje v brskalniku, kot namizna aplikacija za Windows in na telefonu.\n\n## Prvi zagon na napravi\n\n1. Odpri **Blagajna → POS blagajna**.\n2. **Izberi blagajno**: najprej poslovni prostor (lokacijo), nato blagajno/napravo. Če seznam prostorov ni prikazan, jih je treba dodati v portalu: **Nastavitve → Davčna blagajna → Poslovni prostori** (in **Naprave**).\n3. Ob prvem zagonu (če še ni nobenega zaposlenega) se prikaže **prva nastavitev**: vpiši svoje ime in PIN (1–4 števke, dvakrat). PIN ne sme biti iz samih enakih števk (npr. 1111).\n\n## Prijava s PIN-om in zaklepanje\n\n- Blagajna se odpre z **zaklenjenim zaslonom** – vsak zaposleni vpiše svoj PIN in klikne **Potrdi**.\n- Blagajna se po nastavljenem času sama zaklene: **Nastavitve (POS) → Avt. zaklepanje** (15 s, 30 s, 1 min, 5 min ali Nikoli).\n- PIN je kratek, ker do blagajne pride samo uporabnik, ki je že prijavljen v Računko; PIN le loči osebje za pultom.\n\n## Meni zaslonov (levo; na telefonu spodaj/»⋯«)\n\nZasloni: **Prostori & mize, Prodaja, Koledar, Stranke, Paketi, Zaloga, Kuhinja, Inventura, Računi, Opravila & sporočila, Poročila, Nastavitve**.\n\n- Kateri zasloni so v meniju, določa **Nastavitve (POS) → Tip poslovanja** (profili: Vse v enem, Restavracija, Bar / Kavarna, Storitve, Tržnica / Stojnica, Po meri). Pri »Po meri« izbereš zaslone sam.\n- Vrstni red zaslonov v meniju lahko vsak uporabnik prilagodi; shrani se na napravo in na uporabnika.\n\n## Izmena: odpri, vmesno stanje, zaključi (glava blagajne)\n\n1. **🔓 Odpri** (v glavi blagajne) – otvoritev blagajne: preštej gotovino v predalu in vpiši **Znesek v blagajni (€)**. Brez odprte blagajne gumb za plačilo kaže »🔒 Odpri blagajno«.\n2. **Vmesno stanje** – pokaže promet po načinu plačila in koliko gotovine naj bo v blagajni. Ne zapre izmene.\n3. **🔒 Zaključi** – zaključek izmene: štetje gotovine, razlika in **Z-poročilo**. Glej `pos-zakljucek-z-porocilo.md`.\n\nNa telefonu so ti gumbi (in »💾 Shranjeni«) skriti v meniju **⋯** v glavi.\n\n## Shranjena naročila\n\nV glavi je gumb **💾 Shranjeni** – naročila, shranjena z gumbom **💾 Shrani** v košarici (npr. gost bo plačal kasneje). Klik odpre seznam in naročilo vrne v košarico.\n\n## Obvestila (zvonec v glavi)\n\nNepotrjeni fiskalni dokumenti pri FURS (za ponovno pošiljanje), nizka zaloga artiklov in surovin, potekajoče oziroma potekle kartice članov.\n\n## Omejitve in opozorila\n\n- Gumb **🔒 Zaključi** vidijo samo osebe s pravico »Dnevni zaključek« (privzeto Lastnik in Vodja). Blagajnik namesto tega vidi napis »Blagajna odprta«.\n- Delo brez interneta: blagajna mora biti vsaj enkrat zagnana s povezavo. Brez povezave ni mogoče unovčiti kartice obiskov ali predplačila in ni mogoče plačati s Stripe; gotovina in kartica delujeta, računi gredo v vrsto za FURS.\n- Uporabnik z vlogo **blagajnik** v portalu vidi samo blagajno (`/pos`)."
+    },
+    {
+      "modul": "pos-paketi-clanarine",
+      "naslov": "POS – paketi, članarine, karte obiskov, boni, predplačilo, obroki, zamrznitev, samodejna obnova",
+      "poti": [
+        "/pos"
+      ],
+      "vloge": [
+        "lastnik",
+        "vodja",
+        "blagajnik"
+      ],
+      "posodobljeno": "2026-10-05",
+      "vsebina": "# POS – paketi in članarine\n\n## Vrste paketov (predloge)\n\n| Vrsta | Pomen |\n|---|---|\n| Članarina | velja določeno število dni, obiski se ne štejejo |\n| Karta obiskov | npr. 10× vstopnica – vsak obisk odšteje 1 |\n| Darilni bon | vrednostni bon (znesek) |\n| Storitveni bon | bon za določeno storitev |\n| Sezonska | velja od – do datuma sezone |\n| Časovna | velja samo v določenih urah in dnevih (npr. jutranja karta) |\n| Skupinska | obiski skupinske vadbe |\n| Predplačilo | dobroimetje, s katerim stranka plačuje storitve in izdelke |\n\n## Ustvarjanje paketa (predloge)\n\n1. **POS → Nastavitve → Storitve & Paketi**, gumb **+ Paket / Kartica**.\n2. Izberi vrsto, vpiši ime (npr. »Letna članarina«, »10× vstopnica«) in ceno.\n3. DDV stopnja (pri 0 % obvezen razlog za neobračunan DDV).\n4. **Začetek veljavnosti**: Ob nakupu / Ob prvem obisku / Na datum.\n5. **Veljavnost (dni od aktivacije)** (npr. 30, 90, 365) – pri sezonski namesto tega začetek in konec sezone.\n6. **Število obiskov** (karta obiskov, skupinska); pri časovni še ure in veljavni dnevi.\n7. **Opozorilo pred iztekom (dni)** – koliko dni prej stranka dobi opomnik.\n8. **Samodejna obnova** – glej spodaj.\n9. **Shrani**.\n\n## Kako vklopim samodejno podaljševanje (obnovo) paketa?\n\nV obrazcu paketa (**POS → Nastavitve → Storitve & Paketi → uredi paket**) označi **Samodejna obnova** in shrani.\n\nPomembno – kaj obnova dejansko naredi: **stranka pred iztekom prejme predračun za podaljšanje** (po e-pošti). Kartica se **ne** podaljša sama in kartica stranke **ni bremenjena**; podaljša se šele, ko stranka predračun plača. Brez obnove stranka prejme le opomnik o izteku. Pri paketu se nato prikaže oznaka »🔄 Predračun ob izteku«.\n\nKo stranka predračun plača (nakazilo), v blagajni odpri obvestila (**zvonec** v glavi) in pri zahtevku potrdi, da je plačilo prispelo. Takrat se izda račun (po e-pošti stranki), kartica pa se podaljša od dneva po izteku. V obvestilih sta tudi »Pošlji znova« in »Opusti«.\n\nAli se opomniki pošiljajo samodejno ali jih potrdiš sam, nastaviš v **POS → Nastavitve → Obveščanje → Opomniki o poteku kartice** (»Pošlji samodejno« / »Potrdim sam«). Stranka mora imeti vpisan e-mail.\n\n## Prodaja paketa stranki\n\n1. Zaslon **Paketi** → pri paketu **Prodaj stranki** (ali v profilu stranke na zaslonu **Stranke**).\n2. Izberi stranko (iskanje po imenu ali telefonu), začetek veljavnosti, opombo.\n3. Plačaj na blagajni (izda se račun) – kartica se aktivira.\n\n### Plačilo v obrokih\n\n1. V oknu prodaje paketa označi **💳 Plačilo v obrokih (odložena plačila)**.\n2. **Število obrokov** (2–24) in **Pogostost** (Mesečno / Tedensko).\n3. **Prvi obrok**: »💳 plačaj zdaj (blagajna)« ali »📧 pošlji na e-mail«.\n4. Kartica se aktivira takoj. Vsak naslednji obrok se stranki samodejno pošlje kot račun z UPN QR kodo nekaj dni pred zapadlostjo.\n\nPogoja: stranka mora imeti e-mail, podjetje pa IBAN (**portal → Nastavitve → Bančni podatki**) – sicer račun nima QR kode za nakazilo.\n\n## Upravljanje kartice stranke (Stranke → stranka → zavihek paketov)\n\n- **➕ Podaljšaj** – podaljša veljavnost za vpisano število dni.\n- **❄️ ZAMRZ.** – zamrzni kartico: »Zamrzni zdaj, odmrznem ročno kadarkoli« ali »Zamrzni do določenega datuma (avtomatsko)«. Ob odmrznitvi se rok izteka premakne naprej za toliko dni, kolikor je bila kartica zamrznjena. Zamrznjene kartice ni mogoče unovčiti.\n- **✏️ Popravi** – popravi število obiskov, začetek veljavnosti ali zamenja paket.\n- **Deaktiviraj** / **🗑 Briši** – deaktivacija oziroma trajni izbris kartice.\n- **Dodaj kartico ročno** – brez računa (npr. migracija iz starega sistema); razlog je obvezen.\n- **Predplačilo**: **+ Napolni** doda znesek na stanje; stanje se pri plačilu s »Predplačilo« odšteva samodejno.\n\n## Unovčenje obiska\n\nNa blagajni: pripni stranko, v plačilu izberi **🎟️ Karta obiskov** in kartico – odšteje se 1 obisk (storitev je bila obdavčena že ob nakupu kartice). Obisk lahko odšteje tudi termin v **Koledarju**.\n\n## Omejitve in opozorila\n\n- »Samodejna obnova« ne bremeni kartice in ne podaljša sama – pošlje predračun.\n- Unovčenje kartice in predplačila ne deluje brez interneta.\n- Zamrznjene ali porabljene kartice ni mogoče unovčiti (gumb je onemogočen z razlago).\n- Obroki brez IBAN-a podjetja gredo stranki brez QR kode za plačilo."
+    },
+    {
+      "modul": "pos-prodaja-placila",
+      "naslov": "POS – prodaja, košarica, popusti, razdelitev računa, plačilo, odpis",
+      "poti": [
+        "/pos"
+      ],
+      "vloge": [
+        "lastnik",
+        "vodja",
+        "blagajnik"
+      ],
+      "posodobljeno": "2026-10-05",
+      "vsebina": "# POS – prodaja in plačilo\n\n## Prodaja (zaslon Prodaja)\n\n1. Če blagajna še ni odprta, gumb za plačilo kaže **🔒 Odpri blagajno** – najprej odpri izmeno (glej `pos-osnove.md`).\n2. Klikni artikle v mreži (iskanje po imenu ali šifri). Pri artiklih z modifikatorji izberi dodatek.\n3. Količino v košarici povečaš ali zmanjšaš z +/−.\n4. **Stranka** (gumb v košarici): pripni stranko na račun – potrebno za unovčenje kartice obiskov, predplačilo in zgodovino stranke.\n\n## Popusti\n\n- **Popust na postavko**: v košarici ob postavki – v odstotkih ali v evrih (»Brez popusta« ga odstrani).\n- **Popust na račun**: gumb **%** v košarici – v odstotkih (%) ali v evrih (€). Popust v evrih se pretvori v odstotek in ne more preseči zneska računa.\n- Samodejni popusti po urah: **Happy hour** (glej `pos-artikli-ddv.md`).\n\n## Razdelitev računa (split bill)\n\n1. V košarici klikni **Razdeli**.\n2. Za osebo, ki plača zdaj, izberi postavke in količine (»Ta oseba plača:«), potrdi in plačaj.\n3. Plačane količine se odštejejo iz košarice; ostanek ostane za naslednjo osebo. Postopek ponovi, dokler ni vse plačano.\n\n## Ostali gumbi v košarici\n\n- **💾 Shrani** – shrani naročilo za kasneje (najdeš ga pod **💾 Shranjeni** v glavi).\n- **🧾 Predračun** – »Predračun za podjetje«: vpiši ime podjetja ali stranke, naslov, davčno številko in ID za DDV, nato natisni. Predračun ni davčni račun in ne gre v FURS.\n- **⋯ Več** – **Odpis / Poraba / Reprezentanca**:\n  - *Odpis* – pokvarjeno, poteklo, zlomljeno blago;\n  - *Lastna poraba* – lastnik ali zaposleni vzame blago za osebno rabo (DDV samoobdavčitev);\n  - *Reprezentanca* – pogostitev poslovnih partnerjev.\n  Prikaže nabavno vrednost in DDV za samoobdavčitev, opomba je neobvezna. Zaloga artiklov se zmanjša, račun se ne izda.\n\n## Plačilo\n\nKlikni **Plačaj €…**. V oknu »Zaključi račun« izberi **način plačila**:\n\n| Način | Kdaj |\n|---|---|\n| 💶 Gotovina | vpiši »Prejeto«, blagajna izračuna »Za vrniti« |\n| 💳 Kartica | plačilo na zunanjem POS terminalu (»Vnesi na terminal«) |\n| 🎟️ Karta obiskov | unovčenje obiska s kartice stranke – potrebna je izbrana stranka s kartico; kartica ne sme biti zamrznjena ali porabljena |\n| 🎫 Boni | plačilo z darilnim bonom |\n| 💰 Predplačilo | odšteje znesek od stanja predplačila stranke |\n| Stripe (QR) | samo če je podjetje povezano s Stripe (portal **Nastavitve → Plačila s kartico**): na zaslonu se pokaže QR koda, stranka plača s telefonom, račun zaključi in davčno potrdi strežnik |\n\nDodatno v oknu za plačilo:\n- **Napitnina** (0, 5, 10, 15 %) – ni obdavčena.\n- **Popust** na celoten račun.\n- **Davčno potrdi (FURS)** – privzeto vklopljeno (nastavitev v **POS → Nastavitve → FURS & DDV**). Račun, plačan s Stripe, se vedno davčno potrdi.\n- **Račun na podjetje** – vpiši naziv podjetja, naslov in davčno številko (8 števk, brez predpone SI). Davčna se natisne na račun in pošlje FURS.\n\nPo plačilu se natisne ali prikaže račun z ZOI in EOR kodo.\n\n## Omejitve in opozorila\n\n- **Karta obiskov** in **predplačilo** brez interneta ne delujeta (stanje je v bazi).\n- Plačilo s Stripe zahteva internet in povezan Stripe račun; brez tega je gumb onemogočen z razlago.\n- Če FURS ne odgovori, se račun izda in gre v **vrsto za ponovno pošiljanje** – vidno v obvestilih (zvonec). Po zakonu ga je treba potrditi v dveh delovnih dneh.\n- Gumb »Tiskaj brez FURS« je na voljo le, če ga lastnik vklopi v **POS → Nastavitve → FURS & DDV**; lahko zahteva PIN vodje.\n- **Odpis artikla z normativom ne odšteje surovin** (zaloga se zmanjša le pri artiklih z lastno zalogo). Pokvarjeno surovino popravi v zavihku **Surovine → Posodobi zalogo** ali z inventuro.\n- Napačno izbran način plačila popraviš kasneje na zaslonu **Računi** (glej `pos-racuni-storno-vracila.md`)."
+    },
+    {
+      "modul": "pos-racuni-storno-vracila",
+      "naslov": "POS – izdani računi, ponovni izpis, sprememba plačila, storno in vračilo",
+      "poti": [
+        "/pos"
+      ],
+      "vloge": [
+        "lastnik",
+        "vodja",
+        "blagajnik"
+      ],
+      "posodobljeno": "2026-10-05",
+      "vsebina": "# POS – izdani računi, storno in vračilo\n\nVsi računi blagajne so na zaslonu **Računi** (levi meni blagajne). Iščeš lahko po številki računa, EOR ali ZOI kodi in po obdobju. Klik na račun odpre podrobnosti: artikli, način plačila, EOR (FURS) in ZOI (zaščitna oznaka) – klik kodo kopira.\n\n## Gumbi pri računu\n\n| Gumb | Kaj naredi | Kdaj je viden |\n|---|---|---|\n| 🖨️ Ponovni izpis | ponovno natisne račun | vedno |\n| 💳 Spremeni plačilo | popravi način plačila (npr. gotovina → kartica) | samo za **današnje** račune, ki niso stornirani |\n| 🗑️ Storno | stornira cel račun – izda storno dokument z negativnimi zneski in ga davčno potrdi | samo za **današnje** račune; potrebna pravica »Storno računa« (Lastnik, Vodja) |\n| ↩️ Vračilo | delno ali celotno vračilo izbranih artiklov ali zneska | samo za **današnje** račune; potrebna pravica »Vračilo« (Lastnik, Vodja) |\n\n## Storno računa\n\n1. **Računi** → izberi račun → **🗑️ Storno**.\n2. Preveri artikle in znesek, vpiši **razlog storna** (npr. napačna naročba).\n3. Potrdi. Nastane storno dokument (negativni zneski), ki se davčno potrdi pri FURS.\n4. Zaloga se vrne (pri artiklih z normativom se vrnejo surovine). Če je bil račun plačan s Stripe, se denar stranki vrne prek Stripe.\n\n## Vračilo (delno)\n\n1. **Računi** → izberi račun → **↩️ Vračilo**.\n2. Izberi artikle za vračilo ali vpiši znesek (ne sme preseči zneska računa) in **razlog vračila**.\n3. Potrdi – natisne se **potrdilo o vračilu** z obračunom DDV; dokument se davčno potrdi.\n\n## Sprememba načina plačila\n\n**Računi** → račun → **💳 Spremeni plačilo** → izberi pravi način → shrani. Za spremembo iz ali v **predplačilo** mora biti na računu izbrana stranka (stanje predplačila se popravi).\n\n## Omejitve in opozorila\n\n- **Storno, vračilo in sprememba plačila so na blagajni mogoči samo isti dan**, kot je bil račun izdan (za račune iz prejšnjih dni gumbi niso prikazani).\n- Blagajnik (privzete pravice) gumbov Storno in Vračilo ne vidi – storno opravi vodja ali lastnik, ali pa lastnik blagajniku pravico doda (**POS → Nastavitve → Zaposleni & PIN → Dovoljenja**).\n- Davčno potrjenega računa ni mogoče izbrisati (10-letna hramba); popravek je vedno storno ali vračilo.\n- Storno ali vračilo se zapišeta v KPO knjigo; če to ob stornu ne uspe, se popravek zapiše ob zaključku izmene."
+    },
+    {
+      "modul": "pos-zakljucek-z-porocilo",
+      "naslov": "POS – zaključek izmene, Z-poročilo, poročila, dnevni zaključki v portalu",
+      "poti": [
+        "/pos",
+        "/zakljucki"
+      ],
+      "vloge": [
+        "lastnik",
+        "vodja"
+      ],
+      "posodobljeno": "2026-10-05",
+      "vsebina": "# POS – zaključek izmene in Z-poročilo\n\n## Kako naredim Z-poročilo (konec dneva / izmene)?\n\nPravi zaključek izmene je gumb **🔒 Zaključi** v **glavi blagajne** (na telefonu v meniju **⋯**):\n\n1. Klikni **🔒 Zaključi**. Okno »Zaključek blagajne – štetje in Z-poročilo« pokaže promet izmene po načinih plačila.\n2. Pokaže se izračun gotovine: začetna gotovina + gotovinski promet − gotovinska vračila = **Pričakovano v blagajni**.\n3. Preštej gotovino in vpiši **Prešteto v blagajni (€)**. Prikaže se **Razlika**; po potrebi vpiši opombo (npr. »oddano v sef«).\n4. Potrdi. Blagajna se zapre, **Z-poročilo** se shrani in natisne, dnevni promet se zapiše v KPO knjigo.\n5. Z-poročilo predlaga **priporočeno začetno gotovino** za naslednjo otvoritev.\n\nZ-poročilo vsebuje: stanje blagajne (gotovina ob odprtju in zaključku), plačila po metodah (gotovina, kartica, boni, ostalo), skupni promet, gotovinska in negotovinska vračila, neto promet, število računov, napitnine in **DDV po stopnjah** (osnova in DDV za 22 %, 9,5 %, 5 % in oproščeno 0 %).\n\n## Gumb »Z-poročilo (samo obračun)« na zaslonu Poročila\n\nNa zaslonu **Poročila** je gumb **Z-poročilo (samo obračun)**. Ta izdela davčni obračun prometa in DDV za izbrano obdobje, a **ne zapre izmene**, ne prešteje gotovine in ne predlaga prenosa v naslednjo izmeno. Za konec dneva uporabi **🔒 Zaključi** v glavi.\n\n## Vmesno stanje (X-poročilo)\n\n**Vmesno stanje** v glavi blagajne pokaže promet po plačilih in koliko gotovine naj bo v blagajni – brez zapiranja izmene. Lahko ga natisneš.\n\n## Poročila (zaslon Poročila)\n\nObdobje (Zadnjih 7 dni, Ta mesec, po meri), promet po urah, plačila po metodah, najbolje prodajani artikli (po kosih ali prihodku), storitve, vračila, filter po zaposlenem (trener/terapevt). **Vsa poročila** odpre knjižnico dodatnih poročil (npr. DDV po kategorijah artiklov).\n\n## Dnevni zaključki v portalu\n\nV portalu **Blagajna → Dnevni zaključki** (`/zakljucki`) lastnik vidi vsa shranjena Z-poročila z razčlenitvijo po DDV stopnjah. Računovodja jih vidi v svojem portalu.\n\n## Omejitve in opozorila\n\n- **🔒 Zaključi** vidijo le osebe s pravico »Dnevni zaključek« (privzeto Lastnik in Vodja); blagajnik vidi samo »Blagajna odprta«.\n- Če zaključek uspe, pomožni korak (npr. zapis v KPO) pa ne, blagajna to izpiše – **zaključka ne ponavljaj**, izmena je že zaprta."
+    },
+    {
+      "modul": "pos-zaloga-dobavnice-inventura",
+      "naslov": "POS – zaloga, uvoz dobavnic (AI), ujemanje artiklov in surovin, inventura",
+      "poti": [
+        "/pos"
+      ],
+      "vloge": [
+        "lastnik",
+        "vodja"
+      ],
+      "posodobljeno": "2026-10-05",
+      "vsebina": "# POS – zaloga, dobavnice in inventura\n\n## Zaslon Zaloga\n\nZavihki **Artikli**, **Surovine**, **Storitve**, **Dobavnice**; filtri **Vse**, **↓ Pod minimum**, **Razprodano**; razvrščanje (A–Z, po prodaji). Povzetki: zaloga, pod minimumom, vrednost zaloge. Pri artiklu so prodaja in prihodek zadnjih 30 dni ter zgodovina nabavnih cen.\n\n- Artikel z normativom ima opombo »Ob prodaji se odštejejo sestavine, ne ta artikel«.\n- Artikel postane **storitev** (rezervacija v koledarju), ko mu v nastavitvah vklopiš »naročljiv«.\n- Zalogo surovine popraviš z **Popravi zalogo**.\n\n## Uvoz dobavnice z AI (PDF)\n\n1. **Zaloga → Uvozi dobavnico**.\n2. Povleci PDF dobavnice ali računa dobavitelja. AI prepozna dobavitelja, številko dobavnice, postavke, količine in cene.\n3. Za vsako vrstico preveri **Knjiži na:** – na obstoječi artikel, na obstoječo **surovino**, kot **nov artikel** ali kot **novo surovino**. Blagajna sama predlaga ujemanje po črtni kodi in podobnosti naziva (npr. »PIVO CORONA EXTRA 0,33L« → »Corona«).\n4. Odznači vrstice, ki jih ne želiš knjižiti, in potrdi. Zaloga se poveča, nabavne cene in zgodovina cen se posodobijo.\n\n**Ročni vnos** (gumb poleg uvoza): enak obrazec brez PDF-ja – dobavitelj, št. dobavnice, postavke z nazivom, količino, ceno na enoto in DDV (22 %, 9,5 %, 5 %, 0 % ali 8 % pavšalno nadomestilo; pri pavšalnem nadomestilu vpiši še številko dovoljenja FURS).\n\nUvožene dobavnice so v zavihku **Dobavnice** (urejanje podatkov, brisanje).\n\n### Ali uvoznik dobavnic vidi surovine?\n\nDa. Od avgusta 2026 so v naboru za ujemanje tudi **surovine** (kava, vino, žgane pijače …), in vrstico lahko knjižiš kot novo surovino. Nova surovina iz dobavnice ima ob uvozu opombo »nova surovina – dodajte jo v normative« – v normativ artikla jo je treba dodati ročno. Artikli z normativom (npr. espresso) niso na izbiro, ker na dobavnici ne nastopajo.\n\n## Inventura\n\n1. Zaslon **Inventura** → **+ Nova inventura**.\n2. Za vsak artikel in surovino vpiši **dejansko** stanje (ob njem je stanje v evidenci in razlika). Filtri: vse, samo razlike, artikli, surovine, nepreštete.\n3. **Zaključi inventuro** – zaloga se prepiše s preštetim stanjem.\n\n## Omejitve in opozorila\n\n- Hkrati je lahko odprta samo **ena** inventura – najprej zaključi ali izbriši odprto.\n- Pavšalno nadomestilo (8 %) na dobavnici ni DDV in se v obračunu DDV obravnava posebej.\n- Besedilo »Uredi nabavno ceno v Nastavitvah → Sestavine« na zaslonu Zaloga pomeni zavihek **Surovine** v **Nastavitve → Kategorije & Artikli**."
+    }
+  ],
+  "faq": [
+    {
+      "vprasanje": "Kako dodam artikel z normativom (recept) na blagajni?",
+      "modul": "pos-normativi-surovine",
+      "kontekst": "pos"
+    },
+    {
+      "vprasanje": "Kako naredim Z-poročilo ob koncu dneva?",
+      "modul": "pos-zakljucek-z-porocilo",
+      "kontekst": "pos"
+    },
+    {
+      "vprasanje": "Kje nastavim DDV stopnjo za artikel?",
+      "modul": "pos-artikli-ddv",
+      "kontekst": "pos"
+    },
+    {
+      "vprasanje": "Kako vklopim samodejno podaljševanje paketa ali članarine?",
+      "modul": "pos-paketi-clanarine",
+      "kontekst": "pos"
+    },
+    {
+      "vprasanje": "Kako storniram račun na blagajni?",
+      "modul": "pos-racuni-storno-vracila",
+      "kontekst": "pos"
+    },
+    {
+      "vprasanje": "Kako razdelim račun med več oseb?",
+      "modul": "pos-prodaja-placila",
+      "kontekst": "pos"
+    },
+    {
+      "vprasanje": "Kje v portalu najdem nastavitve za Stripe?",
+      "modul": "portal-stripe",
+      "kontekst": "portal"
+    },
+    {
+      "vprasanje": "Kako izdam nov račun?",
+      "modul": "portal-racuni",
+      "kontekst": "portal"
+    },
+    {
+      "vprasanje": "Kako povežem FURS certifikat in poslovni prostor?",
+      "modul": "furs-fiskalizacija",
+      "kontekst": "portal"
+    },
+    {
+      "vprasanje": "Kako uvozim bančni izpisek?",
+      "modul": "portal-stroski-banka-kartice",
+      "kontekst": "portal"
+    },
+    {
+      "vprasanje": "Kako oddam DDV-O?",
+      "modul": "portal-kpo-ddv-davki",
+      "kontekst": "portal"
+    },
+    {
+      "vprasanje": "Kako povabim računovodjo?",
+      "modul": "izvoz-racunovodja",
+      "kontekst": "portal"
+    }
+  ]
+}
