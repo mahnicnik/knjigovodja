@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
+import { knjiziKarticniObracun, type IzidKnjizenja } from '@/lib/kartice-knjizenje'
 import Link from 'next/link'
 import posthog from 'posthog-js'
 import { getActiveMembership } from '@/lib/active-org'
@@ -31,6 +32,10 @@ export default function KarticeePage() {
   const [customFee, setCustomFee] = useState('')
   const [scanning, setScanning] = useState(false)
   const [scanError, setScanError] = useState('')
+  // REVIZIJA V2 (oktober 2026): stopnja DDV kartičnega prometa (zavezanec) in
+  // izrecna potrditev, da promet NI iz blagajne (organizacija z blagajno).
+  const [ddvStopnja, setDdvStopnja] = useState<string>('')
+  const [niIzBlagajne, setNiIzBlagajne] = useState(false)
 
   // ── Paketni uvoz vec izpiskov naenkrat (24.7.2026) ──
   const [batchMode, setBatchMode] = useState(false)
@@ -103,38 +108,22 @@ export default function KarticeePage() {
     const dateFrom = form.period_from
     const dateTo = form.period_to || form.period_from
 
-    // Knjižimo BRUTO prihodek v KPO
-    // POPRAVLJENO (16.8.2026): prej brez preverbe napake. Ce se prihodek
-    // poknjizi, provizija pa ne, je dobicek PRECENJEN in davcna osnova napacna.
-    const { error: incErr } = await supabase.from('kpo_entries').insert({
-      org_id: org.id,
-      entry_date: dateTo,
-      description: `Kartično poslovanje ${selectedProcessor.label} — ${dateFrom} do ${dateTo}`,
-      entry_type: 'income',
-      income: grossAmt,
-      expense: 0,
-      vat_in: 0,
-      vat_out: 0,
-      category: 'Kartično poslovanje',
-      notes: `${form.transactions || '?'} transakcij · provizija ${feePct}%`,
-    })
-    if (incErr) { alert('Prihodka ni bilo mogoče poknjižiti: ' + incErr.message); setSaving(false); return }
-
-    // Knjižimo PROVIZIJO kot strošek
-    if (feeAmt > 0) {
-      const { error: feeErr } = await supabase.from('kpo_entries').insert({
-        org_id: org.id,
-        entry_date: dateTo,
-        description: `Provizija ${selectedProcessor.label} — ${feePct}%`,
-        entry_type: 'expense',
-        income: 0,
-        expense: feeAmt,
-        vat_in: 0,
-        vat_out: 0,
-        category: 'Bančne provizije',
-        notes: `Provizija od €${grossAmt} kartičnih plačil`,
+    // REVIZIJA V2 (oktober 2026): knjizenje v lib/kartice-knjizenje.ts -
+    // brez dvojnega stetja z blagajno ali ze uvozenim bancnim izplacilom, z
+    // DDV pri zavezancu.
+    let izid: IzidKnjizenja
+    try {
+      izid = await knjiziKarticniObracun(supabase, org, {
+        procesor: selectedProcessor.label, od: dateFrom, do: dateTo, bruto: grossAmt, provizija: feeAmt,
+        provizijaPct: feePct, transakcij: parseInt(form.transactions) || null, opomba: '',
+        ddvStopnja: ddvStopnja === '' ? null : Number(ddvStopnja), prisiliPrihodek: niIzBlagajne,
       })
-      if (feeErr) alert('POZOR: prihodek je poknjižen, provizije pa NI bilo mogoče poknjižiti: ' + feeErr.message + '\n\nDobiček bo precenjen — provizijo vnesite ročno.')
+    } catch (e: any) { alert(e.message); setSaving(false); return }
+    if (izid.prihodek === 'manjka_ddv') { alert('Izberite stopnjo DDV kartičnega prometa.'); setSaving(false); return }
+    if (izid.prihodek === 'izpuscen_blagajna') {
+      alert(`Kartična plačila v tem obdobju so že v prometu blagajne (€${formatEurNumber(izid.posKartice)}), zato prihodek NI knjižen znova - knjižena je samo provizija.\n\nČe ta obračun NI za promet blagajne, označite "Promet ni iz blagajne" in knjižite znova.`)
+    } else if (izid.prihodek === 'pretvorjen') {
+      alert('Izplačilo tega obračuna je bilo že uvoženo iz banke kot prihodek. Ta vnos je pretvorjen v kartični prihodek (bruto) - promet ni štet dvakrat.')
     }
 
     // Shranimo obračun
@@ -280,37 +269,17 @@ export default function KarticeePage() {
         const dateFrom = s.period_from
         const dateTo = s.period_to || s.period_from
 
-        // POPRAVLJENO (16.8.2026): prej brez preverbe napake - pri paketnem
-        // uvozu vec izpiskov je posamezen neuspesen vnos ostal neopazen,
-        // uporabnik pa je videl, da so vsi uvozeni.
-        const { error: bIncErr } = await supabase.from('kpo_entries').insert({
-          org_id: org.id,
-          entry_date: dateTo,
-          description: `Kartično poslovanje ${proc.label} — ${dateFrom} do ${dateTo}`,
-          entry_type: 'income',
-          income: grossAmt,
-          expense: 0,
-          vat_in: 0,
-          vat_out: 0,
-          category: 'Kartično poslovanje',
-          notes: `${s.transactions ?? '?'} transakcij · provizija ${feePct}% · paketni uvoz`,
-        })
-        if (bIncErr) { napake.push(`${proc.label} ${dateFrom}: ${bIncErr.message}`); continue }
-        if (feeAmt > 0) {
-          const { error: bFeeErr } = await supabase.from('kpo_entries').insert({
-            org_id: org.id,
-            entry_date: dateTo,
-            description: `Provizija ${proc.label} — ${feePct}%`,
-            entry_type: 'expense',
-            income: 0,
-            expense: feeAmt,
-            vat_in: 0,
-            vat_out: 0,
-            category: 'Bančne provizije',
-            notes: `Provizija od €${grossAmt} kartičnih plačil · paketni uvoz`,
+        // REVIZIJA V2 (oktober 2026): isto knjizenje kot rocni vnos.
+        let izidB: IzidKnjizenja
+        try {
+          izidB = await knjiziKarticniObracun(supabase, org, {
+            procesor: proc.label, od: dateFrom, do: dateTo, bruto: grossAmt, provizija: feeAmt,
+            provizijaPct: feePct, transakcij: s.transactions ?? null, opomba: 'paketni uvoz',
+            ddvStopnja: ddvStopnja === '' ? null : Number(ddvStopnja), prisiliPrihodek: niIzBlagajne,
           })
-          if (bFeeErr) napake.push(`${proc.label} ${dateFrom}: prihodek poknjižen, provizija NE (${bFeeErr.message})`)
-        }
+        } catch (e: any) { napake.push(`${proc.label} ${dateFrom}: ${e.message}`); continue }
+        if (izidB.prihodek === 'manjka_ddv') { napake.push(`${proc.label} ${dateFrom}: izberite stopnjo DDV kartičnega prometa`); continue }
+        if (izidB.prihodek === 'izpuscen_blagajna') napake.push(`${proc.label} ${dateFrom}: kartična plačila so že v blagajni (€${formatEurNumber(izidB.posKartice)}) - knjižena samo provizija`)
 
         const settlement = {
           id: Date.now().toString() + '_' + i,
@@ -409,6 +378,9 @@ export default function KarticeePage() {
                     </div>
                   ))}
                 </div>
+                {!batchProcessing && batchFiles.every(f => f.status === 'pending') && (
+                  <NastavitveKartic org={org} ddvStopnja={ddvStopnja} setDdvStopnja={setDdvStopnja} niIzBlagajne={niIzBlagajne} setNiIzBlagajne={setNiIzBlagajne} />
+                )}
                 {!batchProcessing && batchFiles.every(f => f.status === 'pending') && (
                   <button onClick={processBatch} className="w-full bg-gray-900 text-white rounded-xl py-3 text-sm font-medium">
                     Obdelaj {batchFiles.length} {batchFiles.length === 1 ? 'datoteko' : 'datotek'}
@@ -553,9 +525,11 @@ export default function KarticeePage() {
                   </div>
                 </div>
                 <div className="mt-3 text-xs text-blue-700 bg-blue-50 rounded-lg p-2">
-                  ✓ Aplikacija bo samodejno poknjižila €{formatEurNumber(gross)} kot prihodek
+                  ✓ Aplikacija bo poknjižila €{formatEurNumber(gross)} kot prihodek
                   in €{formatEurNumber(autoFee)} kot strošek v KPO knjigo.
+                  {org?.pos_business_id && !niIzBlagajne && ' Če so kartična plačila v tem obdobju že v blagajni, se prihodek ne knjiži znova (samo provizija).'}
                 </div>
+                <NastavitveKartic org={org} ddvStopnja={ddvStopnja} setDdvStopnja={setDdvStopnja} niIzBlagajne={niIzBlagajne} setNiIzBlagajne={setNiIzBlagajne} />
               </div>
             )}
 
@@ -624,5 +598,36 @@ export default function KarticeePage() {
       </div>
     </div>
     </AppLayout>
+  )
+}
+/**
+ * REVIZIJA V2 (oktober 2026): stopnja DDV kartičnega prometa (samo zavezanec)
+ * in potrditev, da promet NI iz blagajne (samo organizacija z blagajno).
+ */
+function NastavitveKartic({ org, ddvStopnja, setDdvStopnja, niIzBlagajne, setNiIzBlagajne }: {
+  org: any; ddvStopnja: string; setDdvStopnja: (v: string) => void; niIzBlagajne: boolean; setNiIzBlagajne: (v: boolean) => void
+}) {
+  return (
+    <div className="mt-3 mb-3 space-y-2 text-xs">
+      {org?.vat_registered && (
+        <label className="flex items-center gap-2">
+          <span className="text-gray-600">DDV v kartičnem prometu:</span>
+          <select value={ddvStopnja} onChange={e => setDdvStopnja(e.target.value)}
+            className={`border rounded-lg px-2 py-1 ${ddvStopnja === '' ? 'border-orange-300 text-orange-700' : 'border-gray-200'}`}>
+            <option value="">izberi stopnjo…</option>
+            <option value="22">22 %</option>
+            <option value="9.5">9,5 %</option>
+            <option value="5">5 %</option>
+            <option value="0">0 % (oproščeno)</option>
+          </select>
+        </label>
+      )}
+      {org?.pos_business_id && (
+        <label className="flex items-center gap-2 text-gray-600">
+          <input type="checkbox" checked={niIzBlagajne} onChange={e => setNiIzBlagajne(e.target.checked)} />
+          Promet ni iz blagajne Računko (knjiži prihodek, tudi če ima blagajna kartična plačila v tem obdobju)
+        </label>
+      )}
+    </div>
   )
 }

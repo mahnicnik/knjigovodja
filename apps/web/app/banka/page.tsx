@@ -11,6 +11,10 @@ import { naloziListino } from '@/lib/listine'
 import { napovejKategorijo, opisIzVrstice } from '@/lib/kategorizacija'
 import { najdiPlacilnoObveznost } from '@/lib/place'
 import { IMENA_KATEGORIJ, izbireKategorij } from '@/lib/konti'
+import {
+  najdiIzdanRacun, najdiKarticniObracun, najdiPrejetiRacun, karticniObracuniIzKpo, razcleniPriliv,
+  type Zanesljivost, type KarticniObracun, type PrejetRacunZaUjemanje,
+} from '@/lib/banka-ujemanje'
 
 // ================================================================
 // FORMATI SLOVENSKIH BANK
@@ -101,6 +105,12 @@ interface BankTransaction {
   napovedRazlog?: string
   // PRELET 335: odliv, ki poravna placo (na TRR ali FURS) - ni nov strosek.
   matched_placa?: { payslipId: string; vrsta: 'neto' | 'furs'; opis: string } | null
+  // REVIZIJA V1/V2 (oktober 2026): transakcija, ki je ZE v knjigi - ne knjizi se znova.
+  matched_kartice?: KarticniObracun | null       // izplacilo ze knjizenega kartičnega obracuna
+  matched_receipt?: PrejetRacunZaUjemanje | null // placilo ze vnesenega prejetega racuna
+  matched_zanesljivost?: Zanesljivost | null     // 'verjetno' = uporabnik mora potrditi
+  potrjenoUjemanje?: boolean
+  ddvStopnja?: number | null                     // priliv brez racuna pri DDV zavezancu
 }
 
 // Prepozna notranji promet (POS gotovinski polog/dvig, prenos med lastnimi
@@ -290,22 +300,22 @@ function parseCSV(text: string, bankKey: string): BankTransaction[] {
 }
 
 // Pametno ujemanje transakcij z računi
+// REVIZIJA V1 (oktober 2026): ujemanje z izdanimi racuni - tudi ZE PLACANIMI
+// (prej samo status 'sent'; placilo ze placanega racuna se je knjizilo kot nov
+// prihodek "Drugo" - SIRM, junij 2026: 3 x 479,98 EUR). Logika je v
+// lib/banka-ujemanje.ts.
 function matchTransactions(transactions: BankTransaction[], invoices: any[]): BankTransaction[] {
+  const porabljeni = new Set<string>()
   return transactions.map(t => {
-    if (t.type !== 'credit') return t
-
-    // Poskusi ujeti po znesku + datumu (±5 dni)
-    const tDate = new Date(t.date)
-    const matched = invoices.find(inv => {
-      const amountMatch = Math.abs(Number(inv.amount_total) - t.amount) < 0.02
-      const invDate = new Date(inv.due_date)
-      const daysDiff = Math.abs((tDate.getTime() - invDate.getTime()) / (1000 * 60 * 60 * 24))
-      const refMatch = t.reference && inv.invoice_number && (t.reference.includes(inv.invoice_number) || t.description.includes(inv.invoice_number))
-      return amountMatch && (daysDiff <= 10 || refMatch)
-    })
-
-    return { ...t, matched_invoice: matched ?? null }
+    const z = najdiIzdanRacun(t, invoices, porabljeni)
+    if (z) porabljeni.add(z.racun.id)
+    return { ...t, matched_invoice: z?.racun ?? null, matched_zanesljivost: z?.zanesljivost ?? null }
   })
+}
+
+/** Ujemanje (racun, kartični obracun, prejeti racun), ki ga je uporabnik sprejel. */
+function jeUjeto(t: BankTransaction): boolean {
+  return !!(t.matched_invoice || t.matched_kartice || t.matched_receipt) && t.potrjenoUjemanje !== false
 }
 
 export default function BankaPage() {
@@ -314,6 +324,10 @@ export default function BankaPage() {
 
   const [orgId, setOrgId] = useState<string | null>(null)
   const [invoices, setInvoices] = useState<any[]>([])
+  // REVIZIJA V1/V2: kar je ZE v knjigi - prejeti racuni in kartični obracuni.
+  const [prejeti, setPrejeti] = useState<PrejetRacunZaUjemanje[]>([])
+  const [karticniObracuni, setKarticniObracuni] = useState<KarticniObracun[]>([])
+  const [vatRegistered, setVatRegistered] = useState(false)
   const [transactions, setTransactions] = useState<BankTransaction[]>([])
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
@@ -334,8 +348,17 @@ export default function BankaPage() {
       if (!member) return
       setOrgId(member.org_id)
 
-      const { data: inv } = await supabase.from('issued_invoices').select('*').eq('org_id', member.org_id).eq('status', 'sent').order('due_date', { ascending: true })
+      // REVIZIJA V1: tudi ze placani racuni (glej matchTransactions).
+      const od = `${new Date().getFullYear() - 1}-01-01`
+      const [{ data: inv }, { data: prej }, { data: kart }] = await Promise.all([
+        supabase.from('issued_invoices').select('*').eq('org_id', member.org_id).in('status', ['sent', 'paid', 'overdue']).gte('issue_date', od).order('due_date', { ascending: true }),
+        supabase.from('receipts').select('id, vendor, amount_total, receipt_date, receipt_number').eq('org_id', member.org_id).neq('status', 'rejected').gte('receipt_date', od),
+        supabase.from('kpo_entries').select('id, entry_date, category, income, expense, description').eq('org_id', member.org_id).in('category', ['Kartično poslovanje', 'Bančne provizije']).gte('entry_date', od),
+      ])
       setInvoices(inv ?? [])
+      setPrejeti((prej ?? []) as PrejetRacunZaUjemanje[])
+      setKarticniObracuni(karticniObracuniIzKpo((kart ?? []) as any[]))
+      setVatRegistered(!!(member as any).organizations?.vat_registered)
       setLoading(false)
     }
     load()
@@ -451,19 +474,37 @@ export default function BankaPage() {
         .gte('year', new Date().getFullYear() - 1)
         .or('neto_placano_at.is.null,furs_placano_at.is.null')
       const porabljenePlace = new Set<string>()
+      const porabljeniObracuni = new Set<string>()
+      const porabljeniPrejeti = new Set<string>()
 
       const matched = matchTransactions(parsed, invoices).map(t => {
         const placa = t.type === 'debit' ? najdiPlacilnoObveznost(t.amount, t.date, odprtePlace || [], porabljenePlace) : null
         if (placa) porabljenePlace.add(`${placa.payslipId}:${placa.vrsta}`)
+        // REVIZIJA V1/V2 (oktober 2026): ali je transakcija ZE v knjigi?
+        //  - priliv = izplacilo ze knjizenega kartičnega obracuna (bruto je ze prihodek)
+        //  - odliv  = placilo ze vnesenega prejetega racuna (strosek je ze v knjigi)
+        // Prej sta bila oba knjizena znova kot "Drugo" (SIRM Q2 2026: 11 izplacil
+        // Worldline, ~2.800 EUR placil prejetih racunov).
+        const kartice = t.type === 'credit' && !t.matched_invoice ? najdiKarticniObracun(t, karticniObracuni, porabljeniObracuni) : null
+        if (kartice) porabljeniObracuni.add(kartice.obracun.id)
+        const prejet = t.type === 'debit' && !placa ? najdiPrejetiRacun(t, prejeti, porabljeniPrejeti) : null
+        if (prejet) porabljeniPrejeti.add(prejet.racun.id)
+        const zanesljivost = t.matched_zanesljivost || kartice?.zanesljivost || prejet?.zanesljivost || null
         const napoved = napovejKategorijo(t.description, t.type === 'credit' ? 'income' : 'expense', zgodovina || [])
         return {
           ...t,
           isInternal: isInternalTransfer(t.description),
           matched_placa: placa,
-          selected: placa ? true : t.selected,
-          bookCategory: t.matched_invoice || placa ? undefined : napoved.kategorija,
+          matched_kartice: kartice?.obracun ?? null,
+          matched_receipt: prejet?.racun ?? null,
+          matched_zanesljivost: zanesljivost,
+          // 'verjetno' mora uporabnik potrditi; dotlej se transakcija knjizi po kategoriji
+          potrjenoUjemanje: zanesljivost === 'gotovo',
+          selected: placa || kartice || prejet ? true : t.selected,
+          bookCategory: placa ? undefined : napoved.kategorija,
           napovedZanesljivost: napoved.zanesljivost,
           napovedRazlog: napoved.razlog,
+          ddvStopnja: null,
         }
       })
       // PRELET 335: FURS obveznost je pogosto placana z VEC nalogi isti dan
@@ -489,8 +530,8 @@ export default function BankaPage() {
       const credits = matched.filter(t => t.type === 'credit')
       const debits = matched.filter(t => t.type === 'debit')
       setStats({
-        matched: credits.filter(t => t.matched_invoice).length,
-        unmatched: credits.filter(t => !t.matched_invoice).length,
+        matched: credits.filter(t => t.matched_invoice || t.matched_kartice).length,
+        unmatched: credits.filter(t => !t.matched_invoice && !t.matched_kartice).length,
         totalIn: credits.reduce((s, t) => s + t.amount, 0),
         totalOut: debits.reduce((s, t) => s + t.amount, 0),
       })
@@ -514,6 +555,8 @@ export default function BankaPage() {
     // knjizenju ostale neopazene, uporabnik pa je videl samo stevilo uspesnih.
     const errors: string[] = []
     let skippedNoCategory = 0
+    let skippedNoVat = 0
+    let zeVKnjigi = 0
 
     for (const t of transactions) {
       if (!t.selected) continue
@@ -530,55 +573,62 @@ export default function BankaPage() {
         continue
       }
 
-      if (t.type === 'credit' && t.matched_invoice) {
-        // Predal 1: ujeto z racunom - samodejno knjizi s pravo DDV razclenitvijo
+      if (t.type === 'credit' && t.matched_invoice && jeUjeto(t)) {
+        // Predal 1: ujeto z racunom
         const inv = t.matched_invoice
-        const alreadyPaid = inv.status === 'paid'
+        // REVIZIJA V1: ze placan racun je ze prihodek - nic ne knjizimo in ne
+        // prepisemo datuma placila (prej: nov prihodek "Drugo" oz. prepis paid_at).
+        if (inv.status === 'paid') { zeVKnjigi++; continue }
         // POPRAVLJENO (16.8.2026): prej brez preverbe napake - racun je ostal
-        // neplacan, v knjigo pa se je VSEENO vpisal prihodek. Rezultat:
-        // prihodek dvakrat (ob naslednjem uvozu se enkrat) ali odprta terjatev,
-        // ki je v resnici placana.
+        // neplacan, v knjigo pa se je VSEENO vpisal prihodek.
         const { error: payErr } = await supabase.from('issued_invoices').update({
           status: 'paid',
           paid_at: new Date(t.date).toISOString(),
           paid_amount: t.amount,
         }).eq('id', inv.id)
         if (payErr) { errors.push(`Računa ${inv.invoice_number} ni bilo mogoče označiti kot plačanega: ${payErr.message}`); continue }
-
-        // VAROVALKA: ce je racun ZE bil placan (npr. prekrivajoc uvoz), ne
-        // podvoji KPO vnosa.
-        if (!alreadyPaid) {
-          // POPRAVLJENO (26.7.2026): invoice_id doda, da KPO stran lahko
-          // izloci podvojen prikaz (izdan racun + to placilo, ista transakcija).
-          const { error: kpo1Err } = await supabase.from('kpo_entries').insert({
-            org_id: orgId,
-            entry_date: t.date,
-            description: `Plačilo računa ${inv.invoice_number} — ${inv.client_name || ''}`,
-            entry_type: 'income',
-            income: Number(inv.amount_net) || t.amount,
-            expense: 0,
-            vat_in: 0,
-            vat_out: Number(inv.vat_amount) || 0,
-            category: 'Prodaja blaga/storitev',
-            notes: `Bančni uvoz · ${t.reference || ''}`,
-            invoice_id: inv.id,
-          })
-          if (kpo1Err) { errors.push(`Vnosa v knjigo za račun ${inv.invoice_number} ni bilo mogoče shraniti: ${kpo1Err.message}`); continue }
-          bookedCount++
-        }
+        // POPRAVLJENO (26.7.2026): invoice_id doda, da KPO stran lahko
+        // izloci podvojen prikaz (izdan racun + to placilo, ista transakcija).
+        const { error: kpo1Err } = await supabase.from('kpo_entries').insert({
+          org_id: orgId,
+          entry_date: t.date,
+          description: `Plačilo računa ${inv.invoice_number} — ${inv.client_name || ''}`,
+          entry_type: 'income',
+          income: Number(inv.amount_net) || t.amount,
+          expense: 0,
+          vat_in: 0,
+          vat_out: Number(inv.vat_amount) || 0,
+          category: 'Prodaja blaga/storitev',
+          notes: `Bančni uvoz · ${t.reference || ''}`,
+          invoice_id: inv.id,
+        })
+        if (kpo1Err) { errors.push(`Vnosa v knjigo za račun ${inv.invoice_number} ni bilo mogoče shraniti: ${kpo1Err.message}`); continue }
+        bookedCount++
+      } else if ((t.matched_kartice || t.matched_receipt) && jeUjeto(t)) {
+        // REVIZIJA V1/V2: izplacilo ze knjizenega kartičnega obracuna oziroma
+        // placilo ze vnesenega prejetega racuna - prihodek/strosek je ZE v knjigi.
+        zeVKnjigi++
       } else if (t.bookCategory) {
-        // Predal 3: neujeto, rocno izbrana kategorija - knjizi celoten
-        // znesek (brez DDV razclenitve - iz bancnega podatka je ni mogoce
-        // zanesljivo izracunati).
+        // Predal 3: neujeto, rocno izbrana kategorija.
+        // REVIZIJA V1 (oktober 2026): PRILIV pri DDV zavezancu se razdeli na
+        // osnovo in izstopni DDV po stopnji, ki jo izbere uporabnik (0 % =
+        // ni prodaja: posojilo, polog lastnika, vracilo). Prej: bruto kot
+        // prihodek z DDV 0. Brez izbrane stopnje se priliv NE knjizi.
+        // ODLIV ostane bruto brez vstopnega DDV: brez prejetega racuna ni
+        // pravice do odbitka DDV (ZDDV-1) - DDV je del stroska.
+        const jePriliv = t.type === 'credit'
+        if (jePriliv && vatRegistered && (t.ddvStopnja === null || t.ddvStopnja === undefined)) { skippedNoVat++; continue }
+        const { neto, ddv } = jePriliv && vatRegistered ? razcleniPriliv(t.amount, Number(t.ddvStopnja)) : { neto: t.amount, ddv: 0 }
         const { error: kpo2Err } = await supabase.from('kpo_entries').insert({
           org_id: orgId,
           entry_date: t.date,
-          description: t.description || (t.type === 'credit' ? 'Bančni priliv' : 'Bančni odliv'),
-          entry_type: t.type === 'credit' ? 'income' : 'expense',
-          income: t.type === 'credit' ? t.amount : 0,
-          expense: t.type === 'debit' ? t.amount : 0,
+          description: t.description || (jePriliv ? 'Bančni priliv' : 'Bančni odliv'),
+          entry_type: jePriliv ? 'income' : 'expense',
+          income: jePriliv ? neto : 0,
+          expense: jePriliv ? 0 : t.amount,
           vat_in: 0,
-          vat_out: 0,
+          vat_out: ddv,
+          vat_rate: jePriliv && vatRegistered ? Number(t.ddvStopnja) : null,
           category: t.bookCategory,
           notes: `Bančni uvoz · ${t.reference || ''}`,
         })
@@ -591,9 +641,12 @@ export default function BankaPage() {
       }
     }
 
-    const msg = skippedNoCategory > 0
-      ? `Poknjiženih ${bookedCount} transakcij. ${skippedNoCategory} preskočenih - izberite kategorijo za knjiženje.`
-      : `Poknjiženih ${bookedCount} transakcij.`
+    const msg = [
+      `Poknjiženih ${bookedCount} transakcij.`,
+      zeVKnjigi > 0 ? `${zeVKnjigi} je že v knjigi (plačilo računa, izplačilo kartic) - ne knjižimo znova.` : '',
+      skippedNoCategory > 0 ? `${skippedNoCategory} preskočenih - izberite kategorijo.` : '',
+      skippedNoVat > 0 ? `${skippedNoVat} prilivov preskočenih - izberite stopnjo DDV.` : '',
+    ].filter(Boolean).join(' ')
     // DODANO (16.8.2026): napake se zdaj pokazejo - prej je uporabnik videl le
     // stevilo uspesnih in ni vedel, da kaksna transakcija ni bila poknjizena.
     if (errors.length > 0) {
@@ -612,6 +665,14 @@ export default function BankaPage() {
     setTransactions(prev => prev.map((t, idx) => idx === i ? { ...t, bookCategory: category } : t))
   }
 
+  function setDdvStopnja(i: number, stopnja: string) {
+    setTransactions(prev => prev.map((t, idx) => idx === i ? { ...t, ddvStopnja: stopnja === '' ? null : Number(stopnja) } : t))
+  }
+
+  function togglePotrditev(i: number) {
+    setTransactions(prev => prev.map((t, idx) => idx === i ? { ...t, potrjenoUjemanje: !t.potrjenoUjemanje } : t))
+  }
+
   function reset() {
     setTransactions([])
     setStep('upload')
@@ -623,7 +684,7 @@ export default function BankaPage() {
   // POPRAVLJENO (25.7.2026): prej je gumb spodaj stel SAMO ujete racune -
   // ce ni bilo ujemanj, je bil "0" in onemogocen, kljub temu da
   // applyImport() zdaj knjizi TUDI kategorizirane vrstice.
-  const willBookCount = transactions.filter(t => t.selected && !t.isInternal && (t.matched_invoice || t.matched_placa || t.bookCategory)).length
+  const willBookCount = transactions.filter(t => t.selected && !t.isInternal && (jeUjeto(t) || t.matched_placa || t.bookCategory)).length
 
   return (
     <AppLayout>
@@ -750,7 +811,7 @@ export default function BankaPage() {
                   </thead>
                   <tbody>
                     {transactions.map((t, i) => (
-                      <tr key={i} style={{ borderBottom: '0.5px solid rgba(0,0,0,0.04)', background: t.matched_invoice ? '#F0FDF4' : '#fff', opacity: t.type === 'debit' ? 0.6 : 1 }}>
+                      <tr key={i} style={{ borderBottom: '0.5px solid rgba(0,0,0,0.04)', background: jeUjeto(t) ? '#F0FDF4' : '#fff', opacity: t.type === 'debit' ? 0.6 : 1 }}>
                         <td style={{ padding: '10px 14px', width: 40 }}>
                           <input type="checkbox" checked={t.selected} onChange={() => toggleTransaction(i)} style={{ cursor: 'pointer' }} />
                         </td>
@@ -766,11 +827,40 @@ export default function BankaPage() {
                               <span style={{ color: '#888' }}>Notranji promet (ne knjiži se)</span>
                               <button onClick={() => toggleInternal(i)} style={{ fontSize: 10, color: '#888', textDecoration: 'underline', background: 'none', border: 0, cursor: 'pointer' }}>popravi</button>
                             </span>
-                          ) : t.matched_invoice ? (
-                            <span style={{ color: '#1D9E75', fontWeight: 600 }}>✓ {t.matched_invoice.invoice_number} — {t.matched_invoice.client_name}</span>
                           ) : t.matched_placa ? (
                             <span style={{ color: '#1D9E75', fontWeight: 600 }} title="Strošek plače je že v knjigi iz plačilne liste - to plačilo se samo označi kot plačano.">
                               ✓ {t.matched_placa.opis} <span style={{ fontWeight: 400, color: '#888' }}>(ni nov strošek)</span>
+                            </span>
+                          ) : (t.matched_invoice || t.matched_kartice || t.matched_receipt) && t.potrjenoUjemanje ? (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <span style={{ color: '#1D9E75', fontWeight: 600 }}>
+                                ✓ {t.matched_invoice ? `${t.matched_invoice.invoice_number} — ${t.matched_invoice.client_name || ''}${t.matched_invoice.status === 'paid' ? ' (že plačan)' : ''}`
+                                  : t.matched_kartice ? `Izplačilo kartičnega obračuna ${new Date(t.matched_kartice.entry_date).toLocaleDateString('sl-SI')} (bruto €${formatEurNumber(t.matched_kartice.bruto)})`
+                                  : `Plačilo prejetega računa: ${t.matched_receipt!.vendor || ''} (${t.matched_receipt!.receipt_date ? new Date(t.matched_receipt!.receipt_date).toLocaleDateString('sl-SI') : ''})`}
+                              </span>
+                              <span style={{ fontWeight: 400, color: '#888' }}>{t.matched_invoice && t.matched_invoice.status !== 'paid' ? '' : '— že v knjigi, ne knjiži se znova'}</span>
+                              {t.matched_zanesljivost === 'verjetno' && (
+                                <button onClick={() => togglePotrditev(i)} style={{ fontSize: 10, color: '#888', textDecoration: 'underline', background: 'none', border: 0, cursor: 'pointer' }}>ni to</button>
+                              )}
+                            </span>
+                          ) : (t.matched_invoice || t.matched_kartice || t.matched_receipt) && !t.potrjenoUjemanje && t.matched_zanesljivost === 'verjetno' ? (
+                            <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#D97706', cursor: 'pointer' }}>
+                                <input type="checkbox" checked={false} onChange={() => togglePotrditev(i)} />
+                                Verjetno {t.matched_invoice ? `plačilo računa ${t.matched_invoice.invoice_number}`
+                                  : t.matched_kartice ? `izplačilo kartičnega obračuna ${new Date(t.matched_kartice.entry_date).toLocaleDateString('sl-SI')}`
+                                  : `plačilo računa ${t.matched_receipt!.vendor || ''} (${t.matched_receipt!.receipt_date ? new Date(t.matched_receipt!.receipt_date).toLocaleDateString('sl-SI') : ''})`} — potrdi
+                              </label>
+                              <select
+                                value={t.bookCategory || ''}
+                                onChange={e => setBookCategory(i, e.target.value)}
+                                style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.15)' }}
+                              >
+                                <option value="">…ali izberi kategorijo</option>
+                                {(t.type === 'credit' ? INCOME_CATEGORIES : izbireKategorij(t.bookCategory)).map(c => (
+                                  <option key={c} value={c}>{c}</option>
+                                ))}
+                              </select>
                             </span>
                           ) : (
                             <select
@@ -784,11 +874,26 @@ export default function BankaPage() {
                               ))}
                             </select>
                           )}
+                          {/* REVIZIJA V1: priliv brez racuna pri DDV zavezancu - stopnja DDV je obvezna. */}
+                          {!t.isInternal && !jeUjeto(t) && !t.matched_placa && t.type === 'credit' && vatRegistered && (
+                            <select
+                              value={t.ddvStopnja ?? ''}
+                              onChange={e => setDdvStopnja(i, e.target.value)}
+                              title="Ali je ta priliv plačilo prodaje z DDV? 0 % = ni prodaja (posojilo, polog lastnika, vračilo) ali oproščeno."
+                              style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, marginTop: 4, border: '1px solid rgba(0,0,0,0.15)', color: t.ddvStopnja === null || t.ddvStopnja === undefined ? '#D97706' : '#0D1F12' }}
+                            >
+                              <option value="">DDV? izberi stopnjo…</option>
+                              <option value="22">vsebuje 22 % DDV</option>
+                              <option value="9.5">vsebuje 9,5 % DDV</option>
+                              <option value="5">vsebuje 5 % DDV</option>
+                              <option value="0">brez DDV (0 %)</option>
+                            </select>
+                          )}
                           {/* DODANO (19.8.2026): oznaka, od kod je kategorija.
                               Uporabnik mora vedeti, kaj je program uganil in
                               kaj je ostalo nerazvrsceno - sicer bi slepo
                               potrdil napacno razvrstitev. */}
-                          {!t.isInternal && !t.matched_invoice && !t.matched_placa && t.napovedRazlog && (
+                          {!t.isInternal && !jeUjeto(t) && !t.matched_placa && t.napovedRazlog && (
                             <div style={{ fontSize: 10, marginTop: 3,
                               color: t.napovedZanesljivost === 'visoka' ? '#1D9E75'
                                    : t.napovedZanesljivost === 'srednja' ? '#888' : '#D97706' }}>
