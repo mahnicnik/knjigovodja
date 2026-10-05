@@ -107,6 +107,7 @@ export interface ZReportRow {
   total_refunds: number | null
   total_vat_95: number
   total_vat_22: number
+  total_vat_5?: number | null      // migracija 179 (revizija V3)
   total_vat_base_0: number | null
   total_vat_base_other: number | null
   order_count: number
@@ -446,7 +447,7 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
       [`${input.orgName} — ${input.periodLabel}`],
       [],
       ['Št. Z', 'Datum', 'Računov', 'Promet skupaj', 'Gotovina', 'Kartica', 'Boni', 'Drugo', 'Vračila',
-       'DDV 22 %', 'DDV 9,5 %', 'Osnova 0 %', 'Osnova ostalo'],
+       'DDV 22 %', 'DDV 9,5 %', 'DDV 5 %', 'Osnova 0 %', 'Osnova ostalo'],
     ]
     for (const z of zRows) {
       const datum = (z.closed_at ?? z.opened_at ?? '').slice(0, 10)
@@ -462,6 +463,7 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
         Number(z.total_refunds ?? 0),
         Number(z.total_vat_22 ?? 0),
         Number(z.total_vat_95 ?? 0),
+        Number(z.total_vat_5 ?? 0),
         Number(z.total_vat_base_0 ?? 0),
         Number(z.total_vat_base_other ?? 0),
       ])
@@ -472,14 +474,14 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
       'SKUPAJ', '', zRows.reduce((s2, z) => s2 + Number(z.order_count ?? 0), 0),
       vsota(z => z.total_revenue), vsota(z => z.total_cash), vsota(z => z.total_card),
       vsota(z => z.total_bon ?? 0), vsota(z => z.total_other ?? 0), vsota(z => z.total_refunds ?? 0),
-      vsota(z => z.total_vat_22), vsota(z => z.total_vat_95),
+      vsota(z => z.total_vat_22), vsota(z => z.total_vat_95), vsota(z => z.total_vat_5 ?? 0),
       vsota(z => z.total_vat_base_0 ?? 0), vsota(z => z.total_vat_base_other ?? 0),
     ])
 
     const wsZ = XLSX.utils.aoa_to_sheet(zData)
     wsZ['!cols'] = [
       { wch: 7 }, { wch: 12 }, { wch: 9 }, { wch: 14 }, { wch: 12 }, { wch: 12 },
-      { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 11 }, { wch: 11 }, { wch: 12 }, { wch: 13 },
+      { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 11 }, { wch: 11 }, { wch: 10 }, { wch: 12 }, { wch: 13 },
     ]
     XLSX.utils.book_append_sheet(wb, wsZ, 'Dnevni zaključki')
   }
@@ -578,7 +580,7 @@ export function generateAccountingCSV_ZPOROCILA(input: ExportInput): string {
   const header = [
     'Stevilka_Z', 'Datum', 'Stevilo_racunov', 'Promet_skupaj',
     'Gotovina', 'Kartica', 'Boni', 'Drugo', 'Vracila',
-    'DDV_22', 'DDV_95', 'Osnova_0', 'Osnova_ostalo',
+    'DDV_22', 'DDV_95', 'DDV_5', 'Osnova_0', 'Osnova_ostalo',
   ].join(';')
 
   const rows = (input.zReports ?? []).map(z => {
@@ -597,6 +599,7 @@ export function generateAccountingCSV_ZPOROCILA(input: ExportInput): string {
       st(z.total_refunds),
       st(z.total_vat_22),
       st(z.total_vat_95),
+      st(z.total_vat_5),
       st(z.total_vat_base_0),
       st(z.total_vat_base_other),
     ].join(';')

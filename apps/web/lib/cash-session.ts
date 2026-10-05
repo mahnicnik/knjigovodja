@@ -11,6 +11,7 @@
 
 import { createClient } from '@/lib/supabase'
 import { BUSINESS_ID } from '@/lib/pos-client'
+import { ddvZPorocila } from '@/lib/pos-kpo'
 
 // ===== TIPI =====
 
@@ -207,7 +208,7 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
   // obnasanje, da zgodovinski zakljucki ostanejo enaki.
   let ordersQuery = db
     .from('orders')
-    .select('id, tip_amount, cashier_id, payments(method, amount), order_lines(qty, unit_price, total, vat_rate, voided)')
+    .select('id, total, tip_amount, invoice_number, cashier_id, payments(method, amount), order_lines(qty, unit_price, total, vat_rate, voided)')
     .eq('business_id', BUSINESS_ID)
     .eq('status', 'paid')
     .gte('closed_at', from)
@@ -276,56 +277,25 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
       else if (p.method === 'prep') { prep += amt; prepCount++ }
       else                          { other += amt; otherCount++ }
     }
-
-    // POPRAVLJENO (25.8.2026): racuni, poravnani s KARTO OBISKOV, so se steli
-    // v oproscen promet po POLNI ceni postavke, cetudi je racun 0,00 EUR.
-    // Z-porocilo se zato ni izslo: pri prometu 53,60 EUR je obracun DDV kazal
-    // 153,60 EUR - razlika 100 EUR sta bila dva racuna po 50 EUR.
-    //
-    // Storitev je bila placana ze ob NAKUPU kartice, kjer je bil izdan racun z
-    // DDV. Unovcenje ni nov prihodek, zato v obracun DDV ne sodi.
-    const placanoSKartico = ((o as any).payments || [])
-      .some((p: any) => p.method === 'pkg')
-    if (placanoSKartico) continue
-
-    // DDV po vrsticah
-    for (const l of (o as any).order_lines || []) {
-      if (l.voided) continue
-      // POPRAVLJENO (16.8.2026, DDV): prej "qty * unit_price" - BREZ doplacil
-      // modifikatorjev. Stolpec order_lines.total jih ze vsebuje (zapise ga
-      // replaceLines kot (unitPrice + doplacila) * qty), zato je bila osnova za
-      // DDV na Z-POROCILU - uradnem davcnem dokumentu - prenizka za znesek
-      // doplacil. Uporabimo total, s pripravljenim nadomestkom za stare zapise.
-      const lineTotal = l.total != null
-        ? Number(l.total)
-        : Number(l.qty || 0) * Number(l.unit_price || 0)
-      const rate = Number(l.vat_rate ?? 22)
-
-      if (rate === 22) {
-        const base = lineTotal / 1.22
-        vatBase22 += base
-        vat22 += lineTotal - base
-      } else if (rate === 9.5) {
-        const base = lineTotal / 1.095
-        vatBase95 += base
-        vat95 += lineTotal - base
-      } else if (rate === 5) {
-        // DODANO (26.8.2026): 5 % stopnja (knjige, casopisi). Prej je pristala
-        // med "druge stopnje", kjer se osnova sicer prikaze, DDV pa se NE
-        // obracuna - Z-porocilo se pri prodaji s to stopnjo ne bi izslo.
-        const base = lineTotal / 1.05
-        vatBase5 += base
-        vat5 += lineTotal - base
-      } else if (rate === 0) {
-        // Nedavcni zavezanec - cela vrednost je osnova, DDV je 0
-        vatBase0 += lineTotal
-      } else {
-        // VAROVALKA (24.7.2026): nepricakovana stopnja - namesto tihega
-        // izginotja pristane tukaj kot znak za rocni pregled.
-        vatBaseOther += lineTotal
-      }
-    }
   }
+
+  // DDV PO STOPNJAH (revizija V3, oktober 2026): seštevek DDV, ZAOKROZENEGA PO
+  // RACUNU in stopnji, s popustom na racunu (lib/pos-kpo ddvZPorocila) - enako
+  // kot FURS razclenitev, KPO in DDV obracun. Prej: nezaokrozene vrstice BREZ
+  // popusta - SIRM Z#30 je kazal 103,75 EUR DDV namesto 94,75 (popust 50 EUR),
+  // Z#16 0,29 namesto 0,14. Racuni, poravnani s karto obiskov (pkg), niso
+  // promet (storitev je bila obdavcena ob nakupu karte - 25.8.2026).
+  for (const v of ddvZPorocila((orders || []) as any)) {
+    if (v.stopnja === 22) { vatBase22 += v.osnova; vat22 += v.ddv }
+    else if (v.stopnja === 9.5) { vatBase95 += v.osnova; vat95 += v.ddv }
+    else if (v.stopnja === 5) { vatBase5 += v.osnova; vat5 += v.ddv }
+    else if (v.stopnja === 0) vatBase0 += v.osnova
+    // VAROVALKA (24.7.2026): nepricakovana stopnja - za rocni pregled.
+    else vatBaseOther += v.osnova
+  }
+  const r2 = (n: number) => Math.round(n * 100) / 100
+  vatBase22 = r2(vatBase22); vat22 = r2(vat22); vatBase95 = r2(vatBase95); vat95 = r2(vat95)
+  vatBase5 = r2(vatBase5); vat5 = r2(vat5); vatBase0 = r2(vatBase0); vatBaseOther = r2(vatBaseOther)
 
   const refundTotal = (refunds || []).reduce((s, r) => s + Number(r.amount || 0), 0)
   const refundCount = (refunds || []).length
@@ -406,6 +376,9 @@ export async function closeSession(params: {
       total_vat_95: stats.vat95,
       total_vat_base_0: stats.vatBase0,
       total_vat_base_other: stats.vatBaseOther,
+      // REVIZIJA V3: 5 % stopnja (prej ni bila shranjena nikjer - migracija 179)
+      total_vat_5: stats.vat5,
+      total_vat_base_5: stats.vatBase5,
       order_count: stats.orderCount,
       staff_id: params.closedBy,
       cash_session_id: params.session.id,

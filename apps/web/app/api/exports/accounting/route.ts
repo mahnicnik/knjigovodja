@@ -145,7 +145,7 @@ export async function POST(req: NextRequest) {
     if (org.pos_business_id) {
       const { data: zData } = await supabase
         .from('z_reports')
-        .select('report_number, opened_at, closed_at, total_revenue, total_cash, total_card, total_bon, total_other, total_refunds, total_vat_95, total_vat_22, total_vat_base_0, total_vat_base_other, order_count')
+        .select('report_number, opened_at, closed_at, total_revenue, total_cash, total_card, total_bon, total_other, total_refunds, total_vat_95, total_vat_22, total_vat_5, total_vat_base_0, total_vat_base_other, order_count')
         .eq('business_id', org.pos_business_id)
         .gte('closed_at', `${periodFrom}T00:00:00`)
         .lte('closed_at', `${periodTo}T23:59:59`)
