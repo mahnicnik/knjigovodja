@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
-import QRCode from 'qrcode'
+import { sestaviUpnQr, upnBwipOpcije } from '@/lib/upn-qr'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 import { formatEurNumber } from '@/lib/format'
@@ -11,53 +11,37 @@ const MONTHS_FULL = ['Januar','Februar','Marec','April','Maj','Junij',
                      'Julij','Avgust','September','Oktober','November','December']
 
 /**
- * UPN QR za prispevke (popravljeno 26.8.2026).
+ * UPN QR za prispevke.
  *
- * NAPAKA: zapis je imel 17 polj in NI imel kontrolne vsote, ki jo standard
- * UPN QR zahteva kot zadnjo vrstico. Poleg tega je za "UPNQR" sledilo le TRI
- * prazne vrstice namesto stirih. Banke so kodo zato zavrnile s sporocilom o
- * napacni strukturi zapisa.
- *
- * Racuni so imeli PRAVILNO zgradbo (glej lib/invoice-pdf.tsx) in so delovali -
- * ta stran je uporabljala svojo, ki se je od nje razlikovala.
- *
- * Zgradba po standardu (19 polj + kontrolna vsota):
- *   UPNQR, IBAN placnika, polog, dvig, referenca placnika,
- *   ime placnika, ulica, kraj, znesek, datum placila, nujno,
- *   koda namena, namen, rok placila, IBAN prejemnika, referenca prejemnika,
- *   ime prejemnika, ulica prejemnika, kraj prejemnika
+ * 26.8.2026: zapis je imel 17 polj in ni imel kontrolne vsote (banke so ga
+ * zavrnile kot napačno strukturo).
+ * HOTFIX 5.10.2026: zapis sestavi isti modul kot na računih (lib/upn-qr.ts).
+ * Prej je bilo ime prejemnika odrezano na 33 znakov (»Finančna uprava
+ * Republike Sloveni«), koda je bila v UTF-8 namesto ISO 8859-2 (aplikacija je
+ * namesto »č« prebrala dva tuja znaka), brez oznake ECI, brez LF za kontrolno
+ * vsoto in ne v verziji 15 – banke pa od 9.10.2025 ime prejemnika preverjajo
+ * (»Ni ujemanja«).
  */
 function buildUPN(p: {
   payerName: string; payerAddress: string; payerCity: string;
   amount: number; iban: string; reference: string; description: string; dueDate: string;
   recipientName?: string; recipientAddress?: string; recipientCity?: string;
-}) {
-  const amt = Math.round(p.amount * 100).toString().padStart(11, '0')
-  const [y, m, d] = p.dueDate.split('-')
-  const rok = `${d}.${m}.${y}`
-  const iban = p.iban.replace(/\s/g, '')
-  const ref = p.reference.replace(/\s/g, '')
+}): string | null {
+  const r = sestaviUpnQr({
+    placnikIme: p.payerName, placnikUlica: p.payerAddress, placnikKraj: p.payerCity,
+    znesek: p.amount, namen: p.description, rokPlacila: p.dueDate,
+    ibanPrejemnika: p.iban, sklic: p.reference,
+    prejemnikIme: p.recipientName, prejemnikUlica: p.recipientAddress, prejemnikKraj: p.recipientCity,
+  })
+  return 'vsebina' in r ? r.vsebina : null
+}
 
-  const polja = [
-    'UPNQR', '', '', '', '',
-    (p.payerName || '').slice(0, 33),
-    (p.payerAddress || '').slice(0, 33),
-    (p.payerCity || '').slice(0, 33),
-    amt,
-    '', '', 'OTHR',
-    (p.description || '').slice(0, 42),
-    rok,
-    iban,
-    ref,
-    (p.recipientName || '').slice(0, 33),
-    (p.recipientAddress || '').slice(0, 33),
-    (p.recipientCity || '').slice(0, 33),
-  ]
-
-  // Kontrolna vsota: stevilo znakov vseh polj skupaj z locili. Brez nje
-  // banka javi "napacna struktura zapisa".
-  const vsota = polja.reduce((s, f) => s + f.length + 1, 0)
-  return polja.join('\n') + '\n' + String(vsota).padStart(3, '0')
+/** Slika kode v brskalniku (SVG); prazna, če kode ni (npr. znesek 0). */
+async function upnSlika(vsebina: string | null): Promise<string> {
+  if (!vsebina) return ''
+  const { toSVG } = await import('bwip-js/browser')
+  const svg = toSVG(upnBwipOpcije(vsebina) as Parameters<typeof toSVG>[0])
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
 }
 
 export default function PrispevkiPage() {
@@ -146,12 +130,8 @@ export default function PrispevkiPage() {
       iban: 'SI56011008881000030', reference: `SI19${taxNum}-43001`,
       description: `Prispevki za staršev. varstvo ${monthLabel}`, dueDate })
 
-    console.log('UPN PIZ:', pizUPN)
     const [qr1, qr2, qr3, qr4] = await Promise.all([
-      QRCode.toDataURL(pizUPN, { width: 200, margin: 1 }),
-      QRCode.toDataURL(zzzsUPN, { width: 200, margin: 1 }),
-      QRCode.toDataURL(zapoUPN, { width: 200, margin: 1 }),
-      QRCode.toDataURL(starUPN, { width: 200, margin: 1 }),
+      upnSlika(pizUPN), upnSlika(zzzsUPN), upnSlika(zapoUPN), upnSlika(starUPN),
     ])
     setQrPIZ(qr1); setQrZZZS(qr2); setQrZaposlovanje(qr3); setQrStarsevstvo(qr4)
 
@@ -159,7 +139,7 @@ export default function PrispevkiPage() {
       const akUPN = buildUPN({ ...payer, amount: parseFloat(akontacija),
         iban: 'SI56011008881000030', reference: `SI19${taxNum}-40002`,
         description: `Akontacija dohodnine ${monthLabel}`, dueDate })
-      const qr5 = await QRCode.toDataURL(akUPN, { width: 200, margin: 1 })
+      const qr5 = await upnSlika(akUPN)
       setQrAkontacija(qr5)
     } else {
       setQrAkontacija('')
@@ -189,7 +169,7 @@ export default function PrispevkiPage() {
         <div className="text-lg font-semibold text-gray-900">€{formatEurNumber(Number(amount))}</div>
       </div>
       {qr && <img src={qr} alt={`QR ${title}`} className="w-full rounded-xl" />}
-      {!qr && <div className="h-32 bg-gray-50 rounded-xl flex items-center justify-center text-xs text-gray-400">Generiranje...</div>}
+      {!qr && <div className="h-32 bg-gray-50 rounded-xl flex items-center justify-center text-xs text-gray-400">{Number(amount) > 0 ? 'Generiranje...' : 'Ni zneska za plačilo'}</div>}
       <div className="mt-3 space-y-1 text-xs text-gray-500">
         <div className="font-mono">{iban}</div>
         <div className="font-mono">{reference}</div>
