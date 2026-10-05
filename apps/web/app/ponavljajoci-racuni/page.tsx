@@ -252,6 +252,7 @@ export default function PonavljajoceRacunePage() {
                   <select value={vatRate} onChange={e => setVatRate(Number(e.target.value))} style={inp}>
                     <option value={0}>0%</option>
                     <option value={9.5}>9.5%</option>
+                    <option value={5}>5%</option>
                     <option value={22}>22%</option>
                   </select>
                 </div>

@@ -20,7 +20,7 @@ Meni **Poslovanje → Računi** (`/invoices`). Na vrhu: Skupaj fakturirano, Pla�
 1. **+ Nov račun** (ali meni **Nov račun**).
 2. **Stranka**: izberi obstoječo ali vpiši novo. Ko vpišeš **davčno številko** (8 števk, s SI ali brez), se ime in naslov izpolnita samodejno iz javnih podatkov o podjetju (ali klikni iskanje oziroma Enter).
 3. **Datumi**: datum računa, rok plačila, (neobvezno) obdobje opravljene storitve od–do.
-4. **Storitve in blago**: opis, količina, cena, DDV (22 %, 9,5 % ali 0 %), popust %. **+ Dodaj postavko** za več vrstic. **Preračunaj iz cene z DDV** izračuna ceno brez DDV; na voljo je tudi **Kalkulator DDV**.
+4. **Storitve in blago**: opis, količina, cena, DDV (22 %, 9,5 %, 5 % ali 0 %), popust %. **+ Dodaj postavko** za več vrstic. **Preračunaj iz cene z DDV** izračuna ceno brez DDV; na voljo je tudi **Kalkulator DDV**.
 5. Pri **0 % DDV** izberi **Razlog za neobračunan DDV**; »Zapomni si to izbiro za vse prihodnje račune« jo nastavi kot privzeto.
 6. Neobvezno: **Besedilo nad tabelo** (npr. »Na podlagi pogodbe …«) in **Opombe**.
 7. **Shrani osnutek** ali **Izdaj račun**. Izdan račun dobi zaporedno številko in se zapiše v KPO knjigo.
@@ -60,4 +60,4 @@ Ob računu sta še **⬇ PDF** in **📧 Pošlji** (pošiljanje po e-pošti – 
 - **Brezplačni paket**: največ **5 računov skupaj**; nato se prikaže »Nadgradi →«.
 - Vrzel v zaporedju številk (npr. zaradi izbrisanega osnutka) je prikazana nad seznamom – za davčni pregled jo je dobro znati pojasniti.
 - Pošiljanje po e-pošti zahteva paket Pro.
-- Pri postavkah računa v portalu **5 % DDV ni na izbiro** (samo 22 %, 9,5 %, 0 %); 5 % je le v kalkulatorju DDV. Na blagajni (POS) je 5 % na voljo pri artiklih.
+- Pri postavkah računa v portalu je od oktobra 2026 na izbiro tudi **5 % DDV** (poleg 22 %, 9,5 %, 0 %), tako pri novem računu kot pri urejanju – enako kot na blagajni (POS).

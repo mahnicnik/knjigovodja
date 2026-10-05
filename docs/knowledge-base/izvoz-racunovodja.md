@@ -33,6 +33,6 @@ Računovodja vidi seznam strank (zamudniki, nepotrjeni stroški, DDV), išče po
 
 ## Omejitve in opozorila
 
-- Izvoz v obliki **VOD XML** (omenjen na predstavitveni strani »Za računovodje«) v aplikaciji trenutno **ni** na voljo – na voljo sta XLSX in CSV.
+- Na voljo sta **XLSX** in **CSV**; strojnega izvoza VOD XML (ne-tekstovni strukturirani format za neposreden uvoz knjižb v Vasco/Pantheon/Opal) ni – predstavitvena stran »Za računovodje« ga od oktobra 2026 zato ne omenja več.
 - Računko nima glavne knjige ali dvostavnega knjigovodstva; izvoz je osnova, ki jo računovodja uvozi v svoj program.
 - Računovodja ne more izdajati ali urejati računov.

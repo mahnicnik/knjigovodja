@@ -18,7 +18,7 @@ import Link from 'next/link'
 
 export const metadata: Metadata = {
   title: 'Za računovodske servise — Računko ni konkurenca vašemu programu',
-  description: 'Računko nima glavne knjige ne dvostavnega knjigovodstva. Vodi eno podjetje, ne vaše pisarne. Vi dobite izvoz VOD za Vasco, Pantheon ali Opal — namesto mape papirjev.',
+  description: 'Računko nima glavne knjige ne dvostavnega knjigovodstva. Vodi eno podjetje, ne vaše pisarne. Vi dobite izvoz za Vasco, Pantheon ali Minimax — namesto mape papirjev.',
   alternates: { canonical: '/za-racunovodje' },
 }
 
@@ -49,8 +49,8 @@ export default function ZaRacunovodje() {
 
         <h2 style={h2}>Izvozi</h2>
         <ul style={{ ...p, paddingLeft:22 }}>
-          <li style={li}><strong>VOD XML</strong> — knjižbe izdanih računov za Vasco, Pantheon in Opal</li>
-          <li style={li}><strong>Excel</strong> — računi, stroški, zaloge in poročila</li>
+          <li style={li}><strong>Excel (XLSX)</strong> — izdani in prejeti računi, rekapitulacija, zaloge in poročila</li>
+          <li style={li}><strong>CSV</strong> — za uvoz v Vasco, Pantheon, Minimax, e-računi</li>
           <li style={li}><strong>Evidence DDV</strong> — za vse vaše stranke v enem koraku</li>
           <li style={li}><strong>Dnevni zaključki blagajne</strong> — z razčlenitvijo po stopnjah DDV</li>
         </ul>

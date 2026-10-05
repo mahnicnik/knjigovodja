@@ -477,6 +477,7 @@ export default function NewInvoicePage() {
                           <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none">
                             <option value={22}>22 %</option>
                             <option value={9.5}>9,5 %</option>
+                            <option value={5}>5 %</option>
                             <option value={0}>0 %</option>
                           </select>
                         ) : (
@@ -762,7 +763,7 @@ export default function NewInvoicePage() {
                   <div className="col-span-2">
                     {org?.vat_registered ? (
                       <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', +e.target.value)} className="w-full border border-gray-200 rounded-xl px-2 py-2 text-sm focus:outline-none bg-white">
-                        <option value={22}>22 %</option><option value={9.5}>9,5 %</option><option value={0}>0 %</option>
+                        <option value={22}>22 %</option><option value={9.5}>9,5 %</option><option value={5}>5 %</option><option value={0}>0 %</option>
                       </select>
                     ) : (
                       <div className="w-full border border-gray-200 rounded-xl px-2 py-2 text-sm text-gray-400 bg-gray-50 text-center">0 % (ni zavezanec)</div>

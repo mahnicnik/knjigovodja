@@ -187,6 +187,7 @@ export default function NewQuotePage() {
                   <select value={item.vat_rate} onChange={e => updateItem(i, 'vat_rate', Number(e.target.value))} style={{ ...inp, fontSize: 12 }}>
                     <option value={0}>0%</option>
                     <option value={9.5}>9.5%</option>
+                    <option value={5}>5%</option>
                     <option value={22}>22%</option>
                   </select>
                 )}

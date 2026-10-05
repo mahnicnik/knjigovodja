@@ -53,3 +53,4 @@ Stran **E-račun** (`/e-racun`) pojasni zakon ZIERDED: od 1. januarja 2028 so me
 
 - Predračun in dobavnica nista davčna dokumenta.
 - Datoteke e-računa Računko ne odda neposredno na UJP – XML naložiš v spletno banko ali pri ponudniku e-poti.
+- Pri predračunu in ponavljajočem računu so DDV stopnje 22 %, 9,5 %, 5 % in 0 % (enako kot pri izdanih računih, glej `portal-racuni.md`). Avansni računi DDV stopnje trenutno ne prikazujejo kot izbiro – uporabijo 22 % (ali 0 % pri nezavezancu) samodejno.
