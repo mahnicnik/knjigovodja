@@ -17,10 +17,12 @@
  *     iz postavk (line_items[].vat_rate); glava racuna stolpca vat_rate NIMA.
  *     Zneski glave (amount_net, vat_amount) ostanejo merodajni — postavke dolocijo
  *     le razdelitev po stopnjah. Osnutki in predstavitveni (DEMO) racuni ne stejejo.
- *   · POS blagajna (orders, po LOKALNEM datumu closed_at) — DDV po stopnji iz
- *     vrstic narocila, zaokrozen PO RACUNU in stopnji (tako, kot je bil prijavljen
+ *   · POS blagajna (orders, po LOKALNEM datumu) — DDV po stopnji iz vrstic
+ *     narocila, zaokrozen PO RACUNU in stopnji (tako, kot je bil prijavljen
  *     FURS-u). Popust na racunu se uposteva sorazmerno, napitnina ni obdavcena,
- *     unovcenje karte obiskov (placilo 'pkg') ni nov promet.
+ *     unovcenje karte obiskov (placilo 'pkg') ni nov promet. Racun steje na dan
+ *     izdaje, storno (−) na dan storna, vracilo (−) na dan vracila (V4). Izracun
+ *     je ISTI kot za dnevne KPO vnose (lib/pos-kpo.ts).
  *     KPO povzetki blagajne (pos_prodaja, pos_storitve, POS promet) se zato NE
  *     stejejo — sicer bi bil promet stet dvakrat, njihov datum pa je datum
  *     zakljucka izmene in ne datum prodaje (najdba K5).
@@ -38,6 +40,7 @@
  */
 
 import { lokalniDatum } from '@/lib/tax-constants'
+import { izracunajPosKnjizbe, razcleniRacun, lokalniDan, niPromet, IZBOR_NAROCILA, type PosNarocilo, type PosVracilo } from '@/lib/pos-kpo'
 
 // ───────────────────────────── tipi ─────────────────────────────
 
@@ -90,11 +93,10 @@ export interface DdvPodatki {
     income: any; expense: any; vat_out: any; vat_in: any; vat_rate: any
     invoice_id: string | null; receipt_id: string | null
   }>
-  narocila: Array<{
-    closed_at: string; total: any; tip_amount: any; invoice_number?: string | null
-    order_lines: Array<{ total: any; qty: any; unit_price: any; vat_rate: any; voided: boolean | null }> | null
-    payments: Array<{ method: string | null }> | null
-  }>
+  /** POS racuni (placani in stornirani), lib/pos-kpo PosNarocilo. */
+  narocila: PosNarocilo[]
+  /** POS vracila z izvirnim racunom (refunds + orders). */
+  vracila?: PosVracilo[]
   /** Ali ima organizacija POS blagajno (pos_business_id). */
   imaBlagajno: boolean
 }
@@ -282,35 +284,24 @@ export function razcleniIzdanRacun(r: DdvPodatki['racuni'][number]): Array<{ sto
 }
 
 /**
- * POS racun → osnova in DDV po stopnjah, ZAOKROZENO PO RACUNU (kot v FURS
- * razclenitvi, app/api/furs/invoice). Bruto vrstic se sorazmerno prilagodi
- * dejansko zaracunanemu znesku brez napitnine (popust na racunu).
+ * POS racun → osnova in DDV po stopnjah (centi). Ista razclenitev kot v KPO
+ * (lib/pos-kpo razcleniRacun: po racunu, vrsti in stopnji, popust sorazmerno,
+ * brez napitnine), zato se DDV in knjiga ujemata do centa.
  */
-export function razcleniNarocilo(n: DdvPodatki['narocila'][number]): Array<{ stopnja: Stopnja; osnova: number; ddv: number }> {
-  const vrstice = (n.order_lines || []).filter(l => !l.voided)
-  if (vrstice.length === 0) return []
-  const bruto = (l: any) => l.total != null ? Number(l.total) : Number(l.qty || 0) * Number(l.unit_price || 0)
-  const vsotaVrstic = vrstice.reduce((s, l) => s + bruto(l), 0)
-  const zaracunano = Number(n.total || 0) - Number(n.tip_amount || 0)
-  const faktor = vsotaVrstic > 0 ? zaracunano / vsotaVrstic : 1
-  const poStopnji = new Map<number, number>()
-  for (const l of vrstice) {
-    const st = Number(l.vat_rate ?? 22)
-    poStopnji.set(st, (poStopnji.get(st) || 0) + bruto(l) * faktor)
+export function razcleniNarocilo(n: PosNarocilo): Array<{ stopnja: Stopnja; osnova: number; ddv: number }> {
+  const poStopnji = new Map<Stopnja, { osnova: number; ddv: number }>()
+  for (const d of razcleniRacun(n)) {
+    const s = kljucStopnje(d.stopnja)
+    const x = poStopnji.get(s) || { osnova: 0, ddv: 0 }
+    x.osnova += d.neto
+    x.ddv += d.ddv
+    poStopnji.set(s, x)
   }
-  return [...poStopnji.entries()].map(([st, b]) => {
-    const neto = st > 0 ? b / (1 + st / 100) : b
-    const netoC = Math.round(neto * 100)
-    const ddvC = Math.round((b - neto) * 100)
-    return { stopnja: kljucStopnje(st), osnova: netoC, ddv: ddvC }
-  })
+  return [...poStopnji.entries()].map(([stopnja, x]) => ({ stopnja, ...x }))
 }
 
-const lokalniDanFormat = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Ljubljana' })
 /** Datum (YYYY-MM-DD) casovnega ziga v slovenskem casu — prodaja ob 0:30 sodi v ta dan. */
-export function lokalniDanIzCasa(cas: string): string {
-  return lokalniDanFormat.format(new Date(cas))
-}
+export const lokalniDanIzCasa = lokalniDan
 
 // ───────────────────────────── izračun ─────────────────────────────
 
@@ -329,14 +320,13 @@ export function izracunajDdvIzPodatkov(p: DdvPodatki, obdobje: DdvObdobje): DdvR
     for (const d of razcleniIzdanRacun(r)) dodaj(racuni, d.stopnja, d.osnova, d.ddv)
   }
 
-  for (const n of p.narocila) {
-    if (!n.closed_at || !v(lokalniDanIzCasa(n.closed_at))) continue
-    if (String(n.invoice_number || '').startsWith('DEMO')) continue
-    // Unovcenje karte obiskov: storitev je bila obdavcena ob nakupu karte.
-    if ((n.payments || []).some(pl => pl.method === 'pkg')) continue
-    nNar++
-    for (const d of razcleniNarocilo(n)) dodaj(blagajna, d.stopnja, d.osnova, d.ddv)
+  // POS: racun na dan izdaje (+), storno na dan storna (−), vracilo na dan
+  // vracila (−) - ISTI izracun kot dnevni KPO vnosi (lib/pos-kpo, revizija V4).
+  // Unovcenje karte obiskov in DEMO racuni niso promet.
+  for (const k of izracunajPosKnjizbe(p.narocila, p.vracila || [], dan => dan >= od && dan <= doD)) {
+    dodaj(blagajna, kljucStopnje(k.stopnja), k.neto, k.ddv)
   }
+  nNar = p.narocila.filter(n => n.closed_at && !niPromet(n) && v(lokalniDan(n.closed_at))).length
 
   const kpoBlagajne = new Set<string>(p.imaBlagajno ? KPO_KATEGORIJE_BLAGAJNE : [])
   for (const e of p.kpo) {
@@ -419,7 +409,9 @@ export async function naloziDdvPodatke(db: any, orgId: string, od: string, doD: 
   if (orgErr) throw new Error('DDV: organizacije ni mogoce prebrati: ' + orgErr.message)
   const biz: string | null = org?.pos_business_id ?? null
 
-  const [racuni, prejeti, kpo, narocila] = await Promise.all([
+  const casOd = `${premakniDan(od, -1)}T00:00:00Z`
+  const casDo = `${premakniDan(doD, 2)}T00:00:00Z`
+  const [racuni, prejeti, kpo, narocila, vracila] = await Promise.all([
     vseVrstice<DdvPodatki['racuni'][number]>(() => db.from('issued_invoices')
       .select('id, issue_date, amount_net, vat_amount, line_items')
       .eq('org_id', orgId).neq('status', 'draft').or('zoi.is.null,zoi.not.like.DEMO-%')
@@ -431,16 +423,22 @@ export async function naloziDdvPodatke(db: any, orgId: string, od: string, doD: 
       .select('id, entry_date, entry_type, category, income, expense, vat_out, vat_in, vat_rate, invoice_id, receipt_id')
       .eq('org_id', orgId).gte('entry_date', od).lte('entry_date', doD).order('id')),
     biz
-      // closed_at je UTC; dan prej/pozneje zajame prodajo okoli polnoci,
-      // dokoncno se filtrira po lokalnem datumu v izracunu.
-      ? vseVrstice<DdvPodatki['narocila'][number]>(() => db.from('orders')
-          .select('id, closed_at, total, tip_amount, invoice_number, order_lines(total, qty, unit_price, vat_rate, voided), payments(method)')
-          .eq('business_id', biz).eq('status', 'paid')
-          .gte('closed_at', `${premakniDan(od, -1)}T00:00:00Z`).lt('closed_at', `${premakniDan(doD, 2)}T00:00:00Z`)
+      // closed_at/voided_at sta UTC; dan prej/pozneje zajame prodajo okoli
+      // polnoci, dokoncno se filtrira po lokalnem datumu v izracunu.
+      ? vseVrstice<PosNarocilo>(() => db.from('orders')
+          .select(IZBOR_NAROCILA)
+          .eq('business_id', biz).in('status', ['paid', 'voided'])
+          .or(`and(closed_at.gte.${casOd},closed_at.lt.${casDo}),and(voided_at.gte.${casOd},voided_at.lt.${casDo})`)
           .order('id'))
-      : Promise.resolve([] as DdvPodatki['narocila']),
+      : Promise.resolve([] as PosNarocilo[]),
+    biz
+      ? vseVrstice<PosVracilo>(() => db.from('refunds')
+          .select(`id, refunded_at, amount, orders(${IZBOR_NAROCILA})`)
+          .eq('business_id', biz).gte('refunded_at', casOd).lt('refunded_at', casDo)
+          .order('id'))
+      : Promise.resolve([] as PosVracilo[]),
   ])
-  return { racuni, prejeti, kpo, narocila, imaBlagajno: !!biz }
+  return { racuni, prejeti, kpo, narocila, vracila, imaBlagajno: !!biz }
 }
 
 /**

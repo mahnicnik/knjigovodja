@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { resolveActiveOrgId, getRequestedOrgId } from '@/lib/active-org-server'
+import { knjiziPosDneve, dneviMed } from '@/lib/pos-kpo'
 
 function getServiceClient() {
   return createClient(
@@ -10,18 +12,23 @@ function getServiceClient() {
   )
 }
 
-// POPRAVLJENO (26.7.2026, audit portala K1): prej je ta endpoint pisal v
-// tabelo 'invoices', ki v bazi NE OBSTAJA (prava racunovodska tabela je
-// kpo_entries, kamor pisejo tudi vsi drugi viri prihodkov: banka, kartice,
-// Stripe/Woo/Shopify webhooki). Posledica: ves dnevni POS promet se je ob
-// zakljucku blagajne TIHO IZGUBIL - nikoli ni prisel v KPO, na Dashboard,
-// v Statistiko ali davcne obracune.
-//
-// Zdaj: dnevni promet se knjizi kot prihodek v kpo_entries, z DDV
-// razclenitvijo iz Z-porocila (ce je z_report_id podan), in z varovalko
-// proti podvojitvi, ce se isti dan sinhronizira veckrat.
+/**
+ * Prenos POS prometa v KPO ob Z-porocilu ("Z-porocilo, samo obracun").
+ *
+ * PREDELANO (revizija V5, oktober 2026): ista pot kot zakljucek izmene -
+ * lib/pos-kpo.ts knjizi PO DNEVIH iz izvornih racunov, s stornom in vracili,
+ * z locenim DDV po stopnjah in idempotentno (kpo_entries.pos_kljuc).
+ *
+ * Prej je ta endpoint pisal svoj vnos s kategorijo "POS promet": brez
+ * Z-porocila bruto znesek z DDV 0, vracila samo v opombi. Ce je blagajnik
+ * isti dan uporabil tudi "Zakljuci", je bil promet knjizen DVAKRAT.
+ *
+ * Zneska iz telesa zahteve (amount, refunds) NE uporabimo vec - promet se
+ * vedno preracuna iz racunov v bazi. Obdobje: okno Z-porocila (z_report_id)
+ * ali en dan (date).
+ */
 
-async function getSessionOrg() {
+async function prijavljenUporabnik() {
   const cookieStore = await cookies()
   const authed = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -29,109 +36,61 @@ async function getSessionOrg() {
     { cookies: { getAll: () => cookieStore.getAll() } }
   )
   const { data: { user } } = await authed.auth.getUser()
-  if (!user) return { user: null, orgId: null as string | null }
-
-  const { data: member } = await authed
-    .from('org_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .maybeSingle()
-  return { user, orgId: member?.org_id ?? null }
+  return { user, authed }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { user, orgId } = await getSessionOrg()
-    if (!user) {
-      return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })
-    }
-    if (!orgId) {
-      return NextResponse.json({ error: 'Organizacija ni najdena za prijavljenega uporabnika' }, { status: 404 })
-    }
+    const { user, authed } = await prijavljenUporabnik()
+    if (!user) return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })
 
-    const { date, amount, refunds, description, z_report_id } = await req.json()
-
-    if (!date || !amount) {
-      return NextResponse.json({ error: 'Manjka date ali amount' }, { status: 400 })
-    }
-
+    const { date, z_report_id } = await req.json()
     const supabase = getServiceClient()
-    const grossAmount = Number(amount)
 
-    // DDV razclenitev iz Z-porocila (ce je na voljo) - da KPO vnos vsebuje
-    // pravilno locen DDV, ne le bruto znesek.
-    let vatOut = 0
-    let netIncome = grossAmount
+    // Organizacija: pri Z-porocilu tista, ki ji pripada blagajna porocila
+    // (uporabnik mora biti njen clan); sicer aktivna organizacija.
+    // POPRAVLJENO (V5): prej org_members.maybeSingle() - pri clanu vec
+    // organizacij napaka ali napacna organizacija.
+    let orgId: string | null = null
+    let businessId: string | null = null
+    let dnevi: string[] = []
+
     if (z_report_id) {
-      const { data: zr } = await supabase
-        .from('z_reports')
-        .select('total_vat_22, total_vat_95')
-        .eq('id', z_report_id)
-        .maybeSingle()
-      if (zr) {
-        vatOut = Number(zr.total_vat_22 || 0) + Number(zr.total_vat_95 || 0)
-        netIncome = Math.round((grossAmount - vatOut) * 100) / 100
+      const { data: zr } = await supabase.from('z_reports')
+        .select('business_id, opened_at, closed_at').eq('id', z_report_id).maybeSingle()
+      if (!zr) return NextResponse.json({ error: 'Z-poročilo ne obstaja' }, { status: 404 })
+      const { data: org } = await supabase.from('organizations').select('id').eq('pos_business_id', zr.business_id).maybeSingle()
+      const { data: clan } = org
+        ? await supabase.from('org_members').select('org_id').eq('user_id', user.id).eq('org_id', org.id).maybeSingle()
+        : { data: null }
+      if (!org || !clan) return NextResponse.json({ error: 'Z-poročilo ne pripada vaši organizaciji' }, { status: 403 })
+      orgId = org.id
+      businessId = zr.business_id
+      dnevi = dneviMed(zr.opened_at, zr.closed_at || new Date().toISOString())
+    } else {
+      if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return NextResponse.json({ error: 'Manjka z_report_id ali date (YYYY-MM-DD)' }, { status: 400 })
       }
+      const { orgId: aktivna } = await resolveActiveOrgId(authed as any, user.id, getRequestedOrgId(req))
+      if (!aktivna) return NextResponse.json({ error: 'Organizacija ni najdena' }, { status: 404 })
+      const { data: org } = await supabase.from('organizations').select('pos_business_id').eq('id', aktivna).single()
+      orgId = aktivna
+      businessId = org?.pos_business_id ?? null
+      dnevi = [date]
     }
 
-    const entryDescription = description || `POS dnevni promet — ${date}`
-    const entryNotes = `Bruto promet: €${grossAmount.toFixed(2)} | Vračila: €${Number(refunds || 0).toFixed(2)}${z_report_id ? ` | Z-poročilo: ${z_report_id}` : ''}`
-
-    // VAROVALKA proti podvojitvi: ce za ta dan in to organizacijo ze obstaja
-    // POS vnos, ga POSODOBI namesto ustvarjanja novega (blagajna se lahko
-    // zapre veckrat na dan, ali se sinhronizacija ponovi).
-    const { data: existing } = await supabase
-      .from('kpo_entries')
-      .select('id')
-      .eq('org_id', orgId)
-      .eq('entry_date', date)
-      .eq('category', 'POS promet')
-      .maybeSingle()
-
-    if (existing) {
-      const { error: updErr } = await supabase
-        .from('kpo_entries')
-        .update({
-          description: entryDescription,
-          income: netIncome,
-          vat_out: vatOut,
-          notes: entryNotes,
-        })
-        .eq('id', existing.id)
-
-      if (updErr) {
-        console.error('sync-income: napaka pri posodobitvi KPO vnosa:', updErr)
-        return NextResponse.json({ error: 'Napaka pri posodobitvi: ' + updErr.message }, { status: 500 })
-      }
-      return NextResponse.json({ success: true, action: 'updated', id: existing.id })
+    if (!orgId || !businessId) {
+      return NextResponse.json({ error: 'Organizacija nima blagajne' }, { status: 400 })
     }
 
-    const { data: newEntry, error } = await supabase
-      .from('kpo_entries')
-      .insert({
-        org_id: orgId,
-        entry_date: date,
-        description: entryDescription,
-        entry_type: 'income',
-        income: netIncome,
-        expense: 0,
-        vat_in: 0,
-        vat_out: vatOut,
-        category: 'POS promet',
-        notes: entryNotes,
-      })
-      .select('id')
-      .single()
-
-    if (error) {
-      // POPRAVLJENO: prej je koda ob napaki TIHO nadaljevala (fallback brez
-      // preverjanja) - zdaj napako vrnemo, da se ne izgubi neopazno.
-      console.error('sync-income: napaka pri vpisu KPO vnosa:', error)
-      return NextResponse.json({ error: 'Napaka pri knjiženju: ' + error.message }, { status: 500 })
-    }
-
-    return NextResponse.json({ success: true, action: 'created', id: newEntry?.id })
-
+    const knjizbe = await knjiziPosDneve(supabase, orgId, businessId, dnevi)
+    return NextResponse.json({
+      success: true,
+      dnevi,
+      knjizb: knjizbe.length,
+      neto: knjizbe.reduce((s, k) => s + k.neto, 0) / 100,
+      ddv: knjizbe.reduce((s, k) => s + k.ddv, 0) / 100,
+    })
   } catch (e: any) {
     console.error('sync-income error:', e)
     return NextResponse.json({ error: e.message }, { status: 500 })

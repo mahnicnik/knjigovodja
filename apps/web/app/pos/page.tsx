@@ -20,6 +20,7 @@ import { buildReceiptHTML } from '@/lib/receipt'
 import { WorkStatusBar, ClockInModal } from '@/lib/work-session-components'
 import { getCurrentSession, openSession, getSessionStats, closeSession, getLastCarryOver, type CashSession, type SessionStats } from '@/lib/cash-session'
 import { getActiveMembership } from '@/lib/active-org'
+import { knjiziPosDneve, lokalniDan } from '@/lib/pos-kpo'
 import { buildOpeningReceipt, buildXReportReceipt, buildZReportReceipt } from '@/lib/cash-session-receipt'
 // POPRAVLJENO (26.8.2026): prelet 136 je uporabil `idZaDdv`, uvoza pa ni
 // dodal. `@ts-nocheck` je napako skril; ujela jo je skripta preveri-stolpce.
@@ -9325,6 +9326,17 @@ function VoidModal({ order, lines, payment, posData, auth, onClose, onVoided }) 
       // je uporabnik vseeno videl potrdilo, racun pa je ostal veljaven.
       if (voidErr) throw new Error('Storna ni bilo mogoče zabeležiti: ' + voidErr.message)
 
+      // REVIZIJA V4 (oktober 2026): storno je dokument DNEVA storna - KPO vnos
+      // tega dne se takoj preracuna (tudi ce je bila izmena racuna ze zaprta;
+      // prej je storno po zakljucku izmene v knjigi ostal neodstet).
+      // Zapis je idempotenten (lib/pos-kpo.ts) - zakljucek izmene ga ne podvoji.
+      try {
+        await knjiziPosDneve(createClient(), member.org_id, BUSINESS_ID, [lokalniDan(new Date().toISOString())])
+      } catch (kpoErr: any) {
+        console.error('Storno: KPO vnos dneva ni bil preracunan:', kpoErr)
+        alert('Račun je storniran, knjige prihodkov pa ni bilo mogoče posodobiti. Popravek se zapiše ob zaključku izmene.')
+      }
+
       // PRELET 357: vracilo denarja prek Stripe (storno pri FURS je ze opravljen
       // zgoraj po obstojecem postopku). Neuspeh storna ne razveljavi - povemo.
       if (stripeVracilo?.stripe && stripeVracilo.status === 'placano' && vrniPrekStripe) {
@@ -9560,6 +9572,17 @@ function RefundModal({ order, lines, payment, auth, onClose, onRefunded }) {
       // DODANO (16.8.2026): prej se napaka pri vpisu ni preverjala - vracilo
       // je tiho spodletelo, uporabnik pa je videl potrdilo o uspehu.
       if (refundErr) throw new Error('Vračila ni bilo mogoče zabeležiti: ' + refundErr.message)
+
+      // REVIZIJA V4 (oktober 2026): vracilo se odsteje od prometa DNEVA vracila
+      // (razdeljeno po stopnjah DDV izvirnega racuna). Prej je bilo zapisano le
+      // v opombi Z-porocila - prihodek in DDV sta ostala previsoka.
+      try {
+        const clanstvo = await getActiveMembership()
+        if (clanstvo) await knjiziPosDneve(createClient(), clanstvo.org_id, BUSINESS_ID, [lokalniDan(new Date().toISOString())])
+      } catch (kpoErr: any) {
+        console.error('Vracilo: KPO vnos dneva ni bil preracunan:', kpoErr)
+        alert('Vračilo je zabeleženo, knjige prihodkov pa ni bilo mogoče posodobiti. Popravek se zapiše ob zaključku izmene.')
+      }
 
       // Natisni vračilo
       const html = buildRefundReceiptHTML({

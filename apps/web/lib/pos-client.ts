@@ -5,9 +5,7 @@
 //   const items = await pos.items.list()
 
 import { createClient } from '@/lib/supabase'
-import { lokalniDatum } from '@/lib/tax-constants'
-import { vatExemptionText } from '@/lib/vat-exemptions'
-import { jeStoritevVrstica } from '@/lib/pos-calc'
+import { knjiziPosDneve, dneviMed } from '@/lib/pos-kpo'
 
 // ─── Business ID — multi-tenant: dinamično nastavljen glede na org ──
 // Live binding: ko resolveBusinessId() spremeni to vrednost, se sprememba
@@ -469,143 +467,25 @@ export const pos = {
       if (error) throw error
       return data && data.length > 0 ? data[0] : null
     },
-    // POPRAVLJENO (16.8.2026, KRITICNO): odkar ima vsak blagajnik SVOJO sejo,
-    // lahko vec sej tece hkrati. Ta funkcija je filtrirala narocila SAMO po
-    // casovnem oknu seje, zato bi ob zakljucku dveh prekrivajocih se sej ISTI
-    // promet knjizila DVAKRAT v knjigo prihodkov. Zdaj filtrira tudi po
-    // blagajniku (orders.cashier_id), tako da vsaka seja knjizi le svoj del.
+    /**
+     * Prenos prometa izmene v KPO knjigo.
+     *
+     * PREDELANO (revizija K5/V4/V5, oktober 2026): knjizi se PO DNEVIH prodaje
+     * (prej vse z datumom ZAKLJUCKA izmene - izmena cez mejo meseca/cetrtletja je
+     * promet prenesla v napacno davcno obdobje), storno in vracila se odstejejo
+     * na svoj dan, zapis je idempotenten (kpo_entries.pos_kljuc). Izracun in
+     * zapis sta v lib/pos-kpo.ts - ista pot kot Z-porocilo (/api/pos/sync-income)
+     * ter storno in vracilo v blagajni.
+     *
+     * Izmena je skupna za podjetje (prelet 196/216), zato se knjizi ves promet
+     * dni izmene; `staffId` ostaja v podpisu zaradi obstojecih klicev.
+     */
     async syncSessionToKPO(orgId: string, sessionFrom: string, sessionTo: string, staffId?: string | null): Promise<{ productIncome: number; serviceIncome: number } | null> {
-      const db = sb()
-      // Pridobi vse plačane naročitve v tem sessionu, z vrsticami in tipom artikla
-      const { data: orders } = await db
-        .from('orders')
-        // DODANO (19.8.2026): items(bookable, vat_exemption_code).
-        //  • `bookable` loci STORITEV od izdelka: storitev se ob shranjevanju
-        //    sinhronizira v katalog artiklov, zato se v blagajni proda kot
-        //    ARTIKEL in `order_lines.service_id` ostane prazen - fizioterapija
-        //    je bila v KPO knjizena kot "prodaja izdelkov".
-        //  • `vat_exemption_code` prinese razlog za neobracunan DDV, ki ga
-        //    racunovodja doslej iz knjige ni videl.
-        // PRELET 216: dodana `subtotal` in `discount_amount` - brez njiju
-        // prenos ne pozna popusta na CELEM racunu in knjizi prevec.
-        .select('id, closed_at, cashier_id, subtotal, discount_amount, order_lines(qty, unit_price, total, vat_rate, voided, item_id, service_id, items(bookable, vat_exemption_code, vat_exemption_custom_text))')
-        .eq('business_id', BUSINESS_ID)
-        .eq('status', 'paid')
-        .gte('closed_at', sessionFrom)
-        .lte('closed_at', sessionTo)
-      if (!orders || orders.length === 0) return null
-
-      /**
-       * POPRAVLJENO (prelet 216): PRENOS ZAJAME CELOTNO IZMENO.
-       *
-       * NAPAKA: filtriralo se je po `cashier_id === staffId`, torej po osebi,
-       * ki je izmeno ODPRLA. Vse, kar so izdali drugi blagajniki, v knjigo
-       * prihodkov ni prislo NIKOLI - ne ob zakljucku, ne pozneje.
-       *
-       * Posledica ni bila le napacen prikaz: manjkal je PRIHODEK v uradni
-       * evidenci. V enem tednu je tako izpadlo okoli 500 EUR prometa.
-       *
-       * Enako napako sem 3.9.2026 odpravil v `getSessionStats` (prelet 204),
-       * tu pa je ostala. Filter je bil uveden 16.8.2026, ko je imel vsak
-       * blagajnik svojo izmeno; od preleta 196 je izmena SKUPNA za podjetje,
-       * zato mora biti skupen tudi prenos.
-       *
-       * `staffId` ostaja v podpisu, ker ga klici se posiljajo.
-       */
       void staffId
-      const mojaNarocila = orders as any[]
-      if (mojaNarocila.length === 0) return null
-
-      let productNet = 0, productVat = 0
-      let serviceNet = 0, serviceVat = 0
-
-      // POPRAVLJENO (16.8.2026): promet se je sestel v DVA zapisa (izdelki,
-      // storitve), stopnje DDV pa so se pri tem POMESALE - obrazec DDV-O
-      // zahteva LOCENI vrstici za 22% in 9,5%. Zdaj grupiramo po vrsti IN
-      // stopnji, tako da vsak zapis nosi svojo stopnjo.
-      const skupine = new Map<string, {
-        net: number; vat: number; rate: number; jeStoritev: boolean; klavzule: Set<string>
-      }>()
-      for (const o of mojaNarocila) {
-        for (const l of o.order_lines || []) {
-          if (l.voided) continue
-          // POPRAVLJENO (16.8.2026): prej brez doplacil modifikatorjev - prihodek
-          // v knjigi bi bil prenizek. Stolpec total jih ze vsebuje.
-          const lineTotal = l.total != null ? Number(l.total) : Number(l.qty || 0) * Number(l.unit_price || 0)
-          const rate = Number(l.vat_rate ?? 22)
-          /**
-           * POPUST NA CELEM RACUNU (prelet 216)
-           *
-           * Prenos je sestel VRSTICE, popust na racunu pa je zapisan na
-           * NAROCILU - zato ga ni poznal in je v knjigo prihodkov knjizil
-           * vec, kot je gost placal.
-           *
-           * Popust razdelimo med vrstice sorazmerno z njihovo vrednostjo -
-           * enako, kot to pocne baza pri izracunu DDV in kot smo popravili
-           * porocilo po artiklih (prelet 181).
-           */
-          const osnovaRacuna = Number((o as any).subtotal || 0)
-          const popustRacuna = Number((o as any).discount_amount || 0)
-          const faktor = osnovaRacuna > 0 ? Math.max(0, (osnovaRacuna - popustRacuna) / osnovaRacuna) : 1
-          const znesekPoPopustu = lineTotal * faktor
-          const net = rate > 0 ? znesekPoPopustu / (1 + rate / 100) : znesekPoPopustu
-          const vat = znesekPoPopustu - net
-
-          // POPRAVLJENO (19.8.2026): prej samo `!!l.service_id`. Storitev se ob
-          // shranjevanju sinhronizira v katalog artiklov in se proda kot ARTIKEL,
-          // zato service_id ostane prazen - fizioterapija je bila v KPO knjizena
-          // kot "prodaja izdelkov", kategorija pa `pos_prodaja` namesto
-          // `pos_storitve`. Artikel, ki je nastal iz storitve, ima `bookable`.
-          const artikel: any = (l as any).items
-          const jeStoritev = jeStoritevVrstica(l as any)
-
-          const kljuc = `${jeStoritev ? 'storitev' : 'izdelek'}|${rate}`
-          const obstoj = skupine.get(kljuc)
-            || { net: 0, vat: 0, rate, jeStoritev, klavzule: new Set<string>() }
-          obstoj.net += net
-          obstoj.vat += vat
-
-          // Razlog za neobracunan DDV (samo pri 0 %). Ce je v isti skupini vec
-          // razlicnih razlogov, se zapisejo vsi.
-          if (rate === 0) {
-            const besedilo = vatExemptionText(
-              artikel?.vat_exemption_code,
-              artikel?.vat_exemption_custom_text,
-            )
-            if (besedilo) obstoj.klavzule.add(besedilo)
-          }
-
-          skupine.set(kljuc, obstoj)
-          if (jeStoritev) { serviceNet += net; serviceVat += vat }
-          else { productNet += net; productVat += vat }
-        }
-      }
-
-      const today = lokalniDatum(new Date(sessionTo))
-
-      // En zapis na kombinacijo vrste in stopnje DDV.
-      for (const s of skupine.values()) {
-        if (s.net <= 0) continue
-        const { error: kpoErr } = await db.from('kpo_entries').insert({
-          org_id: orgId,
-          entry_date: today,
-          description: `POS blagajna — prodaja ${s.jeStoritev ? 'storitev' : 'izdelkov'} ${s.rate}% (${today})`,
-          entry_type: 'income',
-          income: Math.round(s.net * 100) / 100,
-          vat_out: Math.round(s.vat * 100) / 100,
-          vat_rate: s.rate,
-          category: s.jeStoritev ? 'pos_storitve' : 'pos_prodaja',
-          // DODANO (19.8.2026): pri oproscenem prometu se zapise RAZLOG. Prej je
-          // vnos imel 0 % DDV brez pojasnila, zakaj - racunovodja iz knjige ni
-          // videl, ali gre za oprostitev po 42. clenu ali za neobdavcen bon.
-          notes: s.klavzule.size > 0
-            ? 'Avtomatski dnevni povzetek iz POS blagajne. ' + Array.from(s.klavzule).join(' ')
-            : 'Avtomatski dnevni povzetek iz POS blagajne',
-        })
-        if (kpoErr) console.error('POS -> KPO: zapisa za stopnjo', s.rate, 'ni bilo mogoce shraniti:', kpoErr)
-      }
-
-      return { productIncome: productNet, serviceIncome: serviceNet }
+      const knjizbe = await knjiziPosDneve(sb(), orgId, BUSINESS_ID, dneviMed(sessionFrom, sessionTo))
+      if (knjizbe.length === 0) return null
+      const vsota = (vrsta: string) => knjizbe.filter(k => k.vrsta === vrsta).reduce((s, k) => s + k.neto, 0) / 100
+      return { productIncome: vsota('izdelek'), serviceIncome: vsota('storitev') }
     },
     async closeOrderEmpty(orderId: string, opts?: { prepricanoPrazno?: boolean }) {
       // Izbriše prazno naročilo (brez vrstic) - uporabljeno ko uporabnik zapusti mizo brez artiklov

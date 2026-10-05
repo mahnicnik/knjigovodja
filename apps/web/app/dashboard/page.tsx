@@ -520,7 +520,10 @@ export default function DashboardPage() {
       // ta filter ni prepoznal - promet je pristal pod "drugo" namesto
       // "blagajna" (skupna vsota `revenue` je bila pravilna, samo razdelitev
       // po virih napacna).
-      const jeBlagajna = (e: any) => e.category === 'pos_prodaja' || e.category === 'pos_storitve' || e.category === 'Blagajna'
+      // REVIZIJA V5 (oktober 2026): tudi 'POS promet' - stari vnosi poti
+      // "Z-porocilo, samo obracun" (/api/pos/sync-income). Ta pot od V5 knjizi
+      // enako kot zakljucek izmene (pos_prodaja/pos_storitve), stari vnosi pa ostanejo.
+      const jeBlagajna = (e: any) => ['pos_prodaja', 'pos_storitve', 'POS promet', 'Blagajna'].includes(e.category)
       const prihodekPortal = monthInv.reduce((s: number, i: any) => s + Number(i.amount_net), 0)
       const prihodekBlagajna = kpoMesec
         .filter((e: any) => !e.invoice_id && jeBlagajna(e))
