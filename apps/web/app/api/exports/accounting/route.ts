@@ -180,9 +180,12 @@ export async function POST(req: NextRequest) {
       vendor: r.vendor,
       vendor_tax_num: r.vendor_tax_num,
       amount_net: r.amount_net ? Number(r.amount_net) : null,
-      vat_rate: r.vat_rate ? Number(r.vat_rate) : null,
+      // POPRAVLJENO (V7): prej `r.vat_rate ? … : null` - stopnja 0 je postala
+      // null in racun brez DDV je v KPR pristal v stolpcu 22 %.
+      vat_rate: r.vat_rate != null ? Number(r.vat_rate) : null,
       vat_amount: r.vat_amount ? Number(r.vat_amount) : null,
       amount_total: r.amount_total ? Number(r.amount_total) : null,
+      vat_breakdown: r.vat_breakdown ?? null,
       category: r.category,
       description: r.description,
       is_deductible: r.is_deductible ?? true,

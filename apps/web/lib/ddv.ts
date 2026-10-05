@@ -287,6 +287,20 @@ export function razcleniIzdanRacun(r: DdvPodatki['racuni'][number]): Array<{ sto
 }
 
 /**
+ * Prejeti racun → osnova in DDV po stopnjah (centi). Razclenitev
+ * (receipts.vat_breakdown, revizija V6) ali ena stopnja; brez stopnje se
+ * izpelje iz razmerja. Pavsalno nadomestilo 8 % sodi v 'drugo' (oznaceno).
+ * Isto razclenitev uporablja KPR izvoz (lib/accounting-export).
+ */
+export function razcleniPrejetZaDdv(r: DdvPodatki['prejeti'][number]): Array<{ stopnja: Stopnja; osnova: number; ddv: number; pavsalno: boolean }> {
+  return razcleniPrejetRacun(r).map(d => {
+    const osnova = centi(d.osnova), ddv = centi(d.ddv)
+    if (d.vrsta === 'pavsalno_nadomestilo') return { stopnja: 'drugo' as Stopnja, osnova, ddv, pavsalno: true }
+    return { stopnja: Number.isFinite(d.stopnja) ? kljucStopnje(d.stopnja) : izpeljiStopnjo(osnova, ddv), osnova, ddv, pavsalno: false }
+  })
+}
+
+/**
  * POS racun → osnova in DDV po stopnjah (centi). Ista razclenitev kot v KPO
  * (lib/pos-kpo razcleniRacun: po racunu, vrsti in stopnji, popust sorazmerno,
  * brez napitnine), zato se DDV in knjiga ujemata do centa.
@@ -361,11 +375,9 @@ export function izracunajDdvIzPodatkov(p: DdvPodatki, obdobje: DdvObdobje): DdvR
   for (const r of p.prejeti) {
     if (!v(r.receipt_date)) continue
     nPrej++
-    for (const d of razcleniPrejetRacun(r)) {
-      const osnovaC = centi(d.osnova), ddvC = centi(d.ddv)
-      if (d.vrsta === 'pavsalno_nadomestilo') { pnOsnovaC += osnovaC; pnC += ddvC; dodaj(prejeti, 'drugo', osnovaC, ddvC); continue }
-      const st = Number.isFinite(d.stopnja) ? kljucStopnje(d.stopnja) : izpeljiStopnjo(osnovaC, ddvC)
-      dodaj(prejeti, st, osnovaC, ddvC)
+    for (const d of razcleniPrejetZaDdv(r)) {
+      if (d.pavsalno) { pnOsnovaC += d.osnova; pnC += d.ddv }
+      dodaj(prejeti, d.stopnja, d.osnova, d.ddv)
     }
   }
 

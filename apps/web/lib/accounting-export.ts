@@ -12,7 +12,7 @@
  */
 
 import * as XLSX from 'xlsx'
-import type { DdvRezultat } from '@/lib/ddv'
+import { razcleniIzdanRacun, razcleniPrejetZaDdv, type DdvRezultat } from '@/lib/ddv'
 
 export interface IssuedInvoiceRow {
   invoice_number: string
@@ -43,6 +43,8 @@ export interface ReceiptRow {
   vat_rate: number | null
   vat_amount: number | null
   amount_total: number | null
+  /** Revizija V6: razclenitev DDV po stopnjah (receipts.vat_breakdown) */
+  vat_breakdown?: any
   category: string | null
   description: string | null
   is_deductible: boolean
@@ -115,16 +117,67 @@ export interface ZReportRow {
 
 // ===== POMOŽNE FUNKCIJE =====
 
-function splitByVatRate(amount_net: number, vat_amount: number, vat_rate: number | null) {
-  const rate = vat_rate ?? 22
-  if (rate >= 21 && rate <= 23) {
-    return { net22: amount_net, vat22: vat_amount, net95: 0, vat95: 0, net0: 0 }
-  }
-  if (rate >= 9 && rate <= 10) {
-    return { net22: 0, vat22: 0, net95: amount_net, vat95: vat_amount, net0: 0 }
-  }
-  return { net22: 0, vat22: 0, net95: 0, vat95: 0, net0: amount_net }
+/**
+ * STOLPCI PO STOPNJAH (revizija V7, oktober 2026)
+ *
+ * Prej splitByVatRate(…): izdani racuni so bili klicani s stopnjo null → VSI v
+ * stolpcu 22 % (tudi 9,5 % in mesani); 5 % je padla v stolpec 0 %; prejeti z
+ * 0 % so zaradi `r.vat_rate ? … : null` prav tako pristali v 22 %.
+ *
+ * Zdaj ISTA razclenitev kot DDV obracun (lib/ddv razcleniIzdanRacun in
+ * razcleniPrejetZaDdv) - vsota stolpcev KIR/KPR je enaka izracunajDdv.
+ */
+export interface StolpciDdv {
+  osnova22: number; ddv22: number; osnova95: number; ddv95: number; osnova5: number; ddv5: number
+  osnova0: number; osnovaDrugo: number; ddvDrugo: number; osnovaPn: number; pn: number
 }
+const prazniStolpci = (): StolpciDdv => ({ osnova22: 0, ddv22: 0, osnova95: 0, ddv95: 0, osnova5: 0, ddv5: 0, osnova0: 0, osnovaDrugo: 0, ddvDrugo: 0, osnovaPn: 0, pn: 0 })
+
+function vStolpce(deli: Array<{ stopnja: string; osnova: number; ddv: number; pavsalno?: boolean }>): StolpciDdv {
+  const s = prazniStolpci()
+  for (const d of deli) {
+    // osnova in ddv sta v centih
+    if (d.pavsalno) { s.osnovaPn += d.osnova; s.pn += d.ddv }
+    else if (d.stopnja === '22') { s.osnova22 += d.osnova; s.ddv22 += d.ddv }
+    else if (d.stopnja === '9.5') { s.osnova95 += d.osnova; s.ddv95 += d.ddv }
+    else if (d.stopnja === '5') { s.osnova5 += d.osnova; s.ddv5 += d.ddv }
+    else if (d.stopnja === '0') { s.osnova0 += d.osnova }
+    else { s.osnovaDrugo += d.osnova; s.ddvDrugo += d.ddv }
+  }
+  for (const k of Object.keys(s) as Array<keyof StolpciDdv>) s[k] = s[k] / 100
+  return s
+}
+
+export function stolpciIzdanega(inv: IssuedInvoiceRow): StolpciDdv {
+  return vStolpce(razcleniIzdanRacun({ issue_date: inv.issue_date, amount_net: inv.amount_net, vat_amount: inv.vat_amount, line_items: inv.line_items }))
+}
+
+export function stolpciPrejetega(r: ReceiptRow): StolpciDdv {
+  return vStolpce(razcleniPrejetZaDdv({ receipt_date: r.receipt_date ?? '', amount_net: r.amount_net, vat_amount: r.vat_amount, vat_rate: r.vat_rate, vat_breakdown: r.vat_breakdown }))
+}
+
+/** Vsota stolpcev za vrstico SKUPAJ. */
+export function sestejStolpce(vrstice: StolpciDdv[]): StolpciDdv {
+  const s = prazniStolpci()
+  for (const v of vrstice) for (const k of Object.keys(s) as Array<keyof StolpciDdv>) s[k] = Math.round((s[k] + v[k]) * 100) / 100
+  return s
+}
+
+const KIR_STOLPCI: Array<[string, string, keyof StolpciDdv]> = [
+  ['Osnova 22%', 'Osnova_22', 'osnova22'], ['DDV 22%', 'DDV_22', 'ddv22'],
+  ['Osnova 9,5%', 'Osnova_95', 'osnova95'], ['DDV 9,5%', 'DDV_95', 'ddv95'],
+  ['Osnova 5%', 'Osnova_5', 'osnova5'], ['DDV 5%', 'DDV_5', 'ddv5'],
+  ['Osnova 0%', 'Osnova_0', 'osnova0'],
+  ['Osnova druge st. (preverite)', 'Osnova_drugo', 'osnovaDrugo'], ['DDV druge st.', 'DDV_drugo', 'ddvDrugo'],
+]
+const KPR_STOLPCI: Array<[string, string, keyof StolpciDdv]> = [
+  ['Osnova 22%', 'Osnova_22', 'osnova22'], ['DDV 22% (vstop)', 'DDV_22_vstop', 'ddv22'],
+  ['Osnova 9,5%', 'Osnova_95', 'osnova95'], ['DDV 9,5% (vstop)', 'DDV_95_vstop', 'ddv95'],
+  ['Osnova 5%', 'Osnova_5', 'osnova5'], ['DDV 5% (vstop)', 'DDV_5_vstop', 'ddv5'],
+  ['Osnova 0%', 'Osnova_0', 'osnova0'],
+  ['Pavšalist - vrednost', 'Pavsalist_vrednost', 'osnovaPn'], ['Pavšalno nadomestilo 8%', 'Pavsalno_nadomestilo_8', 'pn'],
+  ['Osnova druge st. (preverite)', 'Osnova_drugo', 'osnovaDrugo'], ['DDV druge st.', 'DDV_drugo', 'ddvDrugo'],
+]
 
 function formatDate(d: string | null): string {
   if (!d) return ''
@@ -167,11 +220,7 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
     'Storitev od',
     'Storitev do',
     'Datum zapadlosti',
-    'Osnova 22%',
-    'DDV 22%',
-    'Osnova 9,5%',
-    'DDV 9,5%',
-    'Osnova 0%',
+    ...KIR_STOLPCI.map(([naslov]) => naslov),
     'Skupaj brez DDV',
     'DDV skupaj',
     'Skupaj z DDV',
@@ -182,8 +231,9 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
     'Opombe',
   ]
 
-  const kirRows = input.issuedInvoices.map(inv => {
-    const split = splitByVatRate(inv.amount_net, inv.vat_amount, null)
+  const kirStolpci = input.issuedInvoices.map(stolpciIzdanega)
+  const kirRows = input.issuedInvoices.map((inv, i) => {
+    const split = kirStolpci[i]
     return [
       inv.invoice_number,
       formatDate(inv.issue_date),
@@ -193,11 +243,7 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
       formatDate(inv.service_date_from),
       formatDate(inv.service_date_to),
       formatDate(inv.due_date),
-      formatAmount(split.net22),
-      formatAmount(split.vat22),
-      formatAmount(split.net95),
-      formatAmount(split.vat95),
-      formatAmount(split.net0),
+      ...KIR_STOLPCI.map(([, , k]) => formatAmount(split[k])),
       formatAmount(inv.amount_net),
       formatAmount(inv.vat_amount),
       formatAmount(inv.amount_total),
@@ -213,9 +259,10 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
   const totalNet = input.issuedInvoices.reduce((s, i) => s + Number(i.amount_net), 0)
   const totalVat = input.issuedInvoices.reduce((s, i) => s + Number(i.vat_amount), 0)
   const totalGross = input.issuedInvoices.reduce((s, i) => s + Number(i.amount_total), 0)
+  const kirSkupaj = sestejStolpce(kirStolpci)
   const sumRowKir = [
     'SKUPAJ', '', '', '', '', '', '', '',
-    '', '', '', '', '',
+    ...KIR_STOLPCI.map(([, , k]) => formatAmount(kirSkupaj[k])),
     formatAmount(totalNet),
     formatAmount(totalVat),
     formatAmount(totalGross),
@@ -236,7 +283,7 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
   wsKir['!cols'] = [
     { wch: 14 }, { wch: 12 }, { wch: 30 }, { wch: 12 }, { wch: 35 },
     { wch: 12 }, { wch: 12 }, { wch: 14 },
-    { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+    ...KIR_STOLPCI.map(() => ({ wch: 12 })),
     { wch: 14 }, { wch: 12 }, { wch: 14 },
     { wch: 12 }, { wch: 12 }, { wch: 20 }, { wch: 20 }, { wch: 30 },
   ]
@@ -249,11 +296,7 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
     'Datum prejema',
     'Dobavitelj',
     'Davčna št.',
-    'Osnova 22%',
-    'DDV 22% (vstop)',
-    'Osnova 9,5%',
-    'DDV 9,5% (vstop)',
-    'Osnova 0%',
+    ...KPR_STOLPCI.map(([naslov]) => naslov),
     'Skupaj brez DDV',
     'DDV vstop. skupaj',
     'Skupaj z DDV',
@@ -266,18 +309,15 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
     'Opomba za računovodjo',
   ]
 
-  const kprRows = input.receipts.map(r => {
-    const split = splitByVatRate(r.amount_net ?? 0, r.vat_amount ?? 0, r.vat_rate)
+  const kprStolpci = input.receipts.map(stolpciPrejetega)
+  const kprRows = input.receipts.map((r, i) => {
+    const split = kprStolpci[i]
     return [
       r.receipt_number ?? '—',
       formatDate(r.receipt_date),
       r.vendor ?? '—',
       r.vendor_tax_num ?? '',
-      formatAmount(split.net22),
-      formatAmount(split.vat22),
-      formatAmount(split.net95),
-      formatAmount(split.vat95),
-      formatAmount(split.net0),
+      ...KPR_STOLPCI.map(([, , k]) => formatAmount(split[k])),
       formatAmount(r.amount_net),
       formatAmount(r.vat_amount),
       formatAmount(r.amount_total),
@@ -294,8 +334,10 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
   const totalKprNet = input.receipts.reduce((s, r) => s + Number(r.amount_net ?? 0), 0)
   const totalKprVat = input.receipts.reduce((s, r) => s + Number(r.vat_amount ?? 0), 0)
   const totalKprGross = input.receipts.reduce((s, r) => s + Number(r.amount_total ?? 0), 0)
+  const kprSkupaj = sestejStolpce(kprStolpci)
   const sumRowKpr = [
-    'SKUPAJ', '', '', '', '', '', '', '', '',
+    'SKUPAJ', '', '', '',
+    ...KPR_STOLPCI.map(([, , k]) => formatAmount(kprSkupaj[k])),
     formatAmount(totalKprNet),
     formatAmount(totalKprVat),
     formatAmount(totalKprGross),
@@ -314,7 +356,7 @@ export function generateAccountingXLSX(input: ExportInput): Buffer {
   
   wsKpr['!cols'] = [
     { wch: 14 }, { wch: 12 }, { wch: 30 }, { wch: 12 },
-    { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+    ...KPR_STOLPCI.map(() => ({ wch: 12 })),
     { wch: 14 }, { wch: 14 }, { wch: 14 },
     { wch: 20 }, { wch: 8 }, { wch: 35 }, { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 45 },
   ]
@@ -497,13 +539,13 @@ export function generateAccountingCSV_KIR(input: ExportInput): string {
   const header = [
     'Stevilka_racuna', 'Datum_izdaje', 'Stranka', 'Davcna_st', 'Naslov',
     'Storitev_od', 'Storitev_do', 'Zapadlost',
-    'Osnova_22', 'DDV_22', 'Osnova_95', 'DDV_95', 'Osnova_0',
+    ...KIR_STOLPCI.map(([, csv]) => csv),
     'Skupaj_neto', 'DDV_skupaj', 'Skupaj_bruto',
     'Status', 'Placano_dne', 'ZOI', 'EOR', 'Opombe',
   ].join(';')
 
   const rows = input.issuedInvoices.map(inv => {
-    const split = splitByVatRate(inv.amount_net, inv.vat_amount, null)
+    const split = stolpciIzdanega(inv)
     return [
       inv.invoice_number,
       formatDate(inv.issue_date),
@@ -513,11 +555,7 @@ export function generateAccountingCSV_KIR(input: ExportInput): string {
       formatDate(inv.service_date_from),
       formatDate(inv.service_date_to),
       formatDate(inv.due_date),
-      formatAmount(split.net22).toString().replace('.', ','),
-      formatAmount(split.vat22).toString().replace('.', ','),
-      formatAmount(split.net95).toString().replace('.', ','),
-      formatAmount(split.vat95).toString().replace('.', ','),
-      formatAmount(split.net0).toString().replace('.', ','),
+      ...KIR_STOLPCI.map(([, , k]) => formatAmount(split[k]).toString().replace('.', ',')),
       formatAmount(inv.amount_net).toString().replace('.', ','),
       formatAmount(inv.vat_amount).toString().replace('.', ','),
       formatAmount(inv.amount_total).toString().replace('.', ','),
@@ -535,23 +573,19 @@ export function generateAccountingCSV_KIR(input: ExportInput): string {
 export function generateAccountingCSV_KPR(input: ExportInput): string {
   const header = [
     'Stevilka_dokumenta', 'Datum_prejema', 'Dobavitelj', 'Davcna_st',
-    'Osnova_22', 'DDV_22_vstop', 'Osnova_95', 'DDV_95_vstop', 'Osnova_0',
+    ...KPR_STOLPCI.map(([, csv]) => csv),
     'Skupaj_neto', 'DDV_vstop_skupaj', 'Skupaj_bruto',
     'Kategorija', 'Konto', 'Opis', 'Davcno_priznano', 'Status', 'Skenirano', 'Opomba',
   ].join(';')
 
   const rows = input.receipts.map(r => {
-    const split = splitByVatRate(r.amount_net ?? 0, r.vat_amount ?? 0, r.vat_rate)
+    const split = stolpciPrejetega(r)
     return [
       r.receipt_number ?? '',
       formatDate(r.receipt_date),
       `"${(r.vendor ?? '').replace(/"/g, '""')}"`,
       r.vendor_tax_num ?? '',
-      formatAmount(split.net22).toString().replace('.', ','),
-      formatAmount(split.vat22).toString().replace('.', ','),
-      formatAmount(split.net95).toString().replace('.', ','),
-      formatAmount(split.vat95).toString().replace('.', ','),
-      formatAmount(split.net0).toString().replace('.', ','),
+      ...KPR_STOLPCI.map(([, , k]) => formatAmount(split[k]).toString().replace('.', ',')),
       formatAmount(r.amount_net).toString().replace('.', ','),
       formatAmount(r.vat_amount).toString().replace('.', ','),
       formatAmount(r.amount_total).toString().replace('.', ','),
