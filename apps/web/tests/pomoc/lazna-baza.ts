@@ -66,6 +66,7 @@ export function laznaBaza(zacetno: Record<string, Vrstica[]> = {}, rpc: Record<s
       insert(p: any) { op = 'insert'; podatki = p; return q },
       upsert(p: any, o?: { onConflict?: string }) { op = 'upsert'; podatki = p; konflikt = (o?.onConflict || 'id').split(','); return q },
       gte(c: string, x: any) { pogoji.push(v => v[c] != null && String(v[c]) >= String(x)); return q },
+      lte(c: string, x: any) { pogoji.push(v => v[c] != null && String(v[c]) <= String(x)); return q },
       like(c: string, x: string) { const re = kotLike(x); pogoji.push(v => v[c] != null && re.test(String(v[c]))); return q },
       range() { return q },
       eq(c: string, x: any) { pogoji.push(v => v[c] === x); return q },
