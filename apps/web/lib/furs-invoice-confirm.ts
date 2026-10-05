@@ -168,25 +168,24 @@ export async function confirmIssuedInvoiceWithFurs(
       device = bothDevice
     }
     const deviceIdCode = device?.device_id ?? 'RACUNKO01'
-    const usesWebSequence = device?.channel === 'web'
 
-    // POPRAVLJENO 21.7.2026 (revizija): prejsnji izracun je stel potrjene
-    // issued_invoices (lastno zaporedje od 1) z neatomarnim count+1 vzorcem.
-    // Ker POS in issued_invoices posiljata pod ISTIM prostorom+napravo
-    // (SIRBFB01-RACUNKO01), bi to povzrocilo trcenje z ze zasedenimi POS
-    // stevilkami pri FURS. Po ZDavPR je zaporedje ENO na prostor+napravo -
-    // zato uporabimo isti atomaren RPC kot POS in storno.
-    const { data: seqData, error: seqError } = usesWebSequence
-      ? await supabase.rpc('get_next_web_invoice_number')
-      : await (async () => {
-          // POPRAVLJENO (16.8.2026): stevilka se dodeli PO PODJETJU. Racuni iz
-          // portala niso vezani na POS blagajno, zato jo poiscemo prek organizacije.
-          const { data: orgRow } = await supabase
-            .from('organizations').select('pos_business_id').eq('id', orgId).maybeSingle()
-          return supabase.rpc('get_next_pos_invoice_number', {
-            p_business_id: orgRow?.pos_business_id ?? orgId,
-          })
-        })()
+    // POPRAVLJENO (revizija K4, oktober 2026): EN vir stevilk - next_invoice_number,
+    // isti kot blagajna (api/furs/invoice, lib/pos-stripe) in storno. Prej je portal
+    // klical get_next_pos_invoice_number (star, LOCEN stevec) oziroma za napravo s
+    // kanalom 'web' globalno zaporedje web_invoice_seq (skupno VSEM organizacijam).
+    // Pri nacinu "device" je zato ista stevilka nastala dvakrat (test s.p.:
+    // SIRBFB01-RACUNKO01-2 in -3, POS + Stripe). next_invoice_number upošteva
+    // organizations.numbering_mode in rabi prostor ter napravo.
+    // Stevilka se dodeli PO PODJETJU (16.8.2026); organizacija brez blagajne
+    // uporablja svoj id.
+    const { data: orgRow } = await supabase
+      .from('organizations').select('pos_business_id').eq('id', orgId).maybeSingle()
+    const { data: seqData, error: seqError } = await supabase.rpc('next_invoice_number', {
+      p_business_id: orgRow?.pos_business_id ?? orgId,
+      p_premise_id: premise.id,
+      p_device_id: device?.id ?? null,
+      p_leto: null,
+    })
     if (seqError) {
       await sprosti()
       return { success: false, error: 'Napaka pri generiranju stevilke racuna: ' + seqError.message }

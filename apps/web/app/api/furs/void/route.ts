@@ -84,6 +84,7 @@ export async function POST(req: NextRequest) {
       .select('*')
       .eq('premise_id', premise.id)
       .eq('is_active', true)
+      .limit(1)
       .maybeSingle()
 
     const deviceIdCode = device?.device_id ?? 'RACUNKO01'
@@ -104,7 +105,16 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
     const stornoBusinessId = stornoOrder?.business_id
 
-    const { data: seqData, error: seqError } = await supabase.rpc('get_next_pos_invoice_number', { p_business_id: stornoBusinessId })
+    // POPRAVLJENO (revizija K4, oktober 2026): next_invoice_number namesto
+    // get_next_pos_invoice_number - ISTI stevec kot racun, ki ga storniramo.
+    // Stari stevec je pri nacinu "device" dajal stevilke iz locenega
+    // zaporedja in povzrocal podvojene davcne stevilke.
+    const { data: seqData, error: seqError } = await supabase.rpc('next_invoice_number', {
+      p_business_id: stornoBusinessId,
+      p_premise_id: premise.id,
+      p_device_id: device?.id ?? null,
+      p_leto: null,
+    })
     if (seqError) {
       return NextResponse.json({ error: 'Napaka pri generiranju številke kredit note: ' + seqError.message }, { status: 500 })
     }
