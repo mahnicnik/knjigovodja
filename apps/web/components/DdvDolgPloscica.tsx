@@ -13,16 +13,21 @@ import { formatEurNumber } from '@/lib/format'
  * ozkem zaslonu razčlenitev ne stisne ploščic v vrstici, ampak gre pod njih.
  *
  * Vse številke so iz `ddv` (izracunajDdv, lib/ddv.ts) — tu se nič ne računa.
+ *
+ * Razčlenitev je PRIVZETO ODPRTA: zaprta za majhno povezavo jo je uporabnik
+ * spregledal. Izhodni (+) in vhodni (−) DDV sta poleg tega vedno vidna tudi
+ * na sami ploščici.
  */
-export default function DdvDolgPloscica({ ddv, nalagam, napaka, naslov = 'DDV dolg', oznakaObdobja }: {
+export default function DdvDolgPloscica({ ddv, nalagam, napaka, naslov = 'DDV dolg', oznakaObdobja, privzetoOdprto = true }: {
   ddv: DdvRezultat | null
   nalagam?: boolean
   napaka?: string | null
   naslov?: string
   /** Človeku berljivo obdobje, npr. "Q3 2026" — enako kot za glavno številko. */
   oznakaObdobja: string
+  privzetoOdprto?: boolean
 }) {
-  const [odprto, setOdprto] = useState(false)
+  const [odprto, setOdprto] = useState(privzetoOdprto)
   const r = ddv ? razclenitevDdv(ddv) : null
   const datumi = ddv ? `${fmtDatum(ddv.od)} – ${fmtDatum(ddv.do)}` : ''
 
@@ -34,11 +39,17 @@ export default function DdvDolgPloscica({ ddv, nalagam, napaka, naslov = 'DDV do
           {ddv ? `€${formatEurNumber(ddv.obveznost)}` : nalagam ? '…' : '—'}
         </div>
         {ddv && ddv.obveznost < 0 && <div className="text-xs text-green-600 mt-1">Negativno = vračilo DDV</div>}
+        {r && (
+          <div className="mt-1.5 space-y-0.5 text-xs tabular-nums">
+            <div className="flex justify-between gap-2"><span className="text-gray-500">Izhodni</span><span className="text-orange-600">+ €{formatEurNumber(r.izstopni.skupaj)}</span></div>
+            <div className="flex justify-between gap-2"><span className="text-gray-500">Vhodni</span><span className="text-emerald-600">− €{formatEurNumber(r.vstopni.skupaj)}</span></div>
+          </div>
+        )}
         {napaka && <div className="text-xs text-red-500 mt-1">{napaka}</div>}
         {ddv && (
           <button type="button" onClick={() => setOdprto(o => !o)} aria-expanded={odprto}
-            className="mt-2 text-xs text-gray-500 hover:text-gray-900 inline-flex items-center gap-1">
-            {odprto ? 'Skrij razčlenitev' : 'Razčlenitev'}
+            className="mt-2 text-xs font-medium text-gray-700 hover:text-gray-900 underline underline-offset-2 inline-flex items-center gap-1">
+            {odprto ? 'Skrij razčlenitev' : 'Pokaži razčlenitev'}
             <span aria-hidden className={`inline-block transition-transform text-[10px] ${odprto ? 'rotate-180' : ''}`}>▼</span>
           </button>
         )}

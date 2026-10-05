@@ -354,6 +354,12 @@ test('/kpo: ploscica "DDV dolg" prikazuje izracunajDdv, ne lastnega sestevka vrs
   expect(letni).toMatch(/<DdvDolgPloscica ddv=\{data\.ddv\}/)
 })
 
+test('Ploscica "DDV dolg": razclenitev je privzeto odprta (zaprto jo je uporabnik spregledal)', () => {
+  const vir = readFileSync(join(__dirname, '..', 'components/DdvDolgPloscica.tsx'), 'utf8')
+  expect(vir).toMatch(/privzetoOdprto = true/)
+  expect(vir).toMatch(/useState\(privzetoOdprto\)/)
+})
+
 // ─────────────── K1: ista stevilka v izvozu za racunovodjo ───────────────
 
 test('K1: izvoz XLSX - "DDV za placilo" je enak izracunajDdv (test s.p. Q3 2026)', () => {
