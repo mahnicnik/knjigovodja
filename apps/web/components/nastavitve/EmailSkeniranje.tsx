@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import { formatEurNumber } from '@/lib/format'
 import { izbireKategorij, kontoZa, normalizirajKategorijo } from '@/lib/konti'
+import { preberiRazclenitev, zneskiZaShranjevanje } from '@/lib/prejeti-ddv'
 import { najdiUjemanje, oknoZaPrimerjavo, STROSEK_POLJA, type ObstojeciStrosek, type Ujemanje } from '@/lib/strosek-ujemanje'
 
 function EmailSkeniranjeContent() {
@@ -176,11 +177,14 @@ function EmailSkeniranjeContent() {
     // DDV, tudi ce organizacija NI davcni zavezanec - takrat DDV-ja ne sme
     // uveljavljati in je celoten placan (bruto) znesek strosek. Enak popravek
     // kot v scan/page.tsx (rocno in paketno skeniranje).
-    const jeZavezanec = !!org?.vat_registered
-    const vatRate = jeZavezanec ? Number(d.vat_rate || 0) : 0
-    const amountNet = jeZavezanec ? Number(d.amount_net || 0) : Number(d.amount_total ?? d.amount_net ?? 0)
-    const vatAmount = amountNet * (vatRate / 100)
-    const amountTotal = amountNet + vatAmount
+    // REVIZIJA V6: DDV po stopnjah iz razclenitve, ne osnova × ena stopnja
+    // (lib/prejeti-ddv). Prej je bil ves DDV racuna z mesanimi stopnjami po 22 %.
+    const z = zneskiZaShranjevanje({
+      jeZavezanec: !!org?.vat_registered,
+      osnova: Number(d.amount_net || 0), stopnja: Number(d.vat_rate || 0),
+      bruto: d.amount_total ?? d.amount_net, razclenitev: preberiRazclenitev(d.vat_breakdown),
+    })
+    const vatRate = z.vat_rate, amountNet = z.amount_net, vatAmount = z.vat_amount, amountTotal = z.amount_total
     // POPRAVLJENO (16.8.2026): prej brez preverbe - potrjen racun iz e-poste se
     // ni shranil, predlog pa se je oznacil kot obdelan, zato bi bil izgubljen.
     const { data: rcpData, error: rcpErr } = await supabase.from('receipts').insert({
@@ -191,6 +195,7 @@ function EmailSkeniranjeContent() {
       vat_rate: vatRate,
       vat_amount: vatAmount,
       amount_total: amountTotal,
+      vat_breakdown: z.vat_breakdown,
       description: d.description || '',
       category: kategorija,
       // PRELET 332: za prepoznavanje ze vnesenih stroskov ob naslednjem skeniranju.

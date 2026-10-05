@@ -40,6 +40,7 @@
  */
 
 import { lokalniDatum } from '@/lib/tax-constants'
+import { razcleniPrejetRacun } from '@/lib/prejeti-ddv'
 import { izracunajPosKnjizbe, razcleniRacun, lokalniDan, niPromet, IZBOR_NAROCILA, type PosNarocilo, type PosVracilo } from '@/lib/pos-kpo'
 
 // ───────────────────────────── tipi ─────────────────────────────
@@ -76,6 +77,8 @@ export interface DdvRezultat {
     prejetiRacuni: PoStopnjah
     kpo: PoStopnjah
     poStopnjah: PoStopnjah
+    /** Pavsalno nadomestilo 8 % kmetom pavsalistom (revizija V6) - del stopnje 'drugo' in skupaj. */
+    pavsalnoNadomestilo: Postavka
     osnovaSkupaj: number
     skupaj: number
   }
@@ -87,7 +90,7 @@ export interface DdvRezultat {
 /** Surovi podatki, iz katerih se racuna. Nalozi jih `naloziDdvPodatke`. */
 export interface DdvPodatki {
   racuni: Array<{ issue_date: string; amount_net: any; vat_amount: any; line_items: any }>
-  prejeti: Array<{ receipt_date: string; amount_net: any; vat_amount: any; vat_rate: any }>
+  prejeti: Array<{ receipt_date: string; amount_net: any; vat_amount: any; vat_rate: any; vat_breakdown?: any }>
   kpo: Array<{
     entry_date: string; entry_type?: string | null; category?: string | null
     income: any; expense: any; vat_out: any; vat_in: any; vat_rate: any
@@ -284,6 +287,20 @@ export function razcleniIzdanRacun(r: DdvPodatki['racuni'][number]): Array<{ sto
 }
 
 /**
+ * Prejeti racun → osnova in DDV po stopnjah (centi). Razclenitev
+ * (receipts.vat_breakdown, revizija V6) ali ena stopnja; brez stopnje se
+ * izpelje iz razmerja. Pavsalno nadomestilo 8 % sodi v 'drugo' (oznaceno).
+ * Isto razclenitev uporablja KPR izvoz (lib/accounting-export).
+ */
+export function razcleniPrejetZaDdv(r: DdvPodatki['prejeti'][number]): Array<{ stopnja: Stopnja; osnova: number; ddv: number; pavsalno: boolean }> {
+  return razcleniPrejetRacun(r).map(d => {
+    const osnova = centi(d.osnova), ddv = centi(d.ddv)
+    if (d.vrsta === 'pavsalno_nadomestilo') return { stopnja: 'drugo' as Stopnja, osnova, ddv, pavsalno: true }
+    return { stopnja: Number.isFinite(d.stopnja) ? kljucStopnje(d.stopnja) : izpeljiStopnjo(osnova, ddv), osnova, ddv, pavsalno: false }
+  })
+}
+
+/**
  * POS racun → osnova in DDV po stopnjah (centi). Ista razclenitev kot v KPO
  * (lib/pos-kpo razcleniRacun: po racunu, vrsti in stopnji, popust sorazmerno,
  * brez napitnine), zato se DDV in knjiga ujemata do centa.
@@ -352,12 +369,16 @@ export function izracunajDdvIzPodatkov(p: DdvPodatki, obdobje: DdvObdobje): DdvR
     if (stet) nKpo++
   }
 
+  // REVIZIJA V6: prejeti racun z mesanimi stopnjami po razclenitvi
+  // (receipts.vat_breakdown, lib/prejeti-ddv), sicer ena stopnja kot prej.
+  let pnOsnovaC = 0, pnC = 0
   for (const r of p.prejeti) {
     if (!v(r.receipt_date)) continue
     nPrej++
-    const osnovaC = centi(r.amount_net), ddvC = centi(r.vat_amount)
-    const st = r.vat_rate != null && r.vat_rate !== '' ? kljucStopnje(Number(r.vat_rate)) : izpeljiStopnjo(osnovaC, ddvC)
-    dodaj(prejeti, st, osnovaC, ddvC)
+    for (const d of razcleniPrejetZaDdv(r)) {
+      if (d.pavsalno) { pnOsnovaC += d.osnova; pnC += d.ddv }
+      dodaj(prejeti, d.stopnja, d.osnova, d.ddv)
+    }
   }
 
   const izh = sestej(racuni, blagajna, kpoIzh)
@@ -373,6 +394,7 @@ export function izracunajDdvIzPodatkov(p: DdvPodatki, obdobje: DdvObdobje): DdvR
     vstopniDdv: {
       prejetiRacuni: vEvre(prejeti), kpo: vEvre(kpoVst),
       poStopnjah: vEvre(vst), osnovaSkupaj: evri(vsotaOsnov(vst)), skupaj: evri(vstC),
+      pavsalnoNadomestilo: { osnova: evri(pnOsnovaC), ddv: evri(pnC) },
     },
     obveznost: evri(izhC - vstC),
     stevilo: { izdaniRacuni: nRac, prejetiRacuni: nPrej, kpo: nKpo, narocila: nNar },
@@ -417,7 +439,7 @@ export async function naloziDdvPodatke(db: any, orgId: string, od: string, doD: 
       .eq('org_id', orgId).neq('status', 'draft').or('zoi.is.null,zoi.not.like.DEMO-%')
       .gte('issue_date', od).lte('issue_date', doD).order('id')),
     vseVrstice<DdvPodatki['prejeti'][number]>(() => db.from('receipts')
-      .select('id, receipt_date, amount_net, vat_amount, vat_rate')
+      .select('id, receipt_date, amount_net, vat_amount, vat_rate, vat_breakdown')
       .eq('org_id', orgId).gte('receipt_date', od).lte('receipt_date', doD).order('id')),
     vseVrstice<DdvPodatki['kpo'][number]>(() => db.from('kpo_entries')
       .select('id, entry_date, entry_type, category, income, expense, vat_out, vat_in, vat_rate, invoice_id, receipt_id')

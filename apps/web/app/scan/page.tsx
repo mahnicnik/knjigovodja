@@ -11,6 +11,7 @@ import { naloziListino, base64VBlob } from '@/lib/listine'
 import SkenerDokumenta from '@/components/SkenerDokumenta'
 import AppLayout from '@/components/AppLayout'
 import { IMENA_KATEGORIJ, izbireKategorij, kontoZa, najdiKategorijo } from '@/lib/konti'
+import { preberiRazclenitev, zneskiZaShranjevanje } from '@/lib/prejeti-ddv'
 
 // Varna base64 pretvorba za VELIKE datoteke (24.7.2026). btoa(String.
 // fromCharCode(...bytes)) je za vecje PDF-je (100KB+) povzrocalo "Maximum
@@ -223,10 +224,15 @@ export default function ScanPage() {
     // DODANO (prelet 298): varovalka tudi ob shranjevanju, ne samo pri
     // predizpolnitvi - za nezavezance DDV stopnja ne sme biti > 0, karkoli je
     // ze v polju (npr. star osnutek pred menjavo organizacije).
-    const amountNet = parseFloat(form.amount_net)
-    const vatRate = org?.vat_registered ? parseFloat(form.vat_rate) : 0
-    const vatAmount = amountNet * (vatRate / 100)
-    const amountTotal = amountNet + vatAmount
+    // REVIZIJA V6: razclenitev DDV iz AI branja velja, dokler uporabnik ne
+    // spremeni osnove ali stopnje (lib/prejeti-ddv). Obrazec je pri
+    // nezavezancu ze predizpolnjen z bruto zneskom.
+    const z = zneskiZaShranjevanje({
+      jeZavezanec: !!org?.vat_registered,
+      osnova: parseFloat(form.amount_net), stopnja: parseFloat(form.vat_rate),
+      bruto: parseFloat(form.amount_net), razclenitev: preberiRazclenitev(result?.vat_breakdown),
+    })
+    const amountNet = z.amount_net, vatRate = z.vat_rate, vatAmount = z.vat_amount, amountTotal = z.amount_total
 
     // POPRAVLJENO (16.8.2026): prej brez preverbe - skeniran racun se ni shranil,
       // uporabnik pa je videl potrditev in dokumenta ne bi skeniral znova.
@@ -263,6 +269,7 @@ export default function ScanPage() {
       vat_rate: vatRate,
       vat_amount: vatAmount,
       amount_total: amountTotal,
+      vat_breakdown: z.vat_breakdown,
       description: form.description,
       category: form.category,
       status: 'confirmed',
@@ -352,11 +359,13 @@ export default function ScanPage() {
         }
         // DODANO (prelet 298): enaka varovalka kot pri posameznem skeniranju
         // zgoraj - nezavezanec ne sme dobiti AI-jevega razcepa DDV.
-        const jeZavezanec = !!org?.vat_registered
-        const vatRate = jeZavezanec ? parseFloat(data.vat_rate ?? '0') : 0
-        const amountNet = jeZavezanec ? parseFloat(data.amount_net) : parseFloat(data.amount_total ?? data.amount_net)
-        const vatAmount = amountNet * (vatRate / 100)
-        const amountTotal = amountNet + vatAmount
+        // REVIZIJA V6: DDV po stopnjah iz razclenitve (lib/prejeti-ddv).
+        const zb = zneskiZaShranjevanje({
+          jeZavezanec: !!org?.vat_registered,
+          osnova: parseFloat(data.amount_net), stopnja: parseFloat(data.vat_rate ?? '0'),
+          bruto: parseFloat(data.amount_total ?? data.amount_net), razclenitev: preberiRazclenitev(data.vat_breakdown),
+        })
+        const vatRate = zb.vat_rate, amountNet = zb.amount_net, vatAmount = zb.vat_amount, amountTotal = zb.amount_total
         const receiptDate = data.date || lokalniDatum()
         const category = data.category || 'Drugo'
 
@@ -375,6 +384,7 @@ export default function ScanPage() {
           vat_rate: vatRate,
           vat_amount: vatAmount,
           amount_total: amountTotal,
+          vat_breakdown: zb.vat_breakdown,
           description: data.description || '',
           category,
           status: 'confirmed',
@@ -668,6 +678,7 @@ export default function ScanPage() {
                     >
                       <option value="22">22%</option>
                       <option value="9.5">9.5%</option>
+                      <option value="5">5%</option>
                       <option value="0">0% (brez DDV)</option>
                     </select>
                   </div>
@@ -683,16 +694,30 @@ export default function ScanPage() {
 
               {form.amount_net && (
                 org?.vat_registered ? (
-                  <div className="bg-gray-50 rounded-xl p-3 flex gap-6 text-sm">
-                    <div>
-                      <span className="text-gray-500">DDV: </span>
-                      <span className="font-medium">€{(parseFloat(form.amount_net||'0') * parseFloat(form.vat_rate) / 100).toFixed(2)}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Skupaj: </span>
-                      <span className="font-semibold">€{(parseFloat(form.amount_net||'0') * (1 + parseFloat(form.vat_rate)/100)).toFixed(2)}</span>
-                    </div>
-                  </div>
+                  (() => {
+                    // REVIZIJA V6: isti izracun kot ob shranjevanju (razclenitev po stopnjah).
+                    const z = zneskiZaShranjevanje({ jeZavezanec: true, osnova: parseFloat(form.amount_net || '0'), stopnja: parseFloat(form.vat_rate), razclenitev: preberiRazclenitev(result?.vat_breakdown) })
+                    return (
+                      <div className="bg-gray-50 rounded-xl p-3 text-sm space-y-1">
+                        <div className="flex gap-6">
+                          <div>
+                            <span className="text-gray-500">DDV: </span>
+                            <span className="font-medium">€{z.vat_amount.toFixed(2)}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Skupaj: </span>
+                            <span className="font-semibold">€{z.amount_total.toFixed(2)}</span>
+                          </div>
+                        </div>
+                        {z.vat_breakdown && z.vat_breakdown.map((d, i) => (
+                          <div key={i} className="text-xs text-gray-500">
+                            {d.vrsta === 'pavsalno_nadomestilo' ? 'Pavšalno nadomestilo 8 %' : `${String(d.stopnja).replace('.', ',')} %`}: osnova €{d.osnova.toFixed(2)} · {d.vrsta === 'pavsalno_nadomestilo' ? 'nadomestilo' : 'DDV'} €{d.ddv.toFixed(2)}
+                          </div>
+                        ))}
+                        {result?._ddv_opozorilo && <div className="text-xs text-amber-700">{result._ddv_opozorilo}</div>}
+                      </div>
+                    )
+                  })()
                 ) : (
                   <div className="bg-gray-50 rounded-xl p-3 flex gap-6 text-sm">
                     <div>

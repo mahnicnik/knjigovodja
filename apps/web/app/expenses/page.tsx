@@ -9,6 +9,7 @@ import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 import { formatEurNumber } from '@/lib/format'
 import { IMENA_KATEGORIJ, izbireKategorij, kontoZa, najdiKategorijo } from '@/lib/konti'
+import { preberiRazclenitev, zneskiZaShranjevanje } from '@/lib/prejeti-ddv'
 
 const MONTHS = ['Januar','Februar','Marec','April','Maj','Junij','Julij','Avgust','September','Oktober','November','December']
 
@@ -86,13 +87,16 @@ export default function ExpensesPage() {
     // POPRAVLJENO (19.8.2026, HITROST): `select('*')` je prenasal tudi
     // `attachment_base64` (21 MB skeniranih listin), ceprav ta stran prilog
     // sploh ne prikazuje - samo seznam stroskov.
-    let query = supabase.from('receipts').select('id, org_id, vendor, vendor_tax_num, receipt_date, receipt_number, amount_net, vat_rate, vat_amount, amount_total, category, description, is_deductible, ai_raw_json, status, kpo_entry_id, created_at, updated_at, attachment_type, attachment_path, image_url').eq('org_id', org.id)
+    let query = supabase.from('receipts').select('id, org_id, vendor, vendor_tax_num, receipt_date, receipt_number, amount_net, vat_rate, vat_amount, amount_total, category, description, is_deductible, ai_raw_json, vat_breakdown, status, kpo_entry_id, created_at, updated_at, attachment_type, attachment_path, image_url').eq('org_id', org.id)
     if (from) query = query.gte('receipt_date', from)
     if (to) query = query.lte('receipt_date', to)
     const { data } = await query.order('receipt_date', { ascending: false })
     setExpenses(data || [])
     setLoading(false)
   }
+
+  // REVIZIJA V6: razclenitev DDV urejanega stroska (receipts.vat_breakdown)
+  const urejanaRazclenitev = editingId ? preberiRazclenitev((expenses as any[]).find(e => e.id === editingId)?.vat_breakdown) : null
 
   function openEdit(exp: any) {
     setForm({
@@ -155,9 +159,16 @@ export default function ExpensesPage() {
     // ne sme biti shranjena, tudi ce je form.vat_rate ostal na stari vrednosti
     // (npr. po preklopu iz DDV zavezanca nazaj). Brez DDV zavezanosti se DDV
     // ne obracunava in ne vraca - celoten bruto znesek je strosek.
-    const vatRate = org?.vat_registered ? parseFloat(form.vat_rate) : 0
-    const vatAmount = amountNet * (vatRate / 100)
-    const amountTotal = amountNet + vatAmount
+    // REVIZIJA V6: pri urejanju racuna z mesanimi stopnjami ostane njegova
+    // razclenitev DDV, dokler se osnova in stopnja ne spremenita
+    // (lib/prejeti-ddv); sicer DDV = osnova × stopnja, zaokrozeno na cent.
+    const z = zneskiZaShranjevanje({
+      jeZavezanec: !!org?.vat_registered, osnova: amountNet, stopnja: parseFloat(form.vat_rate),
+      razclenitev: urejanaRazclenitev,
+    })
+    const vatRate = z.vat_rate
+    const vatAmount = z.vat_amount
+    const amountTotal = z.amount_total
 
     const payload = {
       org_id: org.id,
@@ -167,6 +178,7 @@ export default function ExpensesPage() {
       vat_rate: vatRate,
       vat_amount: vatAmount,
       amount_total: amountTotal,
+      vat_breakdown: z.vat_breakdown,
       description: form.description,
       category: form.category,
       status: 'confirmed',
@@ -385,6 +397,7 @@ export default function ExpensesPage() {
                   >
                     <option value="22">22%</option>
                     <option value="9.5">9.5%</option>
+                    <option value="5">5%</option>
                     <option value="0">0% (brez DDV)</option>
                   </select>
                 </div>
@@ -423,12 +436,17 @@ export default function ExpensesPage() {
             {/* Predogled izračuna */}
             {form.amount_net && (
               org?.vat_registered ? (
-                <div className="bg-gray-50 rounded-xl p-3 mb-4 flex gap-6 text-sm">
-                  <div><span className="text-gray-500">Osnova: </span><span className="font-medium">€{formatEurNumber(parseFloat(form.amount_net))}</span></div>
-                  <div><span className="text-gray-500">DDV: </span><span className="font-medium">€{formatEurNumber((parseFloat(form.amount_net) * parseFloat(form.vat_rate) / 100))}</span></div>
-                  <div><span className="text-gray-500">Skupaj: </span><span className="font-semibold">€{formatEurNumber((parseFloat(form.amount_net) * (1 + parseFloat(form.vat_rate)/100)))}</span></div>
-                  <div><span className="text-gray-500">DDV vračilo: </span><span className="font-medium text-green-600">€{formatEurNumber((parseFloat(form.amount_net) * parseFloat(form.vat_rate) / 100))}</span></div>
-                </div>
+                (() => {
+                  const z = zneskiZaShranjevanje({ jeZavezanec: true, osnova: parseFloat(form.amount_net), stopnja: parseFloat(form.vat_rate), razclenitev: urejanaRazclenitev })
+                  return (
+                    <div className="bg-gray-50 rounded-xl p-3 mb-4 flex flex-wrap gap-6 text-sm">
+                      <div><span className="text-gray-500">Osnova: </span><span className="font-medium">€{formatEurNumber(z.amount_net)}</span></div>
+                      <div><span className="text-gray-500">DDV{z.vat_breakdown ? ' (več stopenj)' : ''}: </span><span className="font-medium">€{formatEurNumber(z.vat_amount)}</span></div>
+                      <div><span className="text-gray-500">Skupaj: </span><span className="font-semibold">€{formatEurNumber(z.amount_total)}</span></div>
+                      <div><span className="text-gray-500">DDV vračilo: </span><span className="font-medium text-green-600">€{formatEurNumber(z.vat_amount)}</span></div>
+                    </div>
+                  )
+                })()
               ) : (
                 <div className="bg-gray-50 rounded-xl p-3 mb-4 flex gap-6 text-sm">
                   <div><span className="text-gray-500">Znesek stroška: </span><span className="font-semibold">€{formatEurNumber(parseFloat(form.amount_net))}</span></div>

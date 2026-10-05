@@ -4,6 +4,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 import { navodiloRazvrscanja, dopolniRazvrstitev, prejsnjaRazvrstitev, kontekstPodjetja } from '@/lib/konti'
+import { NAVODILO_DDV, normalizirajAiDdv } from '@/lib/prejeti-ddv'
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -35,10 +36,7 @@ export async function POST(request: NextRequest) {
 - vendor_tax_number: davcna stevilka ali ID za DDV dobavitelja (ali null)
 - invoice_number: stevilka racuna (ali null)
 - date: datum v formatu YYYY-MM-DD
-- amount_net: znesek brez DDV (samo stevilo, brez €)
-- vat_rate: stopnja DDV (22, 9.5, 5 ali 0 - ce je obrnjena davcna obveznost ali brez DDV, potem 0)
-- vat_amount: znesek DDV (samo stevilo)
-- amount_total: skupni znesek (samo stevilo)
+${NAVODILO_DDV}
 - description: kratek opis, kaj je bilo kupljeno
 ${navodiloRazvrscanja(kontekstPodjetja((member as any)?.organizations))}
 
@@ -46,7 +44,8 @@ Vrni SAMO JSON brez dodatnega besedila.`
     const koncaj = async (text: string) => {
       const jsonMatch = text.match(/\{[\s\S]*\}/)
       if (!jsonMatch) return NextResponse.json({ error: 'Ni mogoče prebrati podatkov' })
-      const d = JSON.parse(jsonMatch[0])
+      // REVIZIJA V6: razclenitev DDV po stopnjah + pavsalno nadomestilo (lib/prejeti-ddv)
+      const d = normalizirajAiDdv(JSON.parse(jsonMatch[0]))
       const prej = member.orgId ? await prejsnjaRazvrstitev(supabase, member.orgId, d) : null
       return NextResponse.json(dopolniRazvrstitev(d, prej))
     }

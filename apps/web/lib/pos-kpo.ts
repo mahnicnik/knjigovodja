@@ -96,39 +96,90 @@ export function niPromet(n: PosNarocilo): boolean {
 }
 
 /**
- * Racun → deli po vrsti in stopnji. Bruto vrstic se sorazmerno prilagodi
- * dejansko zaracunanemu znesku brez napitnine (popust na racunu; enako kot
- * FURS razclenitev v api/furs/invoice). DDV zaokrozen po racunu in stopnji.
- * `delez` (0..1] uporabimo za vracilo dela racuna.
+ * Racun → osnova in DDV PO STOPNJAH, zaokrozeno po racunu in stopnji - natanko
+ * tako kot FURS razclenitev (api/furs/invoice): bruto vrstic se sorazmerno
+ * prilagodi dejansko zaracunanemu znesku brez napitnine (popust na racunu),
+ * osnova in DDV se zaokrozita na cent za vsako stopnjo racuna.
+ * Uporabljajo ga Z-porocilo (V3), KPO in DDV - zato se ujemajo do centa.
  */
-export function razcleniRacun(n: PosNarocilo, delez = 1): Del[] {
+export function razcleniPoStopnjah(n: PosNarocilo, delez = 1): Array<{ stopnja: number; bruto: number; neto: number; ddv: number; vrstice: PosVrstica[] }> {
   const vrstice = (n.order_lines || []).filter(l => !l.voided)
   if (vrstice.length === 0) return []
   const vsota = vrstice.reduce((s, l) => s + bruto(l), 0)
   const zaracunano = Number(n.total || 0) - Number(n.tip_amount || 0)
   const faktor = (vsota > 0 ? zaracunano / vsota : 1) * delez
-  const skupine = new Map<string, { vrsta: Vrsta; stopnja: number; bruto: number; klavzule: Set<string> }>()
+  const poStopnji = new Map<number, { bruto: number; vrstice: PosVrstica[] }>()
   for (const l of vrstice) {
     const stopnja = Number(l.vat_rate ?? 22)
-    const vrsta: Vrsta = jeStoritevVrstica(l as any) ? 'storitev' : 'izdelek'
-    const k = `${vrsta}|${stopnja}`
-    const g = skupine.get(k) || { vrsta, stopnja, bruto: 0, klavzule: new Set<string>() }
+    const g = poStopnji.get(stopnja) || { bruto: 0, vrstice: [] }
     g.bruto += bruto(l) * faktor
-    if (stopnja === 0) {
-      const besedilo = vatExemptionText(l.items?.vat_exemption_code as any, l.items?.vat_exemption_custom_text as any)
-      if (besedilo) g.klavzule.add(besedilo)
-    }
-    skupine.set(k, g)
+    g.vrstice.push(l)
+    poStopnji.set(stopnja, g)
   }
-  return [...skupine.values()].map(g => {
-    const neto = g.stopnja > 0 ? g.bruto / (1 + g.stopnja / 100) : g.bruto
-    return {
-      vrsta: g.vrsta, stopnja: g.stopnja,
-      neto: Math.round(neto * 100),
-      ddv: Math.round((g.bruto - neto) * 100),
-      klavzule: [...g.klavzule],
-    }
+  return [...poStopnji.entries()].map(([stopnja, g]) => {
+    const neto = stopnja > 0 ? g.bruto / (1 + stopnja / 100) : g.bruto
+    return { stopnja, bruto: g.bruto, neto: Math.round(neto * 100), ddv: Math.round((g.bruto - neto) * 100), vrstice: g.vrstice }
   })
+}
+
+/** Razdeli centi po utezeh; ostanek zaokrozevanja dobi najvecja utez. */
+function razdeliCente(c: number, utezi: number[]): number[] {
+  const vsota = utezi.reduce((s, u) => s + Math.abs(u), 0)
+  if (vsota === 0) return utezi.map((_, i) => (i === 0 ? c : 0))
+  const deli = utezi.map(u => Math.round((c * Math.abs(u)) / vsota))
+  const ostanek = c - deli.reduce((s, x) => s + x, 0)
+  if (ostanek !== 0) deli[utezi.indexOf(Math.max(...utezi))] += ostanek
+  return deli
+}
+
+/**
+ * Racun → deli po vrsti (izdelek/storitev) in stopnji. Zaokrozeno PO STOPNJI
+ * (razcleniPoStopnjah), nato razdeljeno med vrsti - vsota po stopnji je vedno
+ * enaka FURS razclenitvi. `delez` (0..1] uporabimo za vracilo dela racuna.
+ */
+export function razcleniRacun(n: PosNarocilo, delez = 1): Del[] {
+  const out: Del[] = []
+  for (const st of razcleniPoStopnjah(n, delez)) {
+    const vrste = new Map<Vrsta, { bruto: number; klavzule: Set<string> }>()
+    for (const l of st.vrstice) {
+      const vrsta: Vrsta = jeStoritevVrstica(l as any) ? 'storitev' : 'izdelek'
+      const g = vrste.get(vrsta) || { bruto: 0, klavzule: new Set<string>() }
+      g.bruto += bruto(l)
+      if (st.stopnja === 0) {
+        const besedilo = vatExemptionText(l.items?.vat_exemption_code as any, l.items?.vat_exemption_custom_text as any)
+        if (besedilo) g.klavzule.add(besedilo)
+      }
+      vrste.set(vrsta, g)
+    }
+    const seznam = [...vrste.entries()]
+    const utezi = seznam.map(([, g]) => g.bruto)
+    const neto = razdeliCente(st.neto, utezi)
+    const ddv = razdeliCente(st.ddv, utezi)
+    seznam.forEach(([vrsta, g], i) => out.push({ vrsta, stopnja: st.stopnja, neto: neto[i], ddv: ddv[i], klavzule: [...g.klavzule] }))
+  }
+  return out
+}
+
+/**
+ * DDV Z-POROCILA (revizija V3): seštevek ZAOKROZENIH zneskov po racunu in
+ * stopnji - ne zaokrozena vsota nezaokrozenih vrstic. Popust na racunu je
+ * upostevan. Unovcenje karte obiskov in DEMO racuni niso promet.
+ * Vrne evre po stopnjah, padajoce.
+ */
+export function ddvZPorocila(narocila: PosNarocilo[]): Array<{ stopnja: number; osnova: number; ddv: number }> {
+  const vsote = new Map<number, { osnova: number; ddv: number }>()
+  for (const n of narocila) {
+    if (niPromet(n)) continue
+    for (const st of razcleniPoStopnjah(n)) {
+      const v = vsote.get(st.stopnja) || { osnova: 0, ddv: 0 }
+      v.osnova += st.neto
+      v.ddv += st.ddv
+      vsote.set(st.stopnja, v)
+    }
+  }
+  return [...vsote.entries()]
+    .map(([stopnja, v]) => ({ stopnja, osnova: v.osnova / 100, ddv: v.ddv / 100 }))
+    .sort((a, b) => b.stopnja - a.stopnja)
 }
 
 /**

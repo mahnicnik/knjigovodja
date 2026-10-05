@@ -20,7 +20,7 @@ import { buildReceiptHTML } from '@/lib/receipt'
 import { WorkStatusBar, ClockInModal } from '@/lib/work-session-components'
 import { getCurrentSession, openSession, getSessionStats, closeSession, getLastCarryOver, type CashSession, type SessionStats } from '@/lib/cash-session'
 import { getActiveMembership } from '@/lib/active-org'
-import { knjiziPosDneve, lokalniDan } from '@/lib/pos-kpo'
+import { knjiziPosDneve, lokalniDan, ddvZPorocila } from '@/lib/pos-kpo'
 import { buildOpeningReceipt, buildXReportReceipt, buildZReportReceipt } from '@/lib/cash-session-receipt'
 // POPRAVLJENO (26.8.2026): prelet 136 je uporabil `idZaDdv`, uvoza pa ni
 // dodal. `@ts-nocheck` je napako skril; ujela jo je skripta preveri-stolpce.
@@ -8625,7 +8625,7 @@ function ZReportModal({ posData, onClose }) {
       // Z-porocilo ga doslej sploh ni imelo - niti v prikazu niti v bazi,
       // ceprav stolpci `total_vat_22`, `total_vat_95` in osnove obstajajo.
       // Racunovodja za DDV obracun potrebuje prav to razclenitev.
-      .select('id, closed_at, payments(amount, method), order_lines(qty, unit_price, total, vat_rate, voided)')
+      .select('id, closed_at, total, tip_amount, invoice_number, payments(amount, method), order_lines(qty, unit_price, total, vat_rate, voided)')
       .eq('business_id', BUSINESS_ID)
       .eq('status', 'paid')
       .gte('closed_at', from.toISOString())
@@ -8657,11 +8657,6 @@ function ZReportModal({ posData, onClose }) {
     let cash = 0, card = 0, bon = 0, other = 0, tips = 0
     const ords = orders || []
 
-    // DDV PO STOPNJAH (21.8.2026) — doslej ga Z-poročilo sploh ni imelo.
-    // Vsaka postavka nosi svojo stopnjo; cena je BRUTO, zato osnovo dobimo
-    // z deljenjem, ne z množenjem.
-    const poStopnji = new Map<number, { osnova: number; ddv: number }>()
-
     ords.forEach(o => {
       ;(o.payments || []).forEach(p => {
         const amt = Number(p.amount || 0)
@@ -8674,22 +8669,13 @@ function ZReportModal({ posData, onClose }) {
         else other += amt
       })
 
-      ;(o.order_lines || []).forEach((l: any) => {
-        if (l.voided) return
-        const bruto = l.total != null ? Number(l.total) : Number(l.qty || 0) * Number(l.unit_price || 0)
-        const stopnja = Number(l.vat_rate ?? 22)
-        const osnova = stopnja > 0 ? bruto / (1 + stopnja / 100) : bruto
-        const obstoj = poStopnji.get(stopnja) || { osnova: 0, ddv: 0 }
-        obstoj.osnova += osnova
-        obstoj.ddv += bruto - osnova
-        poStopnji.set(stopnja, obstoj)
-      })
     })
 
-    const zaokrozi = (n: number) => Math.round(n * 100) / 100
-    const ddvPoStopnjah = Array.from(poStopnji.entries())
-      .map(([stopnja, v]) => ({ stopnja, osnova: zaokrozi(v.osnova), ddv: zaokrozi(v.ddv) }))
-      .sort((a, b) => b.stopnja - a.stopnja)
+    // DDV PO STOPNJAH (21.8.2026; revizija V3, oktober 2026): seštevek DDV,
+    // zaokrozenega PO RACUNU in stopnji, s popustom na racunu - ista funkcija
+    // kot zakljucek izmene, KPO in DDV obracun (lib/pos-kpo ddvZPorocila).
+    // Prej nezaokrozene vrstice brez popusta (SIRM Z#30: 103,75 namesto 94,75).
+    const ddvPoStopnjah = ddvZPorocila(ords as any)
 
     const totalRefunds = (refunds || []).reduce((s, r) => s + Number(r.amount || 0), 0)
     // DODANO (26.8.2026): SAMO gotovinska vracila. Z-porocilo po e-posti je
@@ -8756,8 +8742,11 @@ function ZReportModal({ posData, onClose }) {
         total_vat_95: (data.ddvPoStopnjah || []).find(v => v.stopnja === 9.5)?.ddv ?? 0,
         total_vat_base_0: (data.ddvPoStopnjah || []).find(v => v.stopnja === 0)?.osnova ?? 0,
         total_vat_base_other: (data.ddvPoStopnjah || [])
-          .filter(v => v.stopnja !== 0 && v.stopnja !== 9.5 && v.stopnja !== 22)
+          .filter(v => v.stopnja !== 0 && v.stopnja !== 9.5 && v.stopnja !== 22 && v.stopnja !== 5)
           .reduce((sum, v) => sum + v.osnova, 0),
+        // REVIZIJA V3: 5 % stopnja (migracija 179)
+        total_vat_5: (data.ddvPoStopnjah || []).find(v => v.stopnja === 5)?.ddv ?? 0,
+        total_vat_base_5: (data.ddvPoStopnjah || []).find(v => v.stopnja === 5)?.osnova ?? 0,
         sent_to_racunko: false,
       }).select().single()
 
