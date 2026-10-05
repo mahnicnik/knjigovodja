@@ -38,6 +38,7 @@ function stStevilo(v: any): number {
   return parseFloat(String(v).replace(',', '.')) || 0
 }
 import AppLayout from '@/components/AppLayout'
+import UradnoIme from '@/components/nastavitve/UradnoIme'
 import { VAT_EXEMPTIONS, VAT_EXEMPTION_GROUPS, findVatExemption } from '@/lib/vat-exemptions'
 
 const SP_CONTRIBUTIONS: Record<number, number> = {
@@ -314,6 +315,8 @@ export default function NastavitevPage() {
               <div>
                 <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Ime s.p. *</label>
                 <input value={form.name} onChange={e => setForm({...form, name: e.target.value})} className={inp}/>
+                {/* HOTFIX (5.10.2026): banke preverjajo ime prejemnika (»Ni ujemanja«). */}
+                <UradnoIme davcna={form.tax_number} ime={form.name} onUporabi={u => setForm(f => ({ ...f, name: u }))} />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>

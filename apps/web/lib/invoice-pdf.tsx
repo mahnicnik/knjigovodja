@@ -1,6 +1,8 @@
 import { Document, Page, Text, View, StyleSheet, Image, Font } from '@react-pdf/renderer'
 import QRCode from 'qrcode'
 import { logotipUrl, logoNastavitve, LOGO_MERE } from '@/lib/logotip'
+import { sestaviUpnQr } from '@/lib/upn-qr'
+import { upnQrDataUrl } from '@/lib/upn-qr-slika'
 
 // Inter latin-ext (VSE tri utezi morajo biti latin-EXT, sicer manjkajo
 // sumniki - prejsnja verzija je imela navadni latin subset, ki NIMA "č",
@@ -351,89 +353,36 @@ export async function generateFursQr(zoi: string, issueDate: Date): Promise<stri
   return await QRCode.toDataURL(url, { width: 150, margin: 1, errorCorrectionLevel: 'M' })
 }
 
-// Helper za UPN QR generation (server-side)
+/**
+ * UPN QR na računu (server-side). Vsebina: lib/upn-qr.ts, slika: lib/upn-qr-slika.ts.
+ *
+ * HOTFIX (5.10.2026): plačnik je ob skeniranju dobil »NI UJEMANJA« (bančno
+ * preverjanje imena prejemnika). Ime prejemnika se ne reže več na 33 znakov,
+ * koda ima obvezno oznako ECI (ISO 8859-2), verzijo 15 in LF za kontrolno
+ * vsoto. Podrobnosti v lib/upn-qr.ts.
+ *
+ * Kode NI (prazen niz), če je ne bi bilo mogoče plačati: brez ali z
+ * neveljavnim IBAN-om (22.8.2026: koda brez IBAN-a je bila videti veljavna,
+ * banka pa plačila ni izvedla) ali z ničelnim zneskom. Plačilni podatki so
+ * na računu še vedno izpisani.
+ */
 export async function generateUpnQr(invoice: any, org: any): Promise<string> {
-  const ibanClean = (org.iban || '').replace(/\s/g, '')
-
-  // POPRAVLJENO (22.8.2026): brez IBAN-a se koda SPLOH NE izrise.
-  //
-  // Prej se je izrisala z belim poljem prejemnikovega racuna. Koda je bila
-  // videti veljavna, banka pa takega placila ne izvede - stranka skenira,
-  // dobi napako in poklice. Bolje je, da kode ni, kot da obljubi nekaj,
-  // cesar ne more izpolniti.
-  if (!ibanClean) {
-    console.warn('UPN QR ni izrisana: organizacija nima IBAN-a (' + (org.name || '') + ')')
+  const r = sestaviUpnQr({
+    placnikIme: invoice.client_name,
+    znesek: Number(invoice.amount_total),
+    // C6 (22.8.2026): namen s sumniki - to vidi stranka v bancni aplikaciji.
+    namen: `Plačilo računa ${invoice.invoice_number ?? ''}`,
+    rokPlacila: invoice.due_date,
+    ibanPrejemnika: org.iban,
+    sklic: invoice.reference,
+    stevilkaRacuna: invoice.invoice_number,
+    prejemnikIme: org.name,
+    prejemnikUlica: org.address,
+    prejemnikKraj: `${org.post_code || ''} ${org.city || ''}`,
+  })
+  if ('razlog' in r) {
+    console.warn(`UPN QR ni izrisana (${org.name || ''}): ${r.razlog}`)
     return ''
   }
-
-  const amount = String(Math.round(invoice.amount_total * 100)).padStart(11, '0')
-  const refClean = (invoice.reference || `SI00 ${invoice.invoice_number}`).replace(/\s/g, '')
-  
-  function upnDate(dateStr: string): string {
-    const d = new Date(dateStr)
-    return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`
-  }
-  
-  // C6 (22.8.2026): namen placila je bil brez sumnikov - to vidi stranka
-  // v bancni aplikaciji.
-  const namen = `Plačilo računa ${invoice.invoice_number}`.slice(0, 42)
-  
-  const upnFields = [
-    'UPNQR', '', '', '', '',
-    invoice.client_name.slice(0, 33),
-    '', '',
-    amount,
-    '', '', 'OTHR',
-    namen,
-    upnDate(invoice.due_date),
-    ibanClean,
-    refClean,
-    org.name.slice(0, 33),
-    (org.address || '').slice(0, 33),
-    `${org.post_code || ''} ${org.city || ''}`.trim().slice(0, 33),
-  ]
-  
-  const checksum = upnFields.reduce((s, f) => s + f.length + 1, 0)
-  const upnData = upnFields.join('\n') + '\n' + String(checksum).padStart(3, '0')
-
-  /**
-   * KODNA TABELA QR KODE UPN (prelet 209)
-   * ═════════════════════════════════════
-   *
-   * NAPAKA: po skeniranju je v bancni aplikaciji pisalo "PlaAilo raAuna"
-   * namesto "Placilo racuna" s sumniki.
-   *
-   * VZROK: knjiznica kodo zapise v UTF-8, kjer je crka "c" s streho dva
-   * bajta (0xC4 0x8D). Standard UPN QR pa predpisuje kodno tabelo
-   * ISO 8859-2 (Latin-2), zato bancna aplikacija tista dva bajta prebere
-   * kot dva LOCENA znaka - od tod "A" in nevidni znak za njim.
-   *
-   * Do 22.8.2026 je bil namen placila brez sumnikov in tezave ni bilo;
-   * takrat so bili dodani, kar je napako sprozilo.
-   *
-   * POPRAVEK: besedilo pretvorimo v bajte po ISO 8859-2 in jih zapisemo
-   * neposredno (nacin "byte").
-   *
-   * KONTROLNA VSOTA se ne spremeni: standard steje ZNAKE, ne bajtov.
-   */
-  const LATIN2: Record<string, number> = {
-    '\u0107':0xE6, '\u0106':0xC6, '\u010d':0xE8, '\u010c':0xC8,
-    '\u0111':0xF0, '\u0110':0xD0, '\u0161':0xB9, '\u0160':0xA9,
-    '\u017e':0xBE, '\u017d':0xAE, '\u20ac':0x3F,
-  }
-  const vLatin2 = (s: string): Uint8Array => {
-    const out: number[] = []
-    for (const c of s) {
-      const k = c.charCodeAt(0)
-      if (k <= 0xFF && !(k >= 0x80 && k <= 0x9F)) { out.push(k); continue }
-      const l2 = LATIN2[c]
-      out.push(l2 !== undefined ? l2 : 0x3F)
-    }
-    return Uint8Array.from(out)
-  }
-
-  return await QRCode.toDataURL(
-    [{ data: vLatin2(upnData), mode: 'byte' as const }],
-    { width: 200, margin: 2, errorCorrectionLevel: 'M' },
-  )
+  return await upnQrDataUrl(r.vsebina)
 }
