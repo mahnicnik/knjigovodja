@@ -52,7 +52,7 @@ SLOVENSKO DAVČNO PRAVO 2026 (posodobljeno 30.7.2026):
 - Dohodninska lestvica 2026: do 9.721,43€ → 16%, do 28.592,44€ → 26%, do 57.184,88€ → 33%, do 82.346,23€ → 39%, nad → 50%
 - Splošna olajšava 2026: 5.551,93€ letno (462,66€/mesec)
 - Minimalna plača 2026: 1.481,88€ bruto
-- DDV: 22% standardna, 9.5% znižana (hrana, knjige, zdravila), 0% izvoz
+- DDV: 22% splošna, 9.5% znižana (hrana, zdravila, gostinstvo), 5% (knjige, časopisi), 0% izvoz/oproščeno
 - DDV registracija obvezna nad 60.000€ obdavčljivega prometa v zadnjih 12 mesecih
 
 NORMIRANI S.P. — NOV SISTEM OD 1.1.2026 (zakon ZPZR) — POZOR, TO SE JE SPREMENILO:

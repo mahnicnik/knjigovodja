@@ -7,7 +7,8 @@ import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
 import { idZaDdv } from '@/lib/format'
-import { izracunajDdv } from '@/lib/ddv'
+import { izracunajDdv, razponObdobja, shemaObracuna, oznakaObdobja, type DdvObdobje, type DdvRezultat } from '@/lib/ddv'
+import { sestaviDdvOXml, vrsticeIzstopnegaDdv } from '@/lib/ddv-o'
 
 const QUARTERS = [
   { q: 1, label: 'Q1 (jan–mar)', from: '-01-01', to: '-03-31', due: 'april' },
@@ -22,7 +23,9 @@ export default function DDVEvidencaPage() {
   const [generating, setGenerating] = useState(false)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedQ, setSelectedQ] = useState(Math.ceil((new Date().getMonth() + 1) / 3))
-  const [data, setData] = useState<any>(null)
+  // Mesecna shema obracuna (organizations.vat_period = 'monthly').
+  const [selectedM, setSelectedM] = useState(new Date().getMonth() === 0 ? 12 : new Date().getMonth())
+  const [data, setData] = useState<{ invoices: any[]; ddv: DdvRezultat; obdobje: DdvObdobje } | null>(null)
   const supabase = createClient()
 
   useEffect(() => { load() }, [])
@@ -35,82 +38,47 @@ export default function DDVEvidencaPage() {
     setLoading(false)
   }
 
+  const mesecno = shemaObracuna(org?.vat_period) === 'monthly'
+  const izbranoObdobje: DdvObdobje = mesecno
+    ? { leto: selectedYear, mesec: selectedM }
+    : { leto: selectedYear, cetrtletje: selectedQ as 1 | 2 | 3 | 4 }
+  const oznaka = oznakaObdobja(izbranoObdobje)
+  const oznakaDatoteke = mesecno ? `${selectedYear}-${String(selectedM).padStart(2, '0')}` : `${selectedYear}-Q${selectedQ}`
+
   async function generateEvidenca() {
     if (!org) return
     setGenerating(true)
+    const obdobje = izbranoObdobje
+    const { od: from, do: to } = razponObdobja(obdobje)
 
-    const quarter = QUARTERS.find(q => q.q === selectedQ)!
-    const from = `${selectedYear}${quarter.from}`
-    const to = `${selectedYear}${quarter.to}`
-
-    // Revizija K1 (oktober 2026): zneski DDV pridejo SAMO iz lib/ddv.ts - ista
-    // funkcija kot na nadzorni plosci, /ddv, porocilih, izvozu in API.
-    // Seznam racunov je tu le za B2B/B2C prikaz in CSV.
+    // Revizija K1/K2 (oktober 2026): vsi zneski DDV pridejo SAMO iz lib/ddv.ts
+    // (razclenitev po stopnjah iz postavk racunov, POS narocil in KPO). Seznam
+    // racunov je tu le za B2B/B2C prikaz in CSV.
     const [invoicesRes, ddv] = await Promise.all([
       supabase.from('issued_invoices').select('*').eq('org_id', org.id)
         .neq('status', 'draft').or('zoi.is.null,zoi.not.like.DEMO-%').gte('issue_date', from).lte('issue_date', to),
-      izracunajDdv(org.id, { leto: selectedYear, cetrtletje: selectedQ as 1 | 2 | 3 | 4 }, supabase),
+      izracunajDdv(org.id, obdobje, supabase),
     ])
 
-    const invoices = invoicesRes.data || []
-    const receipts: any[] = []
-    const izh = ddv.izstopniDdv.poStopnjah
-    const vatOut22 = izh['22'].ddv
-    const vatOut95 = izh['9.5'].ddv
-    const sales22 = izh['22'].osnova
-    const sales95 = izh['9.5'].osnova
-    const vatIn = ddv.vstopniDdv.skupaj
-    const purchases = ddv.vstopniDdv.osnovaSkupaj
-    const vatDue = Math.max(0, ddv.obveznost)
-
-    setData({ invoices, receipts, vatOut22, vatOut95, sales22, sales95, vatIn, purchases, vatDue, quarter, from, to })
+    setData({ invoices: invoicesRes.data || [], ddv, obdobje })
     setGenerating(false)
   }
 
   function downloadXML() {
     if (!data || !org) return
-    const q = QUARTERS.find(q => q.q === selectedQ)!
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<DDV_O xmlns="http://edavki.durs.si/Documents/Schemas/DDV_O_4.xsd">
-  <Podatki_o_zavezancu>
-    <DavcnaStevilka>${org.tax_number}</DavcnaStevilka>
-    <ID_za_DDV>${idZaDdv(org.tax_number)}</ID_za_DDV>
-    <Naziv>${org.name}</Naziv>
-    <Naslov>${org.address || ''}</Naslov>
-    <PostnaStevilka>${org.post_code || ''}</PostnaStevilka>
-    <Kraj>${org.city || ''}</Kraj>
-  </Podatki_o_zavezancu>
-  <Obdobje>
-    <ObdobjeOd>${data.from}</ObdobjeOd>
-    <ObdobjeDo>${data.to}</ObdobjeDo>
-    <Kvartal>${selectedQ}</Kvartal>
-    <Leto>${selectedYear}</Leto>
-  </Obdobje>
-  <Obracun>
-    <!-- IZHODNI DDV (od prodaj) -->
-    <P11>${data.sales22.toFixed(2)}</P11>
-    <P12>${data.vatOut22.toFixed(2)}</P12>
-    <P21>${data.sales95.toFixed(2)}</P21>
-    <P22>${data.vatOut95.toFixed(2)}</P22>
-    <!-- VHODNI DDV (od nakupov) -->
-    <P41>${data.purchases.toFixed(2)}</P41>
-    <P42>${data.vatIn.toFixed(2)}</P42>
-    <!-- RAZLIKA -->
-    <P51>${(data.vatOut22 + data.vatOut95).toFixed(2)}</P51>
-    <P52>${data.vatIn.toFixed(2)}</P52>
-    <P53>${data.vatDue.toFixed(2)}</P53>
-  </Obracun>
-  <Podpis>
-    <Datum>${lokalniDatum()}</Datum>
-    <Ime>${org.name}</Ime>
-  </Podpis>
-</DDV_O>`
+    // XML je samo formatiranje rezultata izracunajDdv (lib/ddv-o.ts).
+    const xml = sestaviDdvOXml(
+      { tax_number: org.tax_number, id_za_ddv: idZaDdv(org.tax_number), name: org.name, address: org.address, post_code: org.post_code, city: org.city },
+      data.ddv,
+      data.obdobje as { leto: number; cetrtletje?: number; mesec?: number },
+      lokalniDatum(),
+    )
 
     const blob = new Blob([xml], { type: 'application/xml' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `DDV-O-${selectedYear}-Q${selectedQ}.xml`
+    a.download = `DDV-O-${oznakaDatoteke}.xml`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -134,7 +102,7 @@ export default function DDVEvidencaPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `DDV-evidenca-${selectedYear}-Q${selectedQ}.csv`
+    a.download = `DDV-evidenca-${oznakaDatoteke}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -175,10 +143,19 @@ export default function DDVEvidencaPage() {
         <div className="bg-white rounded-2xl border border-gray-100 p-5 mb-6">
           <h3 className="font-medium text-gray-900 mb-3 text-sm">Izberite obdobje</h3>
           <div className="flex gap-3 mb-4">
-            <select value={selectedQ} onChange={e => { setSelectedQ(parseInt(e.target.value)); setData(null) }}
-              className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none flex-1">
-              {QUARTERS.map(q => <option key={q.q} value={q.q}>{q.label}</option>)}
-            </select>
+            {mesecno ? (
+              <select value={selectedM} onChange={e => { setSelectedM(parseInt(e.target.value)); setData(null) }}
+                className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none flex-1">
+                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                  <option key={m} value={m}>{new Date(2000, m - 1, 1).toLocaleDateString('sl-SI', { month: 'long' })}</option>
+                ))}
+              </select>
+            ) : (
+              <select value={selectedQ} onChange={e => { setSelectedQ(parseInt(e.target.value)); setData(null) }}
+                className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none flex-1">
+                {QUARTERS.map(q => <option key={q.q} value={q.q}>{q.label}</option>)}
+              </select>
+            )}
             <select value={selectedYear} onChange={e => { setSelectedYear(parseInt(e.target.value)); setData(null) }}
               className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none w-28">
               {[2024, 2025, 2026, 2027].map(y => <option key={y}>{y}</option>)}
@@ -186,7 +163,7 @@ export default function DDVEvidencaPage() {
           </div>
           <button onClick={generateEvidenca} disabled={generating}
             className="w-full bg-gray-900 text-white rounded-xl py-3 text-sm font-medium disabled:opacity-40">
-            {generating ? 'Generiram...' : `📊 Generiraj DDV-O za Q${selectedQ} ${selectedYear}`}
+            {generating ? 'Generiram...' : `📊 Generiraj DDV-O za ${oznaka}`}
           </button>
         </div>
 
@@ -194,34 +171,34 @@ export default function DDVEvidencaPage() {
           <>
             {/* DDV povzetek */}
             <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
-              <h3 className="font-medium text-gray-900 mb-4">DDV-O obračun Q{selectedQ} {selectedYear}</h3>
+              <h3 className="font-medium text-gray-900 mb-4">DDV-O obračun {oznakaObdobja(data.obdobje)}</h3>
               <div className="space-y-2 text-sm">
                 <div className="grid grid-cols-3 gap-2 text-xs font-medium text-gray-500 pb-2 border-b border-gray-100">
                   <span>Postavka</span><span className="text-right">Osnova</span><span className="text-right">DDV</span>
                 </div>
-                {data.sales22 > 0 && (
-                  <div className="grid grid-cols-3 gap-2 text-sm">
-                    <span className="text-gray-600">Prodaje 22% (P11/P12)</span>
-                    <span className="text-right">€{data.sales22.toFixed(2)}</span>
-                    <span className="text-right text-red-500">€{data.vatOut22.toFixed(2)}</span>
-                  </div>
-                )}
-                {data.sales95 > 0 && (
-                  <div className="grid grid-cols-3 gap-2 text-sm">
-                    <span className="text-gray-600">Prodaje 9.5% (P21/P22)</span>
-                    <span className="text-right">€{data.sales95.toFixed(2)}</span>
-                    <span className="text-right text-red-500">€{data.vatOut95.toFixed(2)}</span>
-                  </div>
+                {vrsticeIzstopnegaDdv(data.ddv)
+                  .filter(v => v.stopnja === '22' || v.osnova !== 0 || v.ddv !== 0)
+                  .map(v => (
+                    <div key={v.stopnja} className={`grid grid-cols-3 gap-2 text-sm ${v.stopnja === 'drugo' ? 'text-orange-700' : ''}`}>
+                      <span className="text-gray-600">{v.oznaka} ({v.poljeOsnova}{v.poljeDdv ? `/${v.poljeDdv}` : ''})</span>
+                      <span className="text-right">€{v.osnova.toFixed(2)}</span>
+                      <span className="text-right text-red-500">{v.poljeDdv ? `€${v.ddv.toFixed(2)}` : '—'}</span>
+                    </div>
+                  ))}
+                {data.ddv.izstopniDdv.poStopnjah.drugo.osnova !== 0 && (
+                  <p className="text-xs text-orange-700 bg-orange-50 rounded-lg p-2">
+                    Del prometa ima stopnjo DDV, ki ni 22 %, 9,5 %, 5 % ali 0 %. Preverite te vnose pred oddajo.
+                  </p>
                 )}
                 <div className="grid grid-cols-3 gap-2 text-sm border-t border-gray-100 pt-2">
                   <span className="text-gray-600">Nabave (P41/P42)</span>
-                  <span className="text-right">€{data.purchases.toFixed(2)}</span>
-                  <span className="text-right text-green-600">−€{data.vatIn.toFixed(2)}</span>
+                  <span className="text-right">€{data.ddv.vstopniDdv.osnovaSkupaj.toFixed(2)}</span>
+                  <span className="text-right text-green-600">−€{data.ddv.vstopniDdv.skupaj.toFixed(2)}</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2 font-semibold bg-gray-50 rounded-xl p-3 mt-2">
-                  <span>Za plačilo FURS (P53)</span>
+                  <span>{data.ddv.obveznost < 0 ? 'Vračilo DDV (P53)' : 'Za plačilo FURS (P53)'}</span>
                   <span></span>
-                  <span className="text-right text-orange-500">€{data.vatDue.toFixed(2)}</span>
+                  <span className={`text-right ${data.ddv.obveznost < 0 ? 'text-green-600' : 'text-orange-500'}`}>€{data.ddv.obveznost.toFixed(2)}</span>
                 </div>
               </div>
             </div>
@@ -256,7 +233,7 @@ export default function DDVEvidencaPage() {
                 2. Pojdite na <strong>edavki.durs.si</strong><br/>
                 3. Vloge → DDV → DDV-O obrazec<br/>
                 4. Naložite XML ali vnesite ročno<br/>
-                5. Rok: do konca meseca po koncu kvartala<br/>
+                5. Rok: do konca meseca po koncu obdobja<br/>
                 6. Po oddaji prejmete UPN za plačilo
               </div>
             </div>

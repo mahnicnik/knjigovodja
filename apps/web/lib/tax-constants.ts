@@ -283,7 +283,8 @@ export function legalInterestRateOn(date: Date | string): number {
 
 // ───────────────────────── DDV ─────────────────────────
 
-export const VAT_RATES = { standard: 22, reduced: 9.5, zero: 0 } as const
+/** Stopnje DDV po ZDDV-1: splosna, znizana, posebna znizana (knjige, casopisi), 0 %. */
+export const VAT_RATES = { standard: 22, reduced: 9.5, superReduced: 5, zero: 0 } as const
 
 /** Prag za obvezno registracijo (obdavčljiv promet v zadnjih 12 mesecih). */
 export const VAT_REGISTRATION_THRESHOLD = 60000

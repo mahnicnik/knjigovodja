@@ -147,6 +147,7 @@ test('progresivna dohodnina: efektivna stopnja nikoli ne preseze najvisje', () =
 test('stopnje DDV ustrezajo veljavni zakonodaji', () => {
   expect(VAT_RATES.standard).toBe(22)
   expect(VAT_RATES.reduced).toBe(9.5)
+  expect(VAT_RATES.superReduced).toBe(5) // revizija K2: knjige, casopisi
   expect(VAT_RATES.zero).toBe(0)
 })
 

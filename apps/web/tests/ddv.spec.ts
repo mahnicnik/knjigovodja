@@ -12,6 +12,8 @@ import {
   type DdvPodatki,
 } from '../lib/ddv'
 import { generateAccountingXLSX } from '../lib/accounting-export'
+import { sestaviDdvOXml } from '../lib/ddv-o'
+import { VAT_RATES } from '../lib/tax-constants'
 import fiksturaTestSp from './fiksture/ddv-test-sp.json'
 
 /**
@@ -170,6 +172,71 @@ test('K2: oproscen racun (postavka brez stopnje, glava brez DDV) je 0 %, ne 22 %
   expect(d).toEqual([{ stopnja: '0', osnova: 28900, ddv: 0 }])
 })
 
+// ─────────────── K2: DDV-O XML ───────────────
+
+const ZAVEZANEC = { tax_number: '12345678', id_za_ddv: 'SI12345678', name: 'test s.p.' }
+const polje = (xml: string, ime: string) => {
+  const m = xml.match(new RegExp(`<${ime}>([^<]*)</${ime}>`))
+  return m ? m[1] : null
+}
+
+test('K2: DDV-O XML za test s.p. Q3 2026 - P53 = 123,37 (enako kot izracunajDdv)', () => {
+  const r = izracunajDdvIzPodatkov(testSp, Q3_2026)
+  const xml = sestaviDdvOXml(ZAVEZANEC, r, { leto: 2026, cetrtletje: 3 }, '2026-10-05')
+  expect(polje(xml, 'P11')).toBe('698.18')   // 688,34 racuni + 9,84 POS
+  expect(polje(xml, 'P12')).toBe('153.56')
+  expect(polje(xml, 'P21')).toBe('18.28')    // POS burgerji po 9,5 % (prej: v 22 %)
+  expect(polje(xml, 'P22')).toBe('1.72')
+  expect(polje(xml, 'P42')).toBe('31.91')
+  expect(polje(xml, 'P51')).toBe('155.28')
+  expect(polje(xml, 'P53')).toBe('123.37')
+  expect(polje(xml, 'Kvartal')).toBe('3')
+})
+
+test('K2: izdan racun po 9,5 % gre v P21/P22, ne v P11/P12 (glava racuna nima stolpca vat_rate)', () => {
+  const p = prazniPodatki()
+  p.racuni.push({ issue_date: '2026-07-06', amount_net: 1215, vat_amount: 115.43, line_items: [{ quantity: 1, unit_price: 1215, vat_rate: 9.5 }] })
+  const xml = sestaviDdvOXml(ZAVEZANEC, izracunajDdvIzPodatkov(p, Q3_2026), { leto: 2026, cetrtletje: 3 }, '2026-10-05')
+  expect(polje(xml, 'P11')).toBe('0.00')
+  expect(polje(xml, 'P21')).toBe('1215.00')
+  expect(polje(xml, 'P22')).toBe('115.43')
+})
+
+test('K2: KPO prihodek brez DDV (kartice) je v vrstici 0 % (P15), ne v osnovi 22 % (P11)', () => {
+  const p = prazniPodatki()
+  p.kpo.push({ entry_date: '2026-08-31', category: 'Kartično poslovanje', income: 500, expense: 0, vat_out: 0, vat_in: 0, vat_rate: null, invoice_id: null, receipt_id: null })
+  const xml = sestaviDdvOXml(ZAVEZANEC, izracunajDdvIzPodatkov(p, Q3_2026), { leto: 2026, cetrtletje: 3 }, '2026-10-05')
+  expect(polje(xml, 'P11')).toBe('0.00')
+  expect(polje(xml, 'P15')).toBe('500.00')
+})
+
+test('K2: 5 % stopnja je podprta (P31/P32)', () => {
+  const p = prazniPodatki()
+  p.racuni.push({ issue_date: '2026-08-01', amount_net: 100, vat_amount: 5, line_items: [{ quantity: 1, unit_price: 100, vat_rate: 5 }] })
+  const xml = sestaviDdvOXml(ZAVEZANEC, izracunajDdvIzPodatkov(p, Q3_2026), { leto: 2026, cetrtletje: 3 }, '2026-10-05')
+  expect(polje(xml, 'P31')).toBe('100.00')
+  expect(polje(xml, 'P32')).toBe('5.00')
+  expect(polje(xml, 'P11')).toBe('0.00')
+  expect(VAT_RATES.superReduced).toBe(5)
+})
+
+test('K2: vracilo DDV je v P53 NEGATIVNO (prej Math.max(0, ...) = 0,00)', () => {
+  const p = prazniPodatki()
+  p.racuni.push({ issue_date: '2026-08-01', amount_net: 100, vat_amount: 22, line_items: [{ quantity: 1, unit_price: 100, vat_rate: 22 }] })
+  p.prejeti.push({ receipt_date: '2026-08-02', amount_net: 1000, vat_amount: 220, vat_rate: 22 })
+  const xml = sestaviDdvOXml(ZAVEZANEC, izracunajDdvIzPodatkov(p, Q3_2026), { leto: 2026, cetrtletje: 3 }, '2026-10-05')
+  expect(polje(xml, 'P53')).toBe('-198.00')
+})
+
+test('K2: mesecna shema - XML nosi Mesec namesto Kvartal', () => {
+  const r = izracunajDdvIzPodatkov(testSp, { leto: 2026, mesec: 9 })
+  const xml = sestaviDdvOXml(ZAVEZANEC, r, { leto: 2026, mesec: 9 }, '2026-10-05')
+  expect(polje(xml, 'Mesec')).toBe('9')
+  expect(polje(xml, 'Kvartal')).toBeNull()
+  expect(polje(xml, 'ObdobjeOd')).toBe('2026-09-01')
+  expect(polje(xml, 'P53')).toBe('24.40')
+})
+
 // ─────────────── K1: ista stevilka v izvozu za racunovodjo ───────────────
 
 test('K1: izvoz XLSX - "DDV za placilo" je enak izracunajDdv (test s.p. Q3 2026)', () => {
@@ -204,6 +271,7 @@ const POTROSNIKI = [
   'app/api/v1/stats/route.ts',
   'app/api/exports/accounting/route.ts',
   'lib/accounting-export.ts',
+  'lib/ddv-o.ts',
 ]
 const LASTEN_SESTEVEK_DDV = /reduce\([^;]*?Number\(\s*\w+\.(vat_amount|vat_out|vat_in)\b/
 /** Vsote, ki NISO DDV obveznost - vsaka z razlogom. */
@@ -219,10 +287,12 @@ const DOVOLJENE_VSOTE: Record<string, RegExp[]> = {
 for (const pot of POTROSNIKI) {
   test(`K1: ${pot} uporablja lib/ddv in ne racuna DDV sam`, () => {
     const vir = readFileSync(join(__dirname, '..', pot), 'utf8')
-    if (pot !== 'lib/accounting-export.ts') expect(vir).toMatch(/from '@\/lib\/ddv'/)
+    if (pot !== 'lib/accounting-export.ts') expect(vir).toMatch(/from '@\/lib\/ddv(-o)?'/)
     const zadetki = vir.split('\n').filter(v => LASTEN_SESTEVEK_DDV.test(v))
     const izjeme = DOVOLJENE_VSOTE[pot] || []
     expect(zadetki.filter(v => !izjeme.some(re => re.test(v)))).toEqual([])
+    // K2: vracilo DDV se ne sme skriti z Math.max(0, ...)
+    expect(vir.split('\n').filter(v => /Math\.max\(\s*0\s*,[^)]*(vat|ddv|obveznost)/i.test(v))).toEqual([])
   })
 }
 
