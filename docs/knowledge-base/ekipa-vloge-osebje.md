@@ -8,7 +8,7 @@ koda:
   - apps/web/lib/role-access.ts (katere strani sme posamezna vloga)
   - apps/web/app/pos/page.tsx (StaffSection, CFG.rolePresets, CFG.permissionGroups)
   - apps/web/components/nastavitve/Blagajna.tsx (zavihek Osebje blagajne)
-posodobljeno: 2026-10-05
+posodobljeno: 2026-10-06
 ---
 
 # Ekipa in vloge
@@ -31,6 +31,8 @@ V Računku sta **dve ločeni ravni** dostopa – to je pogost vir zmede:
 | Računovodja | ogled in izvoz: portal računovodje, izvoz, KPO knjiga, računi, stroški – brez izdajanja ali urejanja računov |
 
 Vlogo člana spremeniš ali ga odstraniš na istem mestu; čakajoče povabilo lahko prekličeš.
+
+**Paket:** vlogi **Računovodja** in **Gledalec** sta na voljo v paketih Pro in Pro + POS, vloga **Blagajnik** samo v **Pro + POS**. Vloge, ki jih paket ne vsebuje, so v Ekipi sive z oznako »Potreben paket …«. Ob znižanju paketa obstoječi člani ostanejo, blagajnik pa blagajne ne more več odpreti.
 
 ## 2. Osebje blagajne (PIN)
 

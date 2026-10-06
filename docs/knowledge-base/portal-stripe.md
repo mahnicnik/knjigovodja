@@ -7,8 +7,9 @@ koda:
   - apps/web/components/nastavitve/PlacilaStripe.tsx (Nastavitve → Plačila s kartico – Stripe Connect)
   - apps/web/components/nastavitve/Integracije.tsx, apps/web/components/nastavitve/StripePlacila.tsx (Integracije → Stripe – webhook, ključ za branje, uskladitev)
   - apps/web/app/nastavitve/page.tsx (razdelek 'plan' – Naročnina), apps/web/components/ManageSubscriptionButton.tsx, apps/web/app/api/stripe/checkout
+  - apps/web/lib/paket.ts (kaj vsebuje paket, preizkus), apps/web/app/api/stripe/webhook/route.ts, apps/web/lib/narocnina-stripe.ts, apps/web/app/paket/page.tsx, apps/web/components/UpgradeModal.tsx
   - apps/web/components/pos/StripePlacilo.tsx (QR plačilo na blagajni), apps/web/app/invoices/zahtevki (zahtevki za plačilo)
-posodobljeno: 2026-10-05
+posodobljeno: 2026-10-06
 ---
 
 # Stripe v Računku – tri različna mesta
@@ -50,11 +51,21 @@ Na isti strani sta tudi integraciji **WooCommerce** in **Shopify** (webhook iz t
 
 | Paket | Cena | Vsebuje |
 |---|---|---|
-| 🆓 Free | 0 € | izdajanje računov z omejitvijo **5 računov skupaj**, FURS, PDF, prispevki/UPN QR |
-| 💼 Pro | 12,99 €/mes ali 129,90 €/leto | neomejeni računi, pošiljanje po e-pošti, AI skeniranje, dobavnice, AI računovodja |
-| 🖥️ Pro + POS | 29,99 €/mes ali 299,90 €/leto | vse iz Pro + POS blagajna, koledar, člani in paketi, zaloga |
+| 🆓 Free | 0 € | do **5 računov skupaj** (ne na mesec), PDF z UPN QR, izračun prispevkov; **brez** davčnega potrjevanja (FURS) in pošiljanja po e-pošti |
+| 💼 Pro | 12,99 €/mes ali 129,90 €/leto | neomejeni računi, FURS, pošiljanje po e-pošti, skener stroškov, AI računovodja, uvoz bančnega izpiska, e-račun (e-SLOG), izvoz in dostop za računovodjo, zahtevki za plačilo s kartico |
+| 🖥️ Pro + POS | 29,99 €/mes ali 299,90 €/leto | vse iz Pro + POS blagajna (mize, delitev računa, popusti, kartica prek QR, kuhinjski zaslon), zaloge in dobavnice, člani/paketi/koledar, blagajniki s PIN, namizna aplikacija |
 
-Letno plačilo = 2 meseca brezplačno. Nadgradnja: **Nastavitve → Naročnina** → izberi paket (plačilo prek Stripe). Obstoječo naročnino (kartica, preklic, računi) urejaš z gumbom **⚙️ Upravljaj naročnino** (Stripe portal). Če naročnina ni bila sklenjena prek Stripa, gumb to izpiše.
+Letno plačilo = 2 meseca brezplačno. Nadgradnja: **Nastavitve → Naročnina** → izberi paket (plačilo prek Stripe). Obstoječo plačano naročnino (kartica, menjava paketa, mesečno ↔ letno, preklic, računi) urejaš z gumbom **⚙️ Upravljaj naročnino** (Stripe portal) – gumb je viden samo pri plačani naročnini.
+
+### Brezplačni preizkus
+- Vsak nov račun dobi **14 dni preizkusa paketa Pro + POS**. V Nastavitve → Naročnina piše »🎁 Brezplačni preizkus do …«, na nadzorni plošči pasica »Še N dni brezplačnega preizkusa« z gumbom **Nadgradi zdaj**.
+- Ob izteku se paket takoj spremeni v **Free**: zaklenejo se funkcije, **podatki in izdani računi ostanejo** (računi, KPO, DDV, dnevni zaključki so še vedno vidni; storno je vedno mogoč).
+- Plačilo med preizkusom začne plačano naročnino takoj (preostanek preizkusa se ne prenese).
+
+### Kaj se zgodi ob …
+- **Preklicu** v Stripe portalu: paket ostane do konca plačanega obdobja, nato Free.
+- **Neuspelem plačilu**: dokler Stripe še poskuša (zapadlo), paket ostane; ko Stripe naročnino označi kot neplačano ali jo prekliče, paket postane Free.
+- **Strani brez paketa** (Blagajna `/pos`, Zaloge, AI računovodja, Skeniraj račun, Bančni uvoz): odpre se obvestilo »Ta funkcija je na voljo v paketu …« s povezavo **Nastavitve → Naročnina**.
 
 ## Omejitve in opozorila
 
@@ -62,5 +73,6 @@ Letno plačilo = 2 meseca brezplačno. Nadgradnja: **Nastavitve → Naročnina**
 - API verzija webhooka v Stripu mora biti 2025-02-24 ali starejša, sicer Računko dogodek zavrne (vidno v »Zadnji dogodki«).
 - Ključ za branje mora pripadati **istemu** Stripe računu kot webhook.
 - Plačilo s Stripe na blagajni zahteva internet in urejeno FURS potrjevanje; tak račun se vedno davčno potrdi.
-- Pri brezplačnem paketu se po 5 izdanih računih prikaže »Nadgradi →«. (Opis »do 5 računov/mesec« v Nastavitvah ne drži – šteje se skupno število računov.)
+- Pri brezplačnem paketu se po 5 računih prikaže »Nadgradi →«. Štejejo se vsi računi skupaj (tudi osnutki in avansni), **ne** dobropisi/storno in dobavnice.
+- Naročnine ni mogoče spremeniti ročno – samo prek plačila v Stripu. Če je bil paket dodeljen ročno (brez Stripa), ga gumb **Upravljaj naročnino** ne prikaže.
 - Na starejšo stran `/stripe` (Secret Key + webhook) meni ne vodi več – za uvoz plačil uporabljaj **Nastavitve → Integracije → Stripe**.
