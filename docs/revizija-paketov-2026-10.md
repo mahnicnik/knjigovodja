@@ -45,7 +45,7 @@ Stolpec »Po popravku« opisuje stanje na veji `claude/adoring-fermat-4b1ilc`.
 | Pro: skener stroškov | – | `scan-receipt` | ✅ (K5) | ✅ + stran `/scan` |
 | Pro: glasovni vnos | – | ni ločene poti (brskalnik) | ❌ | ❌ odprto (samo brskalnik, brez strežniškega klica) |
 | Pro: AI računovodja | – | `ai-chat` | ✅ (K5) | ✅ + stran `/ai` |
-| Pro: uvoz bančnega izpiska | – | `banka/parse-pdf` (PDF); CSV se bere v brskalniku | ⚠️ | ✅ PDF + stran `/banka` |
+| Pro: uvoz bančnega izpiska | – | `banka/parse-pdf` (PDF); CSV se bere v brskalniku | ⚠️ | ✅ PDF + stran `/banka` (middleware) |
 | Pro: e-SLOG | – | `invoices/[id]/eracun` | ❌ | ✅ |
 | Pro: DDV evidenca / KPO | – | neposredno Supabase | ❌ | ❌ odprto – namerno: KPO je zakonska evidenca, zaklep branja bi kršil »podatki ostanejo dostopni«. Odločitev potrebna. |
 | Pro: izvoz za računovodjo | – | `exports/accounting` | ❌ | ✅ |
@@ -99,8 +99,38 @@ Stolpec »Po popravku« opisuje stanje na veji `claude/adoring-fermat-4b1ilc`.
 7. Aplikacija ponuja veliko funkcij, ki jih cenik ne omenja (plače, REK-1, potni nalogi, amortizacija …) – brez omejitev za Free.
 8. Landing ne omenja 14-dnevnega preizkusa, koda ga daje vsakemu novemu računu (Pro + POS).
 
-## 6. Testi
+## 6. Kaj je popravljeno (veja `claude/adoring-fermat-4b1ilc`, vsak popravek svoj commit)
+
+| Commit | Kaj |
+|---|---|
+| `lib/paket.ts` | en vir resnice: `efektivniPaket` (iztekel preizkus = free takoj), cenik → funkcije, `zahtevajPaket` za API |
+| API vrata | `furs/invoice` (POS), `zaloge/uvoz-dobavnice`, `exports/accounting`, `invoices/[id]/eracun`, `team/invite`, `team/change-role` |
+| Migracija 182 | K1, K2, K4, K5 v bazi + vloge po paketu (**ni uporabljena na produkciji**) |
+| UI | besedila Naročnine, kartica Free, UpgradeModal/Prenosi cene, števec x/5 čez vse račune, ProGate/useSubscription odstranjena |
+| Middleware | `/pos`, `/zaloge`, `/ai`, `/scan`, `/banka` → `/paket` (rewrite – namizna aplikacija ne zapade v zanko) |
+| Webhook | sveže stanje iz Stripa, `status`, vrstni red, org po `stripe_customer_id`, stara naročnina ne prepiše nove |
+| Ekipa | vloge po paketu v UI; zavrnjeno povabilo ni več »poslano« |
+| Baza znanja | portal-stripe, portal-racuni, ekipa-vloge-osebje, izvoz-racunovodja, pos-osnove, _index |
+
+## 7. Odprto / potrebna odločitev
+
+1. **Uporaba migracije 182 na produkciji** (Supabase »Knjigovodja«). Brez nje K1 in K2 ostaneta odprta in omejitev 5 računov ostane samo v UI. Pred uporabo:
+   - **Vpliv:** dve obstoječi Free organizaciji imata skupaj **45 računov** – po migraciji ne bosta mogli izdati novega računa (dobropis gre). Odločitev: pustiti, ali jim dodeliti Pro ročno (service role).
+   - Organizacije `pro`/`pro_pos` brez Stripa in brez `trial_ends_at` (ročno dodeljene, 5 org) ostanejo plačljive – OK.
+2. **Mobilna registracija je pokvarjena že zdaj:** `apps/mobile/app/register.tsx` po `signUp` vstavi DRUGO organizacijo (`handle_new_user` jo je že ustvaril) z `.insert().select()`, kar RLS zavrne (uporabnik še ni član). Predlog: odstraniti vstavljanje organizacije/članstva iz mobilne aplikacije.
+3. **Stran `/invite/[id]`** bere `org_invites` kot povabljenec, ki še ni član – RLS mu vrstice ne pokaže. Glavni tok povabila (e-pošta iz `/api/team/invite`) člana doda na strežniku, zato to ni kritično; preveri, ali je stran še potrebna.
+4. **POS na mobilni aplikaciji in neposredno prek Supabase** (`orders`, `order_lines`, `payments`): RLS ne pozna paketa. Davčno potrjevanje (`/api/furs/invoice`) je zaprto, vnos naročil ne. Predlog: RLS pogoj `efektivni_paket(org) = 'pro_pos'` na `orders` (zahteva preslikavo `business_id` → org).
+5. **KPO / DDV evidenca / plače / potni nalogi …** so odprti vsem paketom. Cenik KPO/DDV uvršča v Pro, a gre za zakonske evidence – odločitev, ali zakleniti samo vnos ali nič.
+6. **Cene v Stripu** (12,99 / 129,90 / 29,99 / 299,90 €) niso preverljive iz tega okolja: `stripe prices retrieve <id>` za vse 4 `STRIPE_*_PRICE_ID`; v Customer Portalu omogoči menjavo med vsemi 4 cenami in proration.
+7. **Opomniki pred iztekom preizkusa** (e-pošta Resend 3 dni in 1 dan prej) in pasica »preizkus je potekel« ne obstajajo.
+8. **Nakup med preizkusom** zaračuna takoj; alternativa `subscription_data.trial_end = trial_ends_at` (plačilo ob izteku preizkusa).
+9. **Vračilo** (`charge.refunded`) paketa ne spremeni – naročnino je treba v Stripu tudi preklicati.
+10. **`/api/furs/invoice` z `offline`**: račun blagajne, izdan brez povezave tik pred iztekom paketa, se po izteku ne more več naknadno prijaviti FURS (redek primer; rešitev: dovoliti naknadno prijavo za račune z `closed_at` pred iztekom).
+11. **E2E s Stripe test clocks** ni narejen (ni testnega ključa; testni Supabase projekt »racunko test« je INACTIVE).
+
+## 8. Testi
 
 - `tests/paketi.spec.ts` – efektivni paket (free, trial-pro, trial-pro_pos, iztekel, plačan, preklican), pravila funkcij po paketih, webhook (status, vrstni red, iskanje org), middleware poti.
-- `tests/paketi-baza.spec.ts` – SQL sprožilci na lokalnem PostgreSQL (preskoči se, če `PAKETI_PG_URL` ni nastavljen): 6. račun zavrnjen, dobropis dovoljen, iztekel preizkus = free, uporabnik ne more spremeniti paketa, ne more se vpisati v tujo organizacijo.
+- `tests/paketi-baza.spec.ts` – migracija 182 na lokalnem PostgreSQL (`PAKETI_PG="-h /tmp -p 54329 -U postgres"`; brez spremenljivke se preskoči): 7 testnih organizacij, 6. račun zavrnjen (tudi service role), dobropis/dobavnica dovoljena, iztekel preizkus = free, uporabnik ne more spremeniti paketa ali ustvariti `pro_pos` organizacije, vpis v tujo organizacijo zavrnjen, povabilo veljavno samo za pravo vlogo/e-naslov in se porabi, vloge po paketu, idempotentnost. **19/19.**
+- `tests/paketi.spec.ts` – **52/52.** Celoten nabor: 811 uspešnih; 8 neuspešnih je enakih na izhodiščnem commitu (testi proti živi strani in datumsko odvisen `ujemanje.spec.ts`).
 - **Ni narejeno:** e2e proti živi aplikaciji s Stripe testnimi urami (test clocks) – zahteva Stripe testni ključ in testni Supabase projekt (»racunko test« je INACTIVE).
