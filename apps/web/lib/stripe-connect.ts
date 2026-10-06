@@ -64,6 +64,10 @@ export function racunUstrezaNacinu(livemode: boolean | null | undefined, zivo = 
  * organizacije s seznama STRIPE_CONNECT_DOVOLJENE_ORG (org_id-ji, locene z
  * vejico). Prazen seznam = nihce. V testnem nacinu seznam ne velja.
  * Ostali vidijo "Placila s kartico — kmalu na voljo".
+ *
+ * 6.10.2026: "*" = vse organizacije (placila s kartico so na voljo vsem s
+ * paketom Pro + POS; paket, FURS certifikat in ostali pogoji se se vedno
+ * preverjajo v preveriPogoje / zivoNiDovoljeno).
  */
 export function dovoljenaVZivem(
   orgId: string | null | undefined,
@@ -72,6 +76,7 @@ export function dovoljenaVZivem(
 ): boolean {
   if (!zivo) return true
   if (!orgId) return false
+  if (seznam.trim() === '*') return true
   return seznam.split(',').map(x => x.trim().toLowerCase()).filter(Boolean).includes(orgId.toLowerCase())
 }
 

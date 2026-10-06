@@ -343,3 +343,9 @@ test('Testni nacin: seznam ne velja - vse organizacije', () => {
 test('Ni na seznamu: zahtevki pokazejo "Placila s kartico — kmalu na voljo"', () => {
   expect(razlogNedostopnosti({ ...vseOk, kmalu: true, nastavljeno: false, stripeAktiven: false })?.razlog).toBe('Plačila s kartico — kmalu na voljo.')
 })
+
+test('Zivi nacin: "*" dovoli vse organizacije (6.10.2026)', () => {
+  expect(dovoljenaVZivem('33333333-aaaa-bbbb-cccc-000000000003', true, '*')).toBe(true)
+  expect(dovoljenaVZivem('33333333-aaaa-bbbb-cccc-000000000003', true, ' * ')).toBe(true)
+  expect(dovoljenaVZivem(null, true, '*')).toBe(false)
+})
