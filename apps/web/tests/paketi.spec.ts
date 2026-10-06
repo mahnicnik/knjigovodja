@@ -192,3 +192,11 @@ test('Nobena datoteka v app/, lib/, components/ ne primerja subscription_status 
     .filter((v: string) => v && !/^[^:]+:\d+:\s*(\/\/|\*|\{\/\*)/.test(v))
   expect(zadetki).toEqual([])
 })
+
+test('Middleware: strani paketa prepise na /paket, vloge smejo na /paket', () => {
+  const mw = readFileSync(join(KORENSKA, 'middleware.ts'), 'utf8')
+  expect(mw).toContain('funkcijaZaPot(pathname)')
+  expect(mw).toContain('NextResponse.rewrite')
+  const { isPathAllowedForRole } = require('../lib/role-access')
+  for (const vloga of ['cashier', 'accountant', 'viewer']) expect(isPathAllowedForRole('/paket', vloga)).toBe(true)
+})
