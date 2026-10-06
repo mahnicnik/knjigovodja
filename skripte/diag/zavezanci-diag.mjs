@@ -14,7 +14,7 @@ for (const vrsta of ['PO', 'DEJ']) {
   const dolz = {}
   for (const v of vrstice) dolz[v.length] = (dolz[v.length] || 0) + 1
   console.log('dolzine vrstic (znaki):', JSON.stringify(Object.entries(dolz).sort((a, b) => b[1] - a[1]).slice(0, 10)))
-  const n = Math.max(...vrstice.map(v => v.length))
+  let n = 0; for (const v of vrstice) if (v.length > n) n = v.length
   const pr = new Array(n).fill(0)
   for (const v of vrstice) for (let i = 0; i < n; i++) if ((v[i] ?? ' ') === ' ') pr[i]++
   const vedno = pr.map((c, i) => c === vrstice.length ? i : -1).filter(i => i >= 0)
@@ -25,8 +25,13 @@ for (const vrsta of ['PO', 'DEJ']) {
   const zv = {}; for (const v of vrstice) { const z = v.slice(0, 4); zv[z] = (zv[z] || 0) + 1 }
   console.log('prvi 4 znaki (pogostost):', JSON.stringify(Object.entries(zv).sort((a, b) => b[1] - a[1]).slice(0, 8)))
   for (const v of vrstice.slice(0, 3)) console.log('VZOREC|' + v + '|')
+  const dolge = vrstice.filter(v => v.length !== vrstice[0].length).slice(0, 4)
+  for (const v of dolge) console.log('DRUGA DOLZINA ' + v.length + '|' + v + '|')
+  const brezZv = vrstice.filter(v => v.slice(0, 4) !== vrstice[0].slice(0, 4)).slice(0, 3)
+  for (const v of brezZv) console.log('DRUG ZACETEK|' + v + '|')
   for (const d of ['10489568', '89481372', '10000658']) { const v = vrstice.find(x => x.includes(d)); if (v) console.log(`NAJDENO ${d} (dolzina ${v.length})|` + v + '|') }
   const zadnja = {}; for (const v of vrstice) { const z = v.slice(-2); zadnja[z] = (zadnja[z] || 0) + 1 }
   console.log('zadnja 2 znaka:', JSON.stringify(Object.entries(zadnja).sort((a, b) => b[1] - a[1]).slice(0, 20)))
 }
 console.log(`\nCAS ${Date.now() - t0} ms, RSS ${Math.round(process.memoryUsage().rss / 1e6)} MB, heap ${Math.round(process.memoryUsage().heapUsed / 1e6)} MB`)
+// dodatno: 268-znakovne vrstice PO in vzorci z zvezdico / brez
