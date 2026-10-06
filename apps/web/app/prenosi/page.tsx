@@ -67,7 +67,7 @@ export default function DownloadPage() {
               Desktop aplikacija je na voljo za uporabnike paketa Pro + POS. Vključuje Windows in Mac verzijo blagajne.
             </div>
             <Link href="/nastavitve#narocnina" style={{ background: '#1D9E75', color: '#fff', padding: '14px 28px', borderRadius: 12, fontWeight: 600, fontSize: 15, textDecoration: 'none', display: 'inline-block' }}>
-              Nadgradi na Pro + POS — €24.99/mes →
+              Nadgradi na Pro + POS — 29,99 €/mes →
             </Link>
           </div>
         ) : (
