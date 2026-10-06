@@ -5,6 +5,7 @@ import {
   efektivniPaket, imaPro, imaPos, jeIztekelPreizkus, jeVPreizkusu, dovoljeno, zahtevajPaket,
   funkcijaZaPot, funkcijaVloge, potrebenPaket, type Funkcija, type OrgNarocnina,
 } from '../lib/paket'
+import { odlociONarocnini, izStripeNarocnine, paketIzCene, type CeneStripe } from '../lib/narocnina-stripe'
 
 /**
  * REVIZIJA PAKETOV (6.10.2026) – pravila paketov brez baze in brskalnika.
@@ -199,4 +200,63 @@ test('Middleware: strani paketa prepise na /paket, vloge smejo na /paket', () =>
   expect(mw).toContain('NextResponse.rewrite')
   const { isPathAllowedForRole } = require('../lib/role-access')
   for (const vloga of ['cashier', 'accountant', 'viewer']) expect(isPathAllowedForRole('/paket', vloga)).toBe(true)
+})
+
+// ═══════════════════ 5. STRIPE WEBHOOK (odlocitev) ═══════════════════
+
+
+const CENE: CeneStripe = { pro: ['price_pro_m', 'price_pro_y'], proPos: ['price_pos_m', 'price_pos_y'] }
+const KONEC = 1798761600 // 2027-01-01
+const nar = (status: string, priceId = 'price_pro_m', id = 'sub_1') => ({ id, status, priceId, konecObdobja: KONEC })
+
+test('Webhook: vse 4 cene -> pravi paket', () => {
+  expect(['price_pro_m', 'price_pro_y', 'price_pos_m', 'price_pos_y'].map(p => paketIzCene(p, CENE))).toEqual(['pro', 'pro', 'pro_pos', 'pro_pos'])
+  expect(paketIzCene('price_stara_999', CENE)).toBe(null)
+  // Manjkajoca letna cena v okolju ('') ne sme ujeti praznega price id.
+  expect(paketIzCene('', { pro: ['p', ''], proPos: [''] })).toBe(null)
+})
+
+test('Webhook: aktivna narocnina nastavi paket, id, konec obdobja in pocisti preizkus', () => {
+  const o = odlociONarocnini({ id: 'org', stripe_subscription_id: null }, nar('active', 'price_pos_y'), CENE)
+  expect(o).toEqual({ tip: 'posodobi', polja: {
+    subscription_status: 'pro_pos', stripe_subscription_id: 'sub_1', trial_ends_at: null,
+    plan_expires_at: '2027-01-01T00:00:00.000Z',
+  } })
+})
+
+test('Webhook: past_due ohrani dostop (Stripe se poskusa), unpaid/canceled/incomplete_expired -> free', () => {
+  const org = { id: 'org', stripe_subscription_id: 'sub_1' }
+  expect((odlociONarocnini(org, nar('past_due'), CENE) as any).polja.subscription_status).toBe('pro')
+  expect((odlociONarocnini(org, nar('trialing'), CENE) as any).polja.subscription_status).toBe('pro')
+  for (const s of ['unpaid', 'canceled', 'incomplete_expired', 'paused']) {
+    expect(odlociONarocnini(org, nar(s), CENE), s).toEqual({ tip: 'posodobi', polja: { subscription_status: 'free', stripe_subscription_id: null, plan_expires_at: null } })
+  }
+})
+
+test('Webhook: incomplete (3D Secure se caka) paketa ne dodeli', () => {
+  expect(odlociONarocnini({ id: 'org', stripe_subscription_id: null }, nar('incomplete'), CENE).tip).toBe('preskoci')
+})
+
+test('Webhook: preklic STARE narocnine ne prepise nove', () => {
+  const o = odlociONarocnini({ id: 'org', stripe_subscription_id: 'sub_nova' }, nar('canceled', 'price_pro_m', 'sub_stara'), CENE)
+  expect(o.tip).toBe('preskoci')
+})
+
+test('Webhook: neznana cena -> napaka (Stripe ponovi), nic se ne zapise', () => {
+  expect(odlociONarocnini({ id: 'org', stripe_subscription_id: null }, nar('active', 'price_999'), CENE).tip).toBe('napaka')
+})
+
+test('Webhook: isti dogodek dvakrat ali v napacnem vrstnem redu -> isti rezultat (sveze stanje)', () => {
+  // Webhook vedno prebere svezo narocnino: po preklicu je status 'canceled',
+  // tudi ce zamujeni dogodek 'updated' pride za 'deleted'.
+  const org = { id: 'org', stripe_subscription_id: 'sub_1' }
+  const a = odlociONarocnini(org, nar('canceled'), CENE)
+  const b = odlociONarocnini(org, nar('canceled'), CENE)
+  expect(a).toEqual(b)
+  expect((a as any).polja.subscription_status).toBe('free')
+})
+
+test('Webhook: current_period_end na narocnini ali na postavki (nov Stripe API)', () => {
+  expect(izStripeNarocnine({ id: 's', status: 'active', current_period_end: 5, items: { data: [{ price: { id: 'p' } }] } }).konecObdobja).toBe(5)
+  expect(izStripeNarocnine({ id: 's', status: 'active', items: { data: [{ price: { id: 'p' }, current_period_end: 7 }] } })).toEqual({ id: 's', status: 'active', priceId: 'p', konecObdobja: 7 })
 })
