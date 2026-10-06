@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import { imaPos } from '@/lib/paket'
 
 export default function DownloadPage() {
   const [org, setOrg] = useState<any>(null)
@@ -34,7 +35,7 @@ export default function DownloadPage() {
     load()
   }, [])
 
-  const isProPos = org?.subscription_status === 'pro_pos'
+  const isProPos = imaPos(org)
 
   const winUrl = release?.assets?.find((a: any) => a.name.endsWith('.exe'))?.browser_download_url
   const version = release?.tag_name || 'v1.0.21'
@@ -67,7 +68,7 @@ export default function DownloadPage() {
               Desktop aplikacija je na voljo za uporabnike paketa Pro + POS. Vključuje Windows in Mac verzijo blagajne.
             </div>
             <Link href="/nastavitve#narocnina" style={{ background: '#1D9E75', color: '#fff', padding: '14px 28px', borderRadius: 12, fontWeight: 600, fontSize: 15, textDecoration: 'none', display: 'inline-block' }}>
-              Nadgradi na Pro + POS — €24.99/mes →
+              Nadgradi na Pro + POS — 29,99 €/mes →
             </Link>
           </div>
         ) : (

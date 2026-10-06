@@ -40,6 +40,7 @@ function stStevilo(v: any): number {
 import AppLayout from '@/components/AppLayout'
 import UradnoIme from '@/components/nastavitve/UradnoIme'
 import { VAT_EXEMPTIONS, VAT_EXEMPTION_GROUPS, findVatExemption } from '@/lib/vat-exemptions'
+import { efektivniPaket, imaPro, imaPos, jeVPreizkusu, BREZPLACNI_RACUNI } from '@/lib/paket'
 
 const SP_CONTRIBUTIONS: Record<number, number> = {
   1: 2584.92, 2: 3012.36, 3: 3439.20, 4: 3866.04, 5: 4293.00,
@@ -228,8 +229,10 @@ export default function NastavitevPage() {
     </div>
   )
 
-  const isPro = org?.subscription_status === 'pro' || org?.subscription_status === 'pro_pos'
-  const isProPos = org?.subscription_status === 'pro_pos'
+  // Revizija paketov: efektivni paket (iztekel preizkus = Free takoj).
+  const isPro = imaPro(org)
+  const isProPos = imaPos(org)
+  const vPreizkusu = jeVPreizkusu(org)
   /**
    * PRELET 319: `subscription_status` se na 'pro'/'pro_pos' postavi TUDI ob
    * zacetku brezplacnega preizkusa (trial), se preden je karkoli placano -
@@ -713,13 +716,19 @@ export default function NastavitevPage() {
                   {isProPos ? 'PRO + POS' : isPro ? 'PRO' : 'FREE'}
                 </span>
               </div>
-              {org.plan_expires_at && (
+              {vPreizkusu && (
+                <p data-testid="preizkus-do" style={{ fontSize: 13, color: '#8a6d1f', marginBottom: 8 }}>
+                  🎁 Brezplačni preizkus do <strong>{new Date(org.trial_ends_at).toLocaleDateString('sl-SI', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>.
+                  Po izteku se zaklenejo funkcije paketa, podatki in izdani računi ostanejo.
+                </p>
+              )}
+              {org.plan_expires_at && jeDejanskoPlacano && (
                 <p style={{ fontSize: 13, color: '#555', marginBottom: 8 }}>
                   Naslednje plačilo: <strong>{new Date(org.plan_expires_at).toLocaleDateString('sl-SI', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
                 </p>
               )}
               {!isPro && (
-                <p style={{ fontSize: 12, color: '#888' }}>Brezplačni plan — do 5 računov/mesec.</p>
+                <p style={{ fontSize: 12, color: '#888' }}>Brezplačni paket — do {BREZPLACNI_RACUNI} računov skupaj, brez davčnega potrjevanja (FURS) in pošiljanja po e-pošti.</p>
               )}
               {isPro && !isProPos && (
                 <p style={{ fontSize: 12, color: '#888' }}>Pro plan — neomejeni računi, email, FURS.</p>
@@ -727,7 +736,7 @@ export default function NastavitevPage() {
               {isProPos && (
                 <p style={{ fontSize: 12, color: '#888' }}>Pro + POS — vse funkcije vključno z blagajno.</p>
               )}
-              {isPro && (
+              {jeDejanskoPlacano && (
                 <ManageSubscriptionButton />
               )}
             </div>
@@ -738,11 +747,11 @@ export default function NastavitevPage() {
               <div style={{ background: '#fff', borderRadius: 16, border: '2px solid ' + (!isPro ? '#0D1F12' : '#f0f0f0'), padding: 20 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>🆓 Free</div>
                 <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 12 }}>€0</div>
-                {/* PRELET 214: brezplacni paket je imel pet racunov na mesec,
-                    konkurent pa daje neomejeno zastonj - kdor primerja, nas
-                    zavrne, preden pogleda karkoli drugega. Omejitev je odslej
-                    stevilo strank, ne stevilo racunov. */}
-                {['Neomejeni računi', 'FURS fiskalizacija', 'PDF download', 'Prispevki / UPN QR'].map(f => (
+                {/* REVIZIJA PAKETOV (6.10.2026): kartica je obljubljala
+                    "Neomejeni računi" in "FURS fiskalizacija" (ostanek preleta
+                    214), koda in cenik na landing strani pa dajeta 5 racunov
+                    skupaj in brez FURS. Kartica mora opisati, kar uporabnik dobi. */}
+                {[`Do ${BREZPLACNI_RACUNI} računov`, 'PDF z UPN QR kodo', 'Izračun prispevkov', 'Brez davčnega potrjevanja (FURS)'].map(f => (
                   <div key={f} style={{ fontSize: 12, color: '#555', marginBottom: 6, display: 'flex', gap: 6 }}>
                     <span style={{ color: '#16a34a' }}>✓</span> {f}
                   </div>
@@ -758,7 +767,7 @@ export default function NastavitevPage() {
                     placala drugo. */}
                 <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 2 }}>12,99 €<span style={{ fontSize: 13, fontWeight: 400, color: '#888' }}>/mes</span></div>
                 <div style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>ali 129,90 €/leto — 2 meseca brezplačno</div>
-                {['Neomejeni računi', 'Email pošiljanje', 'FURS fiskalizacija', 'Dobavnice', 'Prispevki / UPN QR'].map(f => (
+                {['Neomejeni računi in predračuni', 'FURS fiskalizacija', 'Pošiljanje po e-pošti', 'Skener stroškov in AI računovodja', 'Uvoz bančnega izpiska, e-SLOG', 'Izvoz in dostop za računovodjo'].map(f => (
                   <div key={f} style={{ fontSize: 12, color: '#555', marginBottom: 6, display: 'flex', gap: 6 }}>
                     <span style={{ color: '#16a34a' }}>✓</span> {f}
                   </div>
@@ -771,9 +780,9 @@ export default function NastavitevPage() {
                         gumbe (in s tem letno ceno) vidi tudi stranka, ki je
                         samo v preizkusni dobi. */}
                     <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                      <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} targetPlan="pro" period="monthly" jePlacano={jeDejanskoPlacano} />
-                      <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} targetPlan="pro" period="yearly" variant="inline" jePlacano={jeDejanskoPlacano} />
-                      {(org?.subscription_status || 'free') === 'free' && (
+                      <UpgradeButton subscriptionStatus={efektivniPaket(org)} targetPlan="pro" period="monthly" jePlacano={jeDejanskoPlacano} />
+                      <UpgradeButton subscriptionStatus={efektivniPaket(org)} targetPlan="pro" period="yearly" variant="inline" jePlacano={jeDejanskoPlacano} />
+                      {(efektivniPaket(org)) === 'free' && (
                         <p style={{ fontSize:11, color:'#888', margin:0 }}>Letno = 2 meseca brezplačno (prihranite 25,98 €).</p>
                       )}
                     </div>
@@ -798,9 +807,9 @@ export default function NastavitevPage() {
                         letno ceno in gumb, s katerim preizkus dejansko
                         spremeni v placano narocnino. */}
                     <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                      <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} targetPlan="pro_pos" period="monthly" jePlacano={jeDejanskoPlacano} />
-                      <UpgradeButton subscriptionStatus={org?.subscription_status || 'free'} targetPlan="pro_pos" period="yearly" variant="inline" jePlacano={jeDejanskoPlacano} />
-                      {(org?.subscription_status || 'free') !== 'pro_pos' && (
+                      <UpgradeButton subscriptionStatus={efektivniPaket(org)} targetPlan="pro_pos" period="monthly" jePlacano={jeDejanskoPlacano} />
+                      <UpgradeButton subscriptionStatus={efektivniPaket(org)} targetPlan="pro_pos" period="yearly" variant="inline" jePlacano={jeDejanskoPlacano} />
+                      {(efektivniPaket(org)) !== 'pro_pos' && (
                         <p style={{ fontSize:11, color:'#888', margin:0 }}>Letno = 2 meseca brezplačno (prihranite 59,98 €).</p>
                       )}
                     </div>

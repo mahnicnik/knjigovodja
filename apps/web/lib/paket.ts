@@ -14,6 +14,8 @@
  * (migracija 182) - sprozilci v bazi in koda morata govoriti isto.
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js'
+
 export type Paket = 'free' | 'pro' | 'pro_pos'
 
 export type OrgNarocnina = {
@@ -88,7 +90,7 @@ export function sporociloPaketa(f: Funkcija, opis?: string): string {
 // STREZNIK
 // ─────────────────────────────────────────────────────────────────
 
-type Bralec = { from: (t: string) => any }
+type Bralec = Pick<SupabaseClient, 'from'>
 
 /** Prebere organizacijo in vrne njen efektivni paket. */
 export async function naloziPaket(sb: Bralec, orgId: string): Promise<Paket> {

@@ -117,7 +117,7 @@ test('Vloge: racunovodja/gledalec = Pro, blagajnik = Pro + POS, admin brez omeji
 
 // ═══════════════════ 3. API: zahtevajPaket ═══════════════════
 
-function lazniSupabase(org: OrgNarocnina) {
+function lazniSupabase(org: OrgNarocnina): any {
   return {
     from: (t: string) => {
       expect(t).toBe('organizations')
@@ -181,3 +181,14 @@ for (const pot of PLACLJIVE_POTI) {
     expect(vsebina).not.toMatch(/subscription_status\s*(===|!==)/)
   })
 }
+
+test('Nobena datoteka v app/, lib/, components/ ne primerja subscription_status mimo lib/paket', () => {
+  const { execSync } = require('child_process')
+  const zadetki = execSync(
+    `grep -rnE "subscription_status\\s*(===|!==)|\\[\\s*'pro',\\s*'pro_pos'\\s*\\]\\.includes" app lib components middleware.ts || true`,
+    { cwd: KORENSKA, encoding: 'utf8' },
+  ).split('\n')
+    // komentarji (npr. "PRELET 321: prej `subscription_status === 'pro'`") ne stejejo
+    .filter((v: string) => v && !/^[^:]+:\d+:\s*(\/\/|\*|\{\/\*)/.test(v))
+  expect(zadetki).toEqual([])
+})

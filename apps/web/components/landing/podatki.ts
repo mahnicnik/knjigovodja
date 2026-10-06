@@ -27,7 +27,7 @@ export const PAKETI: Paket[] = [
     // PRELET 349: prej je ponudba obljubljala "neomejene racune" in "FURS
     // davcno potrjevanje", aplikacija pa brezplacnemu paketu dovoli 5 racunov,
     // brez FURS, brez posiljanja po e-posti in brez AI racunovodje
-    // (lib/useSubscription.ts, api/furs/confirm, api/ai-chat). Ponudba mora
+    // (lib/paket.ts, api/furs/confirm, api/ai-chat). Ponudba mora
     // opisati, kar uporabnik dejansko dobi.
     opis: 'Da preizkusite, kako deluje. Za račune, plačane na TRR.',
     funkcije: ['Do 5 računov', 'PDF z UPN QR kodo za plačilo', 'Izračun prispevkov', 'Pomoč pri uporabi aplikacije', 'Brez davčnega potrjevanja (FURS)'],
