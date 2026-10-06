@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/stripe-uskladitev",
       "schedule": "30 2 * * *"
+    },
+    {
+      "path": "/api/cron/register-zavezancev",
+      "schedule": "15 4 * * *"
     }
   ]
 }
