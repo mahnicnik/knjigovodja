@@ -27,10 +27,12 @@ export const PAKETI: Paket[] = [
     // PRELET 349: prej je ponudba obljubljala "neomejene racune" in "FURS
     // davcno potrjevanje", aplikacija pa brezplacnemu paketu dovoli 5 racunov,
     // brez FURS, brez posiljanja po e-posti in brez AI racunovodje
-    // (lib/paket.ts, api/furs/confirm, api/ai-chat). Ponudba mora
+    // (lib/useSubscription.ts, api/furs/confirm, api/ai-chat). Ponudba mora
     // opisati, kar uporabnik dejansko dobi.
     opis: 'Da preizkusite, kako deluje. Za račune, plačane na TRR.',
-    funkcije: ['Do 5 računov', 'PDF z UPN QR kodo za plačilo', 'Izračun prispevkov', 'Pomoč pri uporabi aplikacije', 'Brez davčnega potrjevanja (FURS)'],
+    // REVIZIJA PAKETOV (6.10.2026): KPO knjiga in evidenca DDV sta odprti vsem
+    // paketom (zakonski evidenci) - ne samo v Pro.
+    funkcije: ['Do 5 računov', 'PDF z UPN QR kodo za plačilo', 'Izračun prispevkov', 'Evidenca DDV in KPO knjiga', 'Pomoč pri uporabi aplikacije', 'Brez davčnega potrjevanja (FURS)'],
   },
   {
     id: 'pro', ime: 'Pro', mesecno: 12.99, letno: 129.90, poudarjen: true,

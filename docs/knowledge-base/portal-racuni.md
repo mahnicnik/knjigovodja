@@ -59,7 +59,7 @@ Ob računu sta še **⬇ PDF** in **📧 Pošlji** (pošiljanje po e-pošti – 
 
 - **Brisanje** je mogoče samo za osnutke in nefiskalizirane storno zapise. Davčno potrjenega računa ni mogoče izbrisati (10-letna hramba) – uporabi storno ali dobropis.
 - Račun z dodeljeno davčno številko se ne ureja – storniraj in izdaj novega (lahko s **📋 Podvoji račun**).
-- **Brezplačni paket**: največ **5 računov skupaj**; nato se prikaže »Nadgradi →«.
+- **Brezplačni paket**: največ **5 računov**; nato se prikaže »Nadgradi →«. Pri računih, odprtih po oktobru 2026, se štejejo samo računi (ne dobropisi/storno in dobavnice), 6. račun zavrne tudi strežnik, števec »x/5 računov« pa šteje vse račune, ne samo izbranega obdobja. Pri prej odprtih računih se nič ne spremeni.
 - Samodejno izpolnjevanje stranke: register FURS se osveži vsako jutro (FURS ga objavi ob ~23:00), zato podjetje, registrirano danes, najdeš šele jutri. Če ga v registru ni, se poišče še v **VIES** (samo zavezanci za DDV). Če ni najdeno, se izpiše »Podjetje ni najdeno« / »Iskanje ni uspelo« – podatke vpiši ročno.
 - Vrzel v zaporedju številk (npr. zaradi izbrisanega osnutka) je prikazana nad seznamom – za davčni pregled jo je dobro znati pojasniti.
 - Pošiljanje po e-pošti zahteva paket Pro.

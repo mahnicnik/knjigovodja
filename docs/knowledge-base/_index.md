@@ -1,7 +1,7 @@
 ---
 modul: _index
 naslov: Kazalo baze znanja Računko asistenta
-posodobljeno: 2026-10-05
+posodobljeno: 2026-10-06
 ---
 
 # Računko – baza znanja asistenta
@@ -10,7 +10,7 @@ Računko je slovenska aplikacija za s.p. in manjša podjetja: **portal** (račun
 
 ## Splošno (velja povsod)
 
-- **Paketi**: Free (do 5 računov skupaj, brez AI in e-pošte), **Pro** (12,99 €/mes – neomejeni računi, pošiljanje po e-pošti, AI skeniranje in AI branja PDF, AI računovodja), **Pro + POS** (29,99 €/mes – plus POS blagajna, koledar, paketi, zaloga). Nadgradnja: Nastavitve → Naročnina.
+- **Paketi**: Free (do 5 računov, brez FURS, AI in e-pošte; KPO in evidenca DDV sta na voljo vsem), **Pro** (12,99 €/mes – neomejeni računi, FURS, pošiljanje po e-pošti, AI skeniranje in AI branja PDF, AI računovodja), **Pro + POS** (29,99 €/mes – plus POS blagajna, koledar, paketi, zaloga). Nov račun ima 14 dni preizkusa Pro + POS. Nova pravila paketov veljajo samo za račune, odprte po oktobru 2026 – prej odprti delujejo kot doslej (`portal-stripe.md`). Nadgradnja: Nastavitve → Naročnina.
 - **Nastavitve portala** odpreš s klikom na **ime podjetja spodaj v levem meniju**. **Nastavitve blagajne** so v blagajni: levi meni → **Nastavitve**. To sta različni mesti.
 - **Vloge v portalu**: Lastnik, Admin, Blagajnik (samo POS), Gledalec, Računovodja. **Osebje blagajne** se prijavlja s PIN-om (Lastnik, Vodja, Blagajnik, Trener, Terapevt).
 - **Meni** prikazuje samo module, izbrane ob registraciji; manjkajoč modul vklopiš z **Prilagodi meni**.
@@ -40,7 +40,7 @@ Računko je slovenska aplikacija za s.p. in manjša podjetja: **portal** (račun
 | portal-zaposleni.md | plače, plačilne liste, REK-1, dopust, potni stroški, regres, potni nalogi, evidenca časa |
 | portal-evidence-porocila.md | poročila, statistika, kilometrina, zaloge v portalu, amortizacija, reprezentanca, službeni avto |
 | izvoz-racunovodja.md | izvoz XLSX/CSV (Vasco, Pantheon), portal računovodje, povabilo računovodje |
-| portal-stripe.md | Stripe na treh mestih: plačila s kartico, integracija (uvoz plačil), naročnina |
+| portal-stripe.md | Stripe na treh mestih: plačila s kartico, integracija (uvoz plačil), naročnina, preizkus in nova pravila paketov |
 | portal-nastavitve.md | razdelki nastavitev, profil in logotip, DDV & prispevki, 2FA, API ključi, prenosi |
 | portal-pregled-ai.md | nadzorna plošča, vodič, rokovnik, opomniki, AI računovodja, pomoč, onboarding |
 
@@ -60,3 +60,4 @@ Ta seznam asistent prikaže kot hitre bližnjice (vrstni red je pomemben, prvih 
 - Kako uvozim bančni izpisek? | portal-stroski-banka-kartice.md | portal
 - Kako oddam DDV-O? | portal-kpo-ddv-davki.md | portal
 - Kako povabim računovodjo? | izvoz-racunovodja.md | portal
+- Kaj se zgodi, ko poteče brezplačni preizkus? | portal-stripe.md | vse

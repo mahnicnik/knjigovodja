@@ -7,7 +7,7 @@ koda:
   - apps/web/app/izvoz/page.tsx, apps/web/app/api/exports/accounting/route.ts, apps/web/lib/accounting-export.ts
   - apps/web/app/racunovodja/page.tsx, apps/web/app/racunovodja/[orgId]/page.tsx
   - apps/web/components/nastavitve/Ekipa.tsx (povabilo z vlogo Računovodja)
-posodobljeno: 2026-10-05
+posodobljeno: 2026-10-06
 ---
 
 # Izvoz za računovodjo in portal računovodje
@@ -22,6 +22,8 @@ posodobljeno: 2026-10-05
 3. **📥 Prenesi datoteke** ali **📧 Pošlji računovodji** (e-mail računovodje in neobvezno ime).
 
 KIR/KPR sta razčlenjena po dejanskih stopnjah DDV (22 %, 9,5 %, 5 %, 0 %, pavšalno nadomestilo 8 %); »DDV za plačilo« v rekapitulaciji je enak kot na strani DDV obračun.
+
+Pri računih, odprtih po oktobru 2026, je izvoz za računovodjo del paketa **Pro** (in Pro + POS). Pri prej odprtih računih se nič ne spremeni.
 
 ## Povabilo računovodje (lastnik)
 
