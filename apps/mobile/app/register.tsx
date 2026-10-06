@@ -23,29 +23,21 @@ export default function RegisterScreen() {
     }
     setLoading(true);
     try {
+      // POPRAVLJENO (revizija paketov, 6.10.2026): organizacijo in clanstvo
+      // ustvari sprozilec handle_new_user ob signUp (z 14-dnevnim preizkusom).
+      // Prej je aplikacija vstavila se DRUGO organizacijo, kar je RLS zavrnil
+      // (.insert().select() - uporabnik se ni bil clan) in registracija je
+      // padla z napako. Ime podjetja in davcna gresta zdaj v metapodatke, iz
+      // katerih ju prebere handle_new_user (migracija 182).
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { full_name: fullName } },
+        options: { data: { full_name: fullName, org_name: orgName, tax_number: taxNumber } },
       });
 
       if (authError || !authData.user) throw authError;
 
       const userId = authData.user.id;
-
-      const { data: org, error: orgError } = await supabase
-        .from('organizations')
-        .insert({ name: orgName, tax_number: taxNumber, email })
-        .select()
-        .single();
-
-      if (orgError || !org) throw orgError;
-
-      await supabase.from('org_members').insert({
-        org_id: org.id,
-        user_id: userId,
-        role: 'owner',
-      });
 
       await supabase.from('user_profiles').insert({
         id: userId,
