@@ -7,6 +7,7 @@ import { buildInvoiceEmailHtml } from '@/lib/invoice-email'
 import { logotipZaEmail, logoNastavitve } from '@/lib/logotip'
 // PRELET 281: generator e-racuna po uradni shemi e-SLOG 2.0.
 import { zgradiESlogXml } from '@/lib/e-slog'
+import { imaPro } from '@/lib/paket'
 
 export async function POST(
   request: NextRequest,
@@ -63,9 +64,7 @@ export async function POST(
     }
 
     // Preveri subscription - email pošiljanje je samo Pro
-    const subStatus = org.subscription_status || 'free'
-    const isPro = subStatus === 'pro' || subStatus === 'pro_pos'
-    if (!isPro) {
+    if (!imaPro(org)) {
       return NextResponse.json({ error: 'Pošiljanje računov po emailu je na voljo samo v Pro paketu.' }, { status: 403 })
     }
 

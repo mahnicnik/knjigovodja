@@ -6,6 +6,7 @@ import { cookies } from 'next/headers'
 import { resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 import { MODEL_ASISTENTA, sistemskiBloki, ociscenaZgodovina } from '@/lib/kb/asistent'
 import { BAZA_ZNANJA } from '@/lib/kb/baza.generated'
+import { efektivniPaket, STOLPCI_PAKETA } from '@/lib/paket'
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -41,10 +42,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })
     }
 
-    const member = await resolveActiveOrg(supabase, user.id, getRequestedOrgId(request), 'name, subscription_status')
+    const member = await resolveActiveOrg(supabase, user.id, getRequestedOrgId(request), 'name, ' + STOLPCI_PAKETA)
     const org = (member as any)?.organizations
-    const subStatus = org?.subscription_status
-    const planLabel = subStatus === 'pro_pos' ? 'Pro + POS' : subStatus === 'pro' ? 'Pro' : 'Brezplačen (Free)'
+    const paket = efektivniPaket(org)
+    const planLabel = paket === 'pro_pos' ? 'Pro + POS' : paket === 'pro' ? 'Pro' : 'Brezplačen (Free)'
 
     const { messages, currentPath } = await request.json()
     const zgodovina = ociscenaZgodovina(messages)

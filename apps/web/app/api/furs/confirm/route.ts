@@ -4,6 +4,7 @@ import { cookies } from 'next/headers'
 import { createClient as createAdmin } from '@supabase/supabase-js'
 import { confirmIssuedInvoiceWithFurs } from '@/lib/furs-invoice-confirm'
 import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
+import { imaPro, STOLPCI_PAKETA } from '@/lib/paket'
 
 async function getSupabase() {
   const cookieStore = await cookies()
@@ -42,11 +43,10 @@ export async function POST(req: NextRequest) {
 
     const { data: org0 } = await supabase
       .from('organizations')
-      .select('subscription_status')
+      .select(STOLPCI_PAKETA)
       .eq('id', member.org_id)
       .single()
-    const isPro = org0?.subscription_status === 'pro' || org0?.subscription_status === 'pro_pos'
-    if (!isPro) {
+    if (!imaPro(org0)) {
       return NextResponse.json({ error: 'FURS fiskalizacija je na voljo samo v Pro paketu.' }, { status: 403 })
     }
 
