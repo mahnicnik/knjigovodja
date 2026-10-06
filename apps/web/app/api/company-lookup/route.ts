@@ -1,17 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
+import { poisciPodjetje } from '@/lib/register-zavezancev'
+
+export const dynamic = 'force-dynamic'
 
 /**
- * Iskanje podatkov o podjetju po davcni stevilki (posrednik do zunanjega API).
+ * Iskanje podatkov o podjetju po davcni stevilki.
  *
- * POPRAVLJENO (16.8.2026), tri pomanjkljivosti:
- *  1. Endpoint je bil ODPRT - klical ga je lahko kdorkoli brez prijave.
- *     Kot odprt posrednik je omogocal, da nekdo prek nase domene obremenjuje
- *     zunanji API (in tvega, da nas ta blokira).
- *  2. Vnos se je vstavil NEPOSREDNO v naslov, brez kodiranja. Znak "&" v
- *     vnosu je lahko dodal svoje parametre in spremenil poizvedbo.
- *  3. Ni bilo preverbe oblike - poslalo se je karkoli.
+ * Oktober 2026: vir je register davcnih zavezancev FURS (tabela
+ * register_zavezancev, polni /api/cron/register-zavezancev), ce zavezanca ni,
+ * se VIES (samo zavezanci za DDV, omejitev 5 s). Nekdanji zunanji
+ * slo-podjetja-api.eu ne deluje vec in je odstranjen. FURS nima TRR, zato je
+ * transakcijski_računi vedno null.
+ *
+ * Varnost (16.8.2026): zahteva prijavo, vnos mora biti 8 mest (lahko s SI).
  */
 export async function GET(req: NextRequest) {
   // 1. Zahtevamo prijavo
@@ -41,16 +45,13 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // 3. Kodiranje vnosa, da ne more spremeniti poizvedbe
-    const res = await fetch(
-      `https://slo-podjetja-api.eu/api?search=${encodeURIComponent(ocisceno)}&limit=1`,
-      { headers: { 'User-Agent': 'Racunko/1.0' }, next: { revalidate: 3600 } },
-    )
-    if (!res.ok) return NextResponse.json({ error: 'API napaka' }, { status: 500 })
-    const data = await res.json()
-    if (!data || data.length === 0) return NextResponse.json({ error: 'Ni najdeno' }, { status: 404 })
-    return NextResponse.json(data[0])
+    // Tabela je dostopna samo s service role (RLS brez politik).
+    const db = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+    const podatki = await poisciPodjetje(ocisceno, { db })
+    if (!podatki) return NextResponse.json({ error: 'Ni najdeno' }, { status: 404 })
+    return NextResponse.json(podatki)
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    console.error('[company-lookup]', e?.message)
+    return NextResponse.json({ error: 'Iskanje trenutno ni na voljo' }, { status: 500 })
   }
 }

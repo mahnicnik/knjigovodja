@@ -476,7 +476,8 @@ export default function EditInvoicePage() {
       if (!res.ok) throw new Error('Ni najdeno')
       const data = await res.json()
       if (data?.dolgo_ime) {
-        setClientName(data.dolgo_ime)
+        // FURS: dolgo_ime je uradno (VELIKE crke), ime_berljivo predlog za racun; TRR register nima.
+        setClientName(data.ime_berljivo || data.dolgo_ime)
         if (data.naslov) setClientAddress(data.naslov + (data['pošta'] ? ', ' + data['pošta'] : ''))
         if (data.transakcijski_računi) setClientIban(data.transakcijski_računi)
       } else {
