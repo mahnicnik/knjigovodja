@@ -46,7 +46,7 @@ Nobena organizacija nima `trial_ends_at` ali `stripe_subscription_id`. Zaradi 9f
 ## 4. Izpuščeno in zakaj
 
 1. **K1 (vpis v tujo organizacijo) in K2 (lastnik sam spremeni paket) ostaneta odprta za OBSTOJEČE organizacije.** Po pravilu 1 in točki A se zanje ne sme spremeniti nič; zaprta sta samo za nove. To je resna varnostna luknja (dostop do podatkov vseh 8 organizacij, tudi ŠIRM) – **potrebna je tvoja izrecna odločitev**, da se politika `users_can_insert_members` (`WITH CHECK true`) zapre tudi za obstoječe.
-2. **Napačne prikazane cene** (`UpgradeModal` 9,99/24,99 €, `Prenosi` 24,99 €, neuporabljen `ProGate`) in kartica Free v Nastavitvah (»Neomejeni računi«, »FURS fiskalizacija«) – niso bile na seznamu odločitev, cene so na seznamu »ne spreminjaj«. Popravek je samo besedilo (zaračuna se vedno cena v Stripu); čaka tvojo odločitev.
+2. **Napačne prikazane cene** (`UpgradeModal` popravljen na 12,99/29,99 € po potrditvi lastnika; ostaja `Prenosi` 24,99 €, neuporabljen `ProGate`) in kartica Free v Nastavitvah (»Neomejeni računi«, »FURS fiskalizacija«) – niso bile na seznamu odločitev, cene so na seznamu »ne spreminjaj«. Popravek je samo besedilo (zaračuna se vedno cena v Stripu); čaka tvojo odločitev.
 3. **Supabase branch**: `create_branch` je dvakrat potekel (timeout), branch ni nastal (verjetno branching na projektu ni omogočen). Migracija in 182_down sta zato preizkušeni na lokalnem PostgreSQL 16 s posnetkom produkcijskih politik/funkcij (24/24). Preverjeno (samo branje) na produkciji: vsi uporabljeni stolpci obstajajo, imena funkcij/politik niso zasedena. **Testa obstoječe Pro + POS s FURS in Z-poročilom na branchu ni bilo mogoče izvesti** – za to omogoči branching ali obnovi projekt »racunko test« in povej, naj nadaljujem.
 4. **Nove preverbe v `api/pos/import-delivery`, `api/pos/parse-cenik`, `api/furs/confirm`** niso dodane – tam preverba paketa že obstaja; nova bi dodala samo upoštevanje izteklega preizkusa (≤ 24 h do nočnega pg_cron). Manj posegov v POS/FURS.
 5. **`lib/stripe-connect.ts`** (QR plačilo, zahtevki) nespremenjen – iztekel preizkus nove org. ostane do nočnega pg_cron.
@@ -68,7 +68,7 @@ Nobena organizacija nima `trial_ends_at` ali `stripe_subscription_id`. Zaradi 9f
 |---|---|---|---|---|
 | Landing `components/landing/podatki.ts` | 12,99 € | 129,90 € | 29,99 € | 299,90 € |
 | Nastavitve → Naročnina, `UpgradeButton` | 12,99 € | 129,90 € | 29,99 € | 299,90 € |
-| `UpgradeModal` (okno ob omejitvi) | **9,99 €** | – | **24,99 €** | – |
+| `UpgradeModal` (okno ob omejitvi) | 12,99 € (popravljeno, prej 9,99) | – | 29,99 € (popravljeno, prej 24,99) | – |
 | `Prenosi` | – | – | **24,99 €** | – |
 | Stripe (env v Vercelu, vrednosti so skrite) | `STRIPE_PRO_PRICE_ID` (prod + preview) | `STRIPE_PRO_YEARLY_PRICE_ID` (**samo prod**) | `STRIPE_PRO_POS_PRICE_ID` (prod + preview) | `STRIPE_PRO_POS_YEARLY_PRICE_ID` (**samo prod**) |
 

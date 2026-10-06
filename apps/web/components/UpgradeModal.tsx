@@ -99,7 +99,7 @@ export default function UpgradeModal({ open, onClose, feature, requiredPlan = 'p
                 <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>Za aktivne s.p.</div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 22, fontWeight: 800, color: '#0D1F12' }}>€9.99</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#0D1F12' }}>12,99 €</div>
                 <div style={{ fontSize: 11, color: '#888' }}>/mesec</div>
               </div>
             </div>
@@ -140,7 +140,7 @@ export default function UpgradeModal({ open, onClose, feature, requiredPlan = 'p
                 <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>Za blagajne & fitness</div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 22, fontWeight: 800, color: '#0D1F12' }}>€24.99</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#0D1F12' }}>29,99 €</div>
                 <div style={{ fontSize: 11, color: '#888' }}>/mesec</div>
               </div>
             </div>
