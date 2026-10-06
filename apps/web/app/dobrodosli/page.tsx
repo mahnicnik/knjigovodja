@@ -4,7 +4,6 @@ import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
-import { imaPro, imaPos } from '@/lib/paket'
 
 const CHECKLIST = [
   {
@@ -81,8 +80,8 @@ export default function DobrodosliPage() {
   }
 
   const progress = Math.round((done.length / CHECKLIST.length) * 100)
-  const isProPos = imaPos(org)
-  const isPro = imaPro(org)
+  const isProPos = org?.subscription_status === 'pro_pos'
+  const isPro = org?.subscription_status === 'pro' || isProPos
 
   return (
     <div style={{ minHeight: '100vh', background: '#F7F6F2', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 16px' }}>

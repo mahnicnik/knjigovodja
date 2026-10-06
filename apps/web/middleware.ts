@@ -25,7 +25,6 @@ import { createServerClient } from '@supabase/ssr'
 // dashboard je lastnikov pregled poslovanja, racunovodja ima svoj portal
 // na /racunovodja.
 import { ROLE_ALLOWED_PREFIXES, ROLE_HOME, isPathAllowedForRole } from '@/lib/role-access'
-import { dovoljeno, funkcijaZaPot, STOLPCI_PAKETA } from '@/lib/paket'
 
 // Poti, ki jih middleware sploh ne preverja (javne strani, staticne datoteke, auth).
 const PUBLIC_PREFIXES = [
@@ -131,36 +130,11 @@ export async function middleware(req: NextRequest) {
   // torej ravno v primeru, ko so omejitve najbolj potrebne, jih ni bilo.
   const { data: members } = await supabase
     .from('org_members')
-    .select(`role, organizations(${STOLPCI_PAKETA})`)
+    .select('role')
     .eq('user_id', user.id)
 
   const roles = (members ?? []).map((m: any) => m.role).filter(Boolean)
   if (roles.length === 0) return res // ni clan organizacije - naj to obravnava sama stran
-
-  /**
-   * PAKET (revizija paketov, 6.10.2026)
-   *
-   * /pos, /zaloge, /ai, /scan in /banka so v celoti funkcija placljivega
-   * paketa (lib/paket.ts, STRANI_PAKETA). Prej jih je odprl vsak paket -
-   * blagajno tudi namizna aplikacija na Free.
-   *
-   * Aktivna organizacija je v localStorage, ki ga middleware ne vidi, zato
-   * velja najugodnejse clanstvo: stran se odpre, ce jo dovoli VSAJ ENA
-   * organizacija uporabnika. Natancno preverbo (za aktivno organizacijo)
-   * naredijo API poti same.
-   *
-   * REWRITE in ne redirect: namizna aplikacija vsako drugo pot vrne na /pos,
-   * zato bi preusmeritev povzrocila neskoncno zanko.
-   */
-  const funkcija = funkcijaZaPot(pathname)
-  if (funkcija && !(members ?? []).some((m: any) => dovoljeno(m.organizations, funkcija))) {
-    const url = req.nextUrl.clone()
-    url.pathname = '/paket'
-    url.search = `?funkcija=${funkcija}`
-    const prepis = NextResponse.rewrite(url)
-    res.cookies.getAll().forEach((c) => prepis.cookies.set(c))
-    return prepis
-  }
 
   // Ce je uporabnik nekje lastnik/admin, ima poln dostop (svoje podjetje) -
   // omejimo samo, kadar so VSA clanstva omejenih vlog.

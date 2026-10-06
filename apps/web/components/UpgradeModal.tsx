@@ -99,12 +99,12 @@ export default function UpgradeModal({ open, onClose, feature, requiredPlan = 'p
                 <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>Za aktivne s.p.</div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 22, fontWeight: 800, color: '#0D1F12' }}>12,99 €</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#0D1F12' }}>€9.99</div>
                 <div style={{ fontSize: 11, color: '#888' }}>/mesec</div>
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
-              {['Neomejeni računi', 'Pošiljanje po e-pošti', 'FURS fiskalizacija', 'Skener stroškov in AI računovodja'].map(f => (
+              {['Neomejeni računi', 'Email pošiljanje', 'FURS fiskalizacija', 'Dobavnice'].map(f => (
                 <div key={f} style={{ fontSize: 12, color: '#444', display: 'flex', gap: 8 }}>
                   <span style={{ color: '#1D9E75', fontWeight: 700 }}>✓</span> {f}
                 </div>
@@ -124,9 +124,7 @@ export default function UpgradeModal({ open, onClose, feature, requiredPlan = 'p
             </button>
           </div>
 
-          {/* Pro + POS
-              Revizija paketov: cene so bile 9,99 / 24,99 EUR (stari cenik),
-              Stripe pa zaracuna 12,99 / 29,99 EUR (components/landing/podatki.ts). */}
+          {/* Pro + POS */}
           <div
             onClick={() => !loading && handleUpgrade('pro_pos')}
             style={{
@@ -142,7 +140,7 @@ export default function UpgradeModal({ open, onClose, feature, requiredPlan = 'p
                 <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>Za blagajne & fitness</div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 22, fontWeight: 800, color: '#0D1F12' }}>29,99 €</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#0D1F12' }}>€24.99</div>
                 <div style={{ fontSize: 11, color: '#888' }}>/mesec</div>
               </div>
             </div>

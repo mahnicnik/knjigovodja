@@ -14,7 +14,6 @@ import { formatEurNumber } from '@/lib/format'
 // PRELET 360: zahtevek za placilo (Stripe) iz istega obrazca.
 import { VrstaDokumenta, ZahtevekPoShranitvi, ZahtevekQrZaslon, useZahtevkiNaVoljo, type ZahtevekPortal } from '@/components/zahtevki/Zahtevek'
 import { klicStripe } from '@/lib/stripe-connect-odjemalec'
-import { imaPro, BREZPLACNI_RACUNI } from '@/lib/paket'
 
 interface LineItem {
   description: string
@@ -134,8 +133,7 @@ export default function NewInvoicePage() {
         if (!o.vat_registered) {
           setItems(prev => prev.map(item => ({ ...item, vat_rate: 0 })))
         }
-        // Revizija paketov: stejejo se samo racuni (ne dobropisi/dobavnice) - kot v bazi.
-        const { count } = await supabase.from('issued_invoices').select('*', { count: 'exact', head: true }).eq('org_id', o.id).eq('invoice_type', 'invoice')
+        const { count } = await supabase.from('issued_invoices').select('*', { count: 'exact', head: true }).eq('org_id', o.id)
         setInvoiceCount(count || 0)
         // POPRAVLJENO (24.7.2026): atomarna RPC namesto count(*)+1, ki se
         // je pokvaril ob vrzelih v obstojecih stevilkah (samodejno se
@@ -244,10 +242,9 @@ export default function NewInvoicePage() {
 
   async function handleSave(status: 'draft' | 'sent', overrideNumber?: string) {
     if (!org) return
-    // Brezplacni paket: najvec 5 racunov SKUPAJ. To je samo prijaznost -
-    // dejansko omejitev uveljavi baza (sprozilec omeji_brezplacne_racune).
-    const isFree = !imaPro(org)
-    if (isFree && invoiceCount >= BREZPLACNI_RACUNI) {
+    // Free plan limit: max 5 računov
+    const isFree = !['pro', 'pro_pos'].includes(org.subscription_status)
+    if (isFree && invoiceCount >= 5) {
       setShowUpgradeModal(true)
       setLoading(false)
       return
@@ -288,8 +285,6 @@ export default function NewInvoicePage() {
       }
       if (isDuplicate) {
         alert(`Račun s številko "${numberToUse}" že obstaja. Spremenite številko računa in poskusite znova.`)
-      } else if (error.message.includes('Brezplačni paket omogoča')) {
-        setShowUpgradeModal(true)
       } else {
         alert('Napaka: ' + error.message)
       }

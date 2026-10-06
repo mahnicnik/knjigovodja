@@ -5,7 +5,6 @@ import { cookies } from 'next/headers'
 import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 import { navodiloRazvrscanja, dopolniRazvrstitev, prejsnjaRazvrstitev, kontekstPodjetja } from '@/lib/konti'
 import { NAVODILO_DDV, normalizirajAiDdv } from '@/lib/prejeti-ddv'
-import { imaPro, STOLPCI_PAKETA } from '@/lib/paket'
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -23,8 +22,9 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })
     }
-    const member = await resolveActiveOrg(supabase, user.id, getRequestedOrgId(request), STOLPCI_PAKETA + ', name, pos_profile, vat_registered') // vec-org podpora (30.7.2026)
-    const isPro = imaPro((member as any)?.organizations)
+    const member = await resolveActiveOrg(supabase, user.id, getRequestedOrgId(request), 'subscription_status, name, pos_profile, vat_registered') // vec-org podpora (30.7.2026)
+    const subStatus = (member as any)?.organizations?.subscription_status
+    const isPro = subStatus === 'pro' || subStatus === 'pro_pos'
     if (!isPro) {
       return NextResponse.json({ error: 'AI skeniranje računov je na voljo samo v Pro paketu.' }, { status: 403 })
     }

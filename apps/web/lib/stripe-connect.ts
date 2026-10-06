@@ -23,7 +23,6 @@
 import Stripe from 'stripe'
 import { createClient as ustvariAdmin, type SupabaseClient } from '@supabase/supabase-js'
 import { prostorZaPortal } from '@/lib/furs-invoice-confirm'
-import { efektivniPaket } from '@/lib/paket'
 
 export const CONNECT_API_VERZIJA = '2026-04-22.dahlia'
 
@@ -141,11 +140,10 @@ export type Pogoji = {
 export async function preveriPogoje(admin: SupabaseClient, orgId: string): Promise<Pogoji> {
   const { data: org } = await admin
     .from('organizations')
-    .select('id, subscription_status, trial_ends_at, stripe_subscription_id, furs_demo_mode, furs_test_mode, stripe_account_id, stripe_charges_enabled, stripe_account_livemode')
+    .select('id, subscription_status, furs_demo_mode, furs_test_mode, stripe_account_id, stripe_charges_enabled, stripe_account_livemode')
     .eq('id', orgId)
     .maybeSingle()
-  // Revizija paketov: efektivni paket (iztekel preizkus = free).
-  const status = efektivniPaket(org)
+  const status = String(org?.subscription_status || 'free')
   const demo = !!org?.furs_demo_mode
   let fursOk = false
   let fursRazlog: string | null = null
@@ -186,7 +184,7 @@ export async function preveriPogoje(admin: SupabaseClient, orgId: string): Promi
     fursRazlogPortal,
     demo,
     paketPos: status === 'pro_pos',
-    paketPortal: status !== 'free',
+    paketPortal: status === 'pro' || status === 'pro_pos',
     accountId: racun,
   }
 }

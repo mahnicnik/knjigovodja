@@ -15,10 +15,9 @@ export const ROLE_ALLOWED_PREFIXES: Record<string, string[]> = {
   // posameznih postavk. Pri delu potrebuje vpogled v KPO knjigo, izdane racune
   // in stroske - tudi zato, ker se promet iz banke in kartic ne shranjuje
   // loceno, ampak se zapise prav v KPO.
-  // '/paket' (revizija paketov): obvestilo, da funkcija ni v paketu organizacije.
-  accountant: ['/racunovodja', '/izvoz', '/invite', '/profil', '/kpo', '/invoices', '/expenses', '/paket'],
-  cashier: ['/pos', '/invite', '/profil', '/paket'],
-  viewer: ['/racunovodja', '/izvoz', '/pos', '/invite', '/profil', '/paket'],
+  accountant: ['/racunovodja', '/izvoz', '/invite', '/profil', '/kpo', '/invoices', '/expenses'],
+  cashier: ['/pos', '/invite', '/profil'],
+  viewer: ['/racunovodja', '/izvoz', '/pos', '/invite', '/profil'],
 }
 
 /**

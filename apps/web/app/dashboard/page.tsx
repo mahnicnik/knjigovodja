@@ -13,7 +13,6 @@ import { formatEurNumber } from '@/lib/format'
 import { naloziDdvPodatke, izracunajDdvIzPodatkov, razponObdobja, tekoceObdobje, shemaObracuna, obdobjeZaPrijavo, oznakaObdobja, rokOddaje, jeMesecOddaje } from '@/lib/ddv'
 import OrgSwitcher from '@/components/OrgSwitcher'
 import AppLayout from '@/components/AppLayout'
-import { efektivniPaket } from '@/lib/paket'
 
 /* ================================================================
    RAČUNKO DASHBOARD V6 — Faza 2
@@ -960,7 +959,7 @@ export default function DashboardPage() {
     const diffMs = end.getTime() - now.getTime()
     const daysLeft = Math.ceil(diffMs / 86400000)
     if (daysLeft <= 0) return null
-    return { daysLeft, planLabel: efektivniPaket(org) === 'pro' ? 'Pro' : 'Pro + POS' }
+    return { daysLeft, planLabel: org.subscription_status === 'pro' ? 'Pro' : 'Pro + POS' }
   }, [org, now])
 
   async function handleTrialUpgrade() {
@@ -970,7 +969,7 @@ export default function DashboardPage() {
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: efektivniPaket(org) === 'pro' ? 'pro' : 'pro_pos', period: 'monthly' }),
+        body: JSON.stringify({ plan: org?.subscription_status === 'pro' ? 'pro' : 'pro_pos', period: 'monthly' }),
       })
       const data = await res.json()
       if (data.url) { window.location.href = data.url; return }

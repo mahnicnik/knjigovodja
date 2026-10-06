@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { imaPos, STOLPCI_PAKETA } from '@/lib/paket'
-import { resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -27,9 +25,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })
     }
 
-    // Revizija paketov: aktivna organizacija in efektivni paket.
-    const member = await resolveActiveOrg(supabase, user.id, getRequestedOrgId(request), STOLPCI_PAKETA)
-    if (!imaPos(member.organizations)) {
+    const { data: member } = await supabase
+      .from('org_members')
+      .select('organizations(subscription_status)')
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    const subStatus = (member as any)?.organizations?.subscription_status
+    if (subStatus !== 'pro_pos') {
       return NextResponse.json({ error: 'Uvoz cenika je na voljo samo v Pro + POS paketu.' }, { status: 403 })
     }
 

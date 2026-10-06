@@ -20,7 +20,7 @@ $$ select nullif(auth.jwt() ->> 'sub', '')::uuid $$;
 create or replace function auth.role() returns text language sql stable as
 $$ select auth.jwt() ->> 'role' $$;
 
-create table auth.users (id uuid primary key, email text);
+create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}');
 grant usage on schema auth to authenticated, service_role;
 
 create table public.organizations (
@@ -33,6 +33,15 @@ create table public.organizations (
   stripe_subscription_id text,
   trial_ends_at timestamptz,
   plan_expires_at timestamptz,
+  tax_number text,
+  pos_business_id uuid,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+create table public.orders (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid,
+  total numeric default 0,
   created_at timestamptz default now()
 );
 create table public.org_members (
@@ -59,6 +68,44 @@ create table public.issued_invoices (
   status text default 'draft'
 );
 
+create or replace function public.update_updated_at() returns trigger language plpgsql as
+$$ begin new.updated_at := now(); return new; end $$;
+create trigger upd_organizations before update on public.organizations
+  for each row execute function public.update_updated_at();
+
+-- Prepisano iz produkcije (6.10.2026).
+create or replace function public.current_user_business_ids() returns setof uuid
+language sql security definer as $$
+  SELECT pos_business_id FROM organizations
+  WHERE id IN (SELECT org_id FROM org_members WHERE user_id = auth.uid())
+  AND pos_business_id IS NOT NULL
+  UNION
+  SELECT id FROM organizations WHERE id IN (
+    SELECT org_id FROM org_members WHERE user_id = auth.uid()
+  );
+$$;
+
+-- handle_new_user iz produkcije (6.10.2026), pred migracijo 182.
+create or replace function public.handle_new_user() returns trigger
+language plpgsql security definer as $function$
+declare
+  v_org_id uuid;
+  v_full_name text;
+  v_org_name text;
+begin
+  v_full_name := coalesce(new.raw_user_meta_data->>'full_name', '');
+  v_org_name := coalesce(nullif(v_full_name, ''), split_part(new.email, '@', 1)) || ' s.p.';
+  insert into public.organizations (name, plan, subscription_status, trial_ends_at)
+  values (v_org_name, 'solo', 'pro_pos', now() + interval '14 days')
+  returning id into v_org_id;
+  insert into public.org_members (org_id, user_id, role)
+  values (v_org_id, new.id, 'owner');
+  return new;
+end;
+$function$;
+create trigger on_auth_user_created after insert on auth.users
+  for each row execute function public.handle_new_user();
+
 create or replace function public.get_user_org_ids() returns setof uuid
 language sql stable security definer as
 $$ select org_id from org_members where user_id = auth.uid() $$;
@@ -67,6 +114,10 @@ alter table public.organizations enable row level security;
 alter table public.org_members enable row level security;
 alter table public.org_invites enable row level security;
 alter table public.issued_invoices enable row level security;
+alter table public.orders enable row level security;
+create policy "Business scope" on public.orders for all
+  using (business_id in (select current_user_business_ids()))
+  with check (business_id in (select current_user_business_ids()));
 
 create policy "Users can insert org" on public.organizations for insert with check (true);
 create policy "Users can select own org" on public.organizations for select

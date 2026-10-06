@@ -6,12 +6,12 @@ poti: [/pos]
 koda:
   - apps/web/app/pos/page.tsx (KlasikApp, PremiseSelectScreen, PrvaNastavitev, LockScreen, SideNav, SCREENS, CFG.profiles)
   - apps/web/app/pos/page.tsx (OpenCashModal, VmesnoStanjeModal, CloseCashModal)
-posodobljeno: 2026-10-06
+posodobljeno: 2026-10-05
 ---
 
 # POS blagajna – zagon, prijava, meni in izmena
 
-POS blagajna je del Računka na poti `/pos` (v portalu: meni **Blagajna → POS blagajna**). Na voljo je v paketu **Pro + POS** (tudi med 14-dnevnim preizkusom). Brez tega paketa se namesto blagajne prikaže »Ta funkcija je na voljo v paketu Pro + POS« s povezavo **Nastavitve → Naročnina** – tudi v namizni aplikaciji. Dnevni zaključki in izdani računi blagajne ostanejo vidni v portalu. Deluje v brskalniku, kot namizna aplikacija za Windows in na telefonu.
+POS blagajna je del Računka na poti `/pos` (v portalu: meni **Blagajna → POS blagajna**). Na voljo je v paketu **Pro + POS**. Deluje v brskalniku, kot namizna aplikacija za Windows in na telefonu.
 
 ## Prvi zagon na napravi
 
