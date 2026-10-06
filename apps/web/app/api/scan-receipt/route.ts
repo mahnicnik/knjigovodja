@@ -5,6 +5,7 @@ import { cookies } from 'next/headers'
 import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 import { navodiloRazvrscanja, dopolniRazvrstitev, prejsnjaRazvrstitev, kontekstPodjetja } from '@/lib/konti'
 import { NAVODILO_DDV, normalizirajAiDdv } from '@/lib/prejeti-ddv'
+import { zahtevajPaket } from '@/lib/paket'
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -28,6 +29,11 @@ export async function POST(request: NextRequest) {
     if (!isPro) {
       return NextResponse.json({ error: 'AI skeniranje računov je na voljo samo v Pro paketu.' }, { status: 403 })
     }
+
+    // REVIZIJA PAKETOV (migracija 182): DODANA preverba za nove organizacije
+    // (npr. iztekel preizkus). Za obstojece organizacije vedno dovoljeno.
+    const zavrnjenoPaket = member.orgId ? await zahtevajPaket(supabase, member.orgId, 'skener', 'Skener stroškov') : null
+    if (zavrnjenoPaket) return zavrnjenoPaket
     const { image, mediaType, pdfBase64 } = await request.json()
 
     // PRELET 339: razvrstitev po kontih (lib/konti) + uporabnikove pretekle odlocitve.

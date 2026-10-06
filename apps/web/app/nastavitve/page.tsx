@@ -40,6 +40,7 @@ function stStevilo(v: any): number {
 import AppLayout from '@/components/AppLayout'
 import UradnoIme from '@/components/nastavitve/UradnoIme'
 import { VAT_EXEMPTIONS, VAT_EXEMPTION_GROUPS, findVatExemption } from '@/lib/vat-exemptions'
+import { jeVPreizkusu } from '@/lib/paket'
 
 const SP_CONTRIBUTIONS: Record<number, number> = {
   1: 2584.92, 2: 3012.36, 3: 3439.20, 4: 3866.04, 5: 4293.00,
@@ -713,13 +714,21 @@ export default function NastavitevPage() {
                   {isProPos ? 'PRO + POS' : isPro ? 'PRO' : 'FREE'}
                 </span>
               </div>
+              {/* REVIZIJA PAKETOV: datum izteka preizkusa (samo preizkusi brez
+                  placila - obstojece organizacije trial_ends_at nimajo). */}
+              {jeVPreizkusu(org) && (
+                <p data-testid="preizkus-do" style={{ fontSize: 13, color: '#8a6d1f', marginBottom: 8 }}>
+                  🎁 Brezplačni preizkus do <strong>{new Date(org.trial_ends_at).toLocaleDateString('sl-SI', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>.
+                  Po izteku se zaklenejo funkcije paketa, podatki in izdani računi ostanejo.
+                </p>
+              )}
               {org.plan_expires_at && (
                 <p style={{ fontSize: 13, color: '#555', marginBottom: 8 }}>
                   Naslednje plačilo: <strong>{new Date(org.plan_expires_at).toLocaleDateString('sl-SI', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
                 </p>
               )}
               {!isPro && (
-                <p style={{ fontSize: 12, color: '#888' }}>Brezplačni plan — do 5 računov/mesec.</p>
+                <p style={{ fontSize: 12, color: '#888' }}>Brezplačni plan — do 5 računov.</p>
               )}
               {isPro && !isProPos && (
                 <p style={{ fontSize: 12, color: '#888' }}>Pro plan — neomejeni računi, email, FURS.</p>

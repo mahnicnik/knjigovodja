@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { zgradiESlogXml } from '@/lib/e-slog'
+import { dovoljeno, sporociloPaketa } from '@/lib/paket'
 
 /**
  * PRENOS E-RAČUNA (e-SLOG 2.0)
@@ -36,6 +37,9 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     const { data: org } = await supabase
       .from('organizations').select('*').eq('id', racun.org_id).maybeSingle()
     if (!org) return NextResponse.json({ error: 'Organizacija ni najdena' }, { status: 404 })
+    // REVIZIJA PAKETOV (migracija 182): DODANA preverba za nove organizacije
+    // (e-SLOG = Pro). Za obstojece vedno dovoljeno.
+    if (!dovoljeno(org, 'eslog')) return NextResponse.json({ error: sporociloPaketa('eslog', 'e-račun (e-SLOG)') }, { status: 403 })
 
     const postavke = (Array.isArray(racun.line_items) ? racun.line_items : []).map((p: any) => ({
       opis: String(p.description ?? ''),

@@ -12,6 +12,7 @@ import AppLayout from '@/components/AppLayout'
 import { formatEurNumber } from '@/lib/format'
 import PeriodFilter from '@/components/PeriodFilter'
 import { type PeriodMode, getPeriodRange } from '@/lib/period-filter'
+import { imaPro, jeObstojeca } from '@/lib/paket'
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<any[]>([])
@@ -39,6 +40,8 @@ export default function InvoicesPage() {
   const [sendModalInv, setSendModalInv] = useState<any>(null)
   const [sendSuccess, setSendSuccess] = useState('')
   const [canCreate, setCanCreate] = useState(true)
+  // Revizija paketov: vsi racuni NOVE organizacije (ne samo izbranega obdobja).
+  const [steviloRacunov, setSteviloRacunov] = useState(0)
   const supabase = createClient()
 
   // DODANO (Prelet 17, 17.8.2026): izbirnik obdobja za hitrejsi pregled,
@@ -69,6 +72,14 @@ export default function InvoicesPage() {
       setCanCreate(!['accountant', 'viewer', 'cashier'].includes((member as any).role))
       const o = (member as any).organizations
       setOrg(o)
+      // REVIZIJA PAKETOV (migracija 182): za NOVE organizacije omejitev steje
+      // VSE racune (invoice_type 'invoice'), ne glede na obdobje - kot sprozilec
+      // omeji_brezplacne_racune. Obstojece organizacije: kot doslej.
+      if (!jeObstojeca(o)) {
+        const { count: vsehRacunov } = await supabase.from('issued_invoices')
+          .select('id', { count: 'exact', head: true }).eq('org_id', o.id).eq('invoice_type', 'invoice')
+        setSteviloRacunov(vsehRacunov || 0)
+      }
       const { from, to } = getPeriodRange(periodMode, customFrom, customTo)
       let query = supabase.from('issued_invoices').select('*').eq('org_id', o.id)
       if (from) query = query.gte('issue_date', from)
@@ -384,8 +395,9 @@ export default function InvoicesPage() {
 
   const totalSent = invoices.filter(i => i.status !== 'draft' && i.status !== 'cancelled').reduce((s, i) => s + Number(i.amount_total), 0)
   const totalPaid = invoices.filter(i => i.status === 'paid').reduce((s, i) => s + Number(i.amount_total), 0)
-  const isFree = !['pro', 'pro_pos'].includes(org?.subscription_status)
-  const invoiceCount = invoices.length
+  const novaPravila = !jeObstojeca(org)
+  const isFree = novaPravila ? !imaPro(org) : !['pro', 'pro_pos'].includes(org?.subscription_status)
+  const invoiceCount = novaPravila ? steviloRacunov : invoices.length
   const atLimit = isFree && invoiceCount >= 5
   const totalUnpaid = invoices.filter(i => i.status === 'sent' || i.status === 'overdue').reduce((s, i) => s + Number(i.amount_total), 0)
 

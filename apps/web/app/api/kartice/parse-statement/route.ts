@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
+import { zahtevajPaket } from '@/lib/paket'
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -41,6 +42,11 @@ export async function POST(request: NextRequest) {
     if (!isPro) {
       return NextResponse.json({ error: 'Skeniranje kartičnih obračunov je na voljo samo v Pro paketu.' }, { status: 403 })
     }
+
+    // REVIZIJA PAKETOV (migracija 182): DODANA preverba za nove organizacije
+    // (npr. iztekel preizkus). Za obstojece organizacije vedno dovoljeno.
+    const zavrnjenoPaket = member.orgId ? await zahtevajPaket(supabase, member.orgId, 'uvoz_pdf', 'Skeniranje kartičnih obračunov') : null
+    if (zavrnjenoPaket) return zavrnjenoPaket
 
     const { fileBase64, mediaType } = await request.json()
 

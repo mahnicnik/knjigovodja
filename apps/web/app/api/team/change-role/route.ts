@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { resolveActiveOrgId, getRequestedOrgId } from '@/lib/active-org-server'
+import { funkcijaVloge, zahtevajPaket } from '@/lib/paket'
 
 // NOV ENDPOINT (30.7.2026, audit K8): prej je sprememba vloge tekla
 // NEPOSREDNO iz brskalnika (supabase.from('org_members').update({role})),
@@ -54,6 +55,14 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
     if (!target || target.org_id !== caller.org_id) {
       return NextResponse.json({ error: 'Član ni najden v vaši organizaciji' }, { status: 404 })
+    }
+
+    // REVIZIJA PAKETOV (migracija 182): DODANA preverba za nove organizacije.
+    // Za obstojece vedno dovoljeno.
+    const funkcijaPaketa = funkcijaVloge(newRole)
+    if (funkcijaPaketa && newRole !== target.role) {
+      const zavrnjenoPaket = await zahtevajPaket(admin, caller.org_id, funkcijaPaketa, 'Ta vloga')
+      if (zavrnjenoPaket) return zavrnjenoPaket
     }
 
     // SAMO owner sme podeliti ALI odvzeti 'owner' vlogo - admin ne sme

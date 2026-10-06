@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Pridobi org preko org_members (ne preko owner_id)
-    const member = await resolveActiveOrg(supabase, user.id, getRequestedOrgId(request), 'id, name, stripe_customer_id, stripe_subscription_id, subscription_status') // vec-org podpora (30.7.2026)
+    const member = await resolveActiveOrg(supabase, user.id, getRequestedOrgId(request), 'id, name, stripe_customer_id, stripe_subscription_id, subscription_status, trial_ends_at') // vec-org podpora (30.7.2026)
     const memberErr = null
 
     if (memberErr || !member || !(member as any).organizations) {
@@ -84,6 +84,16 @@ export async function POST(request: NextRequest) {
       return customer.id
     }
 
+    /**
+     * REVIZIJA PAKETOV: nakup MED preizkusom se zaracuna ob izteku preizkusa,
+     * ne takoj (prej se je preostanek preizkusa izgubil). Stripe Checkout
+     * zahteva trial_end vsaj 48 ur v prihodnosti - ce je do izteka manj, se
+     * zaracuna takoj, kot doslej. Organizacije brez trial_ends_at (vse
+     * obstojece) dobijo natanko enako sejo kot prej.
+     */
+    const konecPreizkusa = org.trial_ends_at ? Math.floor(new Date(org.trial_ends_at).getTime() / 1000) : 0
+    const trialEnd = konecPreizkusa > Math.floor(Date.now() / 1000) + 48 * 3600 ? konecPreizkusa : null
+
     function ustvariSejo(customerId: string) {
       return stripe.checkout.sessions.create({
         customer: customerId,
@@ -98,6 +108,7 @@ export async function POST(request: NextRequest) {
         metadata: { org_id: org.id },
         subscription_data: {
           metadata: { org_id: org.id },
+          ...(trialEnd ? { trial_end: trialEnd } : {}),
         },
         locale: 'sl',
       })

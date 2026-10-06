@@ -1,17 +1,19 @@
 /**
  * PAKET ORGANIZACIJE – EN SAM VIR RESNICE (revizija paketov, 6.10.2026)
  *
- * Doslej je vsaka stran in vsaka API pot sama brala `subscription_status`
- * in ga primerjala s 'pro'/'pro_pos'. Dve napaki, ki ju to odpravlja:
+ * NEPREKRSLJIVO PRAVILO: za organizacije, ki so obstajale ob objavi
+ * (organizations.obstojeca_pravila = true, migracija 182), se NE spremeni
+ * nic. Vsako NOVO preverjanje paketa se zato zacne z `jeObstojeca` ->
+ * dovoljeno. Obstojece preverbe v API poteh (npr. ai-chat, furs/confirm)
+ * ostanejo nespremenjene; preverbe iz tega modula so jim samo DODANE.
  *
- *  1. `trial_ends_at` se ni upostevalo nikjer. Preizkus je zakljucil samo
- *     nocni pg_cron posel - ce ne tece, je preizkus Pro + POS trajal za vedno,
- *     do naslednjega zagona pa je imela organizacija ves dostop.
- *  2. Pravila (kaj sodi v Pro, kaj v Pro + POS) so bila razpršena po
- *     ducatu datotek in so se razhajala s cenikom.
+ * Varno tudi PRED migracijo: ce stolpca obstojeca_pravila se ni (undefined)
+ * ali organizacije ni bilo mogoce prebrati (null), velja organizacija za
+ * obstojeco - nova pravila se uveljavijo samo ob izrecnem `false`.
+ * Zato pri preverbah VEDNO beremo `select('*')`, ne seznama stolpcev:
+ * poimenovan stolpec, ki se ne obstaja, bi vrnil napako.
  *
- * Isto pravilo kot `efektivniPaket` ima baza v funkciji `efektivni_paket`
- * (migracija 182) - sprozilci v bazi in koda morata govoriti isto.
+ * Isto pravilo ima baza v `org_dovoljeno` / `efektivni_paket` (migracija 182).
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -22,10 +24,16 @@ export type OrgNarocnina = {
   subscription_status?: string | null
   trial_ends_at?: string | null
   stripe_subscription_id?: string | null
+  obstojeca_pravila?: boolean | null
 } | null | undefined
 
-/** Najvec racunov v brezplacnem paketu - SKUPAJ, ne na mesec. */
+/** Najvec racunov v brezplacnem paketu (nove organizacije) - skupaj, ne na mesec. */
 export const BREZPLACNI_RACUNI = 5
+
+/** Organizacija, ki je obstajala ob objavi (ali stanje pred migracijo): pravila kot doslej. */
+export function jeObstojeca(org: OrgNarocnina): boolean {
+  return org?.obstojeca_pravila !== false
+}
 
 /** Preizkus brez placila, ki se je ze iztekel. */
 export function jeIztekelPreizkus(org: OrgNarocnina, zdaj: Date = new Date()): boolean {
@@ -40,12 +48,14 @@ export function jeVPreizkusu(org: OrgNarocnina, zdaj: Date = new Date()): boolea
 
 /**
  * Paket, ki ga organizacija DEJANSKO ima.
- * 'cancelled', neznane vrednosti in iztekel preizkus brez placila -> 'free'.
+ * Obstojece organizacije: kot doslej - samo subscription_status.
+ * Nove: 'cancelled', neznane vrednosti in iztekel preizkus brez placila -> 'free'
+ * (takoj, ne sele po nocnem pg_cron opravilu).
  */
 export function efektivniPaket(org: OrgNarocnina, zdaj: Date = new Date()): Paket {
   const s = org?.subscription_status
   if (s !== 'pro' && s !== 'pro_pos') return 'free'
-  if (jeIztekelPreizkus(org, zdaj)) return 'free'
+  if (!jeObstojeca(org) && jeIztekelPreizkus(org, zdaj)) return 'free'
   return s
 }
 
@@ -54,11 +64,8 @@ export const imaPos = (org: OrgNarocnina, zdaj?: Date) => efektivniPaket(org, zd
 
 export const IME_PAKETA: Record<Paket, string> = { free: 'Brezplačno', pro: 'Pro', pro_pos: 'Pro + POS' }
 
-/** Stolpci, ki jih potrebuje `efektivniPaket` - za .select(). */
-export const STOLPCI_PAKETA = 'subscription_status, trial_ends_at, stripe_subscription_id'
-
 // ─────────────────────────────────────────────────────────────────
-// FUNKCIJE S CENIKA
+// FUNKCIJE S CENIKA (samo za nove organizacije)
 // ─────────────────────────────────────────────────────────────────
 
 export type Funkcija =
@@ -76,7 +83,9 @@ export function potrebenPaket(f: Funkcija): Exclude<Paket, 'free'> {
   return POTREBEN[f]
 }
 
+/** Ali sme organizacija uporabiti funkcijo. Obstojece: vedno (kot doslej). */
 export function dovoljeno(org: OrgNarocnina, f: Funkcija, zdaj?: Date): boolean {
+  if (jeObstojeca(org)) return true
   return POTREBEN[f] === 'pro' ? imaPro(org, zdaj) : imaPos(org, zdaj)
 }
 
@@ -86,26 +95,29 @@ export function sporociloPaketa(f: Funkcija, opis?: string): string {
   return `${opis ?? 'Ta funkcija'} je na voljo ${ime}. Paket izberete v Nastavitve → Naročnina.`
 }
 
+/** Funkcija s cenika, ki jo odpre povabilo z dano vlogo (null = brez omejitve). */
+export function funkcijaVloge(role: string): Funkcija | null {
+  if (role === 'accountant' || role === 'viewer') return 'racunovodja'
+  if (role === 'cashier') return 'ekipa_pin'
+  return null
+}
+
 // ─────────────────────────────────────────────────────────────────
 // STREZNIK
 // ─────────────────────────────────────────────────────────────────
 
 type Bralec = Pick<SupabaseClient, 'from'>
 
-/** Prebere organizacijo in vrne njen efektivni paket. */
-export async function naloziPaket(sb: Bralec, orgId: string): Promise<Paket> {
-  const { data } = await sb.from('organizations').select(STOLPCI_PAKETA).eq('id', orgId).maybeSingle()
-  return efektivniPaket(data)
-}
-
 /**
- * Za API poti: vrne `null`, ce je funkcija dovoljena, sicer odgovor 403.
+ * DODANA preverba za API poti: vrne `null`, ce je funkcija dovoljena, sicer 403.
+ * Obstojece organizacije, neprebrana organizacija in stanje pred migracijo
+ * -> vedno `null` (dovoljeno, kot doslej).
  *
- *   const zavrnjeno = await zahtevajPaket(supabase, orgId, 'furs', 'FURS fiskalizacija')
+ *   const zavrnjeno = await zahtevajPaket(supabase, orgId, 'izvoz', 'Izvoz za računovodjo')
  *   if (zavrnjeno) return zavrnjeno
  */
 export async function zahtevajPaket(sb: Bralec, orgId: string, f: Funkcija, opis?: string): Promise<Response | null> {
-  const { data } = await sb.from('organizations').select(STOLPCI_PAKETA).eq('id', orgId).maybeSingle()
+  const { data } = await sb.from('organizations').select('*').eq('id', orgId).maybeSingle()
   if (dovoljeno(data, f)) return null
   return Response.json({ error: sporociloPaketa(f, opis), paket: potrebenPaket(f) }, { status: 403 })
 }
@@ -115,9 +127,9 @@ export async function zahtevajPaket(sb: Bralec, orgId: string, f: Funkcija, opis
 // ─────────────────────────────────────────────────────────────────
 
 /**
- * Strani, ki so v celoti funkcija placljivega paketa. Strani z evidencami
- * (racuni, KPO, DDV, dnevni zakljucki) NISO tu: po izteku paketa morajo
- * podatki ostati berljivi (10-letna hramba), zaklene se samo funkcija.
+ * Strani, ki so v celoti funkcija placljivega paketa (samo nove organizacije).
+ * Strani z evidencami (racuni, KPO, DDV, dnevni zakljucki) NISO tu: po
+ * izteku paketa morajo podatki ostati berljivi (10-letna hramba).
  */
 export const STRANI_PAKETA: { predpona: string; funkcija: Funkcija }[] = [
   { predpona: '/pos', funkcija: 'pos' },
@@ -132,12 +144,5 @@ export function funkcijaZaPot(pathname: string): Funkcija | null {
   for (const s of STRANI_PAKETA) {
     if (pathname === s.predpona || pathname.startsWith(s.predpona + '/')) return s.funkcija
   }
-  return null
-}
-
-/** Funkcija s cenika, ki jo odpre povabilo z dano vlogo (null = brez omejitve). */
-export function funkcijaVloge(role: string): Funkcija | null {
-  if (role === 'accountant' || role === 'viewer') return 'racunovodja'
-  if (role === 'cashier') return 'ekipa_pin'
   return null
 }
