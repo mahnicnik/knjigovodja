@@ -169,7 +169,7 @@ const PLACLJIVE_POTI = [
   'app/api/invoices/[id]/send/route.tsx', 'app/api/invoices/[id]/eracun/route.ts', 'app/api/invoices/import-pdf/route.ts',
   'app/api/scan-receipt/route.ts', 'app/api/ai-chat/route.ts', 'app/api/banka/parse-pdf/route.ts',
   'app/api/kartice/parse-statement/route.ts', 'app/api/place/parse-payslip/route.ts',
-  'app/api/exports/accounting/route.ts', 'app/api/team/invite/route.ts',
+  'app/api/exports/accounting/route.ts', 'app/api/team/invite/route.ts', 'app/api/team/change-role/route.ts',
   'app/api/pos/import-delivery/route.ts', 'app/api/pos/parse-cenik/route.ts', 'app/api/pos/stripe/placilo/route.ts',
   'app/api/zaloge/uvoz-dobavnice/route.ts',
 ]

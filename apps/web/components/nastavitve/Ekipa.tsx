@@ -6,6 +6,7 @@ import HowTo from '@/components/HowTo'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { getActiveMembership } from '@/lib/active-org'
+import { dovoljeno, funkcijaVloge, potrebenPaket, sporociloPaketa } from '@/lib/paket'
 
 // ===== TIPI =====
 interface Member {
@@ -68,6 +69,9 @@ export default function EkipaSekcija() {
   const supabase = createClient()
 
   const [orgId, setOrgId] = useState<string | null>(null)
+  // Revizija paketov: vloge Računovodja/Gledalec zahtevajo Pro, Blagajnik Pro + POS.
+  const [orgPaket, setOrgPaket] = useState<any>(null)
+  const vlogaDovoljena = (vloga: string) => { const f = funkcijaVloge(vloga); return !f || dovoljeno(orgPaket, f) }
   const [myRole, setMyRole] = useState<string>('')
   const [members, setMembers] = useState<Member[]>([])
   const [invites, setInvites] = useState<Invite[]>([])
@@ -92,6 +96,9 @@ export default function EkipaSekcija() {
 
       if (!member) return
       setOrgId(member.org_id)
+      setOrgPaket((member as any).organizations)
+      // Privzeta vloga je Blagajnik - brez paketa Pro + POS izberemo Admina.
+      if (!dovoljeno((member as any).organizations, 'ekipa_pin')) setInviteRole('admin')
       setMyRole(member.role)
 
       await reload(member.org_id)
@@ -174,7 +181,9 @@ export default function EkipaSekcija() {
       if (error) throw new Error(error.message)
 
       // Pošlji invite email
-      await fetch('/api/team/invite', {
+      // REVIZIJA PAKETOV: odgovor se prej ni preverjal - zavrnjeno povabilo
+      // (npr. računovodja v brezplačnem paketu) je izpisalo »Povabilo poslano«.
+      const odg = await fetch('/api/team/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -183,6 +192,11 @@ export default function EkipaSekcija() {
           role: inviteRole,
         }),
       })
+      if (!odg.ok) {
+        await supabase.from('org_invites').delete().eq('id', invite.id)
+        const podatki = await odg.json().catch(() => ({}))
+        throw new Error(podatki.error || 'Povabila ni bilo mogoče poslati')
+      }
 
       setInviteEmail('')
       await reload(orgId)
@@ -304,18 +318,24 @@ export default function EkipaSekcija() {
                 <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 6 }}>Vloga</label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {ROLES.map(r => (
-                    <label key={r.value} style={{
+                    <label key={r.value} title={vlogaDovoljena(r.value) ? undefined : sporociloPaketa(funkcijaVloge(r.value)!, `Vloga »${r.label}«`)} style={{
+                      opacity: vlogaDovoljena(r.value) ? 1 : 0.45,
                       display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
                       border: inviteRole === r.value ? `2px solid ${r.color}` : '0.5px solid rgba(0,0,0,0.12)',
                       borderRadius: 10, cursor: 'pointer',
                       background: inviteRole === r.value ? `${r.color}15` : '#fff',
                       transition: 'all .12s',
                     }}>
-                      <input type="radio" checked={inviteRole === r.value} onChange={() => setInviteRole(r.value)} style={{ accentColor: r.color }} />
+                      <input type="radio" checked={inviteRole === r.value} disabled={!vlogaDovoljena(r.value)} onChange={() => setInviteRole(r.value)} style={{ accentColor: r.color }} />
                       <span style={{ fontSize: 16 }}>{r.emoji}</span>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 13, fontWeight: 500, color: '#0D1F12' }}>{r.label}</div>
                         <div style={{ fontSize: 11, color: '#888', marginTop: 1 }}>{r.desc}</div>
+                        {!vlogaDovoljena(r.value) && (
+                          <div style={{ fontSize: 11, color: '#b45309', marginTop: 2 }}>
+                            Potreben paket {potrebenPaket(funkcijaVloge(r.value)!) === 'pro_pos' ? 'Pro + POS' : 'Pro'}
+                          </div>
+                        )}
                       </div>
                     </label>
                   ))}
@@ -374,7 +394,7 @@ export default function EkipaSekcija() {
                         fontSize: 12, background: '#fff', color: '#0D1F12', cursor: 'pointer',
                       }}
                     >
-                      {ROLES.map(r => <option key={r.value} value={r.value}>{r.emoji} {r.label}</option>)}
+                      {ROLES.map(r => <option key={r.value} value={r.value} disabled={r.value !== m.role && !vlogaDovoljena(r.value)}>{r.emoji} {r.label}</option>)}
                     </select>
                   ) : (
                     <div style={{

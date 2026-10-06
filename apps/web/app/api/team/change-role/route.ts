@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { resolveActiveOrgId, getRequestedOrgId } from '@/lib/active-org-server'
+import { funkcijaVloge, zahtevajPaket } from '@/lib/paket'
 
 // NOV ENDPOINT (30.7.2026, audit K8): prej je sprememba vloge tekla
 // NEPOSREDNO iz brskalnika (supabase.from('org_members').update({role})),
@@ -72,6 +73,14 @@ export async function POST(req: NextRequest) {
       if ((count ?? 0) <= 1) {
         return NextResponse.json({ error: 'Organizacija mora imeti vsaj enega lastnika - najprej dodelite lastništvo drugemu članu' }, { status: 400 })
       }
+    }
+
+    // REVIZIJA PAKETOV: racunovodja/gledalec = Pro, blagajnik = Pro + POS
+    // (enako kot /api/team/invite in sprozilec vloga_po_paketu).
+    const funkcija = funkcijaVloge(newRole)
+    if (funkcija && newRole !== target.role) {
+      const zavrnjeno = await zahtevajPaket(admin, caller.org_id, funkcija, 'Ta vloga')
+      if (zavrnjeno) return zavrnjeno
     }
 
     const { error } = await admin.from('org_members').update({ role: newRole }).eq('id', memberId)
