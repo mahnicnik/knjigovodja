@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { resend, FROM_EMAIL, posiljateljZa } from '@/lib/resend'
 import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
+import { dovoljeno, funkcijaVloge, sporociloPaketa } from '@/lib/paket'
 
 async function getSupabase() {
   const cookieStore = await cookies()
@@ -65,11 +66,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Nimate pravic za povabilo novih clanov' }, { status: 403 })
     }
 
+    // Vloga mora biti ena od znanih - prej se je sprejela katerakoli vrednost.
+    if (!ROLE_LABELS[role]) return NextResponse.json({ error: 'Neznana vloga' }, { status: 400 })
+
     const { data: org } = await supabase
       .from('organizations')
-      .select('name')
+      .select('name, subscription_status, trial_ends_at, stripe_subscription_id')
       .eq('id', member.org_id)
       .single()
+
+    // REVIZIJA PAKETOV: dostop za računovodjo je v Pro, ekipa s PIN
+    // (blagajnik) v Pro + POS. Prej je bilo povabilo mogoče v vsakem paketu.
+    const funkcija = funkcijaVloge(role)
+    if (funkcija && !dovoljeno(org, funkcija)) {
+      return NextResponse.json({ error: sporociloPaketa(funkcija, `Vloga »${ROLE_LABELS[role]}«`) }, { status: 403 })
+    }
 
     const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
     const roleLabel = ROLE_LABELS[role] ?? role
