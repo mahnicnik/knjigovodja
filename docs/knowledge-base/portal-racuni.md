@@ -9,7 +9,8 @@ koda:
   - apps/web/app/invoices/import/page.tsx, apps/web/app/invoices/zahtevki/page.tsx
   - apps/web/lib/racun-zaklep.ts (zaklep urejanja), apps/web/app/api/invoices/[id]/eracun (e-račun XML)
   - apps/web/lib/upn-qr.ts (UPN QR na računu), apps/web/lib/invoice-pdf.tsx (PDF računa)
-posodobljeno: 2026-10-05
+  - apps/web/app/api/company-lookup/route.ts, apps/web/lib/register-zavezancev.ts (iskanje stranke po davčni – register FURS, VIES)
+posodobljeno: 2026-10-06
 ---
 
 # Portal – izdani računi
@@ -19,7 +20,7 @@ Meni **Poslovanje → Računi** (`/invoices`). Na vrhu: Skupaj fakturirano, Pla�
 ## Nov račun
 
 1. **+ Nov račun** (ali meni **Nov račun**).
-2. **Stranka**: izberi obstoječo ali vpiši novo. Ko vpišeš **davčno številko** (8 števk, s SI ali brez), se ime in naslov izpolnita samodejno iz javnih podatkov o podjetju (ali klikni iskanje oziroma Enter).
+2. **Stranka**: izberi obstoječo ali vpiši novo. Ko vpišeš **davčno številko** (8 števk, s SI ali brez), se ime in naslov izpolnita samodejno iz **registra davčnih zavezancev FURS** (ali klikni iskanje oziroma Enter). Register ima imena z velikimi črkami; na račun se vpiše berljiv zapis (npr. »HFP, izobraževanje na področju športa, Domen Kocjan s.p.«), ki ga lahko popraviš. Register **nima TRR** – TRR stranke vpiši sam (že vpisanega iskanje ne pobriše). Enako deluje na novi **dobavnici**.
 3. **Datumi**: datum računa, rok plačila, (neobvezno) obdobje opravljene storitve od–do.
 4. **Storitve in blago**: opis, količina, cena, DDV (22 %, 9,5 %, 5 % ali 0 %), popust %. **+ Dodaj postavko** za več vrstic. **Preračunaj iz cene z DDV** izračuna ceno brez DDV; na voljo je tudi **Kalkulator DDV**.
 5. Pri **0 % DDV** izberi **Razlog za neobračunan DDV**; »Zapomni si to izbiro za vse prihodnje račune« jo nastavi kot privzeto.
@@ -59,6 +60,7 @@ Ob računu sta še **⬇ PDF** in **📧 Pošlji** (pošiljanje po e-pošti – 
 - **Brisanje** je mogoče samo za osnutke in nefiskalizirane storno zapise. Davčno potrjenega računa ni mogoče izbrisati (10-letna hramba) – uporabi storno ali dobropis.
 - Račun z dodeljeno davčno številko se ne ureja – storniraj in izdaj novega (lahko s **📋 Podvoji račun**).
 - **Brezplačni paket**: največ **5 računov skupaj**; nato se prikaže »Nadgradi →«.
+- Samodejno izpolnjevanje stranke: register FURS se osveži vsako jutro (FURS ga objavi ob ~23:00), zato podjetje, registrirano danes, najdeš šele jutri. Če ga v registru ni, se poišče še v **VIES** (samo zavezanci za DDV). Če ni najdeno, se izpiše »Podjetje ni najdeno« / »Iskanje ni uspelo« – podatke vpiši ročno.
 - Vrzel v zaporedju številk (npr. zaradi izbrisanega osnutka) je prikazana nad seznamom – za davčni pregled jo je dobro znati pojasniti.
 - Pošiljanje po e-pošti zahteva paket Pro.
 - **UPN QR koda** je na neplačanih izdanih računih (ne na plačanih, stornih in dobropisih). Vsebuje TRR, znesek, sklic (SI00 + številka računa; če ima številka črke, SI99 – brez sklica), namen »Plačilo računa …« in **ime prejemnika = Ime s.p. iz Nastavitev** (celo, ne skrajšano). Brez veljavnega IBAN-a v **Nastavitve → Bančni podatki** kode ni. Če plačnik po skeniranju vidi **»Ni ujemanja«**, se ime v Nastavitvah ne ujema z uradnim imenom imetnika računa – glej `portal-nastavitve.md`.

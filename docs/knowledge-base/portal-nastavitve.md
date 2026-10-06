@@ -8,7 +8,7 @@ koda:
   - apps/web/components/nastavitve/UradnoIme.tsx (opozorilo, ko ime ni enako uradnemu iz registra)
   - apps/web/components/nastavitve/Logotip.tsx, LogotipUrejevalnik.tsx, ApiKljuci.tsx, Integracije.tsx
   - apps/web/components/DvostopenjskaPrijava.tsx, apps/web/app/prenosi/page.tsx
-posodobljeno: 2026-10-05
+posodobljeno: 2026-10-06
 ---
 
 # Portal – nastavitve
@@ -35,7 +35,7 @@ posodobljeno: 2026-10-05
 
 Vpiši podatke podjetja (obvezno ime in davčna številka – izpišejo se na vseh računih) in shrani. V istem razdelku naložiš **logotip**, ki se izpiše na računih (z urejevalnikom za obrez in postavitev).
 
-**Ime s.p. mora biti uradno ime iz registra (AJPES)**, tako kot ga ima banka na računu. To ime gre tudi v **UPN QR kodo** na računih. Banke od oktobra 2025 pred vsakim plačilom preverijo ime prejemnika; če se ne ujema, plačnik ob skeniranju QR kode vidi opozorilo **»Ni ujemanja«** (angl. »The name doesn't match«) in plačilo pogosto opusti. Ko se ime razlikuje od uradnega (npr. »Domen Kocjan s.p.« namesto »HFP, Domen Kocjan s.p.«), se pod poljem **Ime s.p.** pokaže opozorilo z gumbom **Uporabi uradno ime** → nato **Shrani**. Novo ime velja za vse na novo prenesene ali poslane PDF račune; že poslanih PDF-jev ne spremeni – stranki račun pošlji znova (**📧 Pošlji** ali **⬇ PDF**).
+**Ime s.p. mora biti uradno ime iz registra (AJPES)**, tako kot ga ima banka na računu. To ime gre tudi v **UPN QR kodo** na računih. Banke od oktobra 2025 pred vsakim plačilom preverijo ime prejemnika; če se ne ujema, plačnik ob skeniranju QR kode vidi opozorilo **»Ni ujemanja«** (angl. »The name doesn't match«) in plačilo pogosto opusti. Uradno ime Računko prebere iz **registra davčnih zavezancev FURS** (po davčni številki iz profila). Velike in male črke niso pomembne: »Domen Kocjan s.p.« in »DOMEN KOCJAN S.P.« se ujemata (pod poljem piše **✓ Ime se ujema z uradnim imenom v registru**). Ko se ime razlikuje od uradnega (npr. »Domen Kocjan s.p.« namesto »HFP, izobraževanje na področju športa, Domen Kocjan s.p.«), se pod poljem **Ime s.p.** pokaže opozorilo »V registru: …« (z velikimi črkami, kot v registru) z gumbom **Uporabi uradno ime**. Gumb vpiše uradno ime v berljivem zapisu (izpisan je ob gumbu, npr. »HFP, izobraževanje na področju športa, Domen Kocjan s.p.«) → nato **Shrani**. Novo ime velja za vse na novo prenesene ali poslane PDF račune; že poslanih PDF-jev ne spremeni – stranki račun pošlji znova (**📧 Pošlji** ali **⬇ PDF**).
 
 ## DDV & prispevki
 
@@ -62,5 +62,6 @@ Sprememba gesla (vsaj 8 znakov) in **🛡️ Dvostopenjska prijava**: **Vklopi d
 ## Omejitve in opozorila
 
 - Spremembe DDV statusa vplivajo na nove račune in obračune, ne na že izdane.
+- Opozorila o uradnem imenu ni, če davčne številke v registru FURS ni (npr. podjetje, registrirano danes – register se osveži vsako jutro) ali če iskanje ne uspe.
 - Opozorilo »Ni ujemanja« v bančni aplikaciji plačnika pomeni, da se ime prejemnika ne ujema z imenom imetnika računa – ne da je QR koda napačna. Popravek: uradno ime v **Nastavitve → Profil podjetja**. Če je IBAN pravi, lahko plačnik plačilo vseeno potrdi (»Nadaljuj«) – denar pride na isti račun.
 - Plačila s kartico, Ekipo in Davčno blagajno običajno ureja lastnik; vloga Admin nima dostopa do nastavitev plačil.

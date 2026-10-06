@@ -9,7 +9,7 @@ koda:
   - apps/web/app/avansni-racuni/page.tsx
   - apps/web/app/ponavljajoci-racuni/page.tsx, apps/web/app/api/cron/recurring-invoices
   - apps/web/app/e-racun/page.tsx
-posodobljeno: 2026-10-05
+posodobljeno: 2026-10-06
 ---
 
 # Portal – predračuni, dobavnice, avansni in ponavljajoči računi
@@ -24,7 +24,7 @@ Predračun ni davčni dokument. Predračuni, ki čakajo na odgovor, so vedno pri
 
 ## Dobavnice – Poslovanje → Dobavnice
 
-1. **+ Nova dobavnica** – prejemnik in dobavljeno blago.
+1. **+ Nova dobavnica** – prejemnik in dobavljeno blago. Ko vpišeš davčno številko prejemnika, se ime in naslov izpolnita iz registra davčnih zavezancev FURS (kot pri računu – glej `portal-racuni.md`).
 2. Neobračunane dobavnice so v sklopu **»Čaka na račun – grupirano po stranki«**.
 3. Gumb **📄 Izstavi račun** pri stranki združi vse njene neobračunane dobavnice v **en osnutek računa**; dobavnice dobijo oznako »Zaračunana«.
 
