@@ -8,6 +8,7 @@ koda:
   - apps/web/app/invoices/new/page.tsx, apps/web/app/invoices/edit/[id]/page.tsx
   - apps/web/app/invoices/import/page.tsx, apps/web/app/invoices/zahtevki/page.tsx
   - apps/web/lib/racun-zaklep.ts (zaklep urejanja), apps/web/app/api/invoices/[id]/eracun (e-račun XML)
+  - apps/web/lib/upn-qr.ts (UPN QR na računu), apps/web/lib/invoice-pdf.tsx (PDF računa)
 posodobljeno: 2026-10-05
 ---
 
@@ -60,4 +61,5 @@ Ob računu sta še **⬇ PDF** in **📧 Pošlji** (pošiljanje po e-pošti – 
 - **Brezplačni paket**: največ **5 računov skupaj**; nato se prikaže »Nadgradi →«.
 - Vrzel v zaporedju številk (npr. zaradi izbrisanega osnutka) je prikazana nad seznamom – za davčni pregled jo je dobro znati pojasniti.
 - Pošiljanje po e-pošti zahteva paket Pro.
+- **UPN QR koda** je na neplačanih izdanih računih (ne na plačanih, stornih in dobropisih). Vsebuje TRR, znesek, sklic (SI00 + številka računa; če ima številka črke, SI99 – brez sklica), namen »Plačilo računa …« in **ime prejemnika = Ime s.p. iz Nastavitev** (celo, ne skrajšano). Brez veljavnega IBAN-a v **Nastavitve → Bančni podatki** kode ni. Če plačnik po skeniranju vidi **»Ni ujemanja«**, se ime v Nastavitvah ne ujema z uradnim imenom imetnika računa – glej `portal-nastavitve.md`.
 - Pri postavkah računa v portalu je od oktobra 2026 na izbiro tudi **5 % DDV** (poleg 22 %, 9,5 %, 0 %), tako pri novem računu kot pri urejanju – enako kot na blagajni (POS).

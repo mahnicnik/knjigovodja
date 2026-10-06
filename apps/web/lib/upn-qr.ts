@@ -59,7 +59,7 @@ function vZnakeLatin2(s: string): string {
     if (NADOMESTKI[z] !== undefined) { out += NADOMESTKI[z]; continue }
     if (jeAscii(z) || V_LATIN2.has(z)) { out += z; continue }
     // npr. "à", "ñ" -> "a", "n" (osnovna črka obstaja, strešice ni v tabeli)
-    const brez = z.normalize('NFD').replace(/[̀-ͯ]/g, '')
+    const brez = z.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     out += brez && [...brez].every(c => jeAscii(c) || V_LATIN2.has(c)) ? brez : '?'
   }
   return out

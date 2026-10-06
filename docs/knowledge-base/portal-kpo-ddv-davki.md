@@ -43,7 +43,7 @@ Nadzorna plošča v mesecu oddaje opozori na DDV-O za **preteklo, zaključeno** 
 
 ## Prispevki s.p. – Davki → Prispevki QR
 
-UPN nalogi z **QR kodo** za PIZ, ZZZS, zaposlovanje, starševsko varstvo in (neobvezno) akontacijo dohodnine. QR kodo skeniraš v mobilni banki. Rok: **20. v naslednjem mesecu**. Zneske določa prispevna osnova – spremeniš jo v **Nastavitve → DDV & prispevki**. Popoldanski s.p. nastavi zaposlovanje in starševstvo na 0 €.
+UPN nalogi z **QR kodo** za PIZ, ZZZS, zaposlovanje, starševsko varstvo in (neobvezno) akontacijo dohodnine. QR kodo skeniraš v mobilni banki. Rok: **20. v naslednjem mesecu**. Zneske določa prispevna osnova – spremeniš jo v **Nastavitve → DDV & prispevki**. Popoldanski s.p. nastavi zaposlovanje in starševstvo na 0 €. Pri znesku 0 € QR kode ni (»Ni zneska za plačilo«). Prejemnik v kodi je **Finančna uprava Republike Slovenije** (celo ime).
 
 ## Dohodnina – Davki → Dohodnina
 

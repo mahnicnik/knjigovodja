@@ -5,6 +5,7 @@ vloge: [lastnik, admin]
 poti: [/nastavitve, /api-kljuci, /integracije, /prenosi]
 koda:
   - apps/web/app/nastavitve/page.tsx (SECTIONS – seznam razdelkov; ?tab=<id> odpre razdelek)
+  - apps/web/components/nastavitve/UradnoIme.tsx (opozorilo, ko ime ni enako uradnemu iz registra)
   - apps/web/components/nastavitve/Logotip.tsx, LogotipUrejevalnik.tsx, ApiKljuci.tsx, Integracije.tsx
   - apps/web/components/DvostopenjskaPrijava.tsx, apps/web/app/prenosi/page.tsx
 posodobljeno: 2026-10-05
@@ -34,6 +35,8 @@ posodobljeno: 2026-10-05
 
 Vpiši podatke podjetja (obvezno ime in davčna številka – izpišejo se na vseh računih) in shrani. V istem razdelku naložiš **logotip**, ki se izpiše na računih (z urejevalnikom za obrez in postavitev).
 
+**Ime s.p. mora biti uradno ime iz registra (AJPES)**, tako kot ga ima banka na računu. To ime gre tudi v **UPN QR kodo** na računih. Banke od oktobra 2025 pred vsakim plačilom preverijo ime prejemnika; če se ne ujema, plačnik ob skeniranju QR kode vidi opozorilo **»Ni ujemanja«** (angl. »The name doesn't match«) in plačilo pogosto opusti. Ko se ime razlikuje od uradnega (npr. »Domen Kocjan s.p.« namesto »HFP, Domen Kocjan s.p.«), se pod poljem **Ime s.p.** pokaže opozorilo z gumbom **Uporabi uradno ime** → nato **Shrani**. Novo ime velja za vse na novo prenesene ali poslane PDF račune; že poslanih PDF-jev ne spremeni – stranki račun pošlji znova (**📧 Pošlji** ali **⬇ PDF**).
+
 ## DDV & prispevki
 
 - **DDV zavezanec** (kljukica) in **ID za DDV** (SI…). Zavezanec postaneš pri obdavčljivem prometu nad 60.000 € v zadnjih 12 mesecih (od 1. 1. 2025) ali prostovoljno.
@@ -59,4 +62,5 @@ Sprememba gesla (vsaj 8 znakov) in **🛡️ Dvostopenjska prijava**: **Vklopi d
 ## Omejitve in opozorila
 
 - Spremembe DDV statusa vplivajo na nove račune in obračune, ne na že izdane.
+- Opozorilo »Ni ujemanja« v bančni aplikaciji plačnika pomeni, da se ime prejemnika ne ujema z imenom imetnika računa – ne da je QR koda napačna. Popravek: uradno ime v **Nastavitve → Profil podjetja**. Če je IBAN pravi, lahko plačnik plačilo vseeno potrdi (»Nadaljuj«) – denar pride na isti račun.
 - Plačila s kartico, Ekipo in Davčno blagajno običajno ureja lastnik; vloga Admin nima dostopa do nastavitev plačil.
