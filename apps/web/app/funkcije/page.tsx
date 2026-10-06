@@ -23,7 +23,7 @@ import Link from 'next/link'
 
 export const metadata: Metadata = {
   title: 'Vse funkcije',
-  description: 'Podroben pregled vsega, kar Računko zna: davčna blagajna za lokale, skeniranje računov z AI, e-račun e-SLOG, KPO knjiga, plače, zaloge z normativi in delo brez povezave.',
+  description: 'Podroben pregled vsega, kar Računko zna: davčna blagajna za lokale, skeniranje računov z AI, e-račun e-SLOG, KPO knjiga, plače, zaloge z normativi in plačila s kartico prek QR kode.',
   alternates: { canonical: '/funkcije' },
 }
 
@@ -77,7 +77,7 @@ const SKUPINE: Skupina[] = [
       { ime: 'Tloris z mizami', opis: 'Prostori, mize in odprta naročila. Vidite, katera miza ima kaj naročeno in koliko dolguje.' },
       { ime: 'Delitev računa', opis: 'Gost plača svoj del, ostalo ostane odprto na mizi.' },
       { ime: 'Popusti', opis: 'Na posamezno postavko v odstotkih ali evrih, ali na celoten račun.' },
-      { ime: 'Delo brez povezave', opis: 'Ob izpadu interneta blagajna izda račun z ZOI in ga natisne. Ko se povezava vrne, ga sama prijavi pri FURS. Zakonski rok sta dva delovna dneva.' },
+      { ime: 'Plačilo s kartico prek QR kode', opis: 'Blagajna pokaže QR kodo, gost plača s kartico, Apple Pay ali Google Pay na svojem telefonu. Brez terminala; račun se po plačilu sam davčno potrdi. Provizijo zaračuna Stripe, Računko nič.' },
       { ime: 'Kuhinjski zaslon', opis: 'Kuhar vidi, kaj čaka na pripravo, v živo.' },
       { ime: 'Odrezek za kuharja', opis: 'Za računom se natisne listek s številko naročila in kuhinjskimi postavkami. Gost dobi račun z isto številko.' },
       { ime: 'Dnevna številka naročila', opis: 'Za postrežbo — gost ve, kdaj je na vrsti.' },

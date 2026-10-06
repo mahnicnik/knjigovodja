@@ -920,3 +920,30 @@
 .racunovodjeOpomba { color: var(--l-tekst-2); font-size: .9rem; }
 /* Prelet 350: trije koraki enake visine, posnetek poravnan na vrh. */
 .korakPosnetek img { width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; object-position: top; }
+
+/* ── 6.10.2026: placilo s kartico prek QR kode (dva telefona) ─────────── */
+.qrPlacilo {
+  position: relative;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 16px 0 12%;
+}
+.qrTelefonZadaj {
+  width: 52%;
+  max-width: 270px;
+  margin-left: 6%;
+  transform: rotate(-4deg);
+}
+.qrTelefonSpredaj {
+  position: absolute;
+  right: 4%;
+  top: 22%;
+  width: 44%;
+  max-width: 230px;
+  transform: rotate(4deg);
+  filter: drop-shadow(0 18px 30px rgba(11, 18, 32, .18));
+}
+@media (max-width: 900px) {
+  .qrTelefonZadaj { width: 54%; margin-left: 7%; }
+  .qrTelefonSpredaj { width: 46%; right: 0; }
+}

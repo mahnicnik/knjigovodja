@@ -16,7 +16,7 @@ export default function StrukturiraniPodatki() {
         applicationCategory: 'BusinessApplication',
         operatingSystem: 'Web, Windows, Android',
         inLanguage: 'sl',
-        description: `${IME} izda račun, prebere stroške s fotografije in izračuna prispevke ter DDV za slovenski s.p. Davčna blagajna s FURS potrjevanjem in delom brez povezave, izvoz za računovodski program.`,
+        description: `${IME} izda račun, prebere stroške s fotografije in izračuna prispevke ter DDV za slovenski s.p. Davčna blagajna s FURS potrjevanjem, plačila s kartico prek QR kode, izvoz za računovodski program.`,
         offers: PAKETI.map(p => p.mesecno === 0
           ? { '@type': 'Offer', name: p.ime, price: '0', priceCurrency: 'EUR' }
           : {
@@ -27,7 +27,7 @@ export default function StrukturiraniPodatki() {
           'Davčno potrjevanje računov (FURS)',
           'Branje prejetih računov s fotografije',
           'POS blagajna za gostinstvo — mize, delitev računa, kuhinjski zaslon',
-          'Delo brez povezave do dveh delovnih dni',
+          'Plačilo s kartico prek QR kode brez terminala',
           'e-račun v obliki e-SLOG 2.0',
           'KPO knjiga in evidence DDV',
           'Izvoz za Vasco, Pantheon in Minimax',

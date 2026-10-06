@@ -78,12 +78,11 @@ export default function DavcnaBlagajna() {
           oznake EOR, in se prijavi naknadno.
         </p>
         <p style={p}>
-          Rok za naknadno prijavo sta <strong>dva delovna dneva</strong>. Računko to opravi sam,
-          takoj ko se povezava vrne — vam ni treba storiti ničesar.
+          Rok za naknadno prijavo sta <strong>dva delovna dneva</strong>.
         </p>
         <p style={p}>
-          Pogoj je številčenje po posamezni napravi. Pri centralnem številčenju blagajna brez
-          povezave računa ne more izdati, ker bi dve napravi lahko podelili isto številko.
+          Blagajna v Računku za delo potrebuje internetno povezavo. Za lokal zato priporočamo
+          rezervno povezavo — npr. mobilni internet prek telefona — da izpad omrežja ne ustavi prodaje.
         </p>
 
         <h2 style={h2}>Kaj mora biti na računu</h2>
@@ -132,7 +131,7 @@ export default function DavcnaBlagajna() {
         mainEntity:[
           ['Ali potrebujem davčno blagajno za lokal?','Da, če prejemate gotovino ali kartico. Za plačila na transakcijski račun potrjevanje ni potrebno.'],
           ['Kaj potrebujem za davčno blagajno?','Digitalno potrdilo FURS, prijavljen poslovni prostor in sprejet interni akt o številčenju računov.'],
-          ['Ali blagajna deluje brez interneta?','Da. Račun se izda z zaščitno oznako ZOI in se prijavi naknadno, v roku dveh delovnih dni.'],
+          ['Kaj, če pade internet?','Zakon dovoli izdajo računa z zaščitno oznako ZOI in naknadno prijavo v dveh delovnih dneh. Blagajna v Računku za delo potrebuje internet, zato priporočamo rezervno povezavo, npr. mobilni internet.'],
         ].map(([q,a])=>({'@type':'Question',name:q,acceptedAnswer:{'@type':'Answer',text:a}})),
       })}} />
     </main>

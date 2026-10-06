@@ -80,7 +80,7 @@ export const metadata: Metadata = {
     default: "Računko — blagajna in računovodstvo za slovenski s.p.",
     template: "%s · Računko",
   },
-  description: "Davčna blagajna za lokale in fakturiranje za s.p. v enem programu. FURS potrjevanje, delo brez povezave, izvoz za računovodjo (Vasco, Pantheon). Od 12,99 €/mesec.",
+  description: "Davčna blagajna za lokale in fakturiranje za s.p. v enem programu. FURS potrjevanje, plačila s kartico prek QR kode, izvoz za računovodjo (Vasco, Pantheon). Od 12,99 €/mesec.",
   keywords: [
     "davčna blagajna", "blagajna za lokal", "POS blagajna gostinstvo",
     "program za izdajanje računov", "s.p. računi", "FURS davčno potrjevanje",
@@ -92,7 +92,7 @@ export const metadata: Metadata = {
     locale: 'sl_SI',
     siteName: 'Računko',
     title: 'Računko — blagajna in računovodstvo za slovenski s.p.',
-    description: 'Davčna blagajna za lokale in fakturiranje za s.p. v enem programu. FURS potrjevanje, delo brez povezave, izvoz za računovodjo.',
+    description: 'Davčna blagajna za lokale in fakturiranje za s.p. v enem programu. FURS potrjevanje, plačila s kartico prek QR kode, izvoz za računovodjo.',
   },
   robots: { index: true, follow: true },
 };

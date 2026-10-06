@@ -40,7 +40,7 @@ export const PAKETI: Paket[] = [
   {
     id: 'pos', ime: 'Pro + POS', mesecno: 29.99, letno: 299.90,
     opis: 'Za lokale, studie in vse, ki sprejemajo gotovino.',
-    funkcije: ['Vse iz paketa Pro', 'Blagajna z mizami in tlorisom', 'Delitev računa in popusti', 'Plačilo s kartico prek QR kode – brez terminala', 'Delo brez povezave do 2 dni', 'Kuhinjski zaslon in odrezki', 'Fotografirate dobavnico, zaloga se posodobi', 'Zaloge z normativi in inventuro', 'Člani, paketi in terminski koledar', 'Ekipa s PIN prijavo', 'Namizna in mobilna aplikacija'],
+    funkcije: ['Vse iz paketa Pro', 'Blagajna z mizami in tlorisom', 'Delitev računa in popusti', 'Plačilo s kartico prek QR kode – brez terminala', 'Kuhinjski zaslon in odrezki', 'Fotografirate dobavnico, zaloga se posodobi', 'Zaloge z normativi in inventuro', 'Člani, paketi in terminski koledar', 'Ekipa s PIN prijavo', 'Namizna in mobilna aplikacija'],
   },
 ]
 
@@ -64,7 +64,7 @@ export const PERSONE: Persona[] = [
   {
     naslov: 'Gostinstvo in lokali',
     kdo: 'Kavarne, restavracije, frizerji, obrtniki',
-    opravila: ['Davčna blagajna z mizami', 'Delo brez interneta', 'Dnevni zaključek z enim klikom', 'Zaloge in normativi'],
+    opravila: ['Davčna blagajna z mizami', 'Plačilo s kartico prek QR kode', 'Dnevni zaključek z enim klikom', 'Zaloge in normativi'],
     paket: 'pos',
   },
   {
@@ -84,7 +84,7 @@ export const VPRASANJA: [string, string][] = [
   ['Kaj potrebujem, da začnem izdajati davčno potrjene račune?',
     `Troje: digitalno potrdilo FURS, prijavljen poslovni prostor in sprejet interni akt o številčenju. Vse troje uredite v ${IME_M}; potrdilo pridobite brezplačno prek eDavkov.`],
   ['Ali blagajna deluje brez interneta?',
-    `Da. Ob izpadu povezave ${IME} izda račun z zaščitno oznako ZOI in ga natisne, nato pa ga samodejno prijavi pri FURS, ko se povezava vrne. Zakonski rok za naknadno prijavo sta dva delovna dneva.`],
+    `Ne. Blagajna za delo potrebuje internetno povezavo, ker vsak račun sproti potrdi pri FURS. Za lokale priporočamo rezervno povezavo, npr. mobilni internet prek telefona.`],
   ['Kdaj bodo e-računi med podjetji obvezni?',
     `Od 1. januarja 2028. Zakon ZIERDED, sprejet oktobra 2025, zahteva strukturirano obliko (e-SLOG ali skladno z EN 16931) in prepoveduje izmenjavo po e-pošti. ${IME} že zdaj izvozi e-račun v obliki e-SLOG 2.0.`],
   ['Ali lahko podatke pošljem svojemu računovodji?',

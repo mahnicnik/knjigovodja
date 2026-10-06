@@ -15,7 +15,7 @@ type Blok = {
   alt: string
   telefon?: { ime: string; alt: string }
   /** Posebna slika namesto posnetka v okvirju brskalnika. */
-  vrsta?: 'dokument' | 'skener'
+  vrsta?: 'dokument' | 'skener' | 'qr-placilo'
 }
 
 const racun = opravilo('racun')
@@ -30,6 +30,16 @@ const BLOKI: Blok[] = [
     // PRELET 343: pravi PDF iz predloge racuna (lib/invoice-pdf.tsx) z
     // izmisljenimi podatki - tak racun dobi stranka.
     posnetek: 'racun', pot: '', vrsta: 'dokument', alt: '',
+  },
+  {
+    // 6.10.2026: placilo s kartico prek Stripe (Pro + POS). Posnetka sta pravi
+    // zaslon blagajne (components/pos/StripePlacilo.tsx) z izmisljenim zneskom;
+    // koda vodi na racunko.si/cene, ne na placilo.
+    naslov: 'Plačilo s kartico prek QR kode',
+    besedilo: 'Na blagajni pokažete QR kodo. Stranka jo poslika s telefonom in plača s kartico, Apple Pay ali Google Pay. Ko je plačano, se račun izda in davčno potrdi sam.',
+    seznam: ['Brez kartičnega terminala in najemnine zanj', 'Kartica, Apple Pay in Google Pay', 'Račun se po plačilu sam potrdi pri FURS', 'Provizijo zaračuna Stripe, Računko nič', 'V paketu Pro + POS'],
+    posnetek: 'stripe-qr', pot: '/pos', vrsta: 'qr-placilo',
+    alt: 'Blagajna na telefonu kaže QR kodo za plačilo 14,20 € s kartico, Apple Pay ali Google Pay',
   },
   {
     naslov: `Stroške fotografirate. Vnos naredi ${IME}.`,
@@ -47,9 +57,9 @@ const BLOKI: Blok[] = [
     posnetek: 'davki', pot: '/dashboard', alt: 'Pregled davkov, prispevkov in napoved pretoka denarja',
   },
   {
-    naslov: 'Blagajna, ki dela tudi brez interneta',
+    naslov: 'Blagajna za lokale, studie in storitve',
     opravilo: 'blagajna',
-    besedilo: 'Ob izpadu povezave blagajna izda račun z zaščitno oznako in ga prijavi pri FURS, ko se povezava vrne.',
+    besedilo: 'Mize in tloris, delitev računa in zaloge z normativi. Vsak račun je ob izdaji davčno potrjen pri FURS.',
     seznam: ['Mize, tloris in delitev računa', 'Zaloge z normativi', 'Dnevni zaključek z enim klikom'],
     posnetek: 'blagajna', pot: '/pos', alt: 'Blagajna s kategorijami, priljubljenimi artikli in košarico',
   },
@@ -103,6 +113,18 @@ export default function Funkcije() {
                       </div>
                     </div>
                     <p className={s.dokumentNapis}>Primera računov z izmišljenimi podatki — za plačilo na TRR z UPN QR in davčno potrjen z ZOI in EOR.</p>
+                  </>
+                ) : b.vrsta === 'qr-placilo' ? (
+                  <>
+                    <div className={s.qrPlacilo}>
+                      <div className={s.qrTelefonZadaj}>
+                        <Posnetek ime="stripe-qr" okvir="telefon" alt={b.alt} sizes="(max-width: 900px) 46vw, 270px" />
+                      </div>
+                      <div className={s.qrTelefonSpredaj}>
+                        <Posnetek ime="stripe-placano" okvir="telefon" alt="Isti zaslon po plačilu: Plačano, račun je zaključen" sizes="(max-width: 900px) 40vw, 230px" />
+                      </div>
+                    </div>
+                    <p className={s.dokumentNapis}>Pravi zaslon blagajne z izmišljenim zneskom — pred plačilom in po njem.</p>
                   </>
                 ) : b.vrsta === 'skener' ? (
                   <div className={s.skener}>

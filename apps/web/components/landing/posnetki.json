@@ -26,5 +26,13 @@
   "skener-mobilni": {
     "sirina": 780,
     "visina": 1475
+  },
+  "stripe-qr": {
+    "sirina": 780,
+    "visina": 1688
+  },
+  "stripe-placano": {
+    "sirina": 780,
+    "visina": 1688
   }
 }
