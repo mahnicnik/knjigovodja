@@ -21,8 +21,8 @@ const KORISTI = [
   },
   {
     znak: '3',
-    naslov: 'Izvoz za Vasco, Pantheon in Opal',
-    besedilo: 'Knjižbe izdanih računov v obliki, ki jo vaš program prebere, ter stroški in dnevni zaključki blagajne po stopnjah DDV.',
+    naslov: 'Izvoz za Vasco, Pantheon in Minimax',
+    besedilo: 'Izdani in prejeti računi v CSV in Excelu, ki ju vaš program uvozi, ter dnevni zaključki blagajne po stopnjah DDV.',
   },
   {
     znak: '4',

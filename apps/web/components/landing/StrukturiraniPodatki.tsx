@@ -30,7 +30,7 @@ export default function StrukturiraniPodatki() {
           'Delo brez povezave do dveh delovnih dni',
           'e-račun v obliki e-SLOG 2.0',
           'KPO knjiga in evidence DDV',
-          'Izvoz za Vasco, Pantheon in Opal',
+          'Izvoz za Vasco, Pantheon in Minimax',
         ],
       },
       {

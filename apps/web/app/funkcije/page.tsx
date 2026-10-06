@@ -154,7 +154,7 @@ const SKUPINE: Skupina[] = [
       { ime: 'Stripe', opis: 'Vsako plačilo postane davčno potrjen račun — kartice, Apple Pay, naročnine.' },
       { ime: 'WooCommerce in Shopify', opis: 'Naročila iz spletne trgovine z izdanimi računi in vodenjem zaloge.' },
       { ime: 'Uvoz plačil iz banke', opis: 'Naložite izpisek (camt.053, XLSX ali CSV). Plačila se povežejo po sklicu, računi označijo kot plačani.' },
-      { ime: 'Izvoz VOD', opis: 'Knjižbe v XML za neposreden uvoz v Vasco, Pantheon ali Opal.' },
+      { ime: 'Izvoz za računovodski program', opis: 'Izdani in prejeti računi v CSV in Excelu za uvoz v Vasco, Pantheon ali Minimax.' },
       { ime: 'Portal za računovodjo', opis: 'Z enim računom preklaplja med vsemi strankami, ki so ga povabile. Vidi dokumente sproti, ne konec kvartala.' },
       { ime: 'Izvozi v Excel', opis: 'Računi, stroški, zaloge, poročila — pripravljeno za nadaljnjo obdelavo.' },
       { ime: 'API ključi', opis: 'Za povezavo z lastnimi orodji.' },

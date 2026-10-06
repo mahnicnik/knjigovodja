@@ -35,12 +35,12 @@ export const PAKETI: Paket[] = [
   {
     id: 'pro', ime: 'Pro', mesecno: 12.99, letno: 129.90, poudarjen: true,
     opis: 'Za aktivnega s.p., ki ne želi prepisovati stroškov.',
-    funkcije: ['Neomejeni računi in predračuni', 'Davčno potrjevanje računov (FURS)', 'Pošiljanje računov po e-pošti', 'Fotografirate račun, Računko ga prebere in določi konto', 'Glasovni vnos računa', 'AI pomočnik za vprašanja o davkih', 'Uvoz plačil iz bančnega izpiska', 'e-račun (e-SLOG) za B2B', 'Evidenca DDV in KPO knjiga', 'Izvoz za Vasco, Pantheon in Opal', 'Brezplačen dostop za vašega računovodjo'],
+    funkcije: ['Neomejeni računi in predračuni', 'Davčno potrjevanje računov (FURS)', 'Pošiljanje računov po e-pošti', 'Fotografirate račun, Računko ga prebere in določi konto', 'Glasovni vnos računa', 'AI pomočnik za vprašanja o davkih', 'Uvoz plačil iz bančnega izpiska', 'e-račun (e-SLOG) za B2B', 'Evidenca DDV in KPO knjiga', 'Izvoz za Vasco, Pantheon in Minimax', 'Brezplačen dostop za vašega računovodjo'],
   },
   {
     id: 'pos', ime: 'Pro + POS', mesecno: 29.99, letno: 299.90,
     opis: 'Za lokale, studie in vse, ki sprejemajo gotovino.',
-    funkcije: ['Vse iz paketa Pro', 'Blagajna z mizami in tlorisom', 'Delitev računa in popusti', 'Delo brez povezave do 2 dni', 'Kuhinjski zaslon in odrezki', 'Fotografirate dobavnico, zaloga se posodobi', 'Zaloge z normativi in inventuro', 'Člani, paketi in terminski koledar', 'Ekipa s PIN prijavo', 'Namizna in mobilna aplikacija'],
+    funkcije: ['Vse iz paketa Pro', 'Blagajna z mizami in tlorisom', 'Delitev računa in popusti', 'Plačilo s kartico prek QR kode – brez terminala', 'Delo brez povezave do 2 dni', 'Kuhinjski zaslon in odrezki', 'Fotografirate dobavnico, zaloga se posodobi', 'Zaloge z normativi in inventuro', 'Člani, paketi in terminski koledar', 'Ekipa s PIN prijavo', 'Namizna in mobilna aplikacija'],
   },
 ]
 
@@ -88,7 +88,7 @@ export const VPRASANJA: [string, string][] = [
   ['Kdaj bodo e-računi med podjetji obvezni?',
     `Od 1. januarja 2028. Zakon ZIERDED, sprejet oktobra 2025, zahteva strukturirano obliko (e-SLOG ali skladno z EN 16931) in prepoveduje izmenjavo po e-pošti. ${IME} že zdaj izvozi e-račun v obliki e-SLOG 2.0.`],
   ['Ali lahko podatke pošljem svojemu računovodji?',
-    `Da. ${IME} izvozi račune, stroške, KPO in evidenco DDV v obliki, ki jo prebere računovodski program — Vasco, Pantheon ali Opal. Vaš računovodja lahko dobi tudi lasten dostop do vaših podatkov.`],
+    `Da. ${IME} izvozi račune, stroške, KPO in evidenco DDV v Excelu in CSV, ki ju uvozi računovodski program — Vasco, Pantheon ali Minimax. Vaš računovodja lahko dobi tudi lasten dostop do vaših podatkov.`],
   ['Kako varni so moji podatki?',
     'Vsi podatki so shranjeni na strežnikih v Evropski uniji, v skladu z GDPR. Varnostne kopije se naredijo vsakih 24 ur. Vaših podatkov brez vaše privolitve ne delimo s tretjimi osebami.'],
   ['Koliko stane?',
