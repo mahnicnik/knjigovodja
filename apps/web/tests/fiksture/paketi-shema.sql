@@ -130,6 +130,12 @@ create policy "Users can insert own membership" on public.org_members for insert
 create policy "Users can select own membership" on public.org_members for select using (user_id = auth.uid());
 create policy "members_select" on public.org_members for select using (org_id in (select get_user_org_ids()));
 create policy "users_can_insert_members" on public.org_members for insert with check (true);
+create policy "members_update_owner_admin" on public.org_members for update
+  using (org_id in (select org_members_1.org_id from org_members org_members_1
+                    where org_members_1.user_id = auth.uid() and org_members_1.role in ('owner','admin')));
+create policy "members_delete_owner_admin" on public.org_members for delete
+  using (org_id in (select org_members_1.org_id from org_members org_members_1
+                    where org_members_1.user_id = auth.uid() and org_members_1.role in ('owner','admin')));
 
 create policy "org members only" on public.org_invites for all
   using (org_id in (select org_members.org_id from org_members where org_members.user_id = auth.uid()));

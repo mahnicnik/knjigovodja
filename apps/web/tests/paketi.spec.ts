@@ -115,7 +115,7 @@ test.describe('Dokaz nespremenjenosti (git diff od izhodisca)', () => {
 
   test('Testi POS in FURS so nespremenjeni (spremenjeni/novi so samo testi paketov)', () => {
     const datoteke = git(`diff --name-only ${IZHODISCE} -- apps/web/tests`).trim().split('\n').filter(Boolean)
-    for (const d of datoteke) expect(d).toMatch(/tests\/(paketi(-baza)?\.spec\.ts|fiksture\/paketi-shema\.sql)$/)
+    for (const d of datoteke) expect(d).toMatch(/tests\/(paketi(-baza|-clanstvo-baza)?\.spec\.ts|fiksture\/paketi-shema\.sql)$/)
   })
 
   test('Obstojece preverbe v API in stari webhook: samo DODANE vrstice', () => {
