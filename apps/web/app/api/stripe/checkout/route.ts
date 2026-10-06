@@ -2,12 +2,19 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createServerClient } from '@supabase/ssr'
+import { createClient as createAdmin } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2026-04-22.dahlia' as any,
 })
+
+const adminSupabase = () => createAdmin(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { persistSession: false } },
+)
 
 export async function POST(request: NextRequest) {
   try {
@@ -66,7 +73,10 @@ export async function POST(request: NextRequest) {
         name: org.name,
         metadata: { org_id: org.id, user_id: user!.id },
       })
-      const { error: shraniErr } = await supabase
+      // Revizija paketov (migracija 182): stripe_* stolpce sme pisati samo
+      // streznik (service role) - uporabnik si jih prek RLS ne more vec
+      // spreminjati sam.
+      const { error: shraniErr } = await adminSupabase()
         .from('organizations')
         .update({ stripe_customer_id: customer.id })
         .eq('id', org.id)

@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createServerClient } from '@supabase/ssr'
+import { createClient as createAdmin } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 
@@ -60,7 +61,9 @@ export async function POST(request: NextRequest) {
     } catch (e: any) {
       const neveljavna = /No such customer|resource_missing/i.test(String(e?.message || ''))
       if (!neveljavna) throw e
-      await supabase.from('organizations').update({ stripe_customer_id: null }).eq('id', org.id)
+      // Revizija paketov (migracija 182): stripe_* sme pisati samo streznik.
+      await createAdmin(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } })
+        .from('organizations').update({ stripe_customer_id: null }).eq('id', org.id)
       console.log(`Pociscena neveljavna povezava s Stripom za org ${org.id}`)
       return NextResponse.json({
         error: 'Naročnina ni bila sklenjena prek Stripa, zato je tu ni mogoče upravljati.',
