@@ -1,0 +1,13 @@
+name: Zavezanci diagnostika (zacasno)
+on:
+  push:
+    branches: [claude/loving-keller-zlzqji]
+    paths: ['skripte/diag/**', '.github/workflows/zavezanci-diag.yml']
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: cd skripte/diag && /usr/bin/time -v node zavezanci-diag.mjs 2>&1 | tail -n +1
