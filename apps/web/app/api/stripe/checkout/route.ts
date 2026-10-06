@@ -2,12 +2,19 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createServerClient } from '@supabase/ssr'
+import { createClient as createAdmin } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2026-04-22.dahlia' as any,
 })
+
+const adminSupabase = () => createAdmin(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { persistSession: false } },
+)
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,7 +44,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Pridobi org preko org_members (ne preko owner_id)
-    const member = await resolveActiveOrg(supabase, user.id, getRequestedOrgId(request), 'id, name, stripe_customer_id, stripe_subscription_id, subscription_status') // vec-org podpora (30.7.2026)
+    const member = await resolveActiveOrg(supabase, user.id, getRequestedOrgId(request), 'id, name, stripe_customer_id, stripe_subscription_id, subscription_status, trial_ends_at') // vec-org podpora (30.7.2026)
     const memberErr = null
 
     if (memberErr || !member || !(member as any).organizations) {
@@ -66,13 +73,26 @@ export async function POST(request: NextRequest) {
         name: org.name,
         metadata: { org_id: org.id, user_id: user!.id },
       })
-      const { error: shraniErr } = await supabase
+      // Revizija paketov (migracija 182): stripe_* stolpce sme pisati samo
+      // streznik (service role) - uporabnik si jih prek RLS ne more vec
+      // spreminjati sam.
+      const { error: shraniErr } = await adminSupabase()
         .from('organizations')
         .update({ stripe_customer_id: customer.id })
         .eq('id', org.id)
       if (shraniErr) console.error(`Stripe stranka ${customer.id} ustvarjena, shranitev k org ${org.id} ni uspela:`, shraniErr.message)
       return customer.id
     }
+
+    /**
+     * REVIZIJA PAKETOV: nakup MED preizkusom se zaracuna ob izteku preizkusa,
+     * ne takoj (prej se je preostanek preizkusa izgubil). Stripe Checkout
+     * zahteva trial_end vsaj 48 ur v prihodnosti - ce je do izteka manj, se
+     * zaracuna takoj, kot doslej. Organizacije brez trial_ends_at (vse
+     * obstojece) dobijo natanko enako sejo kot prej.
+     */
+    const konecPreizkusa = org.trial_ends_at ? Math.floor(new Date(org.trial_ends_at).getTime() / 1000) : 0
+    const trialEnd = konecPreizkusa > Math.floor(Date.now() / 1000) + 48 * 3600 ? konecPreizkusa : null
 
     function ustvariSejo(customerId: string) {
       return stripe.checkout.sessions.create({
@@ -88,6 +108,7 @@ export async function POST(request: NextRequest) {
         metadata: { org_id: org.id },
         subscription_data: {
           metadata: { org_id: org.id },
+          ...(trialEnd ? { trial_end: trialEnd } : {}),
         },
         locale: 'sl',
       })

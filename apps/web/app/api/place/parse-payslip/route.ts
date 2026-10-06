@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
+import { zahtevajPaket } from '@/lib/paket'
 
 // AI branje plačilnih list (25.7.2026, v6 - polna razčlenitev za REK-1)
 //
@@ -79,6 +80,11 @@ export async function POST(request: NextRequest) {
     if (!isPro) {
       return NextResponse.json({ error: 'AI branje plačilnih list je na voljo samo v Pro paketu.' }, { status: 403 })
     }
+
+    // REVIZIJA PAKETOV (migracija 182): DODANA preverba za nove organizacije
+    // (npr. iztekel preizkus). Za obstojece organizacije vedno dovoljeno.
+    const zavrnjenoPaket = member.orgId ? await zahtevajPaket(supabase, member.orgId, 'uvoz_pdf', 'AI branje plačilnih list') : null
+    if (zavrnjenoPaket) return zavrnjenoPaket
 
     const { pdfBase64, fileBase64, mediaType } = await request.json()
 

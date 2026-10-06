@@ -11,6 +11,7 @@ import { cookies } from 'next/headers'
 import { confirmWithFurs, extractFromP12, type FursConfig, type FursInvoiceData } from '@/lib/furs'
 import { getFursCertificate } from '@/lib/furs-cert'
 import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
+import { zahtevajPaket } from '@/lib/paket'
 
 async function getSupabase() {
   const cookieStore = await cookies()
@@ -51,6 +52,12 @@ export async function POST(req: NextRequest) {
     if (!member) {
       return NextResponse.json({ error: 'Org ni najdena' }, { status: 404 })
     }
+
+    // REVIZIJA PAKETOV (migracija 182): DODANA preverba - blagajna je za NOVE
+    // organizacije del paketa Pro + POS. Za obstojece organizacije (tudi Free,
+    // ki blagajno ze uporabljajo) vedno dovoljeno; logika spodaj je nespremenjena.
+    const zavrnjenoPaket = await zahtevajPaket(supabase, member.org_id, 'pos', 'Davčno potrjevanje računov blagajne')
+    if (zavrnjenoPaket) return zavrnjenoPaket
 
     // Order — POS uporablja placeholder business_id (00000000-...-000001),
     // ne pravega org_id. Iščemo samo po order_id, org se določi preko user-ja.

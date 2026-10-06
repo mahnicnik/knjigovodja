@@ -16,6 +16,7 @@ import { resend, FROM_EMAIL, posiljateljZa } from '@/lib/resend'
 import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 import { kontoZa } from '@/lib/konti'
 import { izracunajDdv } from '@/lib/ddv'
+import { dovoljeno, sporociloPaketa } from '@/lib/paket'
 
 const MONTHS = [
   'januar', 'februar', 'marec', 'april', 'maj', 'junij',
@@ -76,6 +77,12 @@ export async function POST(req: NextRequest) {
 
     if (!org) {
       return NextResponse.json({ error: 'Organizacija ni najdena' }, { status: 404 })
+    }
+
+    // REVIZIJA PAKETOV (migracija 182): DODANA preverba za nove organizacije
+    // (izvoz za računovodjo = Pro). Za obstojece vedno dovoljeno.
+    if (!dovoljeno(org, 'izvoz')) {
+      return NextResponse.json({ error: sporociloPaketa('izvoz', 'Izvoz za računovodjo') }, { status: 403 })
     }
 
     // ===== Določi obdobje =====

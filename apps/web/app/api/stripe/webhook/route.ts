@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'
+import { odlociONarocnini, izStripeNarocnine, type CeneStripe } from '@/lib/narocnina-stripe'
+import { resend, FROM_EMAIL } from '@/lib/resend'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2026-04-22.dahlia' as any,
@@ -52,6 +54,18 @@ export async function POST(request: NextRequest) {
     console.error('Webhook signature error:', err.message)
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
+
+  // REVIZIJA PAKETOV (migracija 182) - DODANO pred obstojeco obdelavo:
+  // 1. charge.refunded: samo zabelezimo in obvestimo platformo, dostopa ne spreminjamo.
+  // 2. Dogodki NOVIH organizacij (obstojeca_pravila = false) gredo skozi novo
+  //    obdelavo (lib/narocnina-stripe.ts). Obstojece organizacije in vse, kar
+  //    ni mogoce prepoznati, gre skozi NESPREMENJENO obdelavo spodaj.
+  if (event.type === 'charge.refunded') {
+    await zabeleziVracilo(event.data.object as Stripe.Charge)
+    return NextResponse.json({ received: true })
+  }
+  const novaOrg = await novaOrganizacijaZaDogodek(event)
+  if (novaOrg) return obdelajNovoOrganizacijo(event, novaOrg)
 
   const orgId = (event.data.object as any)?.metadata?.org_id
 
@@ -146,4 +160,115 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ received: true })
+}
+
+
+// ═════════════════════════════════════════════════════════════════
+// REVIZIJA PAKETOV (migracija 182) - SAMO NOVE ORGANIZACIJE
+// ═════════════════════════════════════════════════════════════════
+
+const DOGODKI_NAROCNINE = new Set([
+  'checkout.session.completed',
+  'customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted',
+  'customer.subscription.paused', 'customer.subscription.resumed',
+])
+
+type NovaOrg = { id: string; stripe_subscription_id: string | null }
+
+/**
+ * Organizacija dogodka, a SAMO ce je nova (obstojeca_pravila === false).
+ * Brez klica Stripa: metadata.org_id ali stranka iz samega dogodka. Pred
+ * migracijo (stolpca ni) ali ob kakrsnikoli napaki vrne null -> obstojeca
+ * obdelava, natanko kot doslej.
+ */
+async function novaOrganizacijaZaDogodek(event: Stripe.Event): Promise<NovaOrg | null> {
+  if (!DOGODKI_NAROCNINE.has(event.type)) return null
+  try {
+    const obj = event.data.object as any
+    if (event.type === 'checkout.session.completed' && obj?.mode !== 'subscription') return null
+    const metaOrg = obj?.metadata?.org_id || null
+    const stranka = typeof obj?.customer === 'string' ? obj.customer : obj?.customer?.id
+    let org: any = null
+    if (metaOrg) {
+      const { data } = await sb.from('organizations').select('*').eq('id', metaOrg).maybeSingle()
+      org = data
+    } else if (stranka) {
+      const { data } = await sb.from('organizations').select('*').eq('stripe_customer_id', stranka).limit(2)
+      org = data?.length === 1 ? data[0] : null
+    }
+    if (!org || org.obstojeca_pravila !== false) return null
+    return { id: org.id, stripe_subscription_id: org.stripe_subscription_id ?? null }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Nova obdelava: narocnina se prebere SVEZA iz Stripa (vrstni red in
+ * podvojeni dogodki ne vplivajo na rezultat), upostevan je `status`
+ * (unpaid/canceled/incomplete_expired -> free, past_due ohrani dostop),
+ * preklic stare narocnine ne prepise nove.
+ */
+async function obdelajNovoOrganizacijo(event: Stripe.Event, org: NovaOrg) {
+  const obj = event.data.object as any
+  const subId = event.type === 'checkout.session.completed'
+    ? (typeof obj.subscription === 'string' ? obj.subscription : obj.subscription?.id)
+    : obj.id
+  if (!subId) return NextResponse.json({ received: true })
+
+  const sub = izStripeNarocnine(await stripe.subscriptions.retrieve(subId))
+  const cene: CeneStripe = { pro: [PRO_PRICE_ID, PRO_YEARLY_PRICE_ID], proPos: [PRO_POS_PRICE_ID, PRO_POS_YEARLY_PRICE_ID] }
+  const odlocitev = odlociONarocnini(org, sub, cene)
+
+  if (odlocitev.tip === 'napaka') {
+    // Stripe dogodek ponovi - stranka je placala in mora dobiti dostop.
+    console.error(`KRITICNO: ${odlocitev.razlog} (org ${org.id}) - paket NI dodeljen. Preverite STRIPE_*_PRICE_ID.`)
+    return NextResponse.json({ error: 'Cena ni prepoznana' }, { status: 500 })
+  }
+  if (odlocitev.tip === 'preskoci') {
+    console.log(`Stripe ${event.type}: ${odlocitev.razlog} (org ${org.id})`)
+    return NextResponse.json({ received: true })
+  }
+  const { error } = await sb.from('organizations').update(odlocitev.polja).eq('id', org.id)
+  if (error) {
+    console.error(`KRITICNO: narocnine ${sub.id} (${sub.status}) za org ${org.id} NI bilo mogoce zabeleziti:`, error)
+    return NextResponse.json({ error: 'Posodobitev naročnine ni uspela' }, { status: 500 })
+  }
+  console.log(`Stripe ${event.type}: org ${org.id} -> ${odlocitev.polja.subscription_status} (${sub.status})`)
+  return NextResponse.json({ received: true })
+}
+
+/**
+ * Vracilo placila narocnine: SAMO zapis v dnevnik in e-posta platformi.
+ * Dostopa NE spreminjamo - ce je treba, se narocnina preklice v Stripu.
+ * Napaka pri posiljanju ne sme vrniti 500 (Stripe bi dogodek ponavljal).
+ */
+async function zabeleziVracilo(charge: Stripe.Charge) {
+  const stranka = typeof charge.customer === 'string' ? charge.customer : charge.customer?.id ?? null
+  const znesek = ((charge.amount_refunded || 0) / 100).toFixed(2).replace('.', ',')
+  let org: { id: string; name: string | null } | null = null
+  try {
+    if (stranka) {
+      const { data } = await sb.from('organizations').select('id, name').eq('stripe_customer_id', stranka).limit(1)
+      org = data?.[0] ?? null
+    }
+  } catch {}
+  console.log(`VRACILO: ${charge.id} ${znesek} ${charge.currency?.toUpperCase()} stranka ${stranka} org ${org?.id ?? '-'}`)
+  try {
+    const { error: napakaPosiljanja } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: [process.env.PLATFORMA_OBVESTILA_EMAIL || 'support@xn--raunko-j2a.si'],
+      subject: `Stripe vračilo: ${znesek} € – ${org?.name ?? stranka ?? 'neznana stranka'}`,
+      text: [
+        `Vrnjeno: ${znesek} ${charge.currency?.toUpperCase()} (plačilo ${charge.id})`,
+        `Stripe stranka: ${stranka ?? '-'}`,
+        `Organizacija: ${org ? `${org.name} (${org.id})` : 'ni najdena'}`,
+        '',
+        'Dostop do Računka se NI spremenil. Če je treba, naročnino prekličite v Stripe Dashboardu.',
+      ].join('\n'),
+    })
+    if (napakaPosiljanja) console.error('Obvestila o vracilu ni bilo mogoce poslati:', napakaPosiljanja.message)
+  } catch (e: any) {
+    console.error('Obvestila o vracilu ni bilo mogoce poslati:', e?.message)
+  }
 }

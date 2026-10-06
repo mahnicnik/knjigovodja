@@ -25,6 +25,7 @@ import { createServerClient } from '@supabase/ssr'
 // dashboard je lastnikov pregled poslovanja, racunovodja ima svoj portal
 // na /racunovodja.
 import { ROLE_ALLOWED_PREFIXES, ROLE_HOME, isPathAllowedForRole } from '@/lib/role-access'
+import { dovoljeno, funkcijaZaPot } from '@/lib/paket'
 
 // Poti, ki jih middleware sploh ne preverja (javne strani, staticne datoteke, auth).
 const PUBLIC_PREFIXES = [
@@ -130,11 +131,36 @@ export async function middleware(req: NextRequest) {
   // torej ravno v primeru, ko so omejitve najbolj potrebne, jih ni bilo.
   const { data: members } = await supabase
     .from('org_members')
-    .select('role')
+    // organizations(*) za preverbo paketa spodaj (revizija paketov) - '*', ker
+    // stolpec obstojeca_pravila pred migracijo 182 se ne obstaja.
+    .select('role, organizations(*)')
     .eq('user_id', user.id)
 
   const roles = (members ?? []).map((m: any) => m.role).filter(Boolean)
   if (roles.length === 0) return res // ni clan organizacije - naj to obravnava sama stran
+
+  /**
+   * PAKET (revizija paketov, migracija 182) - SAMO NOVE ORGANIZACIJE
+   *
+   * /pos, /zaloge, /ai, /scan in /banka so za nove organizacije funkcija
+   * placljivega paketa (lib/paket.ts, STRANI_PAKETA). Obstojece organizacije
+   * (obstojeca_pravila = true, ali stolpca se ni) imajo dostop kot doslej.
+   *
+   * Velja najugodnejse clanstvo (aktivna organizacija je v localStorage):
+   * stran se odpre, ce jo dovoli VSAJ ENA organizacija uporabnika.
+   *
+   * REWRITE in ne redirect: namizna aplikacija vsako drugo pot vrne na /pos,
+   * zato bi preusmeritev povzrocila neskoncno zanko.
+   */
+  const funkcija = funkcijaZaPot(pathname)
+  if (funkcija && !(members ?? []).some((m: any) => dovoljeno(m.organizations, funkcija))) {
+    const url = req.nextUrl.clone()
+    url.pathname = '/paket'
+    url.search = `?funkcija=${funkcija}`
+    const prepis = NextResponse.rewrite(url)
+    res.cookies.getAll().forEach((c) => prepis.cookies.set(c))
+    return prepis
+  }
 
   // Ce je uporabnik nekje lastnik/admin, ima poln dostop (svoje podjetje) -
   // omejimo samo, kadar so VSA clanstva omejenih vlog.

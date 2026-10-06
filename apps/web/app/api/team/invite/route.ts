@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { resend, FROM_EMAIL, posiljateljZa } from '@/lib/resend'
 import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
+import { funkcijaVloge, zahtevajPaket } from '@/lib/paket'
 
 async function getSupabase() {
   const cookieStore = await cookies()
@@ -63,6 +64,14 @@ export async function POST(req: NextRequest) {
     if (!member) return NextResponse.json({ error: 'Org ni najdena' }, { status: 404 })
     if (!['owner', 'admin'].includes(member.role)) {
       return NextResponse.json({ error: 'Nimate pravic za povabilo novih clanov' }, { status: 403 })
+    }
+
+    // REVIZIJA PAKETOV (migracija 182): DODANA preverba za nove organizacije -
+    // racunovodja/gledalec = Pro, blagajnik (PIN) = Pro + POS. Za obstojece vedno dovoljeno.
+    const funkcijaPaketa = funkcijaVloge(role)
+    if (funkcijaPaketa) {
+      const zavrnjenoPaket = await zahtevajPaket(supabase, member.org_id, funkcijaPaketa, 'Ta vloga')
+      if (zavrnjenoPaket) return zavrnjenoPaket
     }
 
     const { data: org } = await supabase

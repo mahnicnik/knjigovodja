@@ -7,6 +7,7 @@ import { buildInvoiceEmailHtml } from '@/lib/invoice-email'
 import { logotipZaEmail, logoNastavitve } from '@/lib/logotip'
 // PRELET 281: generator e-racuna po uradni shemi e-SLOG 2.0.
 import { zgradiESlogXml } from '@/lib/e-slog'
+import { zahtevajPaket } from '@/lib/paket'
 
 export async function POST(
   request: NextRequest,
@@ -68,6 +69,11 @@ export async function POST(
     if (!isPro) {
       return NextResponse.json({ error: 'Pošiljanje računov po emailu je na voljo samo v Pro paketu.' }, { status: 403 })
     }
+
+    // REVIZIJA PAKETOV (migracija 182): DODANA preverba za nove organizacije
+    // (npr. iztekel preizkus). Za obstojece organizacije vedno dovoljeno.
+    const zavrnjenoPaket = await zahtevajPaket(supabase, org.id, 'email', 'Pošiljanje računov po e-pošti')
+    if (zavrnjenoPaket) return zavrnjenoPaket
 
     // Generiraj UPN QR
     const qrDataUrl = await generateUpnQr(invoice, org)

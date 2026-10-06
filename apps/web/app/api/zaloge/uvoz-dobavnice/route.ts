@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import Anthropic from '@anthropic-ai/sdk'
+import { zahtevajPaket } from '@/lib/paket'
 
 /**
  * UVOZ DOBAVNICE V ZALOGO PORTALA (26.8.2026)
@@ -66,6 +67,11 @@ export async function POST(req: NextRequest) {
 
   const { fileBase64, mediaType, orgId, potrdi, artikli } = await req.json().catch(() => ({} as any))
   if (!orgId) return NextResponse.json({ error: 'Manjka organizacija.' }, { status: 400 })
+
+  // REVIZIJA PAKETOV (migracija 182): DODANA preverba za nove organizacije
+  // (zaloge = Pro + POS). Za obstojece vedno dovoljeno.
+  const zavrnjenoPaket = await zahtevajPaket(supabase, orgId, 'zaloge', 'Uvoz dobavnice v zaloge')
+  if (zavrnjenoPaket) return zavrnjenoPaket
 
   // ── DRUGI KORAK: uporabnik je predlog potrdil ──
   if (potrdi && Array.isArray(artikli)) {

@@ -61,5 +61,10 @@ export const KB_FAQ: { vprasanje: string; modul: string; kontekst: 'pos' | 'port
     "vprasanje": "Kako povabim računovodjo?",
     "modul": "izvoz-racunovodja",
     "kontekst": "portal"
+  },
+  {
+    "vprasanje": "Kaj se zgodi, ko poteče brezplačni preizkus?",
+    "modul": "portal-stripe",
+    "kontekst": "vse"
   }
 ]

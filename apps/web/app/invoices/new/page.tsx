@@ -14,6 +14,7 @@ import { formatEurNumber } from '@/lib/format'
 // PRELET 360: zahtevek za placilo (Stripe) iz istega obrazca.
 import { VrstaDokumenta, ZahtevekPoShranitvi, ZahtevekQrZaslon, useZahtevkiNaVoljo, type ZahtevekPortal } from '@/components/zahtevki/Zahtevek'
 import { klicStripe } from '@/lib/stripe-connect-odjemalec'
+import { imaPro, jeObstojeca } from '@/lib/paket'
 
 interface LineItem {
   description: string
@@ -133,7 +134,11 @@ export default function NewInvoicePage() {
         if (!o.vat_registered) {
           setItems(prev => prev.map(item => ({ ...item, vat_rate: 0 })))
         }
-        const { count } = await supabase.from('issued_invoices').select('*', { count: 'exact', head: true }).eq('org_id', o.id)
+        // REVIZIJA PAKETOV (migracija 182): za NOVE organizacije se stejejo samo
+        // racuni (ne dobropisi/dobavnice) - kot sprozilec v bazi. Obstojece: kot doslej.
+        let stetje = supabase.from('issued_invoices').select('*', { count: 'exact', head: true }).eq('org_id', o.id)
+        if (!jeObstojeca(o)) stetje = stetje.eq('invoice_type', 'invoice')
+        const { count } = await stetje
         setInvoiceCount(count || 0)
         // POPRAVLJENO (24.7.2026): atomarna RPC namesto count(*)+1, ki se
         // je pokvaril ob vrzelih v obstojecih stevilkah (samodejno se
@@ -243,7 +248,9 @@ export default function NewInvoicePage() {
   async function handleSave(status: 'draft' | 'sent', overrideNumber?: string) {
     if (!org) return
     // Free plan limit: max 5 računov
-    const isFree = !['pro', 'pro_pos'].includes(org.subscription_status)
+    // REVIZIJA PAKETOV: nove organizacije - efektivni paket (iztekel preizkus = Free);
+    // dejansko omejitev za njih uveljavi baza (omeji_brezplacne_racune).
+    const isFree = jeObstojeca(org) ? !['pro', 'pro_pos'].includes(org.subscription_status) : !imaPro(org)
     if (isFree && invoiceCount >= 5) {
       setShowUpgradeModal(true)
       setLoading(false)
@@ -285,6 +292,9 @@ export default function NewInvoicePage() {
       }
       if (isDuplicate) {
         alert(`Račun s številko "${numberToUse}" že obstaja. Spremenite številko računa in poskusite znova.`)
+      } else if (error.message.includes('Brezplačni paket omogoča')) {
+        // Zavrnitev sprozilca omeji_brezplacne_racune (samo nove organizacije).
+        setShowUpgradeModal(true)
       } else {
         alert('Napaka: ' + error.message)
       }
