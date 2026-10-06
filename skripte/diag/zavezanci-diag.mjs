@@ -18,5 +18,5 @@ for (const v of dej.filter(x => x.slice(260, 264).trim()).slice(0, 4)) console.l
 console.log('DEJ [264:308] ni prazno:', dej.filter(v => v.slice(264, 308).trim()).length, 'DEJ [27] presledek:', dej.filter(v => v[27] === ' ').length, '[307] ne-presledek:', dej.filter(v => v[307] !== ' ').length)
 console.log('DEJ naslovi brez ", NNNN ":', dej.filter(v => !/,\s*\d{4}\s/.test(v.slice(308, 422))).length, JSON.stringify(dej.filter(v => !/,\s*\d{4}\s/.test(v.slice(308, 422))).slice(0, 5).map(v => v.slice(308, 422).trim())))
 const ime = (v) => v.slice(27, 259).trim()
-console.log('DEJ najdaljse ime:', Math.max(...dej.slice(0, 100000).map(v => ime(v).length)), 'PO najdaljse ime:', po.reduce((m, v) => Math.max(m, v.slice(42, 142).trim().length), 0))
-console.log('PO podvojene davcne:', po.length - new Set(po.map(v => v.slice(4, 12))).size, 'DEJ podvojene:', dej.length - new Set(dej.map(v => v.slice(0, 8))).size, 'v obeh:', dej.filter(v => new Set(po.map(x => x.slice(4, 12))).has(v.slice(0, 8))).length)
+console.log('DEJ najdaljse ime:', dej.reduce((m, v) => Math.max(m, ime(v).length), 0), 'PO najdaljse ime:', po.reduce((m, v) => Math.max(m, v.slice(42, 142).trim().length), 0))
+console.log('PO podvojene davcne:', po.length - new Set(po.map(v => v.slice(4, 12))).size, 'DEJ podvojene:', dej.length - new Set(dej.map(v => v.slice(0, 8))).size, 'v obeh:', (() => { const m = new Set(po.map(x => x.slice(4, 12))); return dej.filter(v => m.has(v.slice(0, 8))).length })())
