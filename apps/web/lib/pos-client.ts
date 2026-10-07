@@ -116,6 +116,20 @@ export async function ustvariPrvegaUporabnika(
 // Vsakič ustvarimo nov client (Next.js SSR safe)
 function sb() { return createClient() }
 
+/**
+ * Ali je narocilo ze izdan racun: ima stevilko racuna ali vsaj eno placilo.
+ * Ob napaki branja odgovorimo "da" - raje ne izbrisemo/ne prepisemo, kot da
+ * izgubimo davcno potrjen racun.
+ */
+async function jeIzdanRacun(orderId: string): Promise<boolean> {
+  const { data, error } = await sb().from('orders')
+    .select('invoice_number, payments(id)')
+    .eq('id', orderId).maybeSingle()
+  if (error) return true
+  if (!data) return false
+  return !!(data as any).invoice_number || (((data as any).payments || []).length > 0)
+}
+
 // ─── Tipi ────────────────────────────────────────────────────────────
 export type StaffRole = 'Lastnik' | 'Vodja' | 'Blagajnik' | 'Trener' | 'Terapevt'
 export type TableStatus = 'free' | 'occupied' | 'reserved' | 'needs_attention'
@@ -519,7 +533,15 @@ export const pos = {
           return false
         }
       }
-      const { error } = await sb().from('orders').delete().eq('id', orderId)
+      // VAROVALKA (7.10.2026, racun 1597): narocila, ki ima PLACILO ali
+      // STEVILKO RACUNA, ne izbrisemo NIKOLI - tudi s `prepricanoPrazno` ne.
+      // Tak racun je lahko ze davcno potrjen; izbris je odnesel vrstice in
+      // placilo (ON DELETE CASCADE), racun pa je izginil iz prometa.
+      if (await jeIzdanRacun(orderId)) {
+        console.error('closeOrderEmpty: narocilo ' + orderId + ' ima placilo ali stevilko racuna - brisanje ZAVRNJENO')
+        return false
+      }
+      const { error } = await sb().from('orders').delete().eq('id', orderId).is('invoice_number', null)
       if (error) throw error
       return true
     },
@@ -533,6 +555,10 @@ export const pos = {
       mods?: Array<{ name: string; delta: number }>
       note?: string
     }>) {
+      // VAROVALKA (7.10.2026, racun 1597): vrstic izdanega racuna ne spreminjamo.
+      if (await jeIzdanRacun(orderId)) {
+        throw new Error('Naročilo je že izdan račun - postavk ni mogoče spremeniti. Osvežite blagajno.')
+      }
       await sb().from('order_lines').delete().eq('order_id', orderId)
       if (lines.length === 0) return
       const rows = lines.map(line => {

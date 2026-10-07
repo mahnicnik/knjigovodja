@@ -1035,7 +1035,7 @@ async function odstejNormative(cart) {
 // ================================================================
 // PAYMENT MODAL — real Supabase order + payment
 // ================================================================
-function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, onCancel, onComplete, vatRegistered }) {
+function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, onCancel, onComplete, vatRegistered, pripraviNaPlacilo }: any) {
   const [method, setMethod] = useState('cash')
   const [tipPct, setTipPct] = useState(0)
   const [given, setGiven] = useState('')
@@ -1295,6 +1295,9 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
     setProcessing(true)
     setError(null)
     try {
+      // Racun 1597 (7.10.2026): pocakamo, da se samodejno shranjevanje kosarice
+      // konca, preden placilo zapise vrstice - sicer se podvojijo.
+      if (pripraviNaPlacilo) await pripraviNaPlacilo()
       // ── PRELET 158: če omrežja zanesljivo NI, gre prodaja v lokalno vrsto ──
       if (typeof navigator !== 'undefined' && navigator.onLine === false) {
         await izvediOfflineProdajo()
@@ -15849,6 +15852,23 @@ function KlasikApp() {
    */
   const kosaricaZanesljivaRef = useRef(false)
   const shranjevanjeTimerRef = useRef(null)
+  /**
+   * PLACILO IN SAMODEJNO SHRANJEVANJE (prelet 7.10.2026, racun 1597)
+   *
+   * NAPAKA: samodejno shranjevanje (900 ms po zadnjem artiklu) in placilo sta
+   * HKRATI zapisala vrstice istega narocila (oba `replaceLines`: brisi +
+   * vstavi). Vrstice so se podvojile, narocilo je imelo dvojni znesek, zato
+   * ga `pay_order` ni zaprl (placano 3,50 < 7,00) - ostalo je ODPRTO na mizi,
+   * ceprav je bil racun ze davcno potrjen. Ko je natakar "stare" artikle z
+   * mize odstranil, je samodejno shranjevanje narocilo IZBRISALO - z
+   * vrsticami in placilom vred. Racuna ni bilo vec med racuni ne v prometu.
+   *
+   * Zdaj placilo najprej ustavi samodejno shranjevanje in POCAKA, da se
+   * morebitno shranjevanje, ki ze tece, konca. Med odprtim oknom placila se
+   * kosarica ne shranjuje.
+   */
+  const shranjevanjeVTekuRef = useRef<Promise<void> | null>(null)
+  const placiloVTekuRef = useRef(false)
 
   /**
    * Shrani trenutno košarico na dano mizo v bazo (PRELET 315 - izvleček iz
@@ -15865,8 +15885,26 @@ function KlasikApp() {
    * dodanem artiklu) za trenutek prekril prodajni zaslon z "Nalagam
    * cenik...".
    */
-  async function shraniKosarico(tabela, kosarica, zanesljivaPrazna) {
-    if (!tabela) return
+  function shraniKosarico(tabela, kosarica, zanesljivaPrazna) {
+    // Med placilom kosarice NE shranjujemo - placilo samo zapise vrstice.
+    if (!tabela || placiloVTekuRef.current) return Promise.resolve()
+    const prejsnje = shranjevanjeVTekuRef.current || Promise.resolve()
+    // Shranjevanja si sledijo zaporedno, nikoli hkrati (sicer se vrstice podvojijo).
+    const zdaj = prejsnje.catch(() => {}).then(() => shraniKosaricoZdaj(tabela, kosarica, zanesljivaPrazna))
+    shranjevanjeVTekuRef.current = zdaj
+    zdaj.finally(() => { if (shranjevanjeVTekuRef.current === zdaj) shranjevanjeVTekuRef.current = null }).catch(() => {})
+    return zdaj
+  }
+
+  /** Placilo: ustavi samodejno shranjevanje in pocakaj, da se tekoce konca. */
+  async function pripraviNaPlacilo() {
+    placiloVTekuRef.current = true
+    if (shranjevanjeTimerRef.current) { clearTimeout(shranjevanjeTimerRef.current); shranjevanjeTimerRef.current = null }
+    try { await shranjevanjeVTekuRef.current } catch {}
+  }
+
+  async function shraniKosaricoZdaj(tabela, kosarica, zanesljivaPrazna) {
+    if (placiloVTekuRef.current) return
     const existing = await pos.orders.getOpenOnTable(tabela.id)
     if (kosarica.length > 0) {
       const cashierId = auth?.user?.id || null
@@ -15997,6 +16035,9 @@ function KlasikApp() {
     setTableSwitching(false)
   }
 
+  const [happyHourActive, setHappyHourActive] = useState(false)
+  // Pred samodejnim shranjevanjem: njegov seznam odvisnosti bere `paymentOpen`.
+  const [paymentOpen, setPaymentOpen] = useState(false)
   /**
    * Samodejno shranjevanje košarice ~900 ms po zadnji spremembi, dokler je
    * miza aktivna (PRELET 315) - glej obsežen komentar ob
@@ -16007,7 +16048,7 @@ function KlasikApp() {
    * poteklo sredi preklopa.
    */
   useEffect(() => {
-    if (!activeTable || tableSwitching) return
+    if (!activeTable || tableSwitching || paymentOpen) return
     if (shranjevanjeTimerRef.current) clearTimeout(shranjevanjeTimerRef.current)
     shranjevanjeTimerRef.current = setTimeout(() => {
       shranjevanjeTimerRef.current = null
@@ -16018,9 +16059,17 @@ function KlasikApp() {
     return () => {
       if (shranjevanjeTimerRef.current) { clearTimeout(shranjevanjeTimerRef.current); shranjevanjeTimerRef.current = null }
     }
-  }, [cart, activeTable, tableSwitching])
-  const [happyHourActive, setHappyHourActive] = useState(false)
-  const [paymentOpen, setPaymentOpen] = useState(false)
+  }, [cart, activeTable, tableSwitching, paymentOpen])
+  // Ob odprtju okna placila samodejno shranjevanje ustavimo; ob zaprtju (placano
+  // ali preklicano) spet dovolimo.
+  useEffect(() => {
+    if (paymentOpen) {
+      placiloVTekuRef.current = true
+      if (shranjevanjeTimerRef.current) { clearTimeout(shranjevanjeTimerRef.current); shranjevanjeTimerRef.current = null }
+    } else {
+      placiloVTekuRef.current = false
+    }
+  }, [paymentOpen])
   const [modifierPickModal, setModifierPickModal] = useState<any>(null)
   const [receipt, setReceipt] = useState(null)
   const [cashSession, setCashSession] = React.useState(null)
@@ -16511,6 +16560,7 @@ function KlasikApp() {
       )}
       <PaymentModal open={paymentOpen} total={typeof paymentOpen==='object'&&paymentOpen.splitLines ? paymentOpen.splitLines.reduce((s,l)=>s+l.price*l.qty,0)*(1-(paymentOpen.discount||0)/100) : totals.total} cart={typeof paymentOpen==='object'&&paymentOpen.splitLines ? paymentOpen.splitLines : cart} activeTable={activeTable} activeCustomer={activeCustomer} auth={auth}
         vatRegistered={posData.org?.vat_registered}
+        pripraviNaPlacilo={pripraviNaPlacilo}
         onCancel={() => setPaymentOpen(false)}
         onComplete={(data) => {
           const po = paymentOpen
