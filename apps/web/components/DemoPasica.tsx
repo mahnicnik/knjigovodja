@@ -16,11 +16,28 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+
+/**
+ * PREKLOP PORTAL / BLAGAJNA (7.10.2026)
+ *
+ * Predstavitev pokaze oboje: portal (racuni, stroski, davki) in blagajno.
+ * Prej je obiskovalec pristal v blagajni in poti v portal skoraj ni nasel -
+ * povezava je bila skrita v meniju uporabnika in vidna le vlogi lastnika
+ * (prijavljen je lahko tudi kot blagajnik). Zato je preklop v pasici, ki je
+ * vedno vidna.
+ */
+const DELI = [
+  { kam: '/dashboard', ime: 'Portal' },
+  { kam: '/pos', ime: 'Blagajna' },
+]
 
 export default function DemoPasica() {
   const [vidna, setVidna] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const pot = usePathname() || ''
+  const vBlagajni = pot === '/pos' || pot.startsWith('/pos/')
 
   /**
    * PRELET 355: visino pasice objavimo kot CSS spremenljivko. Blagajna na
@@ -57,7 +74,8 @@ export default function DemoPasica() {
       fontSize:13.5, boxShadow:'0 -2px 12px rgba(0,0,0,0.18)',
     }}>
       <span>
-        <strong>Predstavitveni način.</strong>{' '}
+        <strong className="demo-pasica-polno">Predstavitveni način.</strong>
+        <strong className="demo-pasica-kratko" style={{ display:'none' }}>Demo</strong>{' '}
         <span className="demo-pasica-dodatno" style={{ color:'#B9CFC3' }}>
           Računi niso davčno potrjeni. Podatki se vsako noč povrnejo.
         </span>
@@ -65,8 +83,25 @@ export default function DemoPasica() {
         <style>{`@media (max-width: 767px) {
           [data-demo-pasica] { padding: 6px 12px calc(6px + env(safe-area-inset-bottom)) !important; gap: 10px !important; font-size: 12.5px !important; flex-wrap: nowrap !important; }
           [data-demo-pasica] .demo-pasica-dodatno { display: none; }
+          [data-demo-pasica] .demo-pasica-polno { display: none; }
+          [data-demo-pasica] .demo-pasica-kratko { display: inline !important; }
+          [data-demo-pasica] [role=group] a { padding: 5px 9px !important; }
           [data-demo-pasica] a { padding: 6px 12px !important; font-size: 12px !important; white-space: nowrap; }
         }`}</style>
+      </span>
+      <span role="group" aria-label="Preklop med portalom in blagajno" style={{
+        display:'inline-flex', background:'rgba(255,255,255,0.1)', borderRadius:8, padding:3, gap:2,
+      }}>
+        {DELI.map(d => {
+          const aktiven = d.kam === '/pos' ? vBlagajni : !vBlagajni
+          return (
+            <a key={d.kam} href={d.kam} aria-current={aktiven ? 'page' : undefined} style={{
+              padding:'5px 12px', borderRadius:6, fontSize:13, fontWeight:600, textDecoration:'none',
+              background: aktiven ? '#F7F6F2' : 'transparent',
+              color: aktiven ? '#0E3D2A' : '#F7F6F2',
+            }}>{d.ime}</a>
+          )
+        })}
       </span>
       <a href="/register" style={{
         padding:'7px 16px', borderRadius:8, background:'#D89328',
