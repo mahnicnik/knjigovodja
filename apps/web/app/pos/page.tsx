@@ -37,6 +37,7 @@ import { jeElektron, preberiKontekst, naslednjaLokalnaStevilka, zabeleziIzPolneS
 import { useStripePogoji, StripeIzbira, StripeQrZaslon, type StripePlaciloStanje } from '@/components/pos/StripePlacilo'
 import { klicStripe, vrniPrekStripe } from '@/lib/stripe-connect-odjemalec'
 import { predlagajVsebino, preracunaj, kljucPretvorbe, stevilo } from '@/lib/pakiranje'
+import { stanjeKartice, jeNaVoljo, razvrstiKartice, jePokrita, stanjeStranke } from '@/lib/kartice'
 
 // ================================================================
 // TEMA
@@ -258,23 +259,10 @@ const H = {
     if (!Array.isArray(rule.category_ids) || rule.category_ids.length === 0) return true
     return rule.category_ids.includes(item?.category_id)
   },
-  memberStatus: (pkgs) => {
-    if (!pkgs || pkgs.length === 0) return { status: 'none', remainingVisits: 0, daysToExpiry: null }
-    const active = pkgs.filter(p => p.active)
-    if (active.length === 0) return { status: 'none', remainingVisits: 0, daysToExpiry: null }
-    const pkg = active[0]
-    // POPRAVLJENO (22.8.2026): C9 je bil odpravljen le v prikazu, TU pa ne.
-    // Ker je `expires` polnoc, zdajsnji cas pa sredi dneva, je Math.floor
-    // odrezal en dan - kartica, ki potece jutri, je bila oznacena kot
-    // "potece danes", tista, ki potece danes, pa kot POTEKLA.
-    const daysToExpiry = dniDo(pkg.expires) ?? 0
-    const remainingVisits = pkg.remaining
-    let status = 'active'
-    if (daysToExpiry < 0) status = 'expired'
-    else if (daysToExpiry <= 3 || remainingVisits <= 1) status = 'critical'
-    else if (daysToExpiry <= 7 || remainingVisits <= 2) status = 'expiring'
-    return { status, remainingVisits, daysToExpiry }
-  },
+  // KARTICE (7.10.2026): stanje po VELJAVNIH karticah (lib/kartice.ts). Prej
+  // se je vzela PRVA aktivna - pogosto stara, potekla, ceprav je stranka
+  // imela novo.
+  memberStatus: (pkgs) => stanjeStranke(pkgs),
 }
 
 // ================================================================
@@ -1086,10 +1074,12 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
       // DODANO (26.8.2026): kartica, ki se NI zacela veljati, ni uporabna.
       // Odkar je mogoce vnesti zacetek veljavnosti v prihodnosti, bi se taka
       // kartica sicer ponujala za unovcenje ze danes.
+      // KARTICE (7.10.2026): tudi POTEKLE kartice z obiski so se ponujale.
       const danes = lokalniDatum(new Date())
-      const uporabne = (data || []).filter((k: any) =>
+      const uporabne = razvrstiKartice((data || []).filter((k: any) =>
         k.remaining !== null && k.remaining > 0
-        && !(k.activated_at && String(k.activated_at).slice(0, 10) > danes))
+        && stanjeKartice(k, danes) !== 'potekla'
+        && !(k.activated_at && String(k.activated_at).slice(0, 10) > danes)), danes)
       setStrankineKartice(uporabne)
       if (uporabne.length === 1) setIzbranaKartica(uporabne[0].id)
 
@@ -4316,7 +4306,9 @@ function BookingModal({ booking, posData, onClose, onSaved }) {
         .select('*, package_templates(name, template_type, validity_days)')
         .eq('customer_id', data.customer_id)
         .eq('active', true)
-      setActivePkgs(pkgs || [])
+      // KARTICE (7.10.2026): samo kartice, ki jih stranka lahko uporabi - ne
+      // potekle in porabljene (prej je bila potekla lahko celo prva).
+      setActivePkgs(razvrstiKartice((pkgs || []).filter((p: any) => jeNaVoljo(p))))
     }
     load()
   }, [data.customer_id])
@@ -4707,9 +4699,10 @@ function PackagesScreen({ posData, setSellPackageModal }) {
   const allPkgs = posData.customers.flatMap(c => (c.customer_packages||[]))
   const now = new Date()
   const weekFromNow = new Date(now); weekFromNow.setDate(now.getDate()+7)
-  const activeCount = allPkgs.filter(p => p.active).length
+  const activeCount = allPkgs.filter(p => jeNaVoljo(p)).length
   const expiringCount = allPkgs.filter(p => p.active && p.expires && new Date(p.expires) >= now && new Date(p.expires) <= weekFromNow).length
-  const expiredCount = allPkgs.filter(p => p.active && p.expires && new Date(p.expires) < now).length
+  // KARTICE (7.10.2026): stranka, ki je ze podaljsala, ni "potekla".
+  const expiredCount = posData.customers.filter(c => stanjeStranke(c.customer_packages || []).status === 'expired').length
   const filtered = posData.packageTemplates.filter(p => filter === 'all' || (p.template_type||p.type) === filter)
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', minHeight:0 }}>
@@ -4895,13 +4888,13 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
     load()
   }, [selectedId, customerDetailRefreshKey, posData.customers])
 
+  // KARTICE (7.10.2026): po VELJAVNIH karticah. Prej je potekla stara
+  // kartica (se vedno "active") obarvala piko oranzno tudi stranki z novo.
   const pkgStatusDot = (c) => {
-    const pkgs = (c.customer_packages||[]).filter(p=>p.active)
-    if (!pkgs.length) return '#9a9890'
-    // Enako kot zgoraj (22.8.2026).
-    const near = pkgs.some(p => { const d = dniDo(p.expires); return d !== null && d <= 7 })
-    const low = pkgs.some(p => p.remaining!==null && p.remaining<=2)
-    if (near||low) return T.warn
+    const st = stanjeStranke(c.customer_packages || [])
+    if (st.status === 'none') return '#9a9890'
+    if (st.status === 'expired') return T.danger
+    if (st.status === 'expiring' || st.status === 'critical') return T.warn
     return T.accent
   }
 
@@ -4963,7 +4956,7 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
           )}
           {filtered.map(c => {
             const active = c.id === selectedId
-            const activePkgs = (c.customer_packages||[]).filter(p=>p.active)
+            const activePkgs = (c.customer_packages||[]).filter(p=>jeNaVoljo(p))
             const dot = pkgStatusDot(c)
             return (
               <button key={c.id} onClick={()=>{setSelectedId(c.id);setActiveTab('pregled')}}
@@ -5053,7 +5046,7 @@ function CustomersScreen({ posData, setActiveCustomer, setScreen, setSellPackage
             <div className="pos-zavihki" style={{ display:'flex', gap:0, borderBottom:'2px solid '+T.line, marginBottom:-14 }}>
               {[
                 ['pregled','Pregled'],
-                ['kartice','Paketi & predplačilo'+(customerPackages.filter(p=>p.active).length?' '+customerPackages.filter(p=>p.active).length:'')],
+                ['kartice','Paketi & predplačilo'+(customerPackages.filter(p=>jeNaVoljo(p)).length?' '+customerPackages.filter(p=>jeNaVoljo(p)).length:'')],
                 ['zgodovina','Zgodovina'+(customerOrders.length?' '+customerOrders.length:'')],
                 ['opombe','Opombe'],
                 ['uredi','Uredi'],
@@ -5130,7 +5123,11 @@ function jeObiskNarocilo(o, imenaNepijace) {
 }
 
 function CustomerOverviewTab({ customer, orders, packages, loading, posData, setActiveTab, setActiveCustomer, setScreen, onBon, onMail }) {
-  const activePkgs = packages.filter(p=>p.active)
+  // KARTICE (7.10.2026): "AKTIVNA KARTICA" je VELJAVNA kartica. Prej se je
+  // pokazala prva aktivna - pogosto stara, potekla ("Poteklo"), ceprav je
+  // stranka imela novo, tudi rocno dodano. Potekla se pokaze le, ce druge ni.
+  const naVoljo = razvrstiKartice(packages.filter(p => jeNaVoljo(p)))
+  const activePkgs = naVoljo.length > 0 ? naVoljo : razvrstiKartice(packages.filter(p => p.active))
   // Imena, ki NISO pijaca: paketi iz sifranta in naročljivi artikli (Storitve).
   const imenaNepijace = React.useMemo(() => {
     const s = new Set()
@@ -5419,7 +5416,7 @@ function BulkEmailModal({ customers, onClose, posData }) {
   // izbranima strankama ni bilo mogoce, izkljuciti koga tudi ne.
   const kandidati = customers.filter(c => {
     if (!c.email) return false
-    if (filter === 'active_packages') return (c.customer_packages||[]).some(p=>p.active)
+    if (filter === 'active_packages') return (c.customer_packages||[]).some(p=>jeNaVoljo(p))
     return true
   })
 
@@ -5693,8 +5690,11 @@ function CustomerPackagesTab({ customer, packages, posData, loading, onRefresh, 
   const [addingPrepaid, setAddingPrepaid] = useState(false)
   function showToast(msg, ok=true) { setToast({msg,ok}); setTimeout(()=>setToast(null),3000) }
 
-  const active = packages.filter(p=>p.active)
-  const inactive = packages.filter(p=>!p.active)
+  // KARTICE (7.10.2026): potekla kartica, ki jo pokriva novejsa, sodi med
+  // PRETEKLE - ne med aktivne nad novo. Nepokrita potekla ostane zgoraj, da
+  // jo je mogoce podaljsati.
+  const active = razvrstiKartice(packages.filter(p => p.active && !jePokrita(p, packages)))
+  const inactive = packages.filter(p => !p.active || jePokrita(p, packages))
 
   async function useVisit(pkg) {
     if (pkg.remaining !== null && pkg.remaining <= 0) { showToast('Ni več obiskov!', false); return }

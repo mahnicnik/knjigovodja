@@ -173,18 +173,23 @@ export async function GET(req: NextRequest) {
         if (notif.package_id && pkg?.expires) {
           const { data: pokritost } = await supabase
             .from('customer_packages')
-            .select('id, name, expires')
+            .select('id, name, expires, remaining')
             .eq('customer_id', notif.customer_id)
             .eq('active', true)
             .neq('id', notif.package_id)
-            .gt('expires', pkg.expires)
-            .limit(1)
-          if (pokritost?.length) {
+            // KARTICE (7.10.2026): pokriva tudi kartica BREZ datuma poteka
+            // (neomejena, pogosto rocno dodana) - prej jo je `gt` izpustil.
+            .or(`expires.is.null,expires.gt.${pkg.expires}`)
+            .is('frozen_at', null)
+            .limit(5)
+          // Porabljena kartica (0 obiskov) ne pokriva.
+          const pokriva = (pokritost || []).filter((d: any) => d.remaining == null || Number(d.remaining) > 0)
+          if (pokriva.length) {
             results.push({
               customer: customer.name,
               package: pkg?.name,
               status: 'skipped',
-              reason: `Stranko pokriva druga kartica (${pokritost[0].name} do ${pokritost[0].expires}) — opomnik ni potreben.`,
+              reason: `Stranko pokriva druga kartica (${pokriva[0].name} do ${pokriva[0].expires ?? 'brez omejitve'}) — opomnik ni potreben.`,
             })
             continue
           }
