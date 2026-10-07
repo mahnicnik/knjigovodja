@@ -36,6 +36,7 @@ import { useJeTelefon, POS_TELEFON_CSS, SpodnjaNavigacija, SpodnjiList, VrsticaL
 import { jeElektron, preberiKontekst, naslednjaLokalnaStevilka, zabeleziIzPolneStevilke, zaznanaPovezava } from '@/lib/offline-prodaja'
 import { useStripePogoji, StripeIzbira, StripeQrZaslon, type StripePlaciloStanje } from '@/components/pos/StripePlacilo'
 import { klicStripe, vrniPrekStripe } from '@/lib/stripe-connect-odjemalec'
+import { predlagajVsebino, preracunaj, kljucPretvorbe, stevilo } from '@/lib/pakiranje'
 
 // ================================================================
 // TEMA
@@ -6110,6 +6111,59 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
   const [log, setLog] = React.useState([])
   const fileRef = React.useRef(null)
 
+  /**
+   * PAKIRANJE (7.10.2026): dobavnica steje PAKIRANJA (1 sod, 1 paket), zaloga
+   * pa ENOTE PORABE (L, vrecke). Prej se je "1 sod 20 L za 40 EUR" knjizil
+   * kot +1 po 40 EUR. Zdaj ima vsaka vrstica vsebino pakiranja v enoti
+   * zaloge cilja: zaloga += kolicina x vsebina, nabavna = cena / vsebina.
+   * Glej lib/pakiranje.ts.
+   *
+   * `pakiranja[i]`: vsebina, ki jo je vpisal UPORABNIK (sicer predlog).
+   * `shranjenePretvorbe`: potrjene vsebine iz prejsnjih uvozov (po kljucu).
+   * `enoteNovih[i]`: enota zaloge za NOV artikel/surovino.
+   */
+  const [pakiranja, setPakiranja] = React.useState({})
+  const [shranjenePretvorbe, setShranjenePretvorbe] = React.useState({})
+  const [enoteNovih, setEnoteNovih] = React.useState({})
+
+  React.useEffect(() => {
+    if (step !== 'preview' || !result) return
+    let preklic = false
+    // Tabela je iz migracije 184 - pred njo poizvedba pade, predlog pa
+    // deluje naprej brez shranjenih pretvorb.
+    createClient().from('pretvorbe_pakiranja').select('kljuc, vsebina').eq('business_id', BUSINESS_ID)
+      .then(({ data, error }) => {
+        if (preklic || error || !data) return
+        setShranjenePretvorbe(Object.fromEntries(data.map(r => [r.kljuc, Number(r.vsebina)])))
+      })
+    return () => { preklic = true }
+  }, [step, result])
+
+  function ciljnaEnota(i) {
+    const u = ujemanja[i] || {}
+    const a = result?.artikli?.[i] || {}
+    if (u.itemId === 'NOV' || u.vir === 'nova_surovina' || u.vir === 'nov') {
+      return enoteNovih[i] || a.enota_vsebine || a.enota || 'kos'
+    }
+    if (!u.itemId) return null
+    const cilj = u.vrsta === 'ingredient'
+      ? (posData.ingredients || []).find(x => x.id === u.itemId)
+      : posData.items.find(x => x.id === u.itemId)
+    return cilj?.unit || 'kos'
+  }
+
+  function pakiranjeVrstice(i) {
+    const a = result?.artikli?.[i] || {}
+    if (pakiranja[i] != null) return { vsebina: Number(pakiranja[i]) || 1, vir: 'rocno' }
+    const k = kljucPretvorbe({ ean: a.ean, naziv: a.naziv }, result?.dobavitelj)
+    return predlagajVsebino({
+      naziv: a.naziv,
+      ai: { vsebina: a.vsebina_pakiranja, enota: a.enota_vsebine },
+      shranjeno: k ? shranjenePretvorbe[k] : null,
+      ciljnaEnota: ciljnaEnota(i) || 'kos',
+    })
+  }
+
   async function handleFile(f) {
     if (!f || f.type !== 'application/pdf') { setError('Prosim nalozi PDF datoteko'); return }
     setLoading(true); setError('')
@@ -6211,6 +6265,8 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
           ean: a.ean || null,
           quantity: Number(a.kolicina || 0),
           unit: a.enota || 'kos',
+          // Vsebina pakiranja v enoti zaloge (migracija 184); null = 1.
+          pack_size: Number(a.pack_size) > 0 && Number(a.pack_size) !== 1 ? Number(a.pack_size) : null,
           price_ex_vat: Number(a.cena_brez_ddv || 0),
           discount_pct: Number(a.popust_procent || 0),
           net_price_ex_vat: Number(a.neto_cena_brez_ddv || 0),
@@ -6241,6 +6297,12 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
         const izbira = ujemanja[idx] || {}
         const jeSurovina = izbira.vrsta === 'ingredient' || izbira.vir === 'nova_surovina'
         let ciljniId = izbira.itemId && izbira.itemId !== 'NOV' ? izbira.itemId : null
+        // PAKIRANJE (7.10.2026): kolicina in cena v ENOTI ZALOGE cilja.
+        const enotaZaloge = ciljnaEnota(idx) || artikel.enota || 'kos'
+        const pak = pakiranjeVrstice(idx)
+        const { zaloga: kolicinaZaloge, cenaNaEnoto } = preracunaj(Number(artikel.kolicina || 0), artikel.neto_cena_brez_ddv, pak.vsebina)
+        artikel.pack_size = pak.vsebina
+        artikel._vir_pakiranja = pak.vir
 
         // DODANO (20.8.2026): nova SUROVINA (kava, vino, moka ...). Te se
         // vodijo v loceni tabeli in nimajo prodajne cene - prodaja se izdelek
@@ -6249,9 +6311,9 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
           const { data: novaSur, error: surErr } = await sb.from('ingredients').insert({
             business_id: BUSINESS_ID,
             name: artikel.naziv,
-            unit: artikel.enota || 'kos',
+            unit: enotaZaloge,
             stock_qty: 0,
-            cost_price: artikel.neto_cena_brez_ddv || null,
+            cost_price: cenaNaEnoto,
             barcode: artikel.ean || null,
           }).select('id').single()
           if (surErr) throw surErr
@@ -6263,13 +6325,13 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
         if (jeSurovina && ciljniId) {
           const { error: sErr } = await sb.rpc('increment_ingredient_stock', {
             p_ingredient_id: ciljniId,
-            p_qty: Number(artikel.kolicina || 0),
+            p_qty: kolicinaZaloge,
           })
           if (sErr) throw sErr
 
-          // Nabavna cena in crtna koda - koda se zapomni za naslednjic.
+          // Nabavna cena (na enoto zaloge) in crtna koda - koda se zapomni za naslednjic.
           const patchSur: any = {}
-          if (artikel.neto_cena_brez_ddv) patchSur.cost_price = artikel.neto_cena_brez_ddv
+          if (cenaNaEnoto) patchSur.cost_price = cenaNaEnoto
           if (artikel.ean) patchSur.barcode = artikel.ean
           if (Object.keys(patchSur).length > 0) {
             const { error: pErr } = await sb.from('ingredients').update(patchSur).eq('id', ciljniId)
@@ -6281,7 +6343,9 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
           if (izbira.vir !== 'nova_surovina') {
             newLog.push({
               name: artikel.naziv, ok: true,
-              msg: '+' + artikel.kolicina + ' ' + (artikel.enota || 'kos') + ' (surovina)'
+              msg: '+' + stevilo(kolicinaZaloge) + ' ' + enotaZaloge + ' (surovina)'
+                + (pak.vsebina !== 1 ? ' · ' + artikel.kolicina + ' × ' + stevilo(pak.vsebina) : '')
+                + (cenaNaEnoto ? ' · ' + eur(cenaNaEnoto) + '/' + enotaZaloge : '')
                 + (artikel.ean ? ' · koda shranjena' : ''),
             })
           }
@@ -6294,10 +6358,10 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
             business_id: BUSINESS_ID,
             name: artikel.naziv,
             price: 0,                                   // prodajno ceno dolocite sami
-            cost_price: artikel.neto_cena_brez_ddv || null,
+            cost_price: cenaNaEnoto,
             barcode: artikel.ean || null,
             vat_rate: Number(artikel.ddv_stopnja ?? 22),
-            unit: artikel.enota || 'kos',
+            unit: enotaZaloge,
             stock: 0,
           }).select('id').single()
           if (novErr) throw novErr
@@ -6315,7 +6379,7 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
           // POPRAVLJENO (16.8.2026): prej branje zaloge iz ZASTARELEGA posnetka
           // + zapis absolutne vrednosti - ce je vmes tekla prodaja, je uvoz
           // povozil odstete kolicine. Zdaj atomarno pristevanje v bazi.
-          const qty = Number(artikel.kolicina || 0)
+          const qty = kolicinaZaloge
           const { error: stockErr } = await sb.rpc('increment_stock', {
             p_item_id: artikel.ujemanje_id,
             p_qty: qty,
@@ -6326,7 +6390,7 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
           // ce ju je AI dejansko prepoznal - prej je "|| null" IZBRISAL
           // obstojeco nabavno ceno, kadar je AI ni razbral iz PDF-ja.
           const patch: any = {}
-          if (artikel.neto_cena_brez_ddv) patch.cost_price = artikel.neto_cena_brez_ddv
+          if (cenaNaEnoto) patch.cost_price = cenaNaEnoto
           // Crtna koda se zapise ob PRVEM potrjenem ujemanju - naslednjic se
           // artikel ujame samodejno in rocnega dela ni vec (20.8.2026).
           if (artikel.ean) patch.barcode = artikel.ean
@@ -6338,7 +6402,9 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
           }
           newLog.push({
             name: artikel.naziv, ok: true,
-            msg: '+' + artikel.kolicina + ' ' + (artikel.enota || 'kos')
+            msg: '+' + stevilo(kolicinaZaloge) + ' ' + enotaZaloge
+              + (pak.vsebina !== 1 ? ' · ' + artikel.kolicina + ' × ' + stevilo(pak.vsebina) : '')
+              + (cenaNaEnoto ? ' · ' + eur(cenaNaEnoto) + '/' + enotaZaloge : '')
               + (artikel.ean ? ' · koda shranjena' : ''),
           })
         }
@@ -6362,6 +6428,8 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
           ean: a.ean || null,
           quantity: Number(a.kolicina || 0),
           unit: a.enota || 'kos',
+          // Vsebina pakiranja v enoti zaloge (migracija 184); null = 1.
+          pack_size: Number(a.pack_size) > 0 && Number(a.pack_size) !== 1 ? Number(a.pack_size) : null,
           price_ex_vat: Number(a.cena_brez_ddv || 0),
           discount_pct: Number(a.popust_procent || 0),
           net_price_ex_vat: Number(a.neto_cena_brez_ddv || 0),
@@ -6371,13 +6439,42 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
           total_inc_vat: Number(a.vrednost_z_ddv || 0),
         }))
       if (vrstice.length > 0) {
-        const { error: dlErr } = await sb.from('delivery_lines').insert(vrstice)
+        let { error: dlErr } = await sb.from('delivery_lines').insert(vrstice)
+        // Pred migracijo 184 stolpca pack_size ni: kolicino zapisemo kar v
+        // ENOTAH ZALOGE, da brisanje dobavnice odsteje pravo kolicino.
+        if (dlErr && /pack_size/.test(dlErr.message || '')) {
+          const brez = vrstice.map(({ pack_size, ...v }: any) => ({
+            ...v,
+            quantity: Math.round(Number(v.quantity || 0) * Number(pack_size || 1) * 1000) / 1000,
+          }))
+          ;({ error: dlErr } = await sb.from('delivery_lines').insert(brez))
+        }
         if (dlErr) {
           console.error('Vrstic dobavnice ni bilo mogoce shraniti:', dlErr)
           setError('Zaloga je posodobljena, vrstic dobavnice pa NI bilo mogoče shraniti: ' + dlErr.message)
         }
       }
     }
+
+    // 5. Zapomnimo si potrjene vsebine pakiranja - naslednjic se predlagajo same.
+    try {
+      const zapisi = (result?.artikli || [])
+        .map((a, i) => ({ a, i }))
+        .filter(({ a, i }) => selected[i] && (a.ujemanje_id || a.ujemanje_ingredient_id) && a.pack_size
+          && (a.pack_size !== 1 || a._vir_pakiranja === 'rocno'))
+        .map(({ a, i }) => ({
+          business_id: BUSINESS_ID,
+          kljuc: kljucPretvorbe({ ean: a.ean, naziv: a.naziv }, result?.dobavitelj),
+          vsebina: Number(a.pack_size),
+          enota: ciljnaEnota(i),
+          updated_at: new Date().toISOString(),
+        }))
+        .filter(z => z.kljuc)
+      if (zapisi.length > 0) {
+        const { error: pErr } = await sb.from('pretvorbe_pakiranja').upsert(zapisi, { onConflict: 'business_id,org_id,kljuc' })
+        if (pErr) console.warn('Pretvorb pakiranja ni bilo mogoce shraniti:', pErr.message)
+      }
+    } catch (e) { console.warn('Pretvorbe pakiranja:', e) }
 
     setLog(newLog); setStep('done'); setImporting(false)
   }
@@ -6657,6 +6754,42 @@ function DobavnicaImportModal({ posData, onClose, onImported, zacetniKorak }) {
                       {u.vrsta === 'ingredient' && u.itemId && u.vir !== 'nova_surovina' && ' · surovina'}
                       {u.vir === 'brez' && '⚠ zaloga se ne bo spremenila'}
                     </div>
+                    {/* PAKIRANJE (7.10.2026): koliko enot zaloge je v enem pakiranju. */}
+                    {u.itemId && (() => {
+                      const enota = ciljnaEnota(i) || 'kos'
+                      const pak = pakiranjeVrstice(i)
+                      const { zaloga, cenaNaEnoto } = preracunaj(Number(a.kolicina || 0), a.neto_cena_brez_ddv, pak.vsebina)
+                      const jeNov = u.itemId === 'NOV' || u.vir === 'nova_surovina' || u.vir === 'nov'
+                      return (
+                        <div style={{ marginTop:8, padding:'8px 10px', borderRadius:8, background:T.surface2, fontSize:12 }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
+                            <span style={{ color:T.muted }}>{a.kolicina} {a.enota || 'kos'} ×</span>
+                            <input type="number" min="0" step="any" inputMode="decimal"
+                              value={pakiranja[i] ?? pak.vsebina}
+                              onChange={e => setPakiranja(p => ({ ...p, [i]: e.target.value }))}
+                              title="Koliko enot zaloge je v enem pakiranju (sod 20 L → 20, paket 20 vrečk → 20)"
+                              style={{ width:72, padding:'5px 7px', borderRadius:7, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:12, background:T.inputBg }}/>
+                            {jeNov ? (
+                              <select value={enota} onChange={e => setEnoteNovih(p => ({ ...p, [i]: e.target.value }))}
+                                style={{ padding:'5px 6px', borderRadius:7, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:12, background:T.inputBg }}>
+                                {Array.from(new Set([enota, ...ENOTE])).map(en => <option key={en} value={en}>{en}</option>)}
+                              </select>
+                            ) : <span>{enota}</span>}
+                            <span style={{ color:T.muted }}>v pakiranju</span>
+                            <span style={{ marginLeft:'auto', fontWeight:700 }}>
+                              → zaloga +{stevilo(zaloga)} {enota}{cenaNaEnoto ? ' · ' + eur(cenaNaEnoto) + '/' + enota : ''}
+                            </span>
+                          </div>
+                          <div style={{ fontSize:10, color:T.muted, marginTop:3 }}>
+                            {pak.vir === 'shranjeno' && 'zapomnjeno iz prejšnjega uvoza'}
+                            {pak.vir === 'ai' && 'prebral AI — preverite'}
+                            {pak.vir === 'naziv' && 'razbrano iz naziva — preverite'}
+                            {pak.vir === 'rocno' && 'vpisali ste sami — zapomnilo se bo za naslednjič'}
+                            {pak.vir === 'privzeto' && 'pakiranje = 1 enota zaloge; spremenite, če je v pakiranju več (sod, paket …)'}
+                          </div>
+                        </div>
+                      )
+                    })()}
                   </div>
                 )}
               </div>
@@ -7019,8 +7152,9 @@ function InventoryScreen({ posData }) {
    */
   async function deleteDelivery(d) {
     const db = createClient()
+    // '*': stolpec pack_size (migracija 184) pred migracijo se ne obstaja.
     const { data: vrstice } = await db.from('delivery_lines')
-      .select('item_id, ingredient_id, item_name, quantity').eq('delivery_id', d.id)
+      .select('*').eq('delivery_id', d.id)
 
     const poknjizene = (vrstice || []).filter(v => v.item_id || v.ingredient_id)
     const opozorilo = poknjizene.length > 0
@@ -7034,14 +7168,16 @@ function InventoryScreen({ posData }) {
     const neuspeli = []
     for (const v of poknjizene) {
       // Surovina in artikel sta v LOCENIH tabelah, vsaka s svojo funkcijo.
+      // PAKIRANJE (7.10.2026): v zalogo je slo kolicina x vsebina pakiranja.
+      const vZalogi = Number(v.quantity || 0) * (Number(v.pack_size) > 0 ? Number(v.pack_size) : 1)
       const { error } = v.ingredient_id
         ? await db.rpc('increment_ingredient_stock', {
             p_ingredient_id: v.ingredient_id,
-            p_qty: -Number(v.quantity || 0),
+            p_qty: -vZalogi,
           })
         : await db.rpc('increment_stock', {
             p_item_id: v.item_id,
-            p_qty: -Number(v.quantity || 0),
+            p_qty: -vZalogi,
           })
       if (error) neuspeli.push(v.item_name)
     }
