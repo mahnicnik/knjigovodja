@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import { preracunaj, stevilo } from '@/lib/pakiranje'
 
 /**
  * UVOZ DOBAVNICE V ZALOGO PORTALA (26.8.2026)
@@ -18,6 +19,15 @@ export default function UvozDobavniceModal({ orgId, onClose, onDone }: any) {
   const [napaka, setNapaka] = useState<string | null>(null)
   const [podatki, setPodatki] = useState<any>(null)
   const [izbrani, setIzbrani] = useState<Record<number, boolean>>({})
+  // PAKIRANJE (7.10.2026): vsebina, ki jo je uporabnik popravil (sicer predlog streznika).
+  const [vsebine, setVsebine] = useState<Record<number, string>>({})
+  const [enote, setEnote] = useState<Record<number, string>>({})
+
+  const vsebinaVrstice = (a: any, i: number) => {
+    const v = vsebine[i] != null ? Number(vsebine[i]) : Number(a.vsebina)
+    return v > 0 ? v : 1
+  }
+  const enotaVrstice = (a: any, i: number) => enote[i] || a.enota_zaloge || a.enota || 'kos'
 
   async function naloziDatoteko(f: File) {
     setNapaka(null)
@@ -53,7 +63,15 @@ export default function UvozDobavniceModal({ orgId, onClose, onDone }: any) {
   async function uvozi() {
     setKorak('uvazam')
     setNapaka(null)
-    const zaUvoz = podatki.artikli.filter((_: any, i: number) => izbrani[i])
+    const zaUvoz = podatki.artikli
+      .map((a: any, i: number) => ({
+        ...a,
+        vsebina: vsebinaVrstice(a, i),
+        vsebina_rocno: vsebine[i] != null,
+        enota_zaloge: enotaVrstice(a, i),
+        _i: i,
+      }))
+      .filter((a: any) => izbrani[a._i])
     try {
       const res = await fetch('/api/zaloge/uvoz-dobavnice', {
         method: 'POST',
@@ -130,7 +148,11 @@ export default function UvozDobavniceModal({ orgId, onClose, onDone }: any) {
             </div>
 
             <div style={{ border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10, overflow: 'hidden', marginBottom: 16 }}>
-              {podatki.artikli.map((a: any, i: number) => (
+              {podatki.artikli.map((a: any, i: number) => {
+                const vsebina = vsebinaVrstice(a, i)
+                const enota = enotaVrstice(a, i)
+                const { zaloga, cenaNaEnoto } = preracunaj(Number(a.kolicina || 0), a.neto_cena_brez_ddv, vsebina)
+                return (
                 <div key={i} onClick={() => setIzbrani(p => ({ ...p, [i]: !p[i] }))} style={{
                   display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', cursor: 'pointer',
                   borderBottom: '1px solid rgba(0,0,0,0.05)',
@@ -144,16 +166,39 @@ export default function UvozDobavniceModal({ orgId, onClose, onDone }: any) {
                       {a.neto_cena_brez_ddv != null && ` · ${Number(a.neto_cena_brez_ddv).toFixed(4)} €/enoto`}
                       {a.sku && ` · ${a.sku}`}
                     </div>
+                    {/* Koliko enot zaloge je v enem pakiranju (sod 20 L → 20). */}
+                    {izbrani[i] && (
+                      <div onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 12, color: '#555', flexWrap: 'wrap' }}>
+                        <span>{a.kolicina} {a.enota || 'kos'} ×</span>
+                        <input type="number" min="0" step="any" inputMode="decimal"
+                          value={vsebine[i] ?? String(a.vsebina ?? 1)}
+                          onChange={e => setVsebine(p => ({ ...p, [i]: e.target.value }))}
+                          style={{ width: 70, padding: '4px 6px', border: '1px solid rgba(0,0,0,0.15)', borderRadius: 6, fontSize: 12 }}/>
+                        {a.obstaja ? <span>{enota}</span> : (
+                          <input value={enota} onChange={e => setEnote(p => ({ ...p, [i]: e.target.value }))}
+                            style={{ width: 56, padding: '4px 6px', border: '1px solid rgba(0,0,0,0.15)', borderRadius: 6, fontSize: 12 }}/>
+                        )}
+                        <span>v pakiranju → <strong>+{stevilo(zaloga)} {enota}</strong>
+                          {cenaNaEnoto != null && ` · ${cenaNaEnoto.toFixed(4)} €/${enota}`}</span>
+                        <span style={{ fontSize: 10, color: '#999', width: '100%' }}>
+                          {vsebine[i] != null ? 'vpisali ste sami — zapomnilo se bo za naslednjič'
+                            : a.vir_vsebine === 'shranjeno' ? 'zapomnjeno iz prejšnjega uvoza'
+                            : a.vir_vsebine === 'ai' ? 'prebral AI — preverite'
+                            : a.vir_vsebine === 'naziv' ? 'razbrano iz naziva — preverite'
+                            : 'pakiranje = 1 enota zaloge; spremenite, če je v pakiranju več'}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <div style={{
                     fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 5, whiteSpace: 'nowrap',
                     background: a.obstaja ? '#E1F5EE' : '#FFF4E0',
                     color: a.obstaja ? '#0E5E3B' : '#8a6a1f',
                   }}>
-                    {a.obstaja ? `+${a.kolicina} (ima ${a.trenutna_zaloga})` : 'NOV'}
+                    {a.obstaja ? `+${stevilo(zaloga)} (ima ${a.trenutna_zaloga})` : 'NOV'}
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
 
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>

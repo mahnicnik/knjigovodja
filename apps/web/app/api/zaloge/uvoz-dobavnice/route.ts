@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import Anthropic from '@anthropic-ai/sdk'
 import { zahtevajPaket } from '@/lib/paket'
+import { predlagajVsebino, preracunaj, kljucPretvorbe } from '@/lib/pakiranje'
 
 /**
  * UVOZ DOBAVNICE V ZALOGO PORTALA (26.8.2026)
@@ -41,6 +42,8 @@ Vrni SAMO JSON, brez pojasnil in brez oznak za kodo:
       "sku": "šifra ali EAN, če obstaja, sicer null",
       "kolicina": 12,
       "enota": "kos",
+      "vsebina_pakiranja": null,
+      "enota_vsebine": null,
       "cena_brez_ddv": 1.05,
       "popust_procent": 0,
       "ddv_stopnja": 22,
@@ -53,7 +56,8 @@ Pravila:
 - "neto_cena_brez_ddv" je cena NA ENOTO po odbitem popustu — to je nabavna cena.
 - Če je na dokumentu samo cena z DDV, jo pretvori v ceno brez DDV.
 - Če česa ni mogoče razbrati, uporabi null. Ne ugibaj.
-- Zneskov ne zaokrožuj na dve mesti — nabavne cene imajo pogosto štiri.`
+- Zneskov ne zaokrožuj na dve mesti — nabavne cene imajo pogosto štiri.
+- "vsebina_pakiranja" in "enota_vsebine": koliko ENOT PORABE je v ENEM pakiranju, kot ga šteje "kolicina". Primeri: "SOD LAŠKO 20L", 1 kos → 20 in "L"; "ČAJ 20/1" ali "20 vrečk", 1 paket → 20 in "kos"; "VINO 6x0,75L", 1 karton → 6 in "kos"; "KAVA 1KG", 2 kos → 1 in "kg". Če je pakiranje že enota porabe (1 steklenica, 1 kos) ali tega ni mogoče razbrati, vrni null. Ne ugibaj.`
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies()
@@ -78,9 +82,19 @@ export async function POST(req: NextRequest) {
     let dodanih = 0, posodobljenih = 0
     const napake: string[] = []
 
+    const pretvorbe: any[] = []
     for (const a of artikli) {
       if (!a?.naziv || !(Number(a.kolicina) > 0)) continue
-      const cena = a.neto_cena_brez_ddv != null ? Number(a.neto_cena_brez_ddv) : null
+      // PAKIRANJE (7.10.2026): kolicina in cena v ENOTI ZALOGE - sod 20 L
+      // za 40 EUR je +20 L po 2,00 EUR/L, ne +1 po 40 EUR. Vsebino potrdi
+      // uporabnik v predlogu (lib/pakiranje.ts).
+      const vsebina = Number(a.vsebina) > 0 ? Number(a.vsebina) : 1
+      const { zaloga: kolicina, cenaNaEnoto: cena } = preracunaj(Number(a.kolicina), a.neto_cena_brez_ddv, vsebina)
+      const enotaZaloge = a.enota_zaloge || a.enota || 'kos'
+      const kljuc = kljucPretvorbe({ sku: a.sku, naziv: a.naziv }, a.dobavitelj)
+      if (kljuc && (vsebina !== 1 || a.vsebina_rocno)) {
+        pretvorbe.push({ org_id: orgId, kljuc, vsebina, enota: enotaZaloge, updated_at: new Date().toISOString() })
+      }
 
       // Ujemanje najprej po sifri, sele nato po imenu - sifra je zanesljivejsa.
       const { data: obstojeci } = a.sku
@@ -92,7 +106,7 @@ export async function POST(req: NextRequest) {
       const najden = obstojeci?.[0]
 
       if (najden) {
-        const novo = Number(najden.current_stock || 0) + Number(a.kolicina)
+        const novo = Number(najden.current_stock || 0) + kolicina
         const posodobitev: any = { current_stock: novo }
         if (cena != null && cena > 0) posodobitev.purchase_price = cena
         const { error } = await supabase.from('inventory_items').update(posodobitev).eq('id', najden.id)
@@ -101,19 +115,19 @@ export async function POST(req: NextRequest) {
 
         await supabase.from('inventory_movements').insert({
           org_id: orgId, item_id: najden.id, type: 'in',
-          quantity: Number(a.kolicina), unit_price: cena,
+          quantity: kolicina, unit_price: cena,
           reference: a.dokument || 'Uvoz dobavnice',
-          notes: a.dobavitelj || null,
+          notes: opomba(a, vsebina),
         })
       } else {
         const { data: nov, error } = await supabase.from('inventory_items').insert({
           org_id: orgId,
           name: String(a.naziv).slice(0, 200),
           sku: a.sku || null,
-          unit: a.enota || 'kos',
+          unit: enotaZaloge,
           purchase_price: cena,
           vat_rate: a.ddv_stopnja ?? 22,
-          current_stock: Number(a.kolicina),
+          current_stock: kolicina,
           is_active: true,
         }).select('id').single()
 
@@ -122,11 +136,18 @@ export async function POST(req: NextRequest) {
 
         await supabase.from('inventory_movements').insert({
           org_id: orgId, item_id: nov.id, type: 'in',
-          quantity: Number(a.kolicina), unit_price: cena,
+          quantity: kolicina, unit_price: cena,
           reference: a.dokument || 'Uvoz dobavnice',
-          notes: a.dobavitelj || null,
+          notes: opomba(a, vsebina),
         })
       }
+    }
+
+    // Potrjene vsebine si zapomnimo (migracija 184). Pred migracijo tabele ni -
+    // uvoz zaradi tega ne sme pasti.
+    if (pretvorbe.length > 0) {
+      const { error: pErr } = await supabase.from('pretvorbe_pakiranja').upsert(pretvorbe, { onConflict: 'business_id,org_id,kljuc' })
+      if (pErr) console.warn('Pretvorb pakiranja ni bilo mogoce shraniti:', pErr.message)
     }
 
     return NextResponse.json({ ok: true, dodanih, posodobljenih, napake: napake.slice(0, 5) })
@@ -175,16 +196,32 @@ export async function POST(req: NextRequest) {
     // Povemo, kateri artikli so ZE v zalogi - uporabnik vidi, kaj bo dodano
     // in kaj posodobljeno, preden potrdi.
     const { data: vsi } = await supabase.from('inventory_items')
-      .select('id, name, sku, current_stock, purchase_price').eq('org_id', orgId)
+      .select('id, name, sku, unit, current_stock, purchase_price').eq('org_id', orgId)
+    // Shranjene pretvorbe pakiranja (migracija 184); pred migracijo jih ni.
+    const { data: shranjene } = await supabase.from('pretvorbe_pakiranja')
+      .select('kljuc, vsebina').eq('org_id', orgId)
+    const poKljucu = new Map((shranjene || []).map((r: any) => [r.kljuc, Number(r.vsebina)]))
 
     const oznaceni = podatki.artikli.map((a: any) => {
       const najden = (vsi || []).find((x: any) =>
         (a.sku && x.sku && String(x.sku) === String(a.sku))
         || String(x.name).toLowerCase() === String(a.naziv || '').toLowerCase())
+      // Enota zaloge: obstojeci artikel ima svojo, nov dobi enoto porabe.
+      const enotaZaloge = najden?.unit || a.enota_vsebine || a.enota || 'kos'
+      const kljuc = kljucPretvorbe({ sku: a.sku, naziv: a.naziv }, podatki.dobavitelj)
+      const pak = predlagajVsebino({
+        naziv: a.naziv,
+        ai: { vsebina: a.vsebina_pakiranja, enota: a.enota_vsebine },
+        shranjeno: kljuc ? poKljucu.get(kljuc) ?? null : null,
+        ciljnaEnota: enotaZaloge,
+      })
       return {
         ...a,
         dobavitelj: podatki.dobavitelj ?? null,
         dokument: podatki.stevilka_dokumenta ?? null,
+        enota_zaloge: enotaZaloge,
+        vsebina: pak.vsebina,
+        vir_vsebine: pak.vir,
         obstaja: !!najden,
         trenutna_zaloga: najden?.current_stock ?? null,
         prejsnja_cena: najden?.purchase_price ?? null,
@@ -202,4 +239,10 @@ export async function POST(req: NextRequest) {
     console.error('uvoz dobavnice (portal):', e?.message || e)
     return NextResponse.json({ error: e?.message || 'Dokumenta ni bilo mogoče obdelati.' }, { status: 500 })
   }
+}
+
+/** Opomba gibanja: dobavitelj in pakiranje, da je iz kartice razvidno, od kod kolicina. */
+function opomba(a: any, vsebina: number): string | null {
+  const deli = [a.dobavitelj, vsebina !== 1 ? `${a.kolicina} ${a.enota || 'kos'} × ${vsebina}` : null].filter(Boolean)
+  return deli.length ? deli.join(' · ') : null
 }

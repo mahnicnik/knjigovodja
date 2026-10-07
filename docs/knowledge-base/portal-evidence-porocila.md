@@ -7,7 +7,8 @@ koda:
   - apps/web/app/porocila/page.tsx, apps/web/app/statistika/page.tsx
   - apps/web/app/kilometrina/page.tsx, apps/web/app/zaloge/page.tsx (/zaloga preusmeri sem)
   - apps/web/app/amortizacija/page.tsx, apps/web/app/reprezentanca/page.tsx, apps/web/app/avto/page.tsx
-posodobljeno: 2026-10-05
+  - apps/web/components/zaloge/UvozDobavniceModal.tsx, apps/web/app/api/zaloge/uvoz-dobavnice/route.ts (uvoz dobavnice)
+posodobljeno: 2026-10-07
 ---
 
 # Portal – evidence in poročila (meni Evidenca)
@@ -30,6 +31,8 @@ Stran izračuna km in znesek ter natisne potni nalog. (Potni nalogi za **zaposle
 ## Zaloge (portal) – Evidenca → Zaloga
 
 Enostavna zaloga v portalu (ločena od zaloge POS blagajne): artikli (SKU, kategorija, enota, nabavna in prodajna cena, DDV, minimalna zaloga), gibanja **⬆ Prevzem**, **⬇ Izdaja**, **⚖ Popravek**, **📄 Uvozi dobavnico**, **✍️ Ročni vnos** dobavnice, statistika (vrednost nabave in prodaje, marža, top artikli, »Potrebno naročiti«).
+
+**📄 Uvozi dobavnico**: naloži PDF ali fotografijo, preveri prebrane artikle in potrdi. Pri vsaki vrstici je **vsebina pakiranja** – koliko enot zaloge je v enem pakiranju (sod 20 L → 20, paket 20 vrečk → 20). Zaloga se poveča za količino × vsebino, nabavna cena se zapiše na enoto zaloge (cena pakiranja / vsebina). Predlog pride iz prejšnjega uvoza, od AI ali iz naziva; popraviš ga v polju, potrjena vrednost se zapomni za ta artikel dobavitelja. Pri novem artiklu vpišeš tudi enoto zaloge.
 
 Zaloga POS blagajne (artikli, surovine, normativi) je ločena – v blagajni na zaslonu **Zaloga** (glej `pos-zaloga-dobavnice-inventura.md`).
 

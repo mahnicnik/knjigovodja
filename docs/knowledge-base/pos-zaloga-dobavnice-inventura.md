@@ -6,7 +6,8 @@ poti: [/pos]
 koda:
   - apps/web/app/pos/page.tsx (InventoryScreen, DobavnicaImportModal, InventuraScreen)
   - apps/web/app/api/pos/import-delivery/route.ts (AI branje PDF dobavnice)
-posodobljeno: 2026-10-05
+  - apps/web/lib/pakiranje.ts (vsebina pakiranja → enota zaloge)
+posodobljeno: 2026-10-07
 ---
 
 # POS – zaloga, dobavnice in inventura
@@ -24,11 +25,18 @@ Zavihki **Artikli**, **Surovine**, **Storitve**, **Dobavnice**; filtri **Vse**, 
 1. **Zaloga → Uvozi dobavnico**.
 2. Povleci PDF dobavnice ali računa dobavitelja. AI prepozna dobavitelja, številko dobavnice, postavke, količine in cene.
 3. Za vsako vrstico preveri **Knjiži na:** – na obstoječi artikel, na obstoječo **surovino**, kot **nov artikel** ali kot **novo surovino**. Blagajna sama predlaga ujemanje po črtni kodi in podobnosti naziva (npr. »PIVO CORONA EXTRA 0,33L« → »Corona«).
-4. Odznači vrstice, ki jih ne želiš knjižiti, in potrdi. Zaloga se poveča, nabavne cene in zgodovina cen se posodobijo.
+4. Pri vsaki povezani vrstici preveri **vsebino pakiranja**: »1 kos × **20** L v pakiranju → zaloga +20 L · 2,00 €/L«. Število pomeni, koliko enot zaloge (enota izbrane surovine ali artikla) je v enem pakiranju z dobavnice – sod piva 20 L → 20, paket čaja z 20 vrečkami → 20, karton 6 steklenic → 6 (če zalogo vodiš v kosih) ali 4,5 (če jo vodiš v L). Predlog pride iz prejšnjega uvoza, od AI ali iz naziva; popraviš ga v polju. Pri novem artiklu ali surovini izbereš tudi enoto zaloge.
+5. Odznači vrstice, ki jih ne želiš knjižiti, in potrdi. Zaloga se poveča za **količino × vsebino**, nabavna cena se zapiše **na enoto zaloge** (cena pakiranja / vsebina), zgodovina cen se posodobi.
+
+Potrjena vsebina pakiranja se **zapomni** za ta artikel dobavitelja (po črtni kodi, sicer po nazivu in dobavitelju) in se naslednjič predlaga sama.
 
 **Ročni vnos** (gumb poleg uvoza): enak obrazec brez PDF-ja – dobavitelj, št. dobavnice, postavke z nazivom, količino, ceno na enoto in DDV (22 %, 9,5 %, 5 %, 0 % ali 8 % pavšalno nadomestilo; pri pavšalnem nadomestilu vpiši še številko dovoljenja FURS).
 
-Uvožene dobavnice so v zavihku **Dobavnice** (urejanje podatkov, brisanje).
+Uvožene dobavnice so v zavihku **Dobavnice** (urejanje podatkov, brisanje). Brisanje dobavnice zalogo zmanjša za toliko, kot je bilo knjiženo (količina × vsebina pakiranja).
+
+### Sod 20 L se je v zalogo vpisal kot 1 in 40 € – zakaj?
+
+Do 7. 10. 2026 uvoz ni poznal vsebine pakiranja – količino in ceno z dobavnice je prenesel 1 : 1. Pri novih uvozih vpiši vsebino pakiranja (glej zgoraj). Zalogo in nabavno ceno starih uvozov popravi z **Popravi zalogo** pri surovini ali z **inventuro**, nabavno ceno pa v nastavitvah surovine/artikla.
 
 ### Ali uvoznik dobavnic vidi surovine?
 

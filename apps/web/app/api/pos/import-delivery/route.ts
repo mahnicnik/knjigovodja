@@ -86,6 +86,8 @@ JSON struktura:
       "ean": "EAN/barcode koda ali null",
       "kolicina": 160,
       "enota": "kos",
+      "vsebina_pakiranja": null,
+      "enota_vsebine": null,
       "cena_brez_ddv": 1.1989,
       "popust_procent": 12.0,
       "neto_cena_brez_ddv": 1.0575,
@@ -100,7 +102,10 @@ JSON struktura:
   "skupaj_brez_ddv": 329.45,
   "skupaj_ddv": 72.49,
   "skupaj_z_ddv": 401.94
-}`,
+}
+
+Pravila:
+- "vsebina_pakiranja" in "enota_vsebine": koliko ENOT PORABE je v ENEM pakiranju, kot ga šteje "kolicina". Primeri: "SOD LAŠKO 20L", 1 kos → 20 in "L"; "ČAJ 20/1" ali "20 vrečk", 1 paket → 20 in "kos"; "VINO 6x0,75L", 1 karton → 6 in "kos"; "KAVA 1KG", 2 kos → 1 in "kg". Če je pakiranje že enota porabe (1 steklenica, 1 kos) ali tega ni mogoče razbrati, vrni null. Ne ugibaj.`,
             },
           ],
         },
