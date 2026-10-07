@@ -50,6 +50,19 @@
  *   203 vrednost postavke PO popustu · 125 osnova · 124 DDV · 204 popust
  *   79 sestevek postavk · 260 popusti skupaj · 389 osnova skupaj
  *   176 DDV skupaj · 388 skupaj z DDV · 9 za placilo
+ *
+ * PRAVILA EN 16931 (popravek 7.10.2026, primerjava s podpisanim e-racunom
+ * A1 Slovenija, ki prestane shemo in pravila):
+ *   BR-21    vsaka postavka ima zaporedno stevilko (S_LIN/D_1082)
+ *   BR-26    vsaka postavka ima neto ceno (G_SG29 S_PRI AAA)
+ *   BR-CO-10 MOA 79 = vsota MOA 203 postavk, torej PO popustih postavk.
+ *            MOA 260 je SAMO za popuste na ravni racuna (G_SG16), ki jih
+ *            ne izdajamo - popust postavke je ze v 203 in v G_SG39.
+ *   Zaokrozevanje: vsaka postavka na cent, vsote iz zaokrozenih postavk,
+ *   DDV po stopnji iz zaokrozene osnove (BR-S-09 ipd.).
+ *   BR-CO-25 brez roka placila se navedejo placilni pogoji (FTX AAB).
+ *   Kategorija DDV po razlogu oprostitve (vat_exemption_code):
+ *     76a, 25 -> AE · 46 -> K · 52 -> G · 42-*, 44-*, 94, custom -> E
  */
 
 export interface ERacunStranka {
@@ -84,6 +97,8 @@ export interface ERacunPodatki {
   kupec: ERacunStranka
   postavke: ERacunPostavka[]
   klavzulaOprostitve?: string | null
+  /** Koda iz lib/vat-exemptions.ts (npr. '76a', '46', '42-1'). */
+  kodaOprostitve?: string | null
 }
 
 const x = (s: unknown): string =>
@@ -91,19 +106,48 @@ const x = (s: unknown): string =>
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&apos;')
 
-const z = (n: number): string => (Math.round((Number(n) || 0) * 100) / 100).toFixed(2)
+/** Zaokrozi na cent, 1,005 -> 1,01 (brez napake plavajoce vejice). */
+export const r2 = (n: number): number => {
+  const v = Number(n) || 0
+  return Math.sign(v) * Math.round((Math.abs(v) + Number.EPSILON) * 100) / 100
+}
+
+const z = (n: number): string => r2(n).toFixed(2)
 
 /** Znesek s sifro - v e-SLOG se vsak znesek nosi svojo sifro pomena. */
 const moa = (sifra: number, znesek: number) =>
   `<S_MOA><C_C516><D_5025>${sifra}</D_5025><D_5004>${z(znesek)}</D_5004></C_C516></S_MOA>`
 
+/** Cena na enoto: do 4 decimalke (cena 0,335 € ne sme postati 0,34). */
+const cenaNaEnoto = (n: number): string => {
+  const v = Math.round(((Number(n) || 0) + Number.EPSILON) * 10000) / 10000
+  return v.toFixed(Math.max(2, (String(v).split('.')[1] || '').length))
+}
+
 /**
  * Davcna kategorija po uradnem pojasnilu. Nezavezanec izda racun s kodo E
  * in klavzulo o razlogu - enako kot na papirnem racunu.
+ *
+ * Zavezanec s stopnjo 0: kategorija po razlogu oprostitve. Prej je bila
+ * vedno Z (niclna stopnja), kar je za obrnjeno obveznost (76.a, 25. clen),
+ * dobavo v EU (46.) in izvoz (52.) napacno - prejemnik bi DDV knjizil
+ * napacno, pri AE ga sploh ne bi samoobracunal.
  */
-function davcnaKategorija(stopnja: number, zavezanec: boolean): string {
+export function davcnaKategorija(stopnja: number, zavezanec: boolean, koda?: string | null): string {
   if (!zavezanec) return 'E'
-  return (Number(stopnja) || 0) > 0 ? 'S' : 'Z'
+  if ((Number(stopnja) || 0) > 0) return 'S'
+  const k = String(koda || '')
+  if (k === '76a' || k === '25') return 'AE'
+  if (k === '46') return 'K'
+  if (k === '52') return 'G'
+  if (k === '94' || k === 'custom' || k.startsWith('42') || k.startsWith('44')) return 'E'
+  return 'Z'
+}
+
+/** Drzava iz ID za DDV (DE123... -> DE); brez nje SI. Grcija ima EL. */
+function drzavaStranke(s: ERacunStranka): string {
+  const m = /^([A-Z]{2})/.exec(String(s.idZaDdv || '').toUpperCase().trim())
+  return m ? (m[1] === 'EL' ? 'GR' : m[1]) : 'SI'
 }
 
 const dtm = (sifra: number, datum: string) =>
@@ -140,13 +184,15 @@ function stranka(vloga: 'SE' | 'BY' | 'DP', s: ERacunStranka): string {
       `<S_COM><C_C076><D_3148>${x(s.telefon)}</D_3148><D_3155>TE</D_3155></C_C076></S_COM></G_SG5>`
     : ''
 
+  const drzava = drzavaStranke(s)
   return `<G_SG2><S_NAD><D_3035>${vloga}</D_3035>` +
     `<C_C080><D_3036>${x(s.naziv)}</D_3036></C_C080>` +
     (s.naslov ? `<C_C059><D_3042>${x(s.naslov)}</D_3042></C_C059>` : '') +
     (s.kraj ? `<D_3164>${x(String(s.kraj).toUpperCase())}</D_3164>` : '') +
-    `<C_C819><D_3228>SLOVENIA</D_3228></C_C819>` +
+    (drzava === 'SI' ? `<C_C819><D_3228>SLOVENIA</D_3228></C_C819>` : '') +
     (s.posta ? `<D_3251>${x(s.posta)}</D_3251>` : '') +
-    `<D_3207>SI</D_3207></S_NAD>` +
+    // Prej vedno SI - tudi za kupca iz EU pri 46. in 25. clenu.
+    `<D_3207>${drzava}</D_3207></S_NAD>` +
     banka + sklici + stik +
     `</G_SG2>`
 }
@@ -155,24 +201,26 @@ export function zgradiESlogXml(d: ERacunPodatki): string {
   // Zavezanost se doloca po IZDAJATELJU - on obracunava DDV.
   const zavezanecZaDdv = !!d.izdajatelj.idZaDdv
   // Postavke: vrednost pred popustom, popust, osnova, DDV.
-  let sestevekPostavk = 0, popustiSkupaj = 0, osnovaSkupaj = 0, ddvSkupaj = 0
-  const poStopnji = new Map<number, { osnova: number; ddv: number }>()
+  let sestevekPostavk = 0
+  const poStopnji = new Map<string, { kategorija: string; stopnja: number; osnova: number }>()
 
   const vrstice = d.postavke.map((p, i) => {
-    const bruto = (Number(p.cenaBrezDdv) || 0) * (Number(p.kolicina) || 0)
+    // Vsak znesek postavke na cent; vsote samo iz zaokrozenih zneskov (BR-CO-10).
+    const cena = Number(p.cenaBrezDdv) || 0
+    const bruto = r2(cena * (Number(p.kolicina) || 0))
     const popustPct = Number(p.popustOdstotek) || 0
-    const popust = bruto * popustPct / 100
-    const osnova = bruto - popust
+    const popust = r2(bruto * popustPct / 100)
+    const osnova = r2(bruto - popust)
     const stopnja = Number(p.stopnjaDdv) || 0
-    const ddv = osnova * stopnja / 100
+    // DDV postavke je samo informativen; zavezujoc je DDV po stopnji v G_SG52.
+    const ddv = r2(osnova * stopnja / 100)
+    const kategorija = davcnaKategorija(stopnja, zavezanecZaDdv, d.kodaOprostitve)
 
-    sestevekPostavk += bruto
-    popustiSkupaj += popust
-    osnovaSkupaj += osnova
-    ddvSkupaj += ddv
-    const obstoj = poStopnji.get(stopnja) || { osnova: 0, ddv: 0 }
-    obstoj.osnova += osnova; obstoj.ddv += ddv
-    poStopnji.set(stopnja, obstoj)
+    sestevekPostavk = r2(sestevekPostavk + osnova)
+    const kljuc = `${kategorija}|${stopnja}`
+    const obstoj = poStopnji.get(kljuc) || { kategorija, stopnja, osnova: 0 }
+    obstoj.osnova = r2(obstoj.osnova + osnova)
+    poStopnji.set(kljuc, obstoj)
 
     const popustBlok = popustPct > 0
       ? `<G_SG39><S_ALC><D_5463>A</D_5463><C_C552><D_5189>95</D_5189></C_C552></S_ALC>` +
@@ -180,27 +228,33 @@ export function zgradiESlogXml(d: ERacunPodatki): string {
         `<G_SG42>${moa(204, popust)}</G_SG42></G_SG39>`
       : ''
 
-    return `<G_SG26><S_LIN/>` +
+    return `<G_SG26><S_LIN><D_1082>${i + 1}</D_1082></S_LIN>` +
       `<S_IMD><D_7077>F</D_7077><C_C273><D_7008>${x(p.opis)}</D_7008></C_C273></S_IMD>` +
       `<S_QTY><C_C186><D_6063>47</D_6063><D_6060>${z(p.kolicina)}</D_6060><D_6411>C62</D_6411></C_C186></S_QTY>` +
       // Znesek postavke je PO popustu - preverjeno na pravem racunu, kjer
       // je MOA 203 = 54,40 in DDV 11,97, kar je 22 % od 54,40. Popust se
       // navede posebej v G_SG39, sestevek pred popusti pa v MOA 79.
       `<G_SG27>${moa(203, osnova)}</G_SG27>` +
+      // Neto cena na enoto (BT-146), pred popustom postavke - kot pri A1.
+      `<G_SG29><S_PRI><C_C509><D_5125>AAA</D_5125><D_5118>${cenaNaEnoto(cena)}</D_5118></C_C509></S_PRI></G_SG29>` +
       `<G_SG34><S_TAX><D_5283>7</D_5283><C_C241><D_5153>VAT</D_5153></C_C241>` +
       `<C_C243><D_5278>${z(stopnja)}</D_5278></C_C243>` +
-      `<D_5305>${davcnaKategorija(stopnja, zavezanecZaDdv)}</D_5305></S_TAX>` +
+      `<D_5305>${kategorija}</D_5305></S_TAX>` +
       moa(125, osnova) + moa(124, ddv) + `</G_SG34>` +
       popustBlok +
       `</G_SG26>`
   }).join('')
 
-  const skupaj = osnovaSkupaj + ddvSkupaj
+  // DDV po stopnji iz zaokrozene osnove (BR-S-09); vsota iz zaokrozenih zneskov.
+  const stopnje = [...poStopnji.values()].map(v => ({ ...v, ddv: r2(v.osnova * v.stopnja / 100) }))
+  const osnovaSkupaj = sestevekPostavk // brez popustov/stroskov na ravni racuna
+  const ddvSkupaj = r2(stopnje.reduce((s, v) => s + v.ddv, 0))
+  const skupaj = r2(osnovaSkupaj + ddvSkupaj)
 
-  const razclenitevDdv = [...poStopnji.entries()].map(([stopnja, v]) =>
+  const razclenitevDdv = stopnje.map(v =>
     `<G_SG52><S_TAX><D_5283>7</D_5283><C_C241><D_5153>VAT</D_5153></C_C241>` +
-    `<C_C243><D_5278>${z(stopnja)}</D_5278></C_C243>` +
-    `<D_5305>${davcnaKategorija(stopnja, zavezanecZaDdv)}</D_5305></S_TAX>` +
+    `<C_C243><D_5278>${z(v.stopnja)}</D_5278></C_C243>` +
+    `<D_5305>${v.kategorija}</D_5305></S_TAX>` +
     moa(125, v.osnova) + moa(124, v.ddv) + `</G_SG52>`).join('')
 
   const datumDobave = d.datumDobave || d.datumIzdaje
@@ -216,6 +270,10 @@ export function zgradiESlogXml(d: ERacunPodatki): string {
     (d.opomba || d.klavzulaOprostitve
       ? `<S_FTX><D_4451>GEN</D_4451><C_C108><D_4440>${x([d.opomba, d.klavzulaOprostitve].filter(Boolean).join(' '))}</D_4440></C_C108></S_FTX>`
       : '') +
+    // BR-CO-25: brez roka placila morajo biti navedeni placilni pogoji.
+    (!d.datumZapadlosti
+      ? `<S_FTX><D_4451>AAB</D_4451><C_C108><D_4440>Plačilo ob prejemu računa</D_4440></C_C108></S_FTX>`
+      : '') +
     (d.sklic ? `<G_SG1><S_RFF><C_C506><D_1153>PQ</D_1153><D_1154>${x(d.sklic)}</D_1154></C_C506></S_RFF></G_SG1>` : '') +
     stranka('SE', d.izdajatelj) +
     stranka('BY', d.kupec) +
@@ -224,8 +282,9 @@ export function zgradiESlogXml(d: ERacunPodatki): string {
       ? `<G_SG8><S_PAT><D_4279>1</D_4279></S_PAT>${dtm(13, d.datumZapadlosti)}<S_PAI><C_C534><D_4461>30</D_4461></C_C534></S_PAI></G_SG8>`
       : '') +
     vrstice +
+    // 79 = vsota 203 (PO popustih postavk). 260 ne izpisemo: popustov na
+    // ravni racuna ne izdajamo, popusti postavk bi bili sicer steti dvakrat.
     `<G_SG50>${moa(79, sestevekPostavk)}</G_SG50>` +
-    (popustiSkupaj > 0 ? `<G_SG50>${moa(260, popustiSkupaj)}</G_SG50>` : '') +
     `<G_SG50>${moa(389, osnovaSkupaj)}</G_SG50>` +
     `<G_SG50>${moa(176, ddvSkupaj)}</G_SG50>` +
     `<G_SG50>${moa(388, skupaj)}</G_SG50>` +

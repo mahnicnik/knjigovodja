@@ -78,6 +78,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       },
       postavke,
       klavzulaOprostitve: racun.vat_exemption_text || null,
+      // Doloca kategorijo DDV (AE/K/G/E) pri zavezancu s stopnjo 0.
+      kodaOprostitve: racun.vat_exemption_code || null,
     })
 
     const ime = `e-racun-${String(racun.invoice_number).replace(/[^0-9A-Za-z-]/g, '_')}.xml`
