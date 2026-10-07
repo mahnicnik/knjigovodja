@@ -7,7 +7,8 @@ koda:
   - apps/web/app/pos/page.tsx (StoritveInPaketiSection, PackagesAdminSection, TEMPLATE_TYPES, ACTIVATION_TYPES)
   - apps/web/app/pos/page.tsx (PackagesScreen, SellPackageModal, CustomerPackagesTab, FreezePackageModal, ExtendPackageModal, EditPackageModal, ManualAddCardModal)
   - apps/web/app/api/cron/notifications (opomniki in predračun za obnovo), api/cron/installments (obroki), api/cron/unfreeze-packages (samodejna odmrznitev)
-posodobljeno: 2026-10-05
+  - apps/web/lib/kartice.ts (katera kartica velja, stanje stranke)
+posodobljeno: 2026-10-07
 ---
 
 # POS – paketi in članarine
@@ -70,6 +71,19 @@ Pogoja: stranka mora imeti e-mail, podjetje pa IBAN (**portal → Nastavitve →
 - **Deaktiviraj** / **🗑 Briši** – deaktivacija oziroma trajni izbris kartice.
 - **Dodaj kartico ročno** – brez računa (npr. migracija iz starega sistema); razlog je obvezen.
 - **Predplačilo**: **+ Napolni** doda znesek na stanje; stanje se pri plačilu s »Predplačilo« odšteva samodejno.
+
+## Katera kartica velja, če ima stranka staro in novo?
+
+Kartica **velja**, če je aktivna, se je že začela, ni potekla in ima še obiske (pri članarini se obiski ne štejejo). Stara kartica po izteku ostane v evidenci, a je blagajna **ne upošteva**, kadar ima stranka novo, veljavno kartico – ne glede na to, ali je nova **kupljena** ali **dodana ročno**:
+
+- profil stranke pod **AKTIVNA KARTICA** pokaže veljavno kartico (staro šele, če druge ni),
+- v zavihku paketov je stara kartica med **PRETEKLE**,
+- pika v seznamu strank je zelena, filter **✓ Aktivne** stranko šteje,
+- zvonec ne opozarja o izteku stare kartice; že prikazano opozorilo se ob naslednji osvežitvi samo umakne,
+- opomnik o izteku stranki ne gre (pokriva jo nova kartica, tudi neomejena – brez datuma poteka),
+- pri plačilu s **🎟️ Karta obiskov** in v **Koledarju** se ponujajo samo veljavne kartice, ne potekle.
+
+Kot »potečeno« je stranka označena le, če nima **nobene** veljavne kartice.
 
 ## Unovčenje obiska
 
