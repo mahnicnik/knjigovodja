@@ -32,3 +32,11 @@ test('K4: vsak klic next_invoice_number poda prostor in napravo', () => {
     expect(k.args, k.pot).toMatch(/p_device_id/)
   }
 })
+
+test('Obroki: stevilka racuna je MAX+1 v letu, ne count(*)+1 (13.10.2026)', () => {
+  // count(*)+1 je ob vsaki vrzeli dal premajhno stevilko: obrok je 10.10.2026
+  // dobil 2026-022, ceprav je bil zadnji racun ze 2026-030.
+  const vir = koda.find(d => d.pot.endsWith(join('lib', 'installment-invoice.ts')))!.vir
+  expect(vir).toMatch(/rpc\(\s*'get_next_manual_invoice_number'/)
+  expect(vir).not.toMatch(/count\s*\|\|\s*0\)\s*\+\s*1/)
+})

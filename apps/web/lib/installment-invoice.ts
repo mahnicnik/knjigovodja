@@ -51,11 +51,25 @@ export async function issueInstallmentInvoice(
     .eq('id', inst.customer_package_id)
     .maybeSingle()
 
-  const { count } = await supabase
-    .from('issued_invoices')
-    .select('*', { count: 'exact', head: true })
-    .eq('org_id', org.id)
-  const invoiceNumber = `${new Date().getFullYear()}-${String((count || 0) + 1).padStart(3, '0')}`
+  // POPRAVLJENO (13.10.2026): stevilka je bila `count(*) + 1` vseh racunov
+  // organizacije. Ob vsaki vrzeli (izbrisan osnutek) je bila zato PREMAJHNA:
+  // drugi obrok Ceneta Potocnika je 10.10.2026 dobil 2026-022, ceprav je bil
+  // zadnji izdani racun ze 2026-030 (23.9.). Racun z novejsim datumom je tako
+  // stal pred starejsimi - nezaporedno stevilcenje. Ce pa bi count+1 zadel
+  // obstojeco stevilko, bi unikatni kljuc (org_id, invoice_number) izdajo
+  // zavrnil in obrok sploh ne bi bil zaracunan.
+  //
+  // Zdaj enako kot rocni in ponavljajoci racuni: najvisja stevilka v letu + 1.
+  const issueDate = lokalniDatum()
+  const leto = Number(issueDate.slice(0, 4))
+  async function naslednjaStevilka(): Promise<string> {
+    const { data, error } = await supabase.rpc('get_next_manual_invoice_number', {
+      p_org_id: org.id, p_year: leto,
+    })
+    if (error || !data) throw error || new Error('Številke računa ni bilo mogoče dodeliti')
+    return data as string
+  }
+  let invoiceNumber = await naslednjaStevilka()
 
   const grossAmount = Number(inst.amount)
   const vatRate = Number(inst.vat_rate ?? 22)
@@ -89,7 +103,7 @@ export async function issueInstallmentInvoice(
     // ceprav je bil racun izdan in poslan.
     customer_id: inst.customer_id,
 
-    issue_date: lokalniDatum(),
+    issue_date: issueDate,
 
     // C8 (22.8.2026): DATUM OPRAVLJENE STORITVE je obvezna sestavina racuna
     // po ZDDV-1, na obrocnem racunu pa ga sploh ni bilo. Pri obroku je to
@@ -115,11 +129,23 @@ export async function issueInstallmentInvoice(
     source: 'installment',
   }
 
-  const { data: newInvoice, error: invErr } = await supabase
+  let { data: newInvoice, error: invErr } = await supabase
     .from('issued_invoices')
     .insert(invoiceRow)
     .select()
     .single()
+  // Hkratna izdaja (cron in rocni racun v isti sekundi) lahko dobi isto
+  // MAX+1 stevilko; unikatni kljuc jo zavrne. Enkrat ponovimo s sveza stevilko.
+  if (invErr?.code === '23505') {
+    invoiceNumber = await naslednjaStevilka()
+    invoiceRow.invoice_number = invoiceNumber
+    invoiceRow.reference = `SI00 ${invoiceNumber}`
+    ;({ data: newInvoice, error: invErr } = await supabase
+      .from('issued_invoices')
+      .insert(invoiceRow)
+      .select()
+      .single())
+  }
   if (invErr) throw invErr
 
   const invoiceForPdf = { ...newInvoice, organizations: org }

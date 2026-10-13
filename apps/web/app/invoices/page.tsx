@@ -42,6 +42,8 @@ export default function InvoicesPage() {
   const [canCreate, setCanCreate] = useState(true)
   // Revizija paketov: vsi racuni NOVE organizacije (ne samo izbranega obdobja).
   const [steviloRacunov, setSteviloRacunov] = useState(0)
+  // Stevilke VSEH racunov organizacije - samo za preverbo vrzeli (glej `vrzeli`).
+  const [vseStevilke, setVseStevilke] = useState<string[]>([])
   const supabase = createClient()
 
   // DODANO (Prelet 17, 17.8.2026): izbirnik obdobja za hitrejsi pregled,
@@ -106,6 +108,15 @@ export default function InvoicesPage() {
         }
       }
       setInvoices(vsi)
+      // POPRAVLJENO (13.10.2026): preverba vrzeli je gledala samo racune
+      // IZBRANEGA OBDOBJA. Na "Ta mesec" sta bila vidna le 2026-022 in
+      // 2026-031, zato je kot "manjkajoce" nastela vse od 023 do 030, ceprav
+      // so bili izdani avgusta in septembra. Stevilke zato vlecemo za vse
+      // racune organizacije, ne glede na filter.
+      const { data: stevilke } = await supabase.from('issued_invoices')
+        .select('invoice_number').eq('org_id', o.id)
+        .order('created_at', { ascending: false }).limit(1000) // zadnjih 1000 je dovolj za tekoce zaporedje
+      setVseStevilke((stevilke || []).map((x: any) => x.invoice_number))
     }
     setLoading(false)
   }
@@ -421,8 +432,8 @@ export default function InvoicesPage() {
    * vedno le stevilke iste vrste, saj bi sicer mesala dve zaporedji.
    */
   const vrzeli = (() => {
-    const razclenjeni = invoices
-      .map(i => String(i.invoice_number || '').trim())
+    const razclenjeni = vseStevilke
+      .map(s => String(s || '').trim())
       .map(s => {
         const m = s.match(/^(.*?)([0-9]+)$/)
         if (!m) return null
