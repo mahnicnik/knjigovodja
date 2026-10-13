@@ -60,9 +60,12 @@ export async function POST(req: NextRequest) {
       privateKeyPem = extracted.privateKeyPem
       certificatePem = extracted.certificatePem
     } catch (e: any) {
+      console.error('[furs/test] branje .p12 ni uspelo:', e?.message)
       return NextResponse.json({
         success: false,
-        error: 'Napačno geslo certifikata ali neveljavna .p12 datoteka. Preverite geslo in ponovno naložite certifikat.'
+        error: e?.razlog === 'geslo'
+          ? 'Shranjeno geslo certifikata ni pravilno. Ponovno naložite certifikat s pravilnim geslom.'
+          : 'Shranjenega certifikata ni bilo mogoče prebrati. Ponovno naložite .p12 datoteko.'
       }, { status: 400 })
     }
 

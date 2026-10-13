@@ -229,8 +229,11 @@ export function calculateZoi(
   const invoiceNumStr = String(data.invoiceNumber)
 
   // Vsebina za podpis
+  // POPRAVLJENO (13.10.2026): davcna stevilka organizacije je lahko vpisana
+  // kot "SI55284396". XML zahtevek je predpono ze odstranil, ZOI pa se je
+  // racunal s predpono - ZOI na racunu se ne bi ujemal s podatki pri FURS.
   const content = [
-    taxNumber,
+    String(taxNumber).replace(/^SI/i, '').trim(),
     dateStr,
     invoiceNumStr,
     premiseId,
@@ -609,6 +612,90 @@ function extractFursError(xml: string): { code: string; message: string } | null
 // ===== CERTIFIKAT HANDLING =====
 
 /**
+ * Razlog, zakaj .p12 ni bilo mogoce prebrati:
+ *   'geslo'  - MAC se ne ujema / kljuca ni mogoce desifrirati (napacno geslo)
+ *   'format' - datoteka ni berljiv PKCS#12 (ali ga node-forge ne podpira)
+ */
+export type RazlogNapakeP12 = 'geslo' | 'format'
+
+export function razlogNapakeP12(e: unknown): RazlogNapakeP12 {
+  const msg = String((e as any)?.message ?? e)
+  return /MAC could not be verified|Invalid password|wrong password|Unable to decrypt/i.test(msg)
+    ? 'geslo'
+    : 'format'
+}
+
+/**
+ * Prebere .p12 z node-forge.
+ *
+ * DODANO (13.10.2026, prelet: certifikat Peresuti). Nekateri izvozi
+ * certifikata imajo za koncem PKCS#12 strukture odvecne bajte (npr. prazne
+ * vrstice ali zapolnitev). OpenSSL (in s tem Cebelca ter drugi programi) jih
+ * tiho ignorira, node-forge 1.3+ pa privzeto (`parseAllBytes: true`) zavrne
+ * CELO datoteko z "Unparsed DER bytes remain after ASN.1 parsing" - geslo in
+ * certifikat pa sta povsem v redu. Uporabnik je dobil "napacno geslo".
+ *
+ * Najprej beremo strogo (kot doslej). Samo ce pade zaradi odvecnih bajtov,
+ * beremo ponovno z `parseAllBytes: false` - tudi v notranjih klicih forge
+ * (desifriran kljuc, varne vrece), zato fromDer zacasno ovijemo. Celovitost
+ * datoteke se vedno preveri z MAC (geslo), tako da popustljivost ne odpre
+ * poti ponarejenim datotekam. Branje je sinhrono, zato ovoj ne more
+ * vplivati na druge zahtevke.
+ */
+export function parseP12(p12Buffer: Buffer, password: string): any {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const forge = require('node-forge')
+  const der = p12Buffer.toString('binary')
+  try {
+    return forge.pkcs12.pkcs12FromAsn1(forge.asn1.fromDer(forge.util.createBuffer(der)), password)
+  } catch (e: any) {
+    if (!/Unparsed DER bytes/i.test(String(e?.message))) throw e
+  }
+
+  const asn1 = forge.asn1
+  const izvirni = asn1.fromDer
+  asn1.fromDer = function (bytes: any, options?: any) {
+    const o = options === undefined ? {} : typeof options === 'boolean' ? { strict: options } : { ...options }
+    return izvirni.call(this, bytes, { ...o, parseAllBytes: false })
+  }
+  try {
+    return forge.pkcs12.pkcs12FromAsn1(asn1.fromDer(forge.util.createBuffer(der)), password)
+  } finally {
+    asn1.fromDer = izvirni
+  }
+}
+
+/**
+ * Iz .p12 vrne zasebni kljuc in PRIPADAJOCI certifikat.
+ *
+ * FURS .p12 obicajno vsebuje dva certifikata: uporabnikovega in izdajateljev
+ * (TaxCA). Doslej se je vzel prvi po vrsti - ce bi izvoz zamenjal vrstni red,
+ * bi podpisovali/brali s certifikatom izdajatelja. Zdaj izberemo tistega,
+ * cigar javni kljuc se ujema z zasebnim.
+ */
+function kljucInCertifikat(p12: any): { key: any | null; cert: any | null } {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const forge = require('node-forge')
+  const oids = forge.pki.oids
+  const zasciteni = p12.getBags({ bagType: oids.pkcs8ShroudedKeyBag })[oids.pkcs8ShroudedKeyBag] || []
+  const navadni = p12.getBags({ bagType: oids.keyBag })[oids.keyBag] || []
+  const key = (zasciteni[0] || navadni[0])?.key ?? null
+
+  const certs: any[] = (p12.getBags({ bagType: oids.certBag })[oids.certBag] || [])
+    .map((b: any) => b.cert)
+    .filter(Boolean)
+
+  const ujemajoc = key?.n
+    ? certs.find(c => c.publicKey?.n && c.publicKey.n.equals(key.n))
+    : undefined
+  const neCa = certs.find(c => {
+    const bc = c.getExtension?.('basicConstraints')
+    return !bc || !bc.cA
+  })
+  return { key, cert: ujemajoc ?? neCa ?? certs[0] ?? null }
+}
+
+/**
  * Izvleče zasebni ključ in certifikat iz .p12 (PKCS#12) datoteke.
  *
  * Vrne PEM format ki ga rabimo za ZOI podpis.
@@ -623,19 +710,16 @@ export function extractFromP12(
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const forge = require('node-forge')
-    const p12Der = forge.util.createBuffer(p12Buffer.toString('binary'))
-    const p12Asn1 = forge.asn1.fromDer(p12Der)
-    const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, password)
-    const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag })
-    const keyBag = keyBags[forge.pki.oids.pkcs8ShroudedKeyBag]?.[0]
-    if (!keyBag?.key) throw new Error('Zasebni ključ ni najden')
-    const privateKeyPem = forge.pki.privateKeyToPem(keyBag.key)
-    const certBags = p12.getBags({ bagType: forge.pki.oids.certBag })
-    const certBag = certBags[forge.pki.oids.certBag]?.[0]
-    const certificatePem = certBag?.cert ? forge.pki.certificateToPem(certBag.cert) : ''
+    const p12 = parseP12(p12Buffer, password)
+    const { key, cert } = kljucInCertifikat(p12)
+    if (!key) throw new Error('Zasebni ključ ni najden')
+    const privateKeyPem = forge.pki.privateKeyToPem(key)
+    const certificatePem = cert ? forge.pki.certificateToPem(cert) : ''
     return { privateKeyPem, certificatePem }
   } catch (e: any) {
-    throw new Error('Napaka pri branju certifikata: ' + e.message)
+    const err = new Error('Napaka pri branju certifikata: ' + e.message) as Error & { razlog?: RazlogNapakeP12 }
+    err.razlog = razlogNapakeP12(e)
+    throw err
   }
 }
 
@@ -657,16 +741,20 @@ export function extractFromP12(
 export function readCertificateInfo(
   p12Buffer: Buffer,
   password: string,
-): { taxNumber: string | null; validFrom: Date | null; validTo: Date | null; subject: string | null } {
+): {
+  taxNumber: string | null
+  validFrom: Date | null
+  validTo: Date | null
+  subject: string | null
+  /** Zakaj branje ni uspelo (null = prebrano). */
+  napaka: RazlogNapakeP12 | null
+  /** Izvirno sporocilo knjiznice - samo za log, nikoli uporabniku. */
+  napakaPodrobno?: string
+} {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const forge = require('node-forge')
-    const p12Der = forge.util.createBuffer(p12Buffer.toString('binary'))
-    const p12Asn1 = forge.asn1.fromDer(p12Der)
-    const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, password)
-    const certBags = p12.getBags({ bagType: forge.pki.oids.certBag })
-    const cert = certBags[forge.pki.oids.certBag]?.[0]?.cert
-    if (!cert) return { taxNumber: null, validFrom: null, validTo: null, subject: null }
+    const p12 = parseP12(p12Buffer, password)
+    const { cert } = kljucInCertifikat(p12)
+    if (!cert) return { taxNumber: null, validFrom: null, validTo: null, subject: null, napaka: 'format', napakaPodrobno: 'V datoteki ni certifikata' }
 
     const cnField = cert.subject.getField('CN')
     const cn: string | null = cnField?.value ?? null
@@ -677,17 +765,30 @@ export function readCertificateInfo(
       const m = String(cn).match(/(\d{8})/)
       if (m) taxNumber = m[1]
     }
+    // DOPOLNJENO (13.10.2026): pri potrdilih za pravne osebe je v CN ime
+    // podjetja, davcna stevilka pa v OU (npr. "OU=DavPotRac, OU=55284396").
+    if (!taxNumber) {
+      const polje = (cert.subject.attributes || [])
+        .map((a: any) => String(a?.value ?? '').trim())
+        .find((v: string) => /^\d{8}$/.test(v))
+      if (polje) taxNumber = polje
+    }
 
     return {
       taxNumber,
       validFrom: cert.validity?.notBefore ?? null,
       validTo: cert.validity?.notAfter ?? null,
       subject: cn,
+      napaka: null,
     }
-  } catch {
-    // Napake tu ne smejo prekiniti nalaganja - certifikat se vseeno shrani,
-    // samo brez metapodatkov.
-    return { taxNumber: null, validFrom: null, validTo: null, subject: null }
+  } catch (e: any) {
+    // Napaka ne vrze izjeme - klicatelj se odloci (upload-cert zavrne z
+    // natancnim sporocilom glede na `napaka`).
+    return {
+      taxNumber: null, validFrom: null, validTo: null, subject: null,
+      napaka: razlogNapakeP12(e),
+      napakaPodrobno: String(e?.message ?? e),
+    }
   }
 }
 

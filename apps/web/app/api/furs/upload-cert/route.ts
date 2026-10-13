@@ -37,13 +37,19 @@ export async function POST(req: NextRequest) {
     // je FURS zahtevek zavrnil ("tezave pri komunikaciji").
     const info = readCertificateInfo(certBuffer, password)
 
-    // Ce je bilo geslo napacno, iz certifikata ne dobimo nicesar - to je
-    // najpogostejsi vzrok in ga je bolje povedati takoj kot pustiti, da se
-    // pokaze sele ob prvi prodaji.
-    if (!info.subject && !info.taxNumber) {
-      return NextResponse.json({
-        error: 'Certifikata ni bilo mogoce prebrati. Najverjetneje je geslo napacno ali datoteka ni veljaven .p12/.pfx.'
-      }, { status: 400 })
+    // Napako povemo takoj, ne sele ob prvi prodaji.
+    // POPRAVLJENO (13.10.2026): doslej je vsaka napaka pri branju pisala
+    // "najverjetneje je geslo napacno" - tudi ko je bilo geslo pravilno in
+    // je bila tezava v obliki datoteke. Zdaj locimo oba primera, izvirno
+    // sporocilo knjiznice pa gre v log (brez gesla).
+    if (info.napaka || (!info.subject && !info.taxNumber)) {
+      console.error('[upload-cert] branje .p12 ni uspelo:', info.napaka, info.napakaPodrobno, {
+        datoteka: certFile.name, velikost: certBuffer.length,
+      })
+      const error = info.napaka === 'geslo'
+        ? 'Geslo za certifikat ni pravilno. Preverite velike in male črke ter da na začetku ali koncu ni presledka.'
+        : 'Datoteke ni bilo mogoče prebrati kot certifikat .p12/.pfx. Preverite, da ste izbrali datoteko z zasebnim ključem (ne .cer/.crt). Če certifikat deluje v drugem programu, nam pišite.'
+      return NextResponse.json({ error, razlog: info.napaka ?? 'format' }, { status: 400 })
     }
 
     const subject = info.subject || certFile.name.replace('.p12','').replace('.pfx','')

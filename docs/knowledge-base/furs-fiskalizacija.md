@@ -52,3 +52,9 @@ Račun se izda, natisne se ZOI, račun pa gre v **vrsto za ponovno pošiljanje**
 - Brez naloženega certifikata in prijavljenega poslovnega prostora blagajna ne more izbrati prostora (»Dodaj jih v Nastavitve → FURS → Poslovni prostori«).
 - Davčno potrjenega računa ni mogoče izbrisati (10-letna hramba) – popravek je storno ali dobropis.
 - Če certifikat poteče, potrjevanje ne deluje – pravočasno naloži novega.
+
+## Napake pri nalaganju certifikata
+
+- **»Geslo za certifikat ni pravilno …«** – geslo se ne ujema z datoteko. Preveri velike in male črke ter presledke na začetku ali koncu (pogosto pri kopiranju gesla).
+- **»Datoteke ni bilo mogoče prebrati kot certifikat .p12/.pfx …«** – izbrana datoteka ni certifikat z zasebnim ključem (npr. `.cer` ali `.crt`) ali je poškodovana. Naloži `.p12`/`.pfx`, ki ga je izdal SIGEN-CA oz. eDavki. Če isti certifikat deluje v drugem programu, naj uporabnik piše podpori.
+- Pri certifikatih podjetij (d.o.o.) je v nazivu ime podjetja; davčna številka se prebere iz certifikata samodejno.

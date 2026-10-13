@@ -869,7 +869,25 @@ function setupIpcHandlers() {
       }
 
       const p12Der = forge.util.decode64(potrdilo.p12Base64)
-      const p12 = forge.pkcs12.pkcs12FromAsn1(forge.asn1.fromDer(p12Der), false, potrdilo.geslo || '')
+      // 13.10.2026: enako kot parseP12 v apps/web/lib/furs.ts - ce ima
+      // datoteka za koncem odvecne bajte (OpenSSL jih ignorira, forge pa
+      // zavrne z "Unparsed DER bytes"), preberemo ponovno brez te zahteve.
+      let p12
+      try {
+        p12 = forge.pkcs12.pkcs12FromAsn1(forge.asn1.fromDer(p12Der), false, potrdilo.geslo || '')
+      } catch (e) {
+        if (!/Unparsed DER bytes/i.test(String(e && e.message))) throw e
+        const izvirni = forge.asn1.fromDer
+        forge.asn1.fromDer = function (bytes, options) {
+          const o = options === undefined ? {} : typeof options === 'boolean' ? { strict: options } : Object.assign({}, options)
+          return izvirni.call(this, bytes, Object.assign(o, { parseAllBytes: false }))
+        }
+        try {
+          p12 = forge.pkcs12.pkcs12FromAsn1(forge.asn1.fromDer(p12Der), false, potrdilo.geslo || '')
+        } finally {
+          forge.asn1.fromDer = izvirni
+        }
+      }
       const zasciteni = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag })[forge.pki.oids.pkcs8ShroudedKeyBag] || []
       const navadni = p12.getBags({ bagType: forge.pki.oids.keyBag })[forge.pki.oids.keyBag] || []
       const vreca = zasciteni[0] || navadni[0]
@@ -879,7 +897,7 @@ function setupIpcHandlers() {
       const p2 = (n) => String(n).padStart(2, '0')
       const dateStr = [p2(dt.getDate()), p2(dt.getMonth() + 1), dt.getFullYear()].join('.')
         + ' ' + [p2(dt.getHours()), p2(dt.getMinutes()), p2(dt.getSeconds())].join(':')
-      const content = String(taxNumber) + dateStr + String(invoiceNumber)
+      const content = String(taxNumber).replace(/^SI/i, '').trim() + dateStr + String(invoiceNumber)
         + String(premiseId) + String(deviceId) + Number(amount).toFixed(2)
 
       const md = forge.md.sha256.create()
