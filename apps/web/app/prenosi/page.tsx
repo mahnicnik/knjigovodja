@@ -4,17 +4,24 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { getActiveMembership } from '@/lib/active-org'
 import AppLayout from '@/components/AppLayout'
+import { imaPos } from '@/lib/paket'
+import { velikostMB, type StanjePrenosov } from '@/lib/prenosi'
 
 export default function DownloadPage() {
   const [org, setOrg] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [release, setRelease] = useState<any>(null)
+  // POPRAVLJENO (15.10.2026): podatke o izdajah da streznik (/api/prenosi),
+  // gumba pa vodita na /api/prenosi/windows in /api/prenosi/android.
+  // Prej je brskalnik stranke klical GitHub API in APK iskal v Windows
+  // izdaji, kjer ga ni - Android gumb je bil href="#" (lib/prenosi.ts).
+  const [stanje, setStanje] = useState<StanjePrenosov | null>(null)
+  const [androidManjka, setAndroidManjka] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) { setLoading(false); return }
 
       const member = await getActiveMembership() // podpora vec organizacijam (30.7.2026)
 
@@ -22,11 +29,12 @@ export default function DownloadPage() {
         setOrg((member as any).organizations)
       }
 
-      // Pridobi latest release iz GitHub
       try {
-        const res = await fetch('https://api.github.com/repos/mahnicnik/knjigovodja/releases/latest')
-        const data = await res.json()
-        setRelease(data)
+        const res = await fetch('/api/prenosi')
+        if (res.ok) setStanje(await res.json())
+      } catch {}
+      try {
+        setAndroidManjka(new URLSearchParams(window.location.search).get('ni') === 'android')
       } catch {}
 
       setLoading(false)
@@ -34,10 +42,16 @@ export default function DownloadPage() {
     load()
   }, [])
 
-  const isProPos = org?.subscription_status === 'pro_pos'
+  // Enako pravilo kot povsod drugod (lib/paket.ts) - za obstojece
+  // organizacije je to isto kot prej `subscription_status === 'pro_pos'`.
+  const isProPos = imaPos(org)
 
-  const winUrl = release?.assets?.find((a: any) => a.name.endsWith('.exe'))?.browser_download_url
-  const version = release?.tag_name || 'v1.0.21'
+  const win = stanje?.windows ?? null
+  const android = stanje?.android ?? null
+  // Ce streznik GitHuba ni dosegel (stanje null), gumb za Windows vseeno
+  // pokazemo: /api/prenosi/windows ima rezervo (stran zadnje izdaje).
+  const winNaVoljo = !stanje || !!win
+  const androidNaVoljo = !!android && !androidManjka
 
   if (loading) return (
     <AppLayout>
@@ -64,7 +78,7 @@ export default function DownloadPage() {
             <div style={{ fontSize: 48, marginBottom: 16 }}>🖥️</div>
             <div style={{ fontSize: 22, fontWeight: 700, color: '#0D1F12', marginBottom: 8 }}>Računko POS Desktop</div>
             <div style={{ fontSize: 14, color: '#666', marginBottom: 24, maxWidth: 400, margin: '0 auto 24px' }}>
-              Desktop aplikacija je na voljo za uporabnike paketa Pro + POS. Vključuje Windows in Mac verzijo blagajne.
+              Aplikaciji za Windows in Android sta na voljo v paketu Pro + POS.
             </div>
             <Link href="/nastavitve#narocnina" style={{ background: '#1D9E75', color: '#fff', padding: '14px 28px', borderRadius: 12, fontWeight: 600, fontSize: 15, textDecoration: 'none', display: 'inline-block' }}>
               Nadgradi na Pro + POS — 29,99 €/mes →
@@ -74,25 +88,38 @@ export default function DownloadPage() {
           // Pro+POS — pokaži downloade
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ fontSize: 22, fontWeight: 700, color: '#0D1F12', marginBottom: 8 }}>
-              Računko POS Desktop <span style={{ fontSize: 13, fontWeight: 400, color: '#888' }}>{version}</span>
+              Računko POS
             </div>
 
             {/* Windows */}
-            <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <div style={{ fontSize: 36 }}>🪟</div>
-                <div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: '#0D1F12' }}>Windows</div>
-                  <div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>Windows 10 / 11 · 64-bit · .exe installer</div>
+            <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <div style={{ fontSize: 36 }}>🪟</div>
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#0D1F12' }}>Windows</div>
+                    <div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>
+                      Windows 10 / 11 · 64-bit · .exe
+                      {win && <> · v{win.verzija}</>}
+                      {velikostMB(win?.velikost) && <> · {velikostMB(win?.velikost)}</>}
+                    </div>
+                  </div>
                 </div>
+                {winNaVoljo ? (
+                  <a href="/api/prenosi/windows" style={{ background: '#0D1F12', color: '#fff', padding: '10px 20px', borderRadius: 10, fontWeight: 600, fontSize: 14, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                    ⬇ Prenesi
+                  </a>
+                ) : (
+                  <span style={{ color: '#888', fontSize: 13 }}>Trenutno ni na voljo</span>
+                )}
               </div>
-              {winUrl ? (
-                <a href={winUrl} style={{ background: '#0D1F12', color: '#fff', padding: '10px 20px', borderRadius: 10, fontWeight: 600, fontSize: 14, textDecoration: 'none', whiteSpace: 'nowrap' }}>
-                  ⬇ Prenesi
-                </a>
-              ) : (
-                <span style={{ color: '#888', fontSize: 13 }}>Ni na voljo</span>
-              )}
+              {/* Namestitev ni digitalno podpisana - brskalnik in SmartScreen jo
+                  zato ob prvem prenosu zadrzita. Brez tega namiga stranka misli,
+                  da prenos "ne dela" (15.10.2026). */}
+              <div style={{ fontSize: 12, color: '#888', marginTop: 14, lineHeight: 1.6 }}>
+                Če brskalnik datoteko zadrži, izberite <strong>Obdrži</strong>. Če Windows ob zagonu pokaže
+                »Windows je zaščitil vaš računalnik«, kliknite <strong>Več informacij</strong> → <strong>Vseeno zaženi</strong>.
+              </div>
             </div>
 
             {/* Mac */}
@@ -109,21 +136,31 @@ export default function DownloadPage() {
               </a>
             </div>
 
-            {/* Mobile */}
+            {/* Android */}
             <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', padding: 24 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-                <div style={{ fontSize: 36 }}>📱</div>
-                <div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: '#0D1F12' }}>Mobilna aplikacija</div>
-                  <div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>iOS & Android · Prihaja kmalu</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <div style={{ fontSize: 36 }}>📱</div>
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#0D1F12' }}>Android</div>
+                    <div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>
+                      Android 8.0+ · .apk
+                      {android?.verzija && <> · v{android.verzija}</>}
+                      {velikostMB(android?.velikost) && <> · {velikostMB(android?.velikost)}</>}
+                    </div>
+                  </div>
                 </div>
+                {androidNaVoljo ? (
+                  <a href="/api/prenosi/android" style={{ background: '#0D1F12', color: '#fff', padding: '10px 20px', borderRadius: 10, fontWeight: 600, fontSize: 14, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                    ⬇ Prenesi APK
+                  </a>
+                ) : (
+                  <span style={{ color: '#888', fontSize: 13 }}>Trenutno ni na voljo</span>
+                )}
               </div>
-              <a href={release?.assets?.find((a: any) => a.name.endsWith('.apk'))?.browser_download_url || '#'}
-                style={{ display: 'inline-block', background: '#0D1F12', color: '#fff', padding: '10px 20px', borderRadius: 10, fontWeight: 600, fontSize: 14, textDecoration: 'none' }}>
-                ⬇ Prenesi APK
-              </a>
-              <div style={{ fontSize: 12, color: '#888', marginTop: 8 }}>
-                Android 8.0+ · Omogočite nameščanje iz neznanih virov v nastavitvah
+              <div style={{ fontSize: 12, color: '#888', marginTop: 14, lineHeight: 1.6 }}>
+                Prenesite na telefonu in odprite preneseno datoteko. Ko telefon vpraša, dovolite nameščanje
+                iz tega vira (brskalnika). iOS: prihaja kmalu.
               </div>
             </div>
 
@@ -131,10 +168,10 @@ export default function DownloadPage() {
             <div style={{ background: '#f0fdf4', borderRadius: 16, border: '1px solid #bbf7d0', padding: 20 }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: '#15803d', marginBottom: 8 }}>💡 Navodila za namestitev</div>
               <ol style={{ fontSize: 13, color: '#166534', paddingLeft: 20, lineHeight: 1.8, margin: 0 }}>
-                <li>Prenesite installer za vaš operacijski sistem</li>
-                <li>Zaženite installer in sledite navodilom</li>
+                <li>Prenesite namestitveno datoteko za vašo napravo</li>
+                <li>Zaženite jo in sledite navodilom</li>
                 <li>Ob prvem zagonu se prijavite z vašimi Računko podatki</li>
-                <li>Aplikacija se bo samodejno posodabljala</li>
+                <li>Aplikacija za Windows se posodablja sama</li>
               </ol>
             </div>
           </div>

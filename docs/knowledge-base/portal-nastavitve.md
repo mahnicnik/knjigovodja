@@ -8,7 +8,8 @@ koda:
   - apps/web/components/nastavitve/UradnoIme.tsx (opozorilo, ko ime ni enako uradnemu iz registra)
   - apps/web/components/nastavitve/Logotip.tsx, LogotipUrejevalnik.tsx, ApiKljuci.tsx, Integracije.tsx
   - apps/web/components/DvostopenjskaPrijava.tsx, apps/web/app/prenosi/page.tsx
-posodobljeno: 2026-10-06
+  - apps/web/lib/prenosi.ts (od kod se preneseta Windows in Android aplikacija)
+posodobljeno: 2026-10-15
 ---
 
 # Portal – nastavitve
@@ -54,10 +55,14 @@ Sprememba gesla (vsaj 8 znakov) in **🛡️ Dvostopenjska prijava**: **Vklopi d
 
 ## Prenosi (namizna aplikacija in telefon)
 
-**Nastavitve → Prenosi** (`/prenosi`):
-- **Računko POS Desktop za Windows** (Windows 10/11, 64-bit, .exe): prenesi, zaženi namestitev, ob prvem zagonu se prijavi z Računko podatki; posodablja se sama. Podpira neposreden tisk na blagajniški tiskalnik.
-- **Android**: namestitev datoteke (Android 8.0+, dovoli nameščanje iz neznanih virov).
-- Mac: ni na voljo. iOS: prihaja kmalu.
+**Nastavitve → Prenosi** (`/prenosi`) – gumba sta vidna v paketu **Pro + POS** (sicer stran ponudi nadgradnjo):
+- **Windows** (Windows 10/11, 64-bit, .exe): **⬇ Prenesi** → zaženi namestitev → ob prvem zagonu se prijavi z Računko podatki; posodablja se sama. Podpira neposreden tisk na blagajniški tiskalnik. Ob gumbu sta izpisani različica in velikost.
+- **Android** (Android 8.0+, .apk): **⬇ Prenesi APK** na telefonu → odpri preneseno datoteko → ko telefon vpraša, dovoli nameščanje iz tega vira (brskalnika).
+- Mac: zagon iz izvorne kode (gumb **📖 Navodila**). iOS: prihaja kmalu.
+
+**Če prenos »ne dela«:**
+- Namestitev za Windows ni digitalno podpisana. Brskalnik (Edge/Chrome) jo lahko zadrži z opozorilom, da datoteke ne prenaša pogosto → izberi **Obdrži**. Windows ob zagonu lahko pokaže »Windows je zaščitil vaš računalnik« → **Več informacij** → **Vseeno zaženi**.
+- Če namesto gumba piše **Trenutno ni na voljo**, datoteka za to napravo trenutno ni objavljena – piši podpori (**Pošlji podpori**).
 
 ## Omejitve in opozorila
 
