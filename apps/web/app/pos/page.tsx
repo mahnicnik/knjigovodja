@@ -2367,6 +2367,76 @@ async function autoPrint(data) {
   }
 }
 
+/**
+ * UNIVERZALNI ARTIKEL – VNOS ZNESKA OB PRODAJI (16.10.2026)
+ *
+ * Artikel s kljukico "Cena ob prodaji" (items.cena_ob_prodaji) nima stalne
+ * cene. Ob pritisku se odpre ta tipkovnica - kot na karticnem terminalu se
+ * stevke vpisujejo v centih (1, 2, 5, 0 → 12,50 €). DDV je stopnja artikla.
+ * Opis (neobvezen) se izpise na racunu namesto imena artikla.
+ */
+function VnosCeneModal({ item, onClose, onDodaj }) {
+  const [centi, setCenti] = React.useState('')
+  const [opis, setOpis] = React.useState('')
+  const znesek = (Number(centi || '0') / 100)
+
+  function pritisni(k) {
+    if (k === '⌫') { setCenti(c => c.slice(0, -1)); return }
+    if (k === 'C') { setCenti(''); return }
+    setCenti(c => {
+      const n = (c + k).replace(/^0+/, '')
+      return n.length > 7 ? c : n   // najvec 99.999,99 €
+    })
+  }
+  function dodaj() {
+    if (znesek <= 0) return
+    onDodaj(Math.round(znesek * 100) / 100, opis.trim())
+  }
+  React.useEffect(() => {
+    function tipka(e) {
+      if (e.target && (e.target as any).tagName === 'INPUT') {
+        if (e.key === 'Enter') { e.preventDefault(); dodaj() }
+        return
+      }
+      if (/^[0-9]$/.test(e.key)) { e.preventDefault(); pritisni(e.key) }
+      else if (e.key === 'Backspace') { e.preventDefault(); pritisni('⌫') }
+      else if (e.key === 'Enter') { e.preventDefault(); dodaj() }
+      else if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', tipka)
+    return () => window.removeEventListener('keydown', tipka)
+  })
+
+  const tipke = ['1','2','3','4','5','6','7','8','9','C','0','⌫']
+  return (
+    <Modal open onClose={onClose} width={360}>
+      <ModalHeader title={item.name} onClose={onClose}/>
+      <div style={{ padding:'16px 20px 20px', display:'flex', flexDirection:'column', gap:12 }}>
+        <div style={{ fontSize:11, color:T.muted, textAlign:'center' }}>
+          Vnesi znesek{item.vat_rate != null ? ` · DDV ${String(item.vat_rate).replace('.', ',')} %` : ''}
+        </div>
+        <div style={{ fontSize:34, fontWeight:800, textAlign:'center', fontVariantNumeric:'tabular-nums', color: znesek > 0 ? T.ink : T.muted, padding:'4px 0' }}>
+          {eur(znesek)}
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
+          {tipke.map(k => (
+            <button key={k} onClick={() => pritisni(k)}
+              style={{ height:54, borderRadius:10, border:'1px solid '+T.line, background:T.surface, cursor:'pointer', fontFamily:'inherit', fontSize:20, fontWeight:700, color: k==='C' ? T.muted : T.ink }}>
+              {k}
+            </button>
+          ))}
+        </div>
+        <input value={opis} onChange={e => setOpis(e.target.value.slice(0, 60))} placeholder="Opis na računu (neobvezno), npr. Med 1 kg"
+          style={{ padding:'10px 12px', borderRadius:9, border:'1px solid '+T.line, fontFamily:'inherit', fontSize:13, background:T.surface, color:T.ink }}/>
+        <button onClick={dodaj} disabled={znesek <= 0}
+          style={{ padding:'14px 0', borderRadius:10, border:'none', background: znesek > 0 ? T.accent : T.line, color:'#fff', cursor: znesek > 0 ? 'pointer' : 'default', fontFamily:'inherit', fontSize:15, fontWeight:800 }}>
+          Dodaj {znesek > 0 ? eur(znesek) : ''}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 function ReceiptToast({ data, onClose }) {
   const fursOk = data?.eor
   // PRELET 158: račun, izdan brez povezave, NI spodletela fiskalizacija —
@@ -3133,6 +3203,8 @@ function SaleScreen({ activeTable, setActiveTable, activeCustomer, cart, setCart
                         <div style={{ fontSize:10, color:T.muted, textDecoration:'line-through' }}>{eur(it.price)}</div>
                         <div style={{ fontSize:15, fontWeight:800, fontVariantNumeric:'tabular-nums', color:T.warn }}>{eur(it.price * (1 - Number(hhRule?.discount_pct ?? 0) / 100))}</div>
                       </>
+                    ) : it.cena_ob_prodaji ? (
+                      <div style={{ fontSize:12, fontWeight:700, color:T.accent }}>✎ Vpiši znesek</div>
                     ) : (
                       <div style={{ fontSize:15, fontWeight:800, fontVariantNumeric:'tabular-nums' }}>{eur(it.price)}</div>
                     )}
@@ -7091,7 +7163,8 @@ function InventoryScreen({ posData }) {
   async function saveItem() {
     if (!itemModal?.name?.trim()) { showInvToast('Ime je obvezno',false); return }
     const itemType = itemModal?.item_type || 'simple'
-    if (itemType !== 'ingredient' && (!itemModal.price || Number(itemModal.price)<=0)) { showInvToast('Prodajna cena mora biti > 0',false); return }
+    const obProdaji = itemType === 'simple' && !!itemModal.cena_ob_prodaji
+    if (itemType !== 'ingredient' && !obProdaji && (!itemModal.price || Number(itemModal.price)<=0)) { showInvToast('Prodajna cena mora biti > 0',false); return }
     if (posData.org?.vat_registered && (itemModal.vat_rate===undefined || itemModal.vat_rate==='')) { showInvToast('DDV stopnja je obvezna',false); return }
     // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
     // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
@@ -7103,7 +7176,8 @@ function InventoryScreen({ posData }) {
       const payload = {
         business_id:BUSINESS_ID, category_id:itemModal.category_id||null,
         name:itemModal.name, code:itemModal.code||null,
-        price:itemModal.price?Number(itemModal.price):0,
+        price:obProdaji ? 0 : (itemModal.price?Number(itemModal.price):0),
+        cena_ob_prodaji: obProdaji,
         unit:itemModal.unit||'kos', vat_rate:posData.org?.vat_registered ? Number(itemModal.vat_rate) : 0,
         stock:itemModal.stock!=null&&itemModal.stock!==''?Number(itemModal.stock):null,
         fav:!!itemModal.fav, kitchen:!!itemModal.kitchen, bookable:!!itemModal.bookable,
@@ -7862,8 +7936,8 @@ function InventoryScreen({ posData }) {
               </Field>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
                 {(itemModal?.item_type||'simple') !== 'ingredient' && (
-                  <Field label="Prodajna cena (€) *">
-                    <input type="number" onFocus={e => e.target.select()} step="0.01" min="0" value={itemModal?.price||''} onChange={e=>setItemModal(p=>({...p,price:e.target.value}))} placeholder="0.00" style={inp}/>
+                  <Field label={itemModal?.cena_ob_prodaji && (itemModal?.item_type||'simple') === 'simple' ? 'Prodajna cena (€) – vpiše se ob prodaji' : 'Prodajna cena (€) *'}>
+                    <input type="number" onFocus={e => e.target.select()} step="0.01" min="0" disabled={!!itemModal?.cena_ob_prodaji && (itemModal?.item_type||'simple') === 'simple'} value={itemModal?.cena_ob_prodaji && (itemModal?.item_type||'simple') === 'simple' ? '' : (itemModal?.price||'')} onChange={e=>setItemModal(p=>({...p,price:e.target.value}))} placeholder={itemModal?.cena_ob_prodaji && (itemModal?.item_type||'simple') === 'simple' ? 'ob prodaji' : '0.00'} style={inp}/>
                   </Field>
                 )}
                 {(itemModal?.item_type||'simple') === 'ingredient' && (
@@ -7877,6 +7951,15 @@ function InventoryScreen({ posData }) {
                   </select>
                 </Field>
               </div>
+              {(itemModal?.item_type||'simple') === 'simple' && (
+                <label style={{ display:'flex', alignItems:'flex-start', gap:8, fontSize:13, cursor:'pointer', padding:'10px 12px', borderRadius:9, border:'1px solid '+(itemModal?.cena_ob_prodaji ? T.accent : T.line), background: itemModal?.cena_ob_prodaji ? T.accentSoft : 'transparent' }}>
+                  <input type="checkbox" checked={!!itemModal?.cena_ob_prodaji} onChange={e=>setItemModal(p=>({...p,cena_ob_prodaji:e.target.checked}))} style={{ accentColor:T.accent, marginTop:2 }}/>
+                  <span>
+                    <b>Cena ob prodaji</b> (univerzalni artikel)
+                    <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>Na blagajni se ob vsakem pritisku odpre vnos zneska, kot na kartičnem terminalu. Velja izbrana stopnja DDV tega artikla.</div>
+                  </span>
+                </label>
+              )}
               {posData.org?.vat_registered && (
                 <VatExemptionPicker
                   vatRate={itemModal?.vat_rate}
@@ -12553,7 +12636,8 @@ function CatalogSection({ posData }) {
   async function saveItem() {
     if (!itemModal?.name?.trim()) { showToast('Ime je obvezno',false); return }
     const itemType = itemModal?.item_type || 'simple'
-    if (itemType !== 'ingredient' && (!itemModal.price || Number(itemModal.price)<=0)) { showToast('Prodajna cena mora biti > 0',false); return }
+    const obProdaji = itemType === 'simple' && !!itemModal.cena_ob_prodaji
+    if (itemType !== 'ingredient' && !obProdaji && (!itemModal.price || Number(itemModal.price)<=0)) { showToast('Prodajna cena mora biti > 0',false); return }
     if (posData.org?.vat_registered && (itemModal.vat_rate===undefined || itemModal.vat_rate==='')) { showToast('DDV stopnja je obvezna ★',false); return }
     // POPRAVLJENO (17.8.2026): varovalka pred DVOJNIM KLIKOM. Stanje "saving" se
     // je nastavljalo, a se NI preverjalo - dvojni klik je torej ustvaril DVA
@@ -12565,7 +12649,8 @@ function CatalogSection({ posData }) {
       const payload = {
         business_id:BUSINESS_ID, category_id:itemModal.category_id||null,
         name:itemModal.name, code:itemModal.code||null,
-        price:itemModal.price?Number(itemModal.price):0,
+        price:obProdaji ? 0 : (itemModal.price?Number(itemModal.price):0),
+        cena_ob_prodaji: obProdaji,
         unit:itemModal.unit||'kos', vat_rate:posData.org?.vat_registered ? Number(itemModal.vat_rate) : 0,
         stock:itemModal.stock!=null&&itemModal.stock!==''?Number(itemModal.stock):null,
         fav:!!itemModal.fav, kitchen:!!itemModal.kitchen, bookable:!!itemModal.bookable,
@@ -12772,8 +12857,8 @@ function CatalogSection({ posData }) {
 
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             {(itemModal?.item_type||'simple') !== 'ingredient' && (
-              <Field label="Prodajna cena (€) *">
-                <input type="number" onFocus={e => e.target.select()} step="0.01" min="0" value={itemModal?.price||''} onChange={e=>setItemModal(p=>({...p,price:e.target.value}))} placeholder="0.00" style={inp}/>
+              <Field label={itemModal?.cena_ob_prodaji && (itemModal?.item_type||'simple') === 'simple' ? 'Prodajna cena (€) – vpiše se ob prodaji' : 'Prodajna cena (€) *'}>
+                <input type="number" onFocus={e => e.target.select()} step="0.01" min="0" disabled={!!itemModal?.cena_ob_prodaji && (itemModal?.item_type||'simple') === 'simple'} value={itemModal?.cena_ob_prodaji && (itemModal?.item_type||'simple') === 'simple' ? '' : (itemModal?.price||'')} onChange={e=>setItemModal(p=>({...p,price:e.target.value}))} placeholder={itemModal?.cena_ob_prodaji && (itemModal?.item_type||'simple') === 'simple' ? 'ob prodaji' : '0.00'} style={inp}/>
               </Field>
             )}
             {(itemModal?.item_type||'simple') === 'ingredient' && (
@@ -12787,6 +12872,15 @@ function CatalogSection({ posData }) {
               </select>
             </Field>
           </div>
+          {(itemModal?.item_type||'simple') === 'simple' && (
+            <label style={{ display:'flex', alignItems:'flex-start', gap:8, fontSize:13, cursor:'pointer', padding:'10px 12px', borderRadius:9, border:'1px solid '+(itemModal?.cena_ob_prodaji ? T.accent : T.line), background: itemModal?.cena_ob_prodaji ? T.accentSoft : 'transparent' }}>
+              <input type="checkbox" checked={!!itemModal?.cena_ob_prodaji} onChange={e=>setItemModal(p=>({...p,cena_ob_prodaji:e.target.checked}))} style={{ accentColor:T.accent, marginTop:2 }}/>
+              <span>
+                <b>Cena ob prodaji</b> (univerzalni artikel)
+                <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>Na blagajni se ob vsakem pritisku odpre vnos zneska, kot na kartičnem terminalu. Velja izbrana stopnja DDV tega artikla.</div>
+              </span>
+            </label>
+          )}
 
           {posData.org?.vat_registered && (
             <VatExemptionPicker
@@ -16270,7 +16364,25 @@ function KlasikApp() {
 
   const totals = H.orderTotals(cart)
 
+  // Univerzalni artikel (cena ob prodaji, 16.10.2026) - glej VnosCeneModal.
+  const [vnosCene, setVnosCene] = useState<any>(null)
+
+  function dodajZnesek(item, znesek, opis) {
+    // Vsak vnos je SVOJA vrstica (ne zdruzuje se z enakim artiklom - zneski so
+    // razlicni). Brez happy hour, modifikatorjev in zaloge.
+    setCart(c => [...c, {
+      lineId: Math.random().toString(36).slice(2), id: item.id,
+      name: opis || item.name, price: znesek, qty: 1,
+      vat_rate: Number(item.vat_rate ?? 22), item_type: 'simple', stock: null,
+      vat_exemption_code: item.vat_exemption_code || null, vat_exemption_custom_text: item.vat_exemption_custom_text || null,
+      unit: item.unit || 'kos', mods: [], note: '', happyHourApplied: false, happyHourPct: 0,
+      cenaObProdaji: true,
+    }])
+    setVnosCene(null)
+  }
+
   async function addItem(item, happyOn = false) {
+    if (item.cena_ob_prodaji) { setVnosCene(item); return }
     // POPRAVLJENO (16.8.2026): upravicenost in odstotek iz AKTIVNEGA PRAVILA
     const hhRule = happyOn ? H.activeHappyHourRule(posData.happyHourRules) : null
     const eligible = !!hhRule && H.isHappyHourEligible(item, hhRule)
@@ -16312,6 +16424,7 @@ function KlasikApp() {
     <div className="pos-koren" style={{ width:'100%', height:'100%', background:T.bg, color:T.ink, fontFamily:'"Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif', fontSize:13, display:'flex', flexDirection:'column', overflow:'hidden', position:'relative' }}>
       {/* PRELET 355: postavitev za telefon (≤ 767 pik). Nad tem ne velja nic. */}
       <style>{POS_TELEFON_CSS}</style>
+      {vnosCene && <VnosCeneModal item={vnosCene} onClose={() => setVnosCene(null)} onDodaj={(z, o) => dodajZnesek(vnosCene, z, o)}/>}
 
       {/* HEADER */}
       <div className="pos-glava" style={{ background:T.header, color:T.headerInk, padding:'8px 16px', display:'flex', alignItems:'center', gap:14, flexShrink:0, borderBottom:'1px solid '+T.headerLine, minHeight:56 }}>

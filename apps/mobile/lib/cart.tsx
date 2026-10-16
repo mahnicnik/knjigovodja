@@ -49,13 +49,16 @@ export function CartProvider({ children, orgId }: { children: React.ReactNode; o
   function addItem(tableId: string, item: any, mods: any[] = []) {
     setCarts(prev => {
       const current = prev[tableId] || [];
-      const ex = current.find(l => l.item.id === item.id);
+      // Univerzalni artikel (cena ob prodaji, 16.10.2026): vsak vnos je svoja
+      // vrstica - zneski so razlicni, zato se ne zdruzuje.
+      const ex = item.cenaVnesena ? null : current.find(l => l.item.id === item.id && !l.item.cenaVnesena);
       if (ex) {
-        return { ...prev, [tableId]: current.map(l => l.item.id === item.id ? { ...l, qty: l.qty + 1 } : l) };
+        return { ...prev, [tableId]: current.map(l => l.lineId === ex.lineId ? { ...l, qty: l.qty + 1 } : l) };
       }
       const modPrice = mods.reduce((s: number, m: any) => s + m.priceDelta, 0);
       const itemWithMods = { ...item, price: item.price + modPrice };
-      return { ...prev, [tableId]: [...current, { lineId: Date.now().toString(), item: itemWithMods, qty: 1 }] };
+      const lineId = Date.now().toString() + Math.random().toString(36).slice(2, 6);
+      return { ...prev, [tableId]: [...current, { lineId, item: itemWithMods, qty: 1 }] };
     });
   }
 

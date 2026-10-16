@@ -17,7 +17,7 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 interface Category { id: string; name: string; icon: string; color: string; sort_order: number; }
 interface ModifierOption { id: string; name: string; price_delta: number; }
 interface ModifierGroup { id: string; name: string; required: boolean; multi_select: boolean; options: ModifierOption[]; }
-interface Item { id: string; name: string; price: number; vat_rate: number; category_id: string; fav: boolean; code: string; }
+interface Item { id: string; name: string; price: number; vat_rate: number; category_id: string; fav: boolean; code: string; cena_ob_prodaji?: boolean; cenaVnesena?: boolean; }
 interface CartLine { lineId: string; item: Item; qty: number; }
 
 export default function PosScreen() {
@@ -36,6 +36,10 @@ export default function PosScreen() {
   const [payModal, setPayModal] = useState(false);
   const [paying, setPaying] = useState(false);
   const [modModal, setModModal] = useState<{item: Item, groups: ModifierGroup[]} | null>(null);
+  // Univerzalni artikel - vnos zneska ob prodaji (16.10.2026)
+  const [vnosCene, setVnosCene] = useState<Item | null>(null);
+  const [centi, setCenti] = useState('');
+  const [opisCene, setOpisCene] = useState('');
   const [selectedMods, setSelectedMods] = useState<Record<string, string[]>>({});
   const [payMethod, setPayMethod] = useState<'cash'|'card'|'bon'>('cash');
   const [given, setGiven] = useState('');
@@ -47,7 +51,7 @@ export default function PosScreen() {
   async function loadData() {
     const [catRes, itemRes] = await Promise.all([
       supabase.from('categories').select('id,name,icon,color,sort_order').eq('business_id', auth!.businessId).order('sort_order'),
-      supabase.from('items').select('id,name,price,vat_rate,category_id,fav,code').eq('business_id', auth!.businessId).eq('archived', false).order('name'),
+      supabase.from('items').select('*').eq('business_id', auth!.businessId).eq('archived', false).order('name'),
     ]);
     if (catRes.data) setCategories(catRes.data);
     if (itemRes.data) setItems(itemRes.data);
@@ -79,7 +83,25 @@ export default function PosScreen() {
     return result;
   }
 
+  function pritisniCeno(k: string) {
+    if (k === '⌫') { setCenti(c => c.slice(0, -1)); return; }
+    if (k === 'C') { setCenti(''); return; }
+    setCenti(c => { const n = (c + k).replace(/^0+/, ''); return n.length > 7 ? c : n; });
+  }
+
+  function dodajZnesek() {
+    if (!vnosCene) return;
+    const znesek = Math.round(Number(centi || '0')) / 100;
+    if (znesek <= 0) return;
+    addItem({ ...vnosCene, price: znesek, name: opisCene.trim() || vnosCene.name, cenaVnesena: true }, []);
+    setVnosCene(null);
+  }
+
   async function handleItemPress(item: Item) {
+    if (item.cena_ob_prodaji) {
+      setCenti(''); setOpisCene(''); setVnosCene(item);
+      return;
+    }
     const groups = await loadModifiers(item);
     if (groups.length === 0) {
       addItem(item, []);
@@ -409,7 +431,7 @@ export default function PosScreen() {
               columnWrapperStyle={{ gap: 8 }}
               contentContainerStyle={{ gap: 8, padding: 10, paddingBottom: 100 }}
               renderItem={({ item }) => {
-                const inCart = cart.find(l => l.item.id === item.id);
+                const inCart = item.cena_ob_prodaji ? undefined : cart.find(l => l.item.id === item.id && !l.item.cenaVnesena);
                 return (
                   <View style={[s.itemBtn, inCart && s.itemBtnActive]}>
                     {item.fav && <Text style={s.itemFav}>★</Text>}
@@ -418,7 +440,7 @@ export default function PosScreen() {
                       onPress={() => handleItemPress(item)}
                     >
                       <Text style={s.itemName} numberOfLines={3}>{item.name}</Text>
-                      <Text style={s.itemPrice}>{item.price.toFixed(2)} €</Text>
+                      <Text style={s.itemPrice}>{item.cena_ob_prodaji ? '✎ Vpiši znesek' : `${item.price.toFixed(2)} €`}</Text>
                     </TouchableOpacity>
                     {inCart && (
                       <View style={s.itemControls}>
@@ -650,6 +672,46 @@ export default function PosScreen() {
           </View>
         </View>
       </Modal>
+      {vnosCene && (
+        <Modal visible animationType="slide" transparent onRequestClose={() => setVnosCene(null)}>
+          <View style={s.modalOverlay}>
+            <View style={[s.cartModal, spodaj]}>
+              <View style={s.modalHeader}>
+                <Text style={s.modalTitle} numberOfLines={1}>{vnosCene.name}</Text>
+                <TouchableOpacity onPress={() => setVnosCene(null)} hitSlop={12}>
+                  <Text style={s.modalClose}>X</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={{ padding: 16, gap: 10 }}>
+                <Text style={{ textAlign: 'center', color: colors.gray, fontSize: 12 }}>
+                  Vnesi znesek · DDV {String(vnosCene.vat_rate ?? 22).replace('.', ',')} %
+                </Text>
+                <Text style={{ textAlign: 'center', fontSize: 34, fontWeight: 'bold', color: centi ? colors.text : colors.gray }}>
+                  {(Number(centi || '0') / 100).toFixed(2).replace('.', ',')} €
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 8 }}>
+                  {['1','2','3','4','5','6','7','8','9','C','0','⌫'].map(k => (
+                    <TouchableOpacity key={k} onPress={() => pritisniCeno(k)}
+                      style={{ width: '31.5%', height: 54, borderRadius: 10, borderWidth: 1, borderColor: colors.lightGray, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 22, fontWeight: '700', color: k === 'C' ? colors.gray : colors.text }}>{k}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TextInput
+                  value={opisCene}
+                  onChangeText={t => setOpisCene(t.slice(0, 60))}
+                  placeholder="Opis na računu (neobvezno), npr. Med 1 kg"
+                  placeholderTextColor={colors.gray}
+                  style={{ borderWidth: 1, borderColor: colors.lightGray, borderRadius: 10, padding: 12, fontSize: 14, color: colors.text, backgroundColor: colors.white }}
+                />
+                <TouchableOpacity style={[s.payBtn, !(Number(centi || '0') > 0) && s.btnDisabled]} onPress={dodajZnesek} disabled={!(Number(centi || '0') > 0)}>
+                  <Text style={s.payBtnText}>Dodaj {(Number(centi || '0') / 100).toFixed(2).replace('.', ',')} €</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
       {modModal && (
         <Modal visible animationType="slide" transparent>
           <View style={s.modalOverlay}>

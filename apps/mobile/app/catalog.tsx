@@ -17,7 +17,7 @@ export default function CatalogScreen() {
   const [selectedCat, setSelectedCat] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [addModal, setAddModal] = useState(false);
-  const [newItem, setNewItem] = useState({ name: '', price: '', vat_rate: '22', category_id: '' });
+  const [newItem, setNewItem] = useState({ name: '', price: '', vat_rate: '22', category_id: '', cena_ob_prodaji: false });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => { if (auth?.businessId) loadData(); }, [auth?.businessId]);
@@ -25,7 +25,7 @@ export default function CatalogScreen() {
   async function loadData() {
     const [catRes, itemRes] = await Promise.all([
       supabase.from('categories').select('id,name,icon,color').eq('business_id', auth!.businessId).order('sort_order'),
-      supabase.from('items').select('id,name,price,vat_rate,category_id,archived,fav').eq('business_id', auth!.businessId).eq('archived', false).order('name'),
+      supabase.from('items').select('*').eq('business_id', auth!.businessId).eq('archived', false).order('name'),
     ]);
     if (catRes.data) setCategories(catRes.data);
     if (itemRes.data) setItems(itemRes.data);
@@ -36,13 +36,16 @@ export default function CatalogScreen() {
 
   async function saveItem() {
     if (!newItem.name.trim()) { Alert.alert('Napaka', 'Ime je obvezno'); return; }
-    if (!newItem.price || isNaN(parseFloat(newItem.price))) { Alert.alert('Napaka', 'Vnesi veljavno ceno'); return; }
+    if (!newItem.cena_ob_prodaji && (!newItem.price || isNaN(parseFloat(newItem.price.replace(',', '.'))))) { Alert.alert('Napaka', 'Vnesi veljavno ceno'); return; }
     setSaving(true);
     const { error } = await supabase.from('items').insert({
       business_id: auth!.businessId,
       name: newItem.name.trim(),
-      price: parseFloat(newItem.price),
-      vat_rate: parseInt(newItem.vat_rate) || 22,
+      price: newItem.cena_ob_prodaji ? 0 : parseFloat(newItem.price.replace(',', '.')),
+      // POPRAVLJENO (16.10.2026): parseInt('9.5') je dal 9 - artikel z 9,5 % DDV
+      // je bil shranjen z 9 %.
+      vat_rate: parseFloat(newItem.vat_rate) || 22,
+      cena_ob_prodaji: newItem.cena_ob_prodaji,
       category_id: newItem.category_id || null,
       archived: false,
     });
@@ -50,7 +53,7 @@ export default function CatalogScreen() {
       Alert.alert('Napaka', error.message);
     } else {
       setAddModal(false);
-      setNewItem({ name: '', price: '', vat_rate: '22', category_id: '' });
+      setNewItem({ name: '', price: '', vat_rate: '22', category_id: '', cena_ob_prodaji: false });
       loadData();
     }
     setSaving(false);
@@ -122,7 +125,7 @@ export default function CatalogScreen() {
                 <Text style={s.itemName}>{item.name}</Text>
                 <Text style={s.itemMeta}>DDV {item.vat_rate}%</Text>
               </View>
-              <Text style={s.itemPrice}>{parseFloat(item.price).toFixed(2)} €</Text>
+              <Text style={s.itemPrice}>{item.cena_ob_prodaji ? 'ob prodaji' : `${parseFloat(item.price).toFixed(2)} €`}</Text>
               <TouchableOpacity onPress={() => archiveItem(item)} style={s.deleteBtn}>
                 <Text style={{ fontSize: 16 }}>🗑</Text>
               </TouchableOpacity>
@@ -151,19 +154,33 @@ export default function CatalogScreen() {
                 placeholderTextColor={colors.gray}
               />
 
-              <Text style={s.fieldLabel}>Cena (€) *</Text>
-              <TextInput
+              {/* Univerzalni artikel (16.10.2026): cena se vpise ob vsaki prodaji */}
+              <TouchableOpacity
+                onPress={() => setNewItem(p => ({ ...p, cena_ob_prodaji: !p.cena_ob_prodaji }))}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: newItem.cena_ob_prodaji ? colors.accent : colors.lightGray, marginBottom: 12 }}
+              >
+                <View style={{ width: 22, height: 22, borderRadius: 5, borderWidth: 2, borderColor: newItem.cena_ob_prodaji ? colors.accent : colors.lightGray, backgroundColor: newItem.cena_ob_prodaji ? colors.accent : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+                  {newItem.cena_ob_prodaji && <Text style={{ color: 'white', fontWeight: 'bold' }}>✓</Text>}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>Cena ob prodaji</Text>
+                  <Text style={{ fontSize: 11, color: colors.gray, marginTop: 2 }}>Univerzalni artikel – znesek vpišeš ob vsaki prodaji</Text>
+                </View>
+              </TouchableOpacity>
+
+              {!newItem.cena_ob_prodaji && <Text style={s.fieldLabel}>Cena (€) *</Text>}
+              {!newItem.cena_ob_prodaji && <TextInput
                 style={s.input}
                 value={newItem.price}
                 onChangeText={v => setNewItem(p => ({ ...p, price: v }))}
                 placeholder="2.50"
                 keyboardType="numeric"
                 placeholderTextColor={colors.gray}
-              />
+              />}
 
               <Text style={s.fieldLabel}>DDV (%)</Text>
               <View style={s.vatRow}>
-                {['9.5', '22'].map(v => (
+                {['22', '9.5', '5'].map(v => (
                   <TouchableOpacity
                     key={v}
                     style={[s.vatBtn, newItem.vat_rate === v && s.vatBtnActive]}

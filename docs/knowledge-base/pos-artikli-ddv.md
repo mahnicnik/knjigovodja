@@ -7,7 +7,8 @@ koda:
   - apps/web/app/pos/page.tsx (CatalogSection, CenikImportModal, HappyHourSection)
   - apps/web/components/pos/MnozicneCene.tsx, apps/web/components/pos/ZgodovinaCen.tsx
   - apps/web/components/VatExemptionPicker.tsx
-posodobljeno: 2026-10-05
+  - apps/web/app/pos/page.tsx (VnosCeneModal – univerzalni artikel), apps/mobile/app/pos.tsx, apps/mobile/app/catalog.tsx
+posodobljeno: 2026-10-16
 ---
 
 # POS – kategorije, artikli in DDV stopnja
@@ -40,6 +41,18 @@ V obrazcu artikla (**POS → Nastavitve → Kategorije & Artikli → Artikli →
 Smernice iz **POS → Nastavitve → FURS & DDV**: 0 % zdravstvene storitve po 42. členu, izobraževanje, boni; 5 % knjige in časopisi; 9,5 % gostinske storitve, hrana in brezalkoholne pijače, uporaba športnih objektov (samostojna vadba), nastanitev; 22 % alkoholne pijače, vodena vadba in osebno trenerstvo, blago in večina drugih storitev.
 
 Nezavezanec za DDV izbire DDV stopnje ne vidi (vse je 0 %).
+
+## Univerzalni artikel (cena ob prodaji)
+
+Artikel brez stalne cene – znesek vpišeš ob vsaki prodaji, kot na kartičnem terminalu (npr. »Razno 22 %« na tržnici ali za artikle, ki jih nimaš v ceniku).
+
+**Nastavitev:** v obrazcu artikla (tip **Enostaven**) obkljukaj **Cena ob prodaji** (univerzalni artikel). Polje za prodajno ceno se zaklene (»ob prodaji«). Izberi **DDV stopnjo** – ta velja za vsak znesek, vpisan pri tem artiklu. Za različne stopnje naredi več univerzalnih artiklov (npr. »Razno 22 %«, »Razno 9,5 %«). Na Android aplikaciji: **Nastavitve → Kategorije & Artikli → +** → **Cena ob prodaji**.
+
+**Prodaja:** pritisni artikel (na gumbu piše **✎ Vpiši znesek**) → odpre se tipkovnica **Vnesi znesek**. Številke se vpisujejo v centih (1, 2, 5, 0 = 12,50 €), **C** pobriše, **⌫** briše zadnjo številko; v brskalniku lahko tipkaš tudi na tipkovnici (Enter = Dodaj). Po želji vpiši **opis na računu** (npr. »Med 1 kg«) – izpiše se namesto imena artikla. **Dodaj** → vrstica gre v košarico, nato plačilo kot običajno.
+
+- Vsak vnos je svoja vrstica (zneski se ne seštejejo v eno vrstico).
+- Zaloga, happy hour in modifikatorji za univerzalni artikel ne veljajo.
+- Račun, FURS potrditev, storno, vračilo in Z-poročilo delujejo kot pri drugih artiklih (DDV po stopnji artikla).
 
 ## Modifikatorji (dodatki, velikosti)
 
