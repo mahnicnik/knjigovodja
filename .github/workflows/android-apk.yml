@@ -13,7 +13,7 @@ name: Objavi Android APK
 on:
   push:
     branches: [main]
-    paths: ['apps/mobile/android-izdaja.json']
+    paths: ['apps/mobile/android-izdaja.json', '.github/workflows/android-apk.yml']
   workflow_dispatch: {}
 
 permissions:
@@ -60,9 +60,9 @@ jobs:
           if [ -x "$AAPT2" ]; then
             BADGING=$("$AAPT2" dump badging racunko-pos.apk | head -1)
             echo "$BADGING"
-            PAKET=$(echo "$BADGING" | sed -n "s/.*name='\([^']*\)'.*/\1/p")
-            KODA=$(echo "$BADGING" | sed -n "s/.*versionCode='\([^']*\)'.*/\1/p")
-            IME=$(echo "$BADGING" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")
+            PAKET=$(echo "$BADGING" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")
+            KODA=$(echo "$BADGING" | sed -n "s/.* versionCode='\([^']*\)'.*/\1/p")
+            IME=$(echo "$BADGING" | sed -n "s/.* versionName='\([^']*\)'.*/\1/p")
             [ "$PAKET" = "si.racunko.pos" ] || { echo "::error::Napacen paket: $PAKET"; exit 1; }
             VERZIJA="$IME ($KODA)"
           else
