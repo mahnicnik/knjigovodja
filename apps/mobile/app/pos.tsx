@@ -335,9 +335,12 @@ export default function PosScreen() {
     <Zaslon style={s.container}>
       {/* Header */}
       <View style={s.header}>
-        <View>
-          <Text style={s.headerTitle}>Računko POS</Text>
-          <Text style={s.orgName}>{auth?.orgName}</Text>
+        {/* Dolgo ime podjetja (npr. "Perešuti, proizvodnja in prodaja ...
+            d.o.o.") je izrinilo gumbe na desni, tudi Nastavitve (16.10.2026).
+            Levi del se zdaj skrci in ime odreze s "…", gumbi ostanejo. */}
+        <View style={s.headerLeft}>
+          <Text style={s.headerTitle} numberOfLines={1}>Računko POS</Text>
+          <Text style={s.orgName} numberOfLines={1} ellipsizeMode="tail">{auth?.orgName}</Text>
         </View>
         <View style={s.headerRight}>
           <TouchableOpacity style={s.headerBtn} onPress={() => router.push('/orders')}>
@@ -349,7 +352,7 @@ export default function PosScreen() {
           <TouchableOpacity style={s.headerBtn} onPress={() => router.push('/settings')}>
             <Text style={s.headerBtnText}>⚙️</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.replace('/pin')}>
+          <TouchableOpacity style={s.headerBtn} onPress={() => router.replace('/pin')}>
             <Text style={s.headerBtnText}>🔒</Text>
           </TouchableOpacity>
         </View>
@@ -709,9 +712,10 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   header: { backgroundColor: colors.header, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10 },
   headerTitle: { color: colors.brand, fontSize: 15, fontWeight: 'bold' },
-  orgName: { color: colors.white, fontSize: 10, opacity: 0.6 },
-  headerRight: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  headerBtn: { padding: 4 },
+  orgName: { color: colors.white, fontSize: 11, opacity: 0.7 },
+  headerLeft: { flex: 1, minWidth: 0, marginRight: 10 },
+  headerRight: { flexDirection: 'row', gap: 6, alignItems: 'center', flexShrink: 0 },
+  headerBtn: { padding: 6, minWidth: 40, minHeight: 40, alignItems: 'center', justifyContent: 'center' },
   headerBtnText: { fontSize: 20 },
   body: { flex: 1, flexDirection: 'row' },
 
