@@ -132,11 +132,15 @@ export async function zadnjaAndroid(): Promise<AndroidIzdaja | null> {
     }
   } catch {}
   // APK naložen brez .json (rocno prek GitHuba): preveri, ali datoteka obstaja.
+  // GET z Range namesto HEAD: GitHub preusmeri na podpisan URL, ki velja samo
+  // za GET - HEAD tam vrne 401 (preverjeno 16.10.2026). Range prenese 1 bajt.
   try {
-    const res = await fetch(URL_ANDROID_APK, { method: 'HEAD', cache: 'no-store' })
+    const res = await fetch(URL_ANDROID_APK, { headers: { Range: 'bytes=0-0' }, cache: 'no-store' })
     if (res.ok) {
-      const dolzina = Number(res.headers.get('content-length')) || null
-      return { verzija: null, url: URL_ANDROID_APK, velikost: dolzina, datum: null }
+      const obseg = res.headers.get('content-range')?.split('/')[1]
+      const velikost = obseg && /^\d+$/.test(obseg) ? Number(obseg) : null
+      await res.body?.cancel().catch(() => {})
+      return { verzija: null, url: URL_ANDROID_APK, velikost, datum: null }
     }
   } catch {}
   return null

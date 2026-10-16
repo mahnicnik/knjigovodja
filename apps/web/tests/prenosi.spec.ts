@@ -96,6 +96,11 @@ test.describe('stran /prenosi', () => {
   test('paket preverja enako kot preostanek aplikacije', () => {
     expect(stran).toContain('imaPos(org)')
   })
+
+  test('rezerva za APK ne uporablja HEAD (GitHub podpisan URL vrne 401)', () => {
+    const lib = readFileSync(join(KOREN, 'lib', 'prenosi.ts'), 'utf8')
+    expect(lib).not.toContain("method: 'HEAD'")
+  })
 })
 
 test('velikostMB', () => {
