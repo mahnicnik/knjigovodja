@@ -34,6 +34,15 @@ interface FursPremise {
   buildingNumber?: string
   buildingSectionNumber?: string
   channel?: 'pos' | 'web' | 'both'
+  /** 'static' = nepremicnina, 'movable' = premicni prostor (16.10.2026) */
+  premiseType?: 'static' | 'movable'
+  movableType?: 'A' | 'B' | null
+}
+
+/** Opisi tipov premicnih prostorov po FURS. */
+const TIP_PREMICNEGA: Record<string, string> = {
+  A: 'Premični objekt – npr. premična stojnica, vozilo',
+  B: 'Objekt na stalni lokaciji – npr. stojnica na tržnici, kiosk',
 }
 
 interface FursDevice {
@@ -148,6 +157,8 @@ export default function BlagajnaSekcija() {
             buildingNumber: p.building_number || '',
             buildingSectionNumber: p.building_section_number || '',
             channel: p.channel || 'both',
+            premiseType: p.premise_type === 'movable' ? 'movable' : 'static',
+            movableType: p.movable_type || null,
           })),
           devices: (devices || []).map(d => ({
             id: d.id,
@@ -241,10 +252,19 @@ export default function BlagajnaSekcija() {
   }
 
   async function addPremise() {
-    if (!premiseModal?.businessPremiseId || !premiseModal?.address) {
-      showToast('ID prostora in naslov sta obvezna', false)
+    const premicen = premiseModal?.premiseType === 'movable'
+    if (!premiseModal?.businessPremiseId || (!premicen && !premiseModal?.address)) {
+      showToast(premicen ? 'ID prostora je obvezen' : 'ID prostora in naslov sta obvezna', false)
       return
     }
+    if (premicen && !premiseModal?.movableType) {
+      showToast('Izberi tip premičnega prostora (A ali B)', false)
+      return
+    }
+    // Premicni prostor nima katastrskih podatkov (FURS jih zanj ne sprejme).
+    const vrsta = premicen
+      ? { premise_type: 'movable', movable_type: premiseModal!.movableType, cadastral_number: null, building_number: null, building_section_number: null }
+      : { premise_type: 'static', movable_type: null }
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Ni avtentikacije')
@@ -260,13 +280,14 @@ export default function BlagajnaSekcija() {
         // Update obstoječega
         const r = await supabase.from('business_premises').update({
           premise_id: premiseModal.businessPremiseId,
-          address: premiseModal.address,
+          address: premiseModal.address || '',
           postal_code: premiseModal.postalCode || '',
           city: premiseModal.city || '',
           cadastral_number: premiseModal.cadastralNumber || null,
           building_number: premiseModal.buildingNumber || null,
           building_section_number: premiseModal.buildingSectionNumber || null,
           channel: premiseModal.channel || 'both',
+          ...vrsta,
         }).eq('id', premiseModal.id)
         premiseErr = r.error
       } else {
@@ -274,8 +295,7 @@ export default function BlagajnaSekcija() {
         const r = await supabase.from('business_premises').insert({
           org_id: member.org_id,
           premise_id: premiseModal.businessPremiseId,
-          premise_type: 'static',
-          address: premiseModal.address,
+          address: premiseModal.address || '',
           postal_code: premiseModal.postalCode || '',
           city: premiseModal.city || '',
           cadastral_number: premiseModal.cadastralNumber || null,
@@ -283,6 +303,7 @@ export default function BlagajnaSekcija() {
           building_section_number: premiseModal.buildingSectionNumber || null,
           is_active: true,
           channel: premiseModal.channel || 'both',
+          ...vrsta,
         })
         premiseErr = r.error
       }
@@ -315,6 +336,7 @@ export default function BlagajnaSekcija() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          premiseRowId: p.id,
           cadastralNumber: p.cadastralNumber,
           buildingNumber: p.buildingNumber,
           buildingSectionNumber: p.buildingSectionNumber,
@@ -621,15 +643,24 @@ export default function BlagajnaSekcija() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 14, fontFamily: 'monospace', color: '#1f6b3a' }}>{p.businessPremiseId}</div>
-                  <div style={{ fontSize: 13, color: '#444', marginTop: 4 }}>{p.address}, {p.postalCode} {p.city}</div>
-                  {p.cadastralNumber && <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>Kat. občina: {p.cadastralNumber}, stavba: {p.buildingNumber}</div>}
+                  {p.premiseType === 'movable' ? (
+                    <div style={{ fontSize: 13, color: '#444', marginTop: 4 }}>
+                      🛒 Premični prostor – tip {p.movableType}: {TIP_PREMICNEGA[p.movableType || ''] || ''}
+                      {p.address ? <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{p.address}</div> : null}
+                    </div>
+                  ) : (<>
+                    <div style={{ fontSize: 13, color: '#444', marginTop: 4 }}>{p.address}, {p.postalCode} {p.city}</div>
+                    {p.cadastralNumber && <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>Kat. občina: {p.cadastralNumber}, stavba: {p.buildingNumber}</div>}
+                  </>)}
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <button onClick={() => registerPremiseWithFurs(p)} disabled={registeringPremiseId === p.id || !p.cadastralNumber}
-                    title={!p.cadastralNumber ? 'Najprej vnesi katastrske podatke (uredi prostor)' : ''}
-                    style={{ padding: '6px 12px', borderRadius: 7, border: '1px solid #1f6b3a', background: registeringPremiseId === p.id ? '#e5e1d8' : 'rgba(31,107,58,0.08)', cursor: p.cadastralNumber ? 'pointer' : 'not-allowed', fontSize: 12, color: '#1f6b3a', fontWeight: 600, fontFamily: 'inherit', opacity: p.cadastralNumber ? 1 : 0.5 }}>
+                  {(() => { const lahko = p.premiseType === 'movable' ? !!p.movableType : !!p.cadastralNumber; return (
+                  <button onClick={() => registerPremiseWithFurs(p)} disabled={registeringPremiseId === p.id || !lahko}
+                    title={!lahko ? (p.premiseType === 'movable' ? 'Najprej izberi tip prostora (uredi prostor)' : 'Najprej vnesi katastrske podatke (uredi prostor)') : ''}
+                    style={{ padding: '6px 12px', borderRadius: 7, border: '1px solid #1f6b3a', background: registeringPremiseId === p.id ? '#e5e1d8' : 'rgba(31,107,58,0.08)', cursor: lahko ? 'pointer' : 'not-allowed', fontSize: 12, color: '#1f6b3a', fontWeight: 600, fontFamily: 'inherit', opacity: lahko ? 1 : 0.5 }}>
                     {registeringPremiseId === p.id ? '⏳ Prijavljam...' : '📤 Prijavi pri FURS'}
                   </button>
+                  ) })()}
                   <button onClick={() => setPremiseModal(p)} style={{ padding: '6px 12px', borderRadius: 7, border: '1px solid #d0ccc5', background: 'transparent', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}>✏️ Uredi</button>
                   <button onClick={() => deletePremise(p.id)} style={{ padding: '6px 12px', borderRadius: 7, border: '1px solid rgba(168,50,50,0.3)', background: 'transparent', cursor: 'pointer', fontSize: 12, color: '#a83232', fontFamily: 'inherit' }}>Briši</button>
                 </div>
@@ -844,6 +875,30 @@ export default function BlagajnaSekcija() {
                 <input value={premiseModal.businessPremiseId || ''} onChange={e => setPremiseModal(p => ({ ...p, businessPremiseId: e.target.value.toUpperCase() }))}
                   placeholder="SIRBFB01" style={{ ...inputStyle, fontFamily: 'monospace' }} autoFocus />
               </FormField>
+              {/* PREMICNI PROSTOR (16.10.2026): stojnice na trznicah */}
+              <FormField label="Vrsta prostora">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {([
+                    { v: 'static', t: null, label: 'Nepremičnina', opis: 'Lokal, trgovina, pisarna – s katastrskimi podatki' },
+                    { v: 'movable', t: 'A', label: 'Premični prostor – tip A', opis: TIP_PREMICNEGA.A },
+                    { v: 'movable', t: 'B', label: 'Premični prostor – tip B', opis: TIP_PREMICNEGA.B },
+                  ] as const).map(o => {
+                    const izbran = (premiseModal.premiseType || 'static') === o.v && (o.v === 'static' || premiseModal.movableType === o.t)
+                    return (
+                      <label key={o.label} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '8px 10px', borderRadius: 8, border: '1px solid ' + (izbran ? '#1f6b3a' : '#e5e1d8'), background: izbran ? 'rgba(31,107,58,0.06)' : 'transparent', cursor: 'pointer' }}>
+                        <input type="radio" checked={izbran} onChange={() => setPremiseModal(p => ({ ...p, premiseType: o.v, movableType: o.t }))} style={{ marginTop: 3, accentColor: '#1f6b3a' }} />
+                        <span><b style={{ fontSize: 13 }}>{o.label}</b><div style={{ fontSize: 11, color: '#777', marginTop: 1 }}>{o.opis}</div></span>
+                      </label>
+                    )
+                  })}
+                </div>
+              </FormField>
+              {premiseModal.premiseType === 'movable' ? (
+                <FormField label="Opis (neobvezno, npr. Stojnica Ljubljana – Odprta tržnica)">
+                  <input value={premiseModal.address || ''} onChange={e => setPremiseModal(p => ({ ...p, address: e.target.value }))}
+                    placeholder="Stojnica 1" style={inputStyle} />
+                </FormField>
+              ) : (<>
               <FormField label="Naslov *">
                 <input value={premiseModal.address || ''} onChange={e => setPremiseModal(p => ({ ...p, address: e.target.value }))}
                   placeholder="Poljanska cesta 87" style={inputStyle} />
@@ -872,6 +927,7 @@ export default function BlagajnaSekcija() {
                     placeholder="1" style={inputStyle} />
                 </FormField>
               </div>
+              </>)}
               <FormField label="Namen (kanal)">
                 <select value={premiseModal.channel || 'both'} onChange={e => setPremiseModal(p => ({ ...p, channel: e.target.value as any }))} style={inputStyle}>
                   <option value="both">Oboje (POS in Stripe/PDF) — privzeto</option>

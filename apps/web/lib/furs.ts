@@ -852,21 +852,30 @@ export function getFursVerificationUrl(zoi: string, issueDate: Date): string {
 
 export interface FursPremiseData {
   businessPremiseId: string
-  cadastralNumber: string
-  buildingNumber: string
-  buildingSectionNumber: string
-  street: string
-  houseNumber: string
+  /**
+   * PREMICNI POSLOVNI PROSTOR (16.10.2026). Ce je nastavljen, se namesto
+   * nepremicnine (RealEstateBP) poslje PremiseType:
+   *   A – premicni objekt (npr. prevozno sredstvo, premicna stojnica)
+   *   B – objekt na stalni lokaciji (npr. stojnica na trznici, kiosk)
+   *   C – posamezna elektronska naprava (ko zavezanec nima drugega prostora)
+   * Podatki o nepremicnini in naslovu se takrat ne posljejo.
+   */
+  movableType?: 'A' | 'B' | 'C'
+  cadastralNumber?: string
+  buildingNumber?: string
+  buildingSectionNumber?: string
+  street?: string
+  houseNumber?: string
   houseNumberAdditional?: string
-  community: string
-  city: string
-  postalCode: string
+  community?: string
+  city?: string
+  postalCode?: string
   validityDate: string // YYYY-MM-DD
   softwareSupplierTaxNumber: string
   specialNotes?: string
 }
 
-function buildBusinessPremiseRequest(
+export function buildBusinessPremiseRequest(
   config: FursConfig,
   premise: FursPremiseData,
 ): string {
@@ -878,10 +887,14 @@ function buildBusinessPremiseRequest(
   const specialNotesXml = premise.specialNotes
     ? `<fu:SpecialNotes>${premise.specialNotes}</fu:SpecialNotes>`
     : ''
+  // Nepremicnina ali premicni prostor (tip A/B/C) - glej FursPremiseData.movableType.
+  const bpIdentifierXml = premise.movableType
+    ? `<fu:BPIdentifier><fu:PremiseType>${premise.movableType}</fu:PremiseType></fu:BPIdentifier>`
+    : `<fu:BPIdentifier><fu:RealEstateBP><fu:PropertyID><fu:CadastralNumber>${premise.cadastralNumber}</fu:CadastralNumber><fu:BuildingNumber>${premise.buildingNumber}</fu:BuildingNumber><fu:BuildingSectionNumber>${premise.buildingSectionNumber}</fu:BuildingSectionNumber></fu:PropertyID><fu:Address><fu:Street>${premise.street}</fu:Street><fu:HouseNumber>${premise.houseNumber}</fu:HouseNumber>${houseNumberAdditionalXml}<fu:Community>${premise.community}</fu:Community><fu:City>${premise.city}</fu:City><fu:PostalCode>${premise.postalCode}</fu:PostalCode></fu:Address></fu:RealEstateBP></fu:BPIdentifier>`
   // KLJUCNO: brez presledkov/praznih vrstic na mestu izpuscenih neobveznih
   // elementov - predloga je sestavljena tako, da prazen niz ne pusti whitespace
   // text-node med sosednjimi elementi (za primer, ce je to vplivalo na C14N/podpis).
-  const premiseXml = `<fu:BusinessPremiseRequest xmlns:fu="http://www.fu.gov.si/" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" Id="data"><fu:Header><fu:MessageID>${crypto.randomUUID()}</fu:MessageID><fu:DateTime>${new Date().toISOString().split('.')[0]}</fu:DateTime></fu:Header><fu:BusinessPremise><fu:TaxNumber>${cleanTaxNumber}</fu:TaxNumber><fu:BusinessPremiseID>${premise.businessPremiseId}</fu:BusinessPremiseID><fu:BPIdentifier><fu:RealEstateBP><fu:PropertyID><fu:CadastralNumber>${premise.cadastralNumber}</fu:CadastralNumber><fu:BuildingNumber>${premise.buildingNumber}</fu:BuildingNumber><fu:BuildingSectionNumber>${premise.buildingSectionNumber}</fu:BuildingSectionNumber></fu:PropertyID><fu:Address><fu:Street>${premise.street}</fu:Street><fu:HouseNumber>${premise.houseNumber}</fu:HouseNumber>${houseNumberAdditionalXml}<fu:Community>${premise.community}</fu:Community><fu:City>${premise.city}</fu:City><fu:PostalCode>${premise.postalCode}</fu:PostalCode></fu:Address></fu:RealEstateBP></fu:BPIdentifier><fu:ValidityDate>${premise.validityDate}</fu:ValidityDate><fu:SoftwareSupplier><fu:TaxNumber>${premise.softwareSupplierTaxNumber.replace(/^SI/i, '').trim()}</fu:TaxNumber></fu:SoftwareSupplier>${specialNotesXml}</fu:BusinessPremise></fu:BusinessPremiseRequest>`
+  const premiseXml = `<fu:BusinessPremiseRequest xmlns:fu="http://www.fu.gov.si/" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" Id="data"><fu:Header><fu:MessageID>${crypto.randomUUID()}</fu:MessageID><fu:DateTime>${new Date().toISOString().split('.')[0]}</fu:DateTime></fu:Header><fu:BusinessPremise><fu:TaxNumber>${cleanTaxNumber}</fu:TaxNumber><fu:BusinessPremiseID>${premise.businessPremiseId}</fu:BusinessPremiseID>${bpIdentifierXml}<fu:ValidityDate>${premise.validityDate}</fu:ValidityDate><fu:SoftwareSupplier><fu:TaxNumber>${premise.softwareSupplierTaxNumber.replace(/^SI/i, '').trim()}</fu:TaxNumber></fu:SoftwareSupplier>${specialNotesXml}</fu:BusinessPremise></fu:BusinessPremiseRequest>`
 
   // KLJUCNO: BREZ publicCert opcije (ta bi vsilila privzet gol KeyInfo z golim
   // certifikatom, ne glede na keyInfoProvider). keyInfoProvider nastavimo TAKOJ,

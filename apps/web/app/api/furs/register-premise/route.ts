@@ -35,14 +35,29 @@ export async function POST(req: NextRequest) {
     const { cert, isTest } = await getFursCertificate(supabase, member.org_id)
     if (!cert) return NextResponse.json({ error: `${isTest ? 'Testni' : 'Produkcijski'} certifikat ni naložen` }, { status: 400 })
 
-    const { data: premiseRow } = await supabase
+    const body = await req.json().catch(() => ({}))
+
+    // POPRAVLJENO (16.10.2026): prej se je VEDNO prijavil PRVI aktivni prostor
+    // podjetja, ne glede na to, pri katerem je uporabnik kliknil "Prijavi pri
+    // FURS". Pri vec prostorih (stojnice na trznicah) je to prijavilo napacnega.
+    // Brez premiseRowId (stari odjemalci) ostane staro obnasanje.
+    let q = supabase
       .from('business_premises')
       .select('*')
       .eq('org_id', member.org_id)
       .eq('is_active', true)
-      .limit(1)
-      .maybeSingle()
+    if (body.premiseRowId) q = q.eq('id', body.premiseRowId)
+    const { data: premiseRow } = await q.limit(1).maybeSingle()
     if (!premiseRow) return NextResponse.json({ error: 'Poslovni prostor ni najden v bazi' }, { status: 400 })
+
+    const premicen = premiseRow.premise_type === 'movable'
+    const movableType = premicen ? premiseRow.movable_type : undefined
+    if (premicen && !['A', 'B', 'C'].includes(movableType)) {
+      return NextResponse.json({ error: 'Premičnemu prostoru manjka tip (A ali B). Uredi prostor in izberi tip.' }, { status: 400 })
+    }
+    if (!premicen && (!body.cadastralNumber || !body.buildingNumber || !body.buildingSectionNumber)) {
+      return NextResponse.json({ error: 'Za nepremičnino so obvezni katastrska občina, številka stavbe in dela stavbe.' }, { status: 400 })
+    }
 
     const { data: org } = await supabase
       .from('organizations')
@@ -50,8 +65,12 @@ export async function POST(req: NextRequest) {
       .eq('id', member.org_id)
       .single()
 
-    const body = await req.json().catch(() => ({}))
-    const premise: FursPremiseData = {
+    const premise: FursPremiseData = premicen ? {
+      businessPremiseId: premiseRow.premise_id,
+      movableType,
+      validityDate: body.validityDate || lokalniDatum(),
+      softwareSupplierTaxNumber: cert.tax_number || org?.tax_number || '',
+    } : {
       businessPremiseId: premiseRow.premise_id,
       cadastralNumber: body.cadastralNumber,
       buildingNumber: body.buildingNumber,

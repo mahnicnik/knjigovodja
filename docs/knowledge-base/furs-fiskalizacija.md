@@ -5,9 +5,10 @@ vloge: [lastnik]
 poti: [/nastavitve?tab=blagajna, /pos]
 koda:
   - apps/web/components/nastavitve/Blagajna.tsx (Nastavitve → Davčna blagajna: Certifikat, Poslovni prostori, Naprave, Osebje blagajne, Test povezave)
+  - apps/web/app/api/furs/register-premise/route.ts, apps/web/lib/furs.ts (prijava prostora, premični tip A/B)
   - apps/web/app/pos/page.tsx (FursSection – POS → Nastavitve → FURS & DDV; PremiseSelectScreen)
   - apps/web/app/api/furs/* (komunikacija s FURS – asistent jo samo opisuje)
-posodobljeno: 2026-10-05
+posodobljeno: 2026-10-16
 ---
 
 # FURS davčno potrjevanje (fiskalizacija)
@@ -20,7 +21,11 @@ Razdelek ima zavihke: **🔐 Certifikat**, **🏢 Poslovni prostori**, **🖨️
 
 1. **Pridobi certifikat**: na eDavki (eDavki.durs.si → Davčna blagajna → Registracija certifikata); izda ga SIGEN-CA brezplačno, datoteka `.p12`.
 2. **Naloži certifikat**: zavihek Certifikat → klikni polje in izberi `.p12` datoteko → vpiši **geslo certifikata**. En certifikat pokriva vse lokacije. Prikažeta se naziv in »Velja do«.
-3. **Poslovni prostor**: zavihek Poslovni prostori → **Nov poslovni prostor** → **ID poslovnega prostora** (npr. SIRBFB01), naslov, poštna številka, kraj in katastrski podatki → shrani. Prostor se prijavi pri FURS. Vsak lokal mora biti registriran.
+3. **Poslovni prostor**: zavihek Poslovni prostori → **+ Dodaj prostor** → **ID poslovnega prostora** (npr. SIRBFB01) in **Vrsta prostora**:
+   - **Nepremičnina** (lokal, trgovina, pisarna): naslov, poštna številka, kraj in katastrski podatki (kat. občina, št. stavbe, št. dela stavbe).
+   - **Premični prostor – tip A**: premični objekt, npr. premična stojnica, ki jo voziš na različne tržnice, ali vozilo.
+   - **Premični prostor – tip B**: objekt na stalni lokaciji, npr. stojnica na tržnici ali kiosk.
+   Pri premičnem prostoru katastrskih podatkov ni, opis je neobvezen. → **Shrani** → pri prostoru klikni **📤 Prijavi pri FURS** (prijavi se ravno ta prostor). Vsak prostor mora biti prijavljen; kateri tip velja za tvojo stojnico, potrdi z računovodjo.
 4. **Naprava**: zavihek Naprave → **Nova naprava** → ID naprave (npr. RACUNK001), prostor in uporaba: »Oboje (POS in Stripe/PDF) – privzeto«, »Samo POS terminal« ali »Samo Stripe/PDF računi« (ločeno zaporedno številčenje).
 5. **Test povezave**: zavihek Test povezave pošlje testni račun – prikazati se morata **EOR** in **ZOI**.
 
