@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useContext } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, FlatList,
-  SafeAreaView, Alert, ActivityIndicator, TextInput, Modal, ScrollView, StatusBar
+  Alert, ActivityIndicator, TextInput, Modal, ScrollView, StatusBar
 } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { AuthContext } from '../lib/auth';
 import { colors } from '../lib/colors';
+import { Zaslon, HIT_SLOP, useSpodnjiOdmik } from '../lib/zaslon';
 
 export default function CatalogScreen() {
   const auth = useContext(AuthContext);
+  const spodaj = useSpodnjiOdmik();
   const [categories, setCategories] = useState<any[]>([]);
   const [items, setItems] = useState<any[]>([]);
   const [selectedCat, setSelectedCat] = useState<string | null>(null);
@@ -72,9 +74,9 @@ export default function CatalogScreen() {
   if (loading) return <View style={s.center}><ActivityIndicator color={colors.brand} /></View>;
 
   return (
-    <SafeAreaView style={s.container}>
+    <Zaslon style={s.container}>
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()}><Text style={s.back}>← Nazaj</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => router.back()} hitSlop={HIT_SLOP} style={s.backBtn}><Text style={s.back}>← Nazaj</Text></TouchableOpacity>
         <Text style={s.title}>Kategorije & Artikli</Text>
         <TouchableOpacity onPress={() => setAddModal(true)}>
           <Text style={s.addBtn}>+ Artikel</Text>
@@ -132,7 +134,7 @@ export default function CatalogScreen() {
       {/* Add Modal */}
       <Modal visible={addModal} animationType="slide" transparent>
         <View style={s.modalOverlay}>
-          <View style={s.modalBox}>
+          <View style={[s.modalBox, spodaj]}>
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>Nov artikel</Text>
               <TouchableOpacity onPress={() => setAddModal(false)}>
@@ -205,15 +207,16 @@ export default function CatalogScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </Zaslon>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg, paddingTop: StatusBar.currentHeight || 0 },
+  container: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: { backgroundColor: colors.header, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
-  back: { color: colors.brand, fontSize: 14 },
+  back: { color: colors.brand, fontSize: 15, fontWeight: '600' },
+  backBtn: { paddingVertical: 8, paddingRight: 12 },
   title: { color: colors.white, fontSize: 15, fontWeight: 'bold' },
   addBtn: { color: colors.brand, fontSize: 14, fontWeight: '600' },
   body: { flex: 1, flexDirection: 'row' },

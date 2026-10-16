@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 
 export interface CartLine {
   lineId: string;
@@ -23,10 +23,18 @@ export function useCart() {
   return useContext(CartContext);
 }
 
-export function CartProvider({ children }: { children: React.ReactNode }) {
+export function CartProvider({ children, orgId }: { children: React.ReactNode; orgId?: string | null }) {
   const [carts, setCarts] = useState<Record<string, CartLine[]>>({});
   const [activeTableId, setActiveTableId] = useState('quick');
   const [activeTableName, setActiveTableName] = useState('Hitra prodaja');
+
+  // Menjava podjetja (16.10.2026): kosarice in aktivna miza pripadajo
+  // prejsnjemu podjetju (njegovi artikli in mize) - pobrisi jih.
+  useEffect(() => {
+    setCarts({});
+    setActiveTableId('quick');
+    setActiveTableName('Hitra prodaja');
+  }, [orgId]);
 
   function setActiveTable(id: string, name: string) {
     console.log('SET ACTIVE TABLE:', id, name);

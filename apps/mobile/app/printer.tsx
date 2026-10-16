@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, FlatList,
-  SafeAreaView, Alert, ActivityIndicator, StatusBar
+  Alert, ActivityIndicator, StatusBar
 } from 'react-native';
 import { router } from 'expo-router';
 import { colors } from '../lib/colors';
+import { Zaslon, HIT_SLOP } from '../lib/zaslon';
 
 import BluetoothPrinter from '../modules/bluetooth-printer'
 
@@ -67,9 +68,9 @@ export default function PrinterScreen() {
   }
 
   return (
-    <SafeAreaView style={s.container}>
+    <Zaslon style={s.container}>
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()}><Text style={s.back}>← Nazaj</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => router.back()} hitSlop={HIT_SLOP} style={s.backBtn}><Text style={s.back}>← Nazaj</Text></TouchableOpacity>
         <Text style={s.title}>Bluetooth tiskalnik</Text>
         <View style={{ width: 60 }} />
       </View>
@@ -143,14 +144,15 @@ export default function PrinterScreen() {
       <View style={s.infoBox}>
         <Text style={s.infoText}>Podprti tiskalniki: ESC/POS Bluetooth (Epson, Star, Xprinter, generični)</Text>
       </View>
-    </SafeAreaView>
+    </Zaslon>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg, paddingTop: StatusBar.currentHeight || 0 },
+  container: { flex: 1, backgroundColor: colors.bg },
   header: { backgroundColor: colors.header, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
-  back: { color: colors.brand, fontSize: 14 },
+  back: { color: colors.brand, fontSize: 15, fontWeight: '600' },
+  backBtn: { paddingVertical: 8, paddingRight: 12 },
   title: { color: colors.white, fontSize: 15, fontWeight: 'bold' },
   connectedBar: { backgroundColor: '#f0faf4', borderBottomWidth: 1, borderColor: colors.accent, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
   connectedIcon: { fontSize: 28 },

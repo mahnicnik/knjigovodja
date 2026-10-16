@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  SafeAreaView, ActivityIndicator, Alert, TextInput, Modal, StatusBar
+  ActivityIndicator, Alert, TextInput, Modal, StatusBar
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useCart } from '../lib/cart';
 import { supabase } from '../lib/supabase';
 import { AuthContext } from '../lib/auth';
 import { colors } from '../lib/colors';
+import { Zaslon, HIT_SLOP, useSpodnjiOdmik } from '../lib/zaslon';
 
 export default function FloorScreen() {
   const auth = useContext(AuthContext);
+  const spodaj = useSpodnjiOdmik();
   const { setActiveTable, carts } = useCart();
   console.log('CARTS FROM CONTEXT:', JSON.stringify(Object.keys(carts || {})));
   const [spaces, setSpaces] = useState<any[]>([]);
@@ -116,9 +118,9 @@ export default function FloorScreen() {
   if (loading) return <View style={s.center}><ActivityIndicator color={colors.brand} /></View>;
 
   return (
-    <SafeAreaView style={s.container}>
+    <Zaslon style={s.container}>
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()}><Text style={s.back}>← Nazaj</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => router.back()} hitSlop={HIT_SLOP} style={s.backBtn}><Text style={s.back}>← Nazaj</Text></TouchableOpacity>
         <Text style={s.title}>Prostori & Mize</Text>
         <TouchableOpacity onPress={() => setEditMode(e => !e)}>
           <Text style={[s.editBtn, editMode && s.editBtnActive]}>{editMode ? 'Končaj' : 'Uredi'}</Text>
@@ -220,7 +222,7 @@ export default function FloorScreen() {
       {/* Space Modal */}
       <Modal visible={!!spaceModal} animationType="slide" transparent>
         <View style={s.modalOverlay}>
-          <View style={s.modalBox}>
+          <View style={[s.modalBox, spodaj]}>
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>{spaceModal?.id ? 'Uredi prostor' : 'Nov prostor'}</Text>
               <TouchableOpacity onPress={() => setSpaceModal(null)}><Text style={s.modalClose}>✕</Text></TouchableOpacity>
@@ -261,7 +263,7 @@ export default function FloorScreen() {
       {/* Table Modal */}
       <Modal visible={!!tableModal} animationType="slide" transparent>
         <View style={s.modalOverlay}>
-          <View style={s.modalBox}>
+          <View style={[s.modalBox, spodaj]}>
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>{tableModal?.id ? 'Uredi mizo' : 'Nova miza'}</Text>
               <TouchableOpacity onPress={() => setTableModal(null)}><Text style={s.modalClose}>✕</Text></TouchableOpacity>
@@ -300,15 +302,16 @@ export default function FloorScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </Zaslon>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg, paddingTop: StatusBar.currentHeight || 0 },
+  container: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: { backgroundColor: colors.header, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
-  back: { color: colors.brand, fontSize: 14 },
+  back: { color: colors.brand, fontSize: 15, fontWeight: '600' },
+  backBtn: { paddingVertical: 8, paddingRight: 12 },
   title: { color: colors.white, fontSize: 15, fontWeight: 'bold' },
   editBtn: { color: colors.white, fontSize: 14, opacity: 0.7 },
   editBtnActive: { color: colors.brand, opacity: 1, fontWeight: 'bold' },

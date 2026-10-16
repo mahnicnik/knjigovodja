@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { AuthContext } from '../lib/auth';
 import { colors } from '../lib/colors';
+import { Zaslon, HIT_SLOP } from '../lib/zaslon';
 
 export default function OrdersScreen() {
   const auth = useContext(AuthContext);
@@ -36,9 +37,9 @@ export default function OrdersScreen() {
   const totalRevenue = orders.reduce((s, o) => s + (o.total || 0), 0);
 
   return (
-    <SafeAreaView style={s.container}>
+    <Zaslon style={s.container}>
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()}><Text style={s.back}>← Nazaj</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => router.back()} hitSlop={HIT_SLOP} style={s.backBtn}><Text style={s.back}>← Nazaj</Text></TouchableOpacity>
         <Text style={s.title}>Računi</Text>
         <View />
       </View>
@@ -91,14 +92,15 @@ export default function OrdersScreen() {
           ListEmptyComponent={<Text style={s.empty}>Ni računov za to obdobje</Text>}
         />
       )}
-    </SafeAreaView>
+    </Zaslon>
   );
 }
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   header: { backgroundColor: colors.header, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
-  back: { color: colors.brand, fontSize: 14 },
+  back: { color: colors.brand, fontSize: 15, fontWeight: '600' },
+  backBtn: { paddingVertical: 8, paddingRight: 12 },
   title: { color: colors.white, fontSize: 16, fontWeight: 'bold' },
   periodRow: { flexDirection: 'row', backgroundColor: colors.white, borderBottomWidth: 1, borderColor: colors.lightGray },
   periodBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: 2, borderColor: 'transparent' },

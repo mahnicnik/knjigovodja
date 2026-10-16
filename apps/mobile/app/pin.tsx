@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useContext } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, SafeAreaView,
-  Alert, ActivityIndicator, ScrollView, StatusBar
+  View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView, StatusBar
 } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '../lib/supabase';
-import { AuthContext } from '../lib/auth';
+import { AuthContext, usePodjetja } from '../lib/auth';
 import { colors } from '../lib/colors';
+import { Zaslon } from '../lib/zaslon';
 
 interface StaffMember {
   id: string;
@@ -18,6 +18,7 @@ interface StaffMember {
 
 export default function PinScreen() {
   const auth = useContext(AuthContext);
+  const { clanstva, zamenjaj } = usePodjetja();
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
@@ -91,10 +92,27 @@ export default function PinScreen() {
   }
 
   return (
-    <SafeAreaView style={s.container}>
+    <Zaslon style={s.container}>
       <View style={s.top}>
         <Text style={s.orgName}>{auth?.orgName}</Text>
+        {clanstva.length > 1 && (
+          <TouchableOpacity onPress={zamenjaj} hitSlop={12} style={{ marginTop: 6, paddingVertical: 6 }}>
+            <Text style={s.switchText}>⇄ Zamenjaj podjetje</Text>
+          </TouchableOpacity>
+        )}
       </View>
+
+      {/* Blagajna tega podjetja se nima osebja s PIN-om (npr. podjetje, kjer
+          je uporabnik dodan kot admin, pa blagajne se ne uporablja). Brez
+          tega sporocila je bil zaslon s tipkovnico brez izhoda. */}
+      {staff.length === 0 && (
+        <View style={s.emptyBox}>
+          <Text style={s.emptyTitle}>Blagajna še nima osebja</Text>
+          <Text style={s.emptyText}>
+            Osebje s PIN kodo doda lastnik v Računku v brskalniku: Nastavitve → Davčna blagajna → Osebje blagajne.
+          </Text>
+        </View>
+      )}
 
       {/* Staff izbira */}
       {staff.length > 0 && (
@@ -150,7 +168,7 @@ export default function PinScreen() {
       <TouchableOpacity onPress={logout} style={s.logoutBtn}>
         <Text style={s.logoutText}>Odjava</Text>
       </TouchableOpacity>
-    </SafeAreaView>
+    </Zaslon>
   );
 }
 
@@ -158,10 +176,13 @@ const s = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.header,
-    paddingTop: StatusBar.currentHeight || 0,
   },
   top: { alignItems: 'center', paddingTop: 20, paddingBottom: 10 },
-  orgName: { color: colors.brand, fontSize: 18, fontWeight: 'bold' },
+  orgName: { color: colors.brand, fontSize: 18, fontWeight: 'bold', textAlign: 'center', paddingHorizontal: 16 },
+  switchText: { color: colors.white, opacity: 0.75, fontSize: 14, fontWeight: '600' },
+  emptyBox: { marginHorizontal: 20, marginBottom: 12, padding: 14, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.08)' },
+  emptyTitle: { color: colors.white, fontSize: 15, fontWeight: '700', marginBottom: 4 },
+  emptyText: { color: colors.white, opacity: 0.7, fontSize: 13, lineHeight: 19 },
   staffSection: { paddingBottom: 16 },
   staffLabel: { color: colors.white, opacity: 0.6, fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1, paddingHorizontal: 20, marginBottom: 10 },
   staffRow: { paddingHorizontal: 16, gap: 10 },

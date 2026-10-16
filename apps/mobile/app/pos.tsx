@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, FlatList,
-  SafeAreaView, Alert, ActivityIndicator, ScrollView,
+  Alert, ActivityIndicator, ScrollView,
   TextInput, Modal, Dimensions, StatusBar, Switch
 } from 'react-native';
 import { router } from 'expo-router';
@@ -9,6 +9,7 @@ import { useCart } from '../lib/cart';
 import { supabase } from '../lib/supabase';
 import { AuthContext } from '../lib/auth';
 import { colors } from '../lib/colors';
+import { Zaslon, useSpodnjiOdmik } from '../lib/zaslon';
 import BluetoothPrinter from '../modules/bluetooth-printer';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -21,6 +22,7 @@ interface CartLine { lineId: string; item: Item; qty: number; }
 
 export default function PosScreen() {
   const auth = useContext(AuthContext);
+  const spodaj = useSpodnjiOdmik();
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [selectedCat, setSelectedCat] = useState('fav');
@@ -330,7 +332,7 @@ export default function PosScreen() {
   const selectedCatName = allCats.find(c => c.id === selectedCat)?.name || '';
 
   return (
-    <SafeAreaView style={s.container}>
+    <Zaslon style={s.container}>
       {/* Header */}
       <View style={s.header}>
         <View>
@@ -472,7 +474,7 @@ export default function PosScreen() {
       {/* Košarica Modal */}
       <Modal visible={cartOpen} animationType="slide" transparent>
         <View style={s.modalOverlay}>
-          <View style={s.cartModal}>
+          <View style={[s.cartModal, spodaj]}>
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>{tableName} · {cartQty} kos</Text>
               <View style={s.modalHeaderRight}>
@@ -538,7 +540,7 @@ export default function PosScreen() {
       {/* Payment Modal */}
       <Modal visible={payModal} animationType="slide" transparent>
         <View style={s.modalOverlay}>
-          <View style={s.payModalBox}>
+          <View style={[s.payModalBox, spodaj]}>
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>Zaključi račun</Text>
               <TouchableOpacity onPress={() => !paying && setPayModal(false)}>
@@ -648,7 +650,7 @@ export default function PosScreen() {
       {modModal && (
         <Modal visible animationType="slide" transparent>
           <View style={s.modalOverlay}>
-            <View style={s.cartModal}>
+            <View style={[s.cartModal, spodaj]}>
               <View style={s.modalHeader}>
                 <Text style={s.modalTitle}>{modModal.item.name}</Text>
                 <TouchableOpacity onPress={() => setModModal(null)}>
@@ -699,12 +701,12 @@ export default function PosScreen() {
         </Modal>
       )}
 
-    </SafeAreaView>
+    </Zaslon>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg, paddingTop: StatusBar.currentHeight || 0 },
+  container: { flex: 1, backgroundColor: colors.bg },
   header: { backgroundColor: colors.header, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10 },
   headerTitle: { color: colors.brand, fontSize: 15, fontWeight: 'bold' },
   orgName: { color: colors.white, fontSize: 10, opacity: 0.6 },
