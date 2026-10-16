@@ -8,6 +8,7 @@ koda:
   - apps/web/app/pos/page.tsx (OpenCashModal, VmesnoStanjeModal, CloseCashModal)
   - apps/mobile/app/izberi-podjetje.tsx, apps/mobile/lib/podjetja.ts (Android: izbira podjetja)
   - apps/mobile/lib/posodobitve.ts, apps/mobile/app/settings.tsx (Android: samodejne posodobitve)
+  - apps/mobile/lib/naprava.ts, apps/mobile/app/naprava.tsx (Android: davčna naprava telefona)
 posodobljeno: 2026-10-16
 ---
 
@@ -35,6 +36,10 @@ POS blagajna je del Računka na poti `/pos` (v portalu: meni **Blagajna → POS 
 - Uporabnik z enim podjetjem zaslona za izbiro ne vidi.
 - Če podjetje še nima osebja blagajne, zaslon za PIN pokaže »Blagajna še nima osebja« – osebje doda lastnik v brskalniku (**Nastavitve → Davčna blagajna → Osebje blagajne** ali **POS → Nastavitve → Zaposleni & PIN**).
 - Po odjavi se izbira pozabi.
+
+**Davčna naprava telefona** (več telefonov hkrati, npr. stojnice na tržnici): vsak telefon izdaja račune pod svojo oznako elektronske naprave (oblika računa PROSTOR-NAPRAVA-številka). Če ima podjetje za blagajno več naprav, telefon ob prvem odprtju blagajne vpraša **Davčna naprava** – izberi napravo tega telefona (vsak telefon svojo). Izbira se zapomni; zamenjaš jo v **Nastavitve → Davčna blagajna → Davčna naprava**. Izbrana oznaka je v glavi blagajne (📍 npr. STOJ1-TEL1). Pri eni sami napravi telefon ne sprašuje. Naprave doda lastnik v brskalniku: **Nastavitve → Davčna blagajna → Naprave** (vsaki napravi izbere prostor).
+
+Če FURS ob plačilu ne odgovori ali račun ni potrjen, telefon to pokaže (»⚠️ Plačano – …«). Z ZOI izdan račun se prijavi naknadno; nepotrjen račun potrdiš v Računku pri računu (**⚠️ Potrdi FURS**).
 
 **Posodobitve Android aplikacije** so samodejne: ob zagonu (in ob vrnitvi v aplikacijo, največ na 30 minut) preveri, ali je na voljo nova različica, jo prenese in uporabi ob **naslednjem zagonu** – nikoli med prodajo. Ročno: **Nastavitve → ⟳ Preveri posodobitve** → **Znova zaženi** (neplačane košarice se izpraznijo). Različica in datum zadnje posodobitve sta izpisana na dnu Nastavitev. Ponovna namestitev APK je potrebna le redko (večje spremembe aplikacije).
 

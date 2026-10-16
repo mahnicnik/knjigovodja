@@ -26,7 +26,7 @@ Razdelek ima zavihke: **🔐 Certifikat**, **🏢 Poslovni prostori**, **🖨️
    - **Premični prostor – tip A**: premični objekt, npr. premična stojnica, ki jo voziš na različne tržnice, ali vozilo.
    - **Premični prostor – tip B**: objekt na stalni lokaciji, npr. stojnica na tržnici ali kiosk.
    Pri premičnem prostoru katastrskih podatkov ni, opis je neobvezen. → **Shrani** → pri prostoru klikni **📤 Prijavi pri FURS** (prijavi se ravno ta prostor). Vsak prostor mora biti prijavljen; kateri tip velja za tvojo stojnico, potrdi z računovodjo.
-4. **Naprava**: zavihek Naprave → **Nova naprava** → ID naprave (npr. RACUNK001), prostor in uporaba: »Oboje (POS in Stripe/PDF) – privzeto«, »Samo POS terminal« ali »Samo Stripe/PDF računi« (ločeno zaporedno številčenje).
+4. **Naprava**: zavihek Naprave → **Nova naprava** → ID naprave (npr. RACUNK001), prostor in uporaba: »Oboje (POS in Stripe/PDF) – privzeto«, »Samo POS terminal« ali »Samo Stripe/PDF računi« (ločeno zaporedno številčenje). Za več telefonov hkrati (npr. 4 prodajalci na tržnici) dodaj **eno napravo na telefon** (npr. TEL1–TEL4) v isti ali v ločenih prostorih; na vsakem telefonu nato izberi njegovo napravo (Android: **Nastavitve → Davčna blagajna → Davčna naprava**).
 5. **Test povezave**: zavihek Test povezave pošlje testni račun – prikazati se morata **EOR** in **ZOI**.
 
 ### Test način ali produkcija

@@ -1,10 +1,12 @@
 import React, { useState, useContext } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { AuthContext, usePodjetja } from '../lib/auth';
 import { imeVloge } from '../lib/podjetja';
 import { preveriZdaj, znovaZazeni, opisRazlicice } from '../lib/posodobitve';
+import { trenutnaNaprava, type Naprava } from '../lib/naprava';
 import { colors } from '../lib/colors';
 import { Zaslon, HIT_SLOP } from '../lib/zaslon';
 
@@ -12,6 +14,12 @@ export default function SettingsScreen() {
   const auth = useContext(AuthContext);
   const { clanstva, zamenjaj } = usePodjetja();
   const [preverjam, setPreverjam] = useState(false);
+  const [naprava, setNaprava] = useState<{ n: Naprava | null; stevilo: number } | null>(null);
+
+  useFocusEffect(React.useCallback(() => {
+    if (!auth?.orgId) return;
+    trenutnaNaprava(auth.orgId).then(r => setNaprava({ n: r.naprava, stevilo: r.vse.length })).catch(() => {});
+  }, [auth?.orgId]));
 
   async function posodobitve() {
     setPreverjam(true);
@@ -71,6 +79,23 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           )}
         </View>
+
+        {/* Davcna naprava telefona (trznice, 16.10.2026) */}
+        {naprava && naprava.stevilo > 0 && (
+          <View>
+            <Text style={s.sectionTitle}>Davčna blagajna</Text>
+            <TouchableOpacity style={[s.sectionCard, s.settingItem]} onPress={() => router.push('/naprava')} disabled={naprava.stevilo < 2}>
+              <Text style={s.settingIcon}>📍</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={s.settingLabel}>Davčna naprava</Text>
+                <Text style={{ fontSize: 12, color: colors.gray, marginTop: 2, fontFamily: 'monospace' }}>
+                  {naprava.n ? `${naprava.n.prostorOznaka}-${naprava.n.oznaka}` : 'ni izbrana'}
+                </Text>
+              </View>
+              {naprava.stevilo > 1 && <Text style={s.settingArrow}>›</Text>}
+            </TouchableOpacity>
+          </View>
+        )}
 
         {sections.map(section => (
           <View key={section.title}>

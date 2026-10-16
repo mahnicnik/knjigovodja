@@ -7,13 +7,36 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { createClient as createJwtClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { confirmWithFurs, extractFromP12, type FursConfig, type FursInvoiceData } from '@/lib/furs'
 import { getFursCertificate } from '@/lib/furs-cert'
 import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 import { zahtevajPaket } from '@/lib/paket'
 
-async function getSupabase() {
+/**
+ * ANDROID BLAGAJNA (16.10.2026): telefon nima piskotkov spletne seje, zato
+ * poslje JWT svoje Supabase seje v glavi `Authorization: Bearer ...` in
+ * izbrano podjetje v `x-active-org`. Prej je klical /api/furs/confirm (pot
+ * za racune s portala) s stevilko NAROCILA - ta ni nasla racuna, napaka pa
+ * je bila tiha: racuni s telefona niso bili davcno potrjeni.
+ * API kljuci (rk_...) sem ne spadajo - zanje velja /api/v1.
+ */
+function jwtIzGlave(req: NextRequest): string | null {
+  const g = req.headers.get('authorization') || ''
+  if (!g.startsWith('Bearer ')) return null
+  const t = g.slice(7).trim()
+  return t && !t.startsWith('rk_') ? t : null
+}
+
+async function getSupabase(req?: NextRequest) {
+  const jwt = req ? jwtIzGlave(req) : null
+  if (jwt) {
+    return createJwtClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+      global: { headers: { Authorization: `Bearer ${jwt}` } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    }) as any
+  }
   const cookieStore = await cookies()
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -29,14 +52,15 @@ async function getSupabase() {
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await getSupabase()
-    const { data: { user } } = await supabase.auth.getUser()
+    const supabase = await getSupabase(req)
+    const jwt = jwtIzGlave(req)
+    const { data: { user } } = jwt ? await supabase.auth.getUser(jwt) : await supabase.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })
     }
 
     const body = await req.json()
-    const { order_id, total, premise_id: requestedPremiseId } = body
+    const { order_id, total, premise_id: requestedPremiseId, device_id: requestedDeviceId } = body
     // PRELET 158: racun, izdan BREZ POVEZAVE, pride z ze dodeljeno stevilko,
     // ZOI in DEJANSKIM casom izdaje — natisnjeni so na kupcevem racunu in
     // FURS-u moramo prijaviti NATANKO to (SubsequentSubmit).
@@ -155,12 +179,40 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { data: device } = await supabase
-      .from('electronic_devices')
-      .select('*')
-      .eq('premise_id', premise.id)
-      .eq('is_active', true)
-      .maybeSingle()
+    /**
+     * NAPRAVA (16.10.2026): vec telefonov v istem prostoru (stojnica) - vsak
+     * poslje SVOJO napravo (electronic_devices.id). Prej `.maybeSingle()`: pri
+     * dveh napravah v prostoru je vrnil napako (null) in racun je dobil
+     * izmisljeno oznako RACUNKO01. Brez izbire: prva naprava prostora za
+     * blagajno (kanal pos/both), sicer katerakoli - pri eni napravi enako
+     * kot prej.
+     */
+    let device: any = null
+    if (requestedDeviceId) {
+      const { data: izbrana } = await supabase
+        .from('electronic_devices')
+        .select('*')
+        .eq('id', requestedDeviceId)
+        .eq('org_id', member.org_id)
+        .eq('premise_id', premise.id)
+        .eq('is_active', true)
+        .maybeSingle()
+      if (!izbrana) {
+        return NextResponse.json(
+          { error: 'Izbrana elektronska naprava ne pripada temu prostoru ali ni aktivna. Na telefonu izberi napravo znova (Nastavitve → Davčna naprava).' },
+          { status: 400 }
+        )
+      }
+      device = izbrana
+    } else {
+      const { data: naprave } = await supabase
+        .from('electronic_devices')
+        .select('*')
+        .eq('premise_id', premise.id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: true })
+      device = (naprave || []).find((d: any) => d.channel !== 'web') ?? (naprave || [])[0] ?? null
+    }
 
     const deviceIdCode = device?.device_id ?? 'RACUNKO01'
 

@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Niste prijavljeni' }, { status: 401 })
 
     const body = await req.json()
-    const { invoiceId, paymentType, premiseId: requestedPremiseId } = body
+    const { invoiceId, paymentType, premiseId: requestedPremiseId, deviceId: requestedDeviceId } = body
     if (!invoiceId) return NextResponse.json({ error: 'invoiceId je obvezen' }, { status: 400 })
 
     const { orgId: __orgId, role: __role } = await resolveActiveOrgId(supabase, user.id, getRequestedOrgId(req))
@@ -60,6 +60,9 @@ export async function POST(req: NextRequest) {
       invoiceId,
       paymentType ?? 'cash',
       requestedPremiseId,
+      {},
+      // Trznice (16.10.2026): telefon poslje SVOJO napravo (electronic_devices.id)
+      typeof requestedDeviceId === 'string' && requestedDeviceId ? requestedDeviceId : undefined,
     )
 
     if (result.success) {

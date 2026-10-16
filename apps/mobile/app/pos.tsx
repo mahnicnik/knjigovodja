@@ -4,12 +4,13 @@ import {
   Alert, ActivityIndicator, ScrollView,
   TextInput, Modal, Dimensions, StatusBar, Switch
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCart } from '../lib/cart';
 import { supabase } from '../lib/supabase';
 import { AuthContext } from '../lib/auth';
 import { colors } from '../lib/colors';
 import { Zaslon, useSpodnjiOdmik } from '../lib/zaslon';
+import { trenutnaNaprava, type Naprava } from '../lib/naprava';
 import BluetoothPrinter from '../modules/bluetooth-printer';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -45,6 +46,19 @@ export default function PosScreen() {
   const [given, setGiven] = useState('');
   const [discount, setDiscount] = useState(0);
   const [fursEnabled, setFursEnabled] = useState(true);
+  // Davcna naprava telefona (trznice, 16.10.2026) - lib/naprava.ts
+  const [naprava, setNaprava] = useState<Naprava | null>(null);
+
+  useFocusEffect(React.useCallback(() => {
+    if (!auth?.orgId) return;
+    let ustavi = false;
+    trenutnaNaprava(auth.orgId).then(r => {
+      if (ustavi) return;
+      if (r.izbira) { router.push('/naprava'); return; }
+      setNaprava(r.naprava);
+    }).catch(() => {});
+    return () => { ustavi = true; };
+  }, [auth?.orgId]));
 
   useEffect(() => { if (auth?.businessId) loadData(); }, [auth?.businessId]);
 
@@ -226,26 +240,44 @@ export default function PosScreen() {
     }
   }
 
-  async function confirmWithFurs(invoiceId: string): Promise<{eor?: string, zoi?: string, invoiceNumber?: string}> {
+  /**
+   * FURS POTRDITEV RACUNA BLAGAJNE (16.10.2026)
+   *
+   * NAPAKA: klicala se je /api/furs/confirm (pot za racune s PORTALA,
+   * issued_invoices) s stevilko NAROCILA in s piskotkom, ki ga streznik ne
+   * bere. Racun ni bil najden, napaka se je le izpisala v konzolo - racuni s
+   * telefona NISO bili davcno potrjeni. Zdaj ista pot kot spletna blagajna
+   * (/api/furs/invoice, order_id), z izbranim prostorom in napravo telefona.
+   *
+   * Ce FURS ne odgovori, streznik vrne ZOI in stevilko (racun se natisne z
+   * ZOI in se kasneje naknadno prijavi) - zato ju uporabimo tudi ob napaki.
+   */
+  async function confirmWithFurs(orderId: string, znesek: number): Promise<{eor?: string, zoi?: string, invoiceNumber?: string, napaka?: string}> {
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return {}
-      const res = await fetch('https://xn--raunko-j2a.si/api/furs/confirm', {
+      if (!session) return { napaka: 'Ni prijave' }
+      const res = await fetch('https://xn--raunko-j2a.si/api/furs/invoice', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ' + session.access_token,
-          'Cookie': 'sb-access-token=' + session.access_token,
+          'x-active-org': auth!.orgId,
         },
-        body: JSON.stringify({ invoiceId, paymentType: payMethod === 'card' ? 'card' : 'cash' }),
+        body: JSON.stringify({
+          order_id: orderId,
+          total: znesek,
+          ...(naprava ? { premise_id: naprava.prostorId, device_id: naprava.id } : {}),
+        }),
       })
-      const data = await res.json()
-      if (data.success) return { eor: data.eor, zoi: data.zoi, invoiceNumber: data.invoiceNumber }
-      console.log('FURS error:', data.error)
-      return {}
+      const data = await res.json().catch(() => ({}))
+      return {
+        eor: data.eor || undefined,
+        zoi: data.zoi || undefined,
+        invoiceNumber: data.invoiceNumber || undefined,
+        napaka: data.success ? undefined : (data.error || `FURS napaka (${res.status})`),
+      }
     } catch (e: any) {
-      console.log('FURS error:', e.message)
-      return {}
+      return { napaka: e?.message || 'Ni povezave' }
     }
   }
 
@@ -339,12 +371,19 @@ export default function PosScreen() {
       setDiscount(0);
       let fursData: any = {}
       if (fursEnabled) {
-        fursData = await confirmWithFurs(order.id)
+        fursData = await confirmWithFurs(order.id, total)
       }
       printReceipt(order, {}, fursData);
-      Alert.alert('✅ Plačilo uspešno',
-        `${payMethod === 'cash' ? 'Gotovina' : payMethod === 'card' ? 'Kartica' : 'Bon'} — ${total.toFixed(2)} €${change > 0 ? `\nVrniti: ${change.toFixed(2)} €` : ''}`
-      );
+      const placilo = `${payMethod === 'cash' ? 'Gotovina' : payMethod === 'card' ? 'Kartica' : 'Bon'} — ${total.toFixed(2)} €${change > 0 ? `\nVrniti: ${change.toFixed(2)} €` : ''}`;
+      if (fursEnabled && fursData.napaka) {
+        // Ne tiho: blagajnik mora vedeti, da racun ni potrjen (ali je le z ZOI).
+        Alert.alert(fursData.zoi ? '⚠️ Plačano – FURS ni odgovoril' : '⚠️ Plačano – račun NI davčno potrjen',
+          placilo + '\n\n' + (fursData.zoi
+            ? `Račun ${fursData.invoiceNumber || ''} je izdan z ZOI in bo naknadno prijavljen.`
+            : `FURS: ${fursData.napaka}\nRačun potrdi v Računku (Računi → Potrdi FURS).`));
+      } else {
+        Alert.alert('✅ Plačilo uspešno', placilo + (fursData.invoiceNumber ? `\nRačun ${fursData.invoiceNumber}` : ''));
+      }
     } catch (e: any) {
       Alert.alert('Napaka', e?.message || 'Plačilo ni uspelo');
     }
@@ -362,7 +401,7 @@ export default function PosScreen() {
             Levi del se zdaj skrci in ime odreze s "…", gumbi ostanejo. */}
         <View style={s.headerLeft}>
           <Text style={s.headerTitle} numberOfLines={1}>Računko POS</Text>
-          <Text style={s.orgName} numberOfLines={1} ellipsizeMode="tail">{auth?.orgName}</Text>
+          <Text style={s.orgName} numberOfLines={1} ellipsizeMode="tail">{naprava ? `📍 ${naprava.prostorOznaka}-${naprava.oznaka} · ` : ''}{auth?.orgName}</Text>
         </View>
         <View style={s.headerRight}>
           <TouchableOpacity style={s.headerBtn} onPress={() => router.push('/orders')}>

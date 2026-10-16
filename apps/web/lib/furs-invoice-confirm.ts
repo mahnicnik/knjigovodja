@@ -60,6 +60,12 @@ export async function confirmIssuedInvoiceWithFurs(
   paymentType: 'cash' | 'card' = 'cash',
   requestedPremiseId?: string,
   deps: FursOdvisnosti = {},
+  /**
+   * Naprava, s katere je racun izdan (16.10.2026): vec telefonov na trznici,
+   * vsak s svojo oznako naprave. Brez nje se izbere privzeta naprava prostora
+   * (kot doslej) - portal, Stripe, storno.
+   */
+  requestedDeviceId?: string,
 ): Promise<ConfirmIssuedInvoiceResult> {
   const posli = deps.posli ?? confirmWithFurs
   const kljuc = deps.kljuc ?? ((c: any) => extractFromP12(Buffer.from(c.certificate_data, 'base64'), c.certificate_password ?? ''))
@@ -148,7 +154,16 @@ export async function confirmIssuedInvoiceWithFurs(
     // 'web' kanal (locena od POS-a). Ce nic ni oznaceno kot 'web', pade nazaj
     // na 'both' - IDENTICNO obnasanje kot prej (deli napravo s POS-om).
     let premise: any = null
-    if (requestedPremiseId) {
+    let izbranaNaprava: any = null
+    if (requestedDeviceId) {
+      const { data: nap } = await supabase.from('electronic_devices').select('*')
+        .eq('org_id', orgId).eq('is_active', true).eq('id', requestedDeviceId).maybeSingle()
+      if (!nap) { await sprosti(); return { success: false, error: 'Izbrana elektronska naprava ne obstaja ali ni aktivna. Na telefonu izberi napravo znova (Nastavitve → Davčna naprava).' } }
+      izbranaNaprava = nap
+      const { data } = await supabase.from('business_premises').select('*')
+        .eq('org_id', orgId).eq('is_active', true).eq('id', nap.premise_id).maybeSingle()
+      premise = data
+    } else if (requestedPremiseId) {
       const { data } = await supabase.from('business_premises').select('*')
         .eq('org_id', orgId).eq('is_active', true).eq('id', requestedPremiseId).maybeSingle()
       premise = data
@@ -159,9 +174,9 @@ export async function confirmIssuedInvoiceWithFurs(
     }
     if (!premise) { await sprosti(); return { success: false, error: 'Poslovni prostor ni dodan' } }
 
-    const { data: webDevice } = await supabase.from('electronic_devices').select('*')
+    const { data: webDevice } = izbranaNaprava ? { data: null } : await supabase.from('electronic_devices').select('*')
       .eq('premise_id', premise.id).eq('is_active', true).eq('channel', 'web').limit(1).maybeSingle()
-    let device: any = webDevice
+    let device: any = izbranaNaprava ?? webDevice
     if (!device) {
       const { data: bothDevice } = await supabase.from('electronic_devices').select('*')
         .eq('premise_id', premise.id).eq('is_active', true).eq('channel', 'both').limit(1).maybeSingle()
