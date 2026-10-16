@@ -1,4 +1,5 @@
 {
-  "apk_url": "",
-  "opis": "Povezava za prenos EAS builda (expo.dev → Builds → build → Download). Sprememba na main sproži .github/workflows/android-apk.yml, ki APK objavi v predizdajo android."
+  "apk_url": "https://expo.dev/artifacts/eas/Fg3ojdilnUw3HbnRC97X3fTWdWJuIfh1uN1T6-u0v2Y.apk",
+  "opis": "Povezava za prenos EAS builda (expo.dev → Builds → build → Download). Sprememba na main sproži .github/workflows/android-apk.yml, ki APK objavi v predizdajo android.",
+  "build": "1.0.0 (7), d1e163d"
 }
