@@ -1,0 +1,4 @@
+{
+  "apk_url": "",
+  "opis": "Povezava za prenos EAS builda (expo.dev → Builds → build → Download). Sprememba na main sproži .github/workflows/android-apk.yml, ki APK objavi v predizdajo android."
+}
