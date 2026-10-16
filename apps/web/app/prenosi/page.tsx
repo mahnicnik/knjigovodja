@@ -171,7 +171,7 @@ export default function DownloadPage() {
                 <li>Prenesite namestitveno datoteko za vašo napravo</li>
                 <li>Zaženite jo in sledite navodilom</li>
                 <li>Ob prvem zagonu se prijavite z vašimi Računko podatki</li>
-                <li>Aplikacija za Windows se posodablja sama</li>
+                <li>Obe aplikaciji se posodabljata sami – novo različico preneseta ob zagonu</li>
               </ol>
             </div>
           </div>

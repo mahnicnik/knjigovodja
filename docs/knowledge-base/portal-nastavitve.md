@@ -57,7 +57,7 @@ Sprememba gesla (vsaj 8 znakov) in **🛡️ Dvostopenjska prijava**: **Vklopi d
 
 **Nastavitve → Prenosi** (`/prenosi`) – gumba sta vidna v paketu **Pro + POS** (sicer stran ponudi nadgradnjo):
 - **Windows** (Windows 10/11, 64-bit, .exe): **⬇ Prenesi** → zaženi namestitev → ob prvem zagonu se prijavi z Računko podatki; posodablja se sama. Podpira neposreden tisk na blagajniški tiskalnik. Ob gumbu sta izpisani različica in velikost.
-- **Android** (Android 8.0+, .apk): **⬇ Prenesi APK** na telefonu → odpri preneseno datoteko → ko telefon vpraša, dovoli nameščanje iz tega vira (brskalnika).
+- **Android** (Android 8.0+, .apk): **⬇ Prenesi APK** na telefonu → odpri preneseno datoteko → ko telefon vpraša, dovoli nameščanje iz tega vira (brskalnika). Namestiš enkrat – nato se aplikacija posodablja sama (glej `pos-osnove.md`).
 - Mac: zagon iz izvorne kode (gumb **📖 Navodila**). iOS: prihaja kmalu.
 
 **Če prenos »ne dela«:**

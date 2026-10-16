@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, AppState } from 'react-native';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { AuthContext, OrgContext, PodjetjaContext } from '../lib/auth';
@@ -12,6 +12,7 @@ import {
   Clanstvo, clanstvaZaBlagajno, izberiSamodejno, vKontekst,
   preberiIzbiro, shraniIzbiro, pobrisiIzbiro,
 } from '../lib/podjetja';
+import { preveriVOzadju } from '../lib/posodobitve';
 
 export default function RootLayout() {
   const [auth, setAuth] = useState<OrgContext | null>(null);
@@ -42,7 +43,12 @@ export default function RootLayout() {
         setTimeout(() => { loadOrg(id); }, 0);
       }
     });
-    return () => subscription.unsubscribe();
+    // Samoposodabljanje (lib/posodobitve.ts): blagajna je lahko odprta vec
+    // dni - ob vrnitvi v ospredje tiho prenesi novo razlicico.
+    const stanje = AppState.addEventListener('change', (s) => {
+      if (s === 'active') preveriVOzadju();
+    });
+    return () => { subscription.unsubscribe(); stanje.remove(); };
   }, []);
 
   useEffect(() => {

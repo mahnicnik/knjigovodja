@@ -675,7 +675,7 @@ export default function NastavitevPage() {
             </div>
 
             <div style={{ fontSize: 11.5, color: '#888', marginTop: 16, lineHeight: 1.6 }}>
-              Namizna aplikacija se posodablja sama — ob zagonu preveri, ali je na voljo novejša različica.
+              Aplikaciji se posodabljata sami — ob zagonu preverita, ali je na voljo novejša različica.
             </div>
           </div>
         )}

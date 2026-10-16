@@ -4,12 +4,32 @@ import { router } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { AuthContext, usePodjetja } from '../lib/auth';
 import { imeVloge } from '../lib/podjetja';
+import { preveriZdaj, znovaZazeni, opisRazlicice } from '../lib/posodobitve';
 import { colors } from '../lib/colors';
 import { Zaslon, HIT_SLOP } from '../lib/zaslon';
 
 export default function SettingsScreen() {
   const auth = useContext(AuthContext);
   const { clanstva, zamenjaj } = usePodjetja();
+  const [preverjam, setPreverjam] = useState(false);
+
+  async function posodobitve() {
+    setPreverjam(true);
+    const r = await preveriZdaj();
+    setPreverjam(false);
+    if (r === 'pripravljena') {
+      Alert.alert('Nova različica je pripravljena', 'Aplikacija se ob ponovnem zagonu posodobi. Neplačane košarice se izpraznijo.', [
+        { text: 'Kasneje', style: 'cancel' },
+        { text: 'Znova zaženi', onPress: () => { znovaZazeni(); } },
+      ]);
+    } else if (r === 'najnovejsa') {
+      Alert.alert('Posodobitve', 'Imaš najnovejšo različico.');
+    } else if (r === 'ni-na-voljo') {
+      Alert.alert('Posodobitve', 'Samodejne posodobitve delujejo samo v nameščeni aplikaciji.');
+    } else {
+      Alert.alert('Posodobitve', 'Preverjanje ni uspelo. Preveri internetno povezavo.');
+    }
+  }
 
   async function logout() {
     Alert.alert('Odjava', 'Se res želiš odjaviti?', [
@@ -80,7 +100,12 @@ export default function SettingsScreen() {
           <Text style={s.logoutText}>Odjava</Text>
         </TouchableOpacity>
 
-        <Text style={s.version}>Računko POS v1.0</Text>
+        {/* Samoposodabljanje (16.10.2026): lib/posodobitve.ts */}
+        <TouchableOpacity style={s.updateBtn} onPress={posodobitve} disabled={preverjam}>
+          <Text style={s.updateText}>{preverjam ? 'Preverjam …' : '⟳ Preveri posodobitve'}</Text>
+        </TouchableOpacity>
+
+        <Text style={s.version}>Računko POS {opisRazlicice()}</Text>
       </ScrollView>
     </Zaslon>
   );
@@ -104,6 +129,8 @@ const s = StyleSheet.create({
   settingIcon: { fontSize: 20 },
   settingLabel: { flex: 1, fontSize: 14, color: colors.text },
   settingArrow: { fontSize: 18, color: colors.gray },
+  updateBtn: { backgroundColor: colors.white, borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: colors.lightGray },
+  updateText: { color: colors.text, fontWeight: '600', fontSize: 15 },
   logoutBtn: { backgroundColor: colors.white, borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: colors.danger },
   logoutText: { color: colors.danger, fontWeight: '600', fontSize: 15 },
   version: { textAlign: 'center', color: colors.gray, fontSize: 12, marginTop: 8 },

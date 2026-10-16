@@ -7,6 +7,7 @@ koda:
   - apps/web/app/pos/page.tsx (KlasikApp, PremiseSelectScreen, PrvaNastavitev, LockScreen, SideNav, SCREENS, CFG.profiles)
   - apps/web/app/pos/page.tsx (OpenCashModal, VmesnoStanjeModal, CloseCashModal)
   - apps/mobile/app/izberi-podjetje.tsx, apps/mobile/lib/podjetja.ts (Android: izbira podjetja)
+  - apps/mobile/lib/posodobitve.ts, apps/mobile/app/settings.tsx (Android: samodejne posodobitve)
 posodobljeno: 2026-10-16
 ---
 
@@ -26,7 +27,7 @@ POS blagajna je del Računka na poti `/pos` (v portalu: meni **Blagajna → POS 
 - Blagajna se po nastavljenem času sama zaklene: **Nastavitve (POS) → Avt. zaklepanje** (15 s, 30 s, 1 min, 5 min ali Nikoli).
 - PIN je kratek, ker do blagajne pride samo uporabnik, ki je že prijavljen v Računko; PIN le loči osebje za pultom.
 
-## Android aplikacija: več podjetij
+## Android aplikacija: več podjetij in posodobitve
 
 Če je uporabnik član **več podjetij** (npr. lastnik svojega in admin pri stranki), mu Android aplikacija po prijavi pokaže zaslon **Izberi podjetje** (ime podjetja in vloga). Izbira se zapomni – ob naslednjem zagonu se odpre neposredno blagajna izbranega podjetja.
 - Zamenjava: **⇄ Zamenjaj podjetje** na zaslonu za PIN ali v **Nastavitve** (pod imenom podjetja). Ob zamenjavi se izpraznijo neplačane košarice in izbrana miza.
@@ -34,6 +35,8 @@ POS blagajna je del Računka na poti `/pos` (v portalu: meni **Blagajna → POS 
 - Uporabnik z enim podjetjem zaslona za izbiro ne vidi.
 - Če podjetje še nima osebja blagajne, zaslon za PIN pokaže »Blagajna še nima osebja« – osebje doda lastnik v brskalniku (**Nastavitve → Davčna blagajna → Osebje blagajne** ali **POS → Nastavitve → Zaposleni & PIN**).
 - Po odjavi se izbira pozabi.
+
+**Posodobitve Android aplikacije** so samodejne: ob zagonu (in ob vrnitvi v aplikacijo, največ na 30 minut) preveri, ali je na voljo nova različica, jo prenese in uporabi ob **naslednjem zagonu** – nikoli med prodajo. Ročno: **Nastavitve → ⟳ Preveri posodobitve** → **Znova zaženi** (neplačane košarice se izpraznijo). Različica in datum zadnje posodobitve sta izpisana na dnu Nastavitev. Ponovna namestitev APK je potrebna le redko (večje spremembe aplikacije).
 
 ## Meni zaslonov (levo; na telefonu spodaj/»⋯«)
 
