@@ -67,6 +67,8 @@ export default function BlagajnaSekcija() {
   // DODANO (11.8.2026): DEMO nacin - LOCEN od testMode. NE komunicira s
   // FURS sploh, generira jasno lazne ZOI/EOR kode za testiranje/predstavitev.
   const [demoMode, setDemoMode] = useState(false)
+  // Locene izmene po napravi (trznice, 17.10.2026) - organizations.izmene_po_napravi
+  const [izmenePoNapravi, setIzmenePoNapravi] = useState(false)
   const [orgIdForDemo, setOrgIdForDemo] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -142,8 +144,9 @@ export default function BlagajnaSekcija() {
           .eq('org_id', member.org_id)
           .eq('is_active', true)
 
-        const { data: orgTestMode } = await supabase.from('organizations').select('furs_test_mode, furs_demo_mode').eq('id', member.org_id).single()
+        const { data: orgTestMode } = await supabase.from('organizations').select('*').eq('id', member.org_id).single()
         setDemoMode((orgTestMode as any)?.furs_demo_mode ?? false)
+        setIzmenePoNapravi(!!(orgTestMode as any)?.izmene_po_napravi)
         setOrgIdForDemo(member.org_id)
         setConfig({
           testMode: orgTestMode?.furs_test_mode ?? (process.env.NEXT_PUBLIC_FURS_TEST_MODE === 'true'),
@@ -727,6 +730,27 @@ export default function BlagajnaSekcija() {
               ⚠️ Najprej dodaj poslovni prostor
             </div>
           )}
+
+          {/* LOCENE IZMENE PO NAPRAVI (trznice, 17.10.2026) */}
+          <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '12px 14px', background: '#fff', borderRadius: 11, border: '1px solid ' + (izmenePoNapravi ? '#1f6b3a' : '#e5e1d8'), marginBottom: 14, cursor: 'pointer' }}>
+            <input type="checkbox" checked={izmenePoNapravi} style={{ marginTop: 3, accentColor: '#1f6b3a' }}
+              onChange={async e => {
+                const next = e.target.checked
+                const member = await getActiveMembership()
+                if (!member) return
+                const { error: izErr } = await supabase.from('organizations').update({ izmene_po_napravi: next }).eq('id', member.org_id)
+                if (izErr) { showToast('Nastavitve ni bilo mogoče shraniti: ' + izErr.message, false); return }
+                setIzmenePoNapravi(next)
+                showToast(next ? 'Vsaka naprava ima zdaj svojo izmeno' : 'Izmena je spet skupna za vse naprave')
+              }} />
+            <span>
+              <b style={{ fontSize: 13 }}>Vsaka naprava svoja izmena (svoj predal)</b>
+              <div style={{ fontSize: 12, color: '#777', marginTop: 2, lineHeight: 1.5 }}>
+                Za več prodajnih mest hkrati, npr. stojnice na tržnici: vsaka naprava odpre, pregleda in zaključi svojo blagajno in dobi svoje Z-poročilo.
+                Izklopljeno (privzeto): ena skupna izmena za celo podjetje. Spremeni samo, ko so vse izmene zaprte.
+              </div>
+            </span>
+          </label>
 
           {config.devices.length === 0 ? (
             <div style={{ padding: 40, textAlign: 'center', color: '#999', background: '#fff', borderRadius: 12, border: '1px solid #e5e1d8' }}>

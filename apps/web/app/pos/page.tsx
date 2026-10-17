@@ -1417,7 +1417,7 @@ function PaymentModal({ open, total, cart, activeTable, activeCustomer, auth, on
             //
             // Zdaj beremo isti podatek prek pomozne funkcije, ki je dosegljiva
             // povsod.
-            body: JSON.stringify({ order_id: orderId, total: finalTotal, premise_id: getActivePremise()?.id }),
+            body: JSON.stringify({ order_id: orderId, total: finalTotal, premise_id: getActivePremise()?.id, device_id: getActivePremise() && getActiveDevice()?.premise_id === getActivePremise()?.id ? getActiveDevice()?.id : undefined }),
           })
           // 200 = success, 503 = FURS napaka ampak še vedno imamo ZOI + tridelno
           const fursData = await fursRes.json().catch(() => ({}))
@@ -9763,6 +9763,8 @@ function RefundModal({ order, lines, payment, auth, onClose, onRefunded }) {
 
       const { error: refundErr } = await createClient().from('refunds').insert({
         business_id: BUSINESS_ID,
+        // Trznice (17.10.2026): vracilo gre iz predala naprave, ki ga izplaca.
+        device_id: getActiveDevice()?.id ?? null,
         original_order_id: order.id,
         amount: refundAmount,
         reason: reason || 'Delno vračilo',
@@ -10737,7 +10739,7 @@ function OrdersScreen({ posData, auth }) {
             {selectedOrder.furs_required && !orderPayment?.furs_eor && (
               <button onClick={async()=>{
                 try {
-                  const res = await fetch('/api/furs/invoice', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ order_id: selectedOrder.id, total: selectedOrder.total, premise_id: getActivePremise()?.id }) })
+                  const res = await fetch('/api/furs/invoice', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ order_id: selectedOrder.id, total: selectedOrder.total, premise_id: getActivePremise()?.id, device_id: getActivePremise() && getActiveDevice()?.premise_id === getActivePremise()?.id ? getActiveDevice()?.id : undefined }) })
                   if (res.ok) { const d = await res.json(); alert('FURS potrjen! EOR: ' + d.eor); loadOrders() }
                   else alert('FURS napaka: ' + (await res.text()))
                 } catch(e) { alert('FURS napaka: ' + e.message) }

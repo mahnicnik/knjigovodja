@@ -11,6 +11,8 @@ import { AuthContext } from '../lib/auth';
 import { colors } from '../lib/colors';
 import { Zaslon, useSpodnjiOdmik } from '../lib/zaslon';
 import { trenutnaNaprava, type Naprava } from '../lib/naprava';
+import { stanjeIzmene } from '../lib/izmena';
+import { trenutnaOseba } from '../lib/osebje';
 import BluetoothPrinter from '../modules/bluetooth-printer';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -295,18 +297,24 @@ export default function PosScreen() {
        *
        * To ni bila napaka prikaza, ampak manjkajoc prihodek v evidenci.
        */
-      const { data: izmena } = await supabase
-        .from('cash_sessions')
-        .select('id')
-        .eq('business_id', auth!.businessId)
-        .eq('status', 'open')
-        .limit(1)
-        .maybeSingle();
-
-      if (!izmena) {
+      // Trznice (17.10.2026): stanje izmene prek /api/pos/izmena - pri locenih
+      // izmenah po napravi je to izmena TE naprave (svoj predal), sicer
+      // skupna izmena podjetja (kot doslej).
+      let izmenaOdprta = false;
+      try {
+        const st = await stanjeIzmene(auth!.orgId, naprava?.id ?? null);
+        izmenaOdprta = !!st.izmena;
+      } catch (e: any) {
         setPaying(false);
-        Alert.alert('Blagajna ni odprta',
-          'Pred prodajo odprite blagajno. Brez odprte izmene promet ne bi prišel v dnevni obračun ne v knjigo prihodkov.');
+        Alert.alert('Ni povezave', 'Stanja izmene ni bilo mogoče preveriti: ' + (e?.message || ''));
+        return;
+      }
+
+      if (!izmenaOdprta) {
+        setPaying(false);
+        Alert.alert('Izmena ni odprta',
+          'Pred prodajo odprite izmeno. Brez odprte izmene promet ne bi prišel v dnevni obračun ne v knjigo prihodkov.',
+          [{ text: 'Prekliči', style: 'cancel' }, { text: 'Odpri izmeno', onPress: () => router.push('/izmena') }]);
         return;
       }
 
@@ -326,6 +334,8 @@ export default function PosScreen() {
         business_id: auth!.businessId,
         status: 'open',
         table_id: tableId !== 'quick' ? tableId : null,
+        // Trznice: promet gre v predal naprave telefona (locene izmene).
+        device_id: naprava?.id ?? null,
         // Popust hranimo v IZVORNEM stolpcu - `discount_amount` in `total`
         // izracuna sprozilec v bazi (prelet 178).
         discount_fixed: discountAmt || 0,
@@ -357,7 +367,8 @@ export default function PosScreen() {
         p_amount: total,
         p_received: payMethod === 'cash' && given ? Number(given) : null,
         p_furs: fursEnabled,
-        p_cashier_id: null,
+        // Blagajnik, ki je odklenil s PIN-om (17.10.2026) - prej vedno null.
+        p_cashier_id: trenutnaOseba()?.id ?? null,
       });
       if (payError) throw new Error(payError.message);
 

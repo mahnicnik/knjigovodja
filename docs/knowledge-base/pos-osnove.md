@@ -9,7 +9,8 @@ koda:
   - apps/mobile/app/izberi-podjetje.tsx, apps/mobile/lib/podjetja.ts (Android: izbira podjetja)
   - apps/mobile/lib/posodobitve.ts, apps/mobile/app/settings.tsx (Android: samodejne posodobitve)
   - apps/mobile/lib/naprava.ts, apps/mobile/app/naprava.tsx (Android: davčna naprava telefona)
-posodobljeno: 2026-10-16
+  - apps/mobile/app/izmena.tsx (Android: odpiranje in zaključek izmene)
+posodobljeno: 2026-10-17
 ---
 
 # POS blagajna – zagon, prijava, meni in izmena
@@ -37,7 +38,7 @@ POS blagajna je del Računka na poti `/pos` (v portalu: meni **Blagajna → POS 
 - Če podjetje še nima osebja blagajne, zaslon za PIN pokaže »Blagajna še nima osebja« – osebje doda lastnik v brskalniku (**Nastavitve → Davčna blagajna → Osebje blagajne** ali **POS → Nastavitve → Zaposleni & PIN**).
 - Po odjavi se izbira pozabi.
 
-**Davčna naprava telefona** (več telefonov hkrati, npr. stojnice na tržnici): vsak telefon izdaja račune pod svojo oznako elektronske naprave (oblika računa PROSTOR-NAPRAVA-številka). Če ima podjetje za blagajno več naprav, telefon ob prvem odprtju blagajne vpraša **Davčna naprava** – izberi napravo tega telefona (vsak telefon svojo). Izbira se zapomni; zamenjaš jo v **Nastavitve → Davčna blagajna → Davčna naprava**. Izbrana oznaka je v glavi blagajne (📍 npr. STOJ1-TEL1). Pri eni sami napravi telefon ne sprašuje. Naprave doda lastnik v brskalniku: **Nastavitve → Davčna blagajna → Naprave** (vsaki napravi izbere prostor).
+**Davčna naprava telefona** (več telefonov hkrati, npr. stojnice na tržnici): vsak telefon izdaja račune pod svojo oznako elektronske naprave (oblika računa PROSTOR-NAPRAVA-številka). Če ima podjetje za blagajno več naprav, telefon ob prvem odprtju blagajne vpraša **Davčna naprava** – izberi napravo tega telefona (vsak telefon svojo). Izbira se zapomni; zamenjaš jo v **Nastavitve → Davčna blagajna → Davčna naprava**. Izbrana oznaka je v glavi blagajne (📍 npr. STOJ1-TEL1). Pri eni sami napravi telefon ne sprašuje. Naprave doda lastnik v brskalniku: **Nastavitve → Davčna blagajna → Naprave** (vsaki napravi izbere prostor). Če naj ima vsak telefon tudi **svoj predal in svoje Z-poročilo**, lastnik tam vklopi »Vsaka naprava svoja izmena (svoj predal)«; izmeno na telefonu odpreš in zaključiš v **Nastavitve → 💰 Izmena** (glej Zaključek izmene in Z-poročilo).
 
 Če FURS ob plačilu ne odgovori ali račun ni potrjen, telefon to pokaže (»⚠️ Plačano – …«). Z ZOI izdan račun se prijavi naknadno; nepotrjen račun potrdiš v Računku pri računu (**⚠️ Potrdi FURS**).
 

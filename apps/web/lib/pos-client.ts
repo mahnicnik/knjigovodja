@@ -117,6 +117,19 @@ export async function ustvariPrvegaUporabnika(
 function sb() { return createClient() }
 
 /**
+ * Elektronska naprava te blagajne (izbrana ob prijavi v blagajno,
+ * pos/page.tsx ACTIVE_DEVICE_KEY). Trznice (17.10.2026): narocilo in vracilo
+ * dobita `device_id`, da gre promet v predal prave naprave, kadar ima
+ * podjetje locene izmene po napravi (lib/cash-session.ts).
+ */
+export function napravaBlagajne(): string | null {
+  try {
+    if (typeof window === 'undefined') return null
+    return JSON.parse(window.localStorage.getItem('racunko_active_device') || 'null')?.id ?? null
+  } catch { return null }
+}
+
+/**
  * Ali je narocilo ze izdan racun: ima stevilko racuna ali vsaj eno placilo.
  * Ob napaki branja odgovorimo "da" - raje ne izbrisemo/ne prepisemo, kot da
  * izgubimo davcno potrjen racun.
@@ -372,6 +385,10 @@ export const pos = {
         p_cashier_id: params.cashierId,
       })
       if (error) throw error
+      // Trznice: naprava, ki je narocilo odprla (npr. placilo s Stripe QR, ki
+      // ga zakljuci streznik). Ob placilu na blagajni jo prepise placujoca.
+      const naprava = napravaBlagajne()
+      if (naprava && data) await sb().from('orders').update({ device_id: naprava }).eq('id', data as string)
       return data as string // returns order UUID
     },
 
@@ -412,6 +429,11 @@ export const pos = {
       fursZoi?: string
       fursEor?: string
     }) {
+      // Trznice (17.10.2026): denar prejme naprava, ki placilo zakljuci - promet
+      // gre v NJEN predal (locene izmene po napravi). Pred pay_order, ker
+      // placano narocilo je izdan racun.
+      const naprava = napravaBlagajne()
+      if (naprava) await sb().from('orders').update({ device_id: naprava }).eq('id', params.orderId).neq('status', 'paid')
       const { data, error } = await sb().rpc('pay_order', {
         p_order_id: params.orderId,
         p_method: params.method,

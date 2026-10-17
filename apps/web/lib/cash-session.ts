@@ -15,9 +15,66 @@ import { ddvZPorocila } from '@/lib/pos-kpo'
 
 // ===== TIPI =====
 
+/**
+ * LOCENE IZMENE PO NAPRAVI (trznice, 17.10.2026, migracija 188)
+ *
+ * Ce ima podjetje vklopljeno `organizations.izmene_po_napravi`, ima VSAKA
+ * elektronska naprava svojo izmeno (svoj predal): odpre, vmesno stanje,
+ * zakljuci in Z-porocilo se nanasajo samo na promet te naprave
+ * (`orders.device_id`, `refunds.device_id`). Privzeto ostane skupna izmena
+ * za celo podjetje (prelet 196) - nic se ne spremeni.
+ *
+ * Kontekst: v brskalniku (spletna/namizna blagajna) se vse privzame - odjemalec
+ * iz '@/lib/supabase', BUSINESS_ID in izbrana naprava blagajne (localStorage).
+ * Streznik (/api/pos/izmena, Android) poda svojega: odjemalec s sejo
+ * telefona, business_id in napravo telefona.
+ */
+export interface IzmenaKontekst {
+  db?: any
+  businessId?: string
+  /** electronic_devices.id; undefined = naprava blagajne iz brskalnika */
+  deviceId?: string | null
+}
+
+const KLJUC_NAPRAVE = 'racunko_active_device' // isto kot pos/page.tsx (ACTIVE_DEVICE_KEY)
+
+function napravaBrskalnika(): string | null {
+  try {
+    if (typeof window === 'undefined') return null
+    return JSON.parse(window.localStorage.getItem(KLJUC_NAPRAVE) || 'null')?.id ?? null
+  } catch { return null }
+}
+
+const nacinPredpomnilnik = new Map<string, { po: boolean; cas: number }>()
+
+/** Ali ima podjetje loceno izmeno za vsako napravo (predpomnjeno 60 s). */
+export async function izmenePoNapravi(db: any, businessId: string): Promise<boolean> {
+  const p = nacinPredpomnilnik.get(businessId)
+  if (p && Date.now() - p.cas < 60_000) return p.po
+  const { data } = await db
+    .from('organizations')
+    .select('*')
+    .or(`pos_business_id.eq.${businessId},id.eq.${businessId}`)
+    .limit(1)
+    .maybeSingle()
+  const po = !!data?.izmene_po_napravi
+  nacinPredpomnilnik.set(businessId, { po, cas: Date.now() })
+  return po
+}
+
+async function razresi(ctx?: IzmenaKontekst) {
+  const db = ctx?.db ?? createClient()
+  const businessId = ctx?.businessId ?? BUSINESS_ID
+  const poNapravi = businessId ? await izmenePoNapravi(db, businessId) : false
+  const deviceId = poNapravi ? (ctx?.deviceId !== undefined ? ctx.deviceId : napravaBrskalnika()) : null
+  return { db, businessId, poNapravi, deviceId }
+}
+
 export interface CashSession {
   id: string
   business_id: string
+  /** Naprava izmene (samo pri locenih izmenah po napravi), sicer null */
+  device_id?: string | null
   opened_by: string
   // DODANO (13.8.2026): locene seje po osebi - staff_id je PIN-preverjena
   // identiteta osebja (staff.id), locena od opened_by (Supabase auth naprave).
@@ -85,12 +142,12 @@ const MAX_OPEN_HOURS = 24 // če je odprto več kot 24h, pri otvoritvi avto-zapr
  * Vrne trenutno odprto izmeno za to blagajno (če obstaja).
  * Če je izmena starejša od 24h, vrne null (in jo treba ročno zapreti).
  */
-export async function getCurrentSession(staffId?: string): Promise<CashSession | null> {
+export async function getCurrentSession(staffId?: string, ctx?: IzmenaKontekst): Promise<CashSession | null> {
+  const { db, businessId, poNapravi, deviceId } = await razresi(ctx)
   // DODANO (16.8.2026): brez tega se poizvedba sprozi, preden je business_id
   // razrescen - streznik vrne napako 400 in v konzoli se pojavi
   // "getCurrentSession error" ob vsakem odprtju blagajne.
-  if (!BUSINESS_ID) return null
-  const db = createClient()
+  if (!businessId) return null
   // POPRAVLJENO (13.8.2026, KRITICNO): ce je staffId podan, filtriraj SAMO
   // na sejo TE osebe - vec ljudi ima lahko ODPRTO SVOJO sejo hkrati. Prej se
   // je filtriralo SAMO po business_id, zato so VSI videli isto (prvo odprto)
@@ -98,8 +155,14 @@ export async function getCurrentSession(staffId?: string): Promise<CashSession |
   let query = db
     .from('cash_sessions')
     .select('*')
-    .eq('business_id', BUSINESS_ID)
+    .eq('business_id', businessId)
     .eq('status', 'open')
+  // Trznice (17.10.2026): pri locenih izmenah samo izmena TE naprave.
+  // Brez izbrane naprave ni izmene (blagajna najprej zahteva napravo).
+  if (poNapravi) {
+    if (!deviceId) return null
+    query = query.eq('device_id', deviceId)
+  }
   /**
    * POPRAVLJENO (prelet 196): IZMENA JE SKUPNA, NE OSEBNA.
    *
@@ -150,27 +213,31 @@ export async function openSession(params: {
   openedBy: string
   staffId?: string
   note?: string
-}): Promise<{ session: CashSession | null; error: string | null }> {
-  const db = createClient()
+}, ctx?: IzmenaKontekst): Promise<{ session: CashSession | null; error: string | null }> {
+  const { db, businessId, poNapravi, deviceId } = await razresi(ctx)
+  if (poNapravi && !deviceId) {
+    return { session: null, error: 'Izberi davčno napravo te blagajne - vsaka naprava ima svojo izmeno.' }
+  }
 
   // POPRAVLJENO (prelet 196): preverimo, ali je blagajna ze odprta za
   // PODJETJE. Prej se je preverjalo po osebi, zato je vsak nov blagajnik
   // odprl SVOJO izmeno in ob koncu dneva je bilo Z-obracunov toliko, kolikor
   // je bilo ljudi - namesto enega za en predal.
-  const existing = await getCurrentSession()
+  const existing = await getCurrentSession(undefined, { db, businessId, deviceId })
   if (existing && existing.status === 'open') {
     return {
       session: null,
-      error: 'Blagajna je že odprta. Najprej jo zaprite.',
+      error: poNapravi ? 'Izmena te naprave je že odprta. Najprej jo zaprite.' : 'Blagajna je že odprta. Najprej jo zaprite.',
     }
   }
 
   const { data, error } = await db
     .from('cash_sessions')
     .insert({
-      business_id: BUSINESS_ID,
+      business_id: businessId,
       opened_by: params.openedBy,
       staff_id: params.staffId || null,
+      device_id: poNapravi ? deviceId : null,
       cash_opening: params.cashOpening,
       opening_note: params.note || null,
       status: 'open',
@@ -189,8 +256,10 @@ export async function openSession(params: {
  * Vrne statistiko trenutne izmene (X-poročilo).
  * Šteje vse plačane orderje od otvoritve do zdaj (ali do closedAt).
  */
-export async function getSessionStats(session: CashSession): Promise<SessionStats> {
-  const db = createClient()
+export async function getSessionStats(session: CashSession, ctx?: IzmenaKontekst): Promise<SessionStats> {
+  const db = ctx?.db ?? createClient()
+  // Izmena pripada podjetju, ki ga zapis nosi - ne globalnemu BUSINESS_ID.
+  const businessId = session.business_id || ctx?.businessId || BUSINESS_ID
 
   const from = session.opened_at
   const to = session.closed_at || new Date().toISOString()
@@ -209,10 +278,13 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
   let ordersQuery = db
     .from('orders')
     .select('id, total, tip_amount, invoice_number, cashier_id, payments(method, amount), order_lines(qty, unit_price, total, vat_rate, voided)')
-    .eq('business_id', BUSINESS_ID)
+    .eq('business_id', businessId)
     .eq('status', 'paid')
     .gte('closed_at', from)
     .lte('closed_at', to)
+  // Trznice (17.10.2026): izmena naprave steje samo promet TE naprave. Izmena
+  // brez naprave (skupna, vsi obstojeci zapisi) - nespremenjeno.
+  if (session.device_id) ordersQuery = ordersQuery.eq('device_id', session.device_id)
 
   /**
    * POPRAVLJENO (prelet 204): PROMET CELOTNE IZMENE, NE SAMO ENE OSEBE.
@@ -244,7 +316,7 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
   let refundsQuery = db
     .from('refunds')
     .select('amount, method')
-    .eq('business_id', BUSINESS_ID)
+    .eq('business_id', businessId)
     // POPRAVLJENO (19.8.2026): `created_at` v tabeli `refunds` ne obstaja -
     // pravi je `refunded_at`. Poizvedba je odpovedala, zato se vracila NISO
     // odstela od pricakovane gotovine: zakljucek blagajne je javljal manjko,
@@ -253,7 +325,9 @@ export async function getSessionStats(session: CashSession): Promise<SessionStat
     .lte('refunded_at', to)
   // PRELET 204: enako kot pri prometu - vracila celotne izmene. Sicer bi se
   // vracilo, ki ga je opravil drug blagajnik, ne odstelo od pricakovane
-  // gotovine in bi zakljucek javil presezek.
+  // gotovine in bi zakljucek javil presezek. (Pri izmeni naprave: vracila
+  // te naprave - spodaj.)
+  if (session.device_id) refundsQuery = refundsQuery.eq('device_id', session.device_id)
   const { data: refunds } = await refundsQuery
 
   // Akumulacija
@@ -334,33 +408,40 @@ export async function closeSession(params: {
   closedBy: string
   note?: string
   sendEmail?: boolean
-}): Promise<{ zReportNumber: number | null; difference: number; error: string | null }> {
-  const db = createClient()
+}, ctx?: IzmenaKontekst): Promise<{ zReportNumber: number | null; difference: number; error: string | null }> {
+  const db = ctx?.db ?? createClient()
+  const businessId = params.session.business_id || ctx?.businessId || BUSINESS_ID
 
   // 1. Pridobi statistiko za to izmeno
-  const stats = await getSessionStats(params.session)
+  const stats = await getSessionStats(params.session, { db, businessId })
 
   // 2. Izračunaj razliko gotovine
   const expected = stats.cashExpected
   const declared = params.cashClosingDeclared
   const difference = declared - expected
 
-  // 3. Pridobi zadnjo Z-številko
+  // 3.+4. Z-stevilka in Z-porocilo. Trznice (17.10.2026): ko zakljucuje vec
+  // naprav hkrati, bi "zadnja + 1" dvema dala isto stevilko - baza ima zdaj
+  // unikatnost (business_id, report_number), ob trku poskusimo z naslednjo.
+  let reportNumber = 0
+  let zReport: any = null
+  let zError: any = null
+  for (let poskus = 0; poskus < 5; poskus++) {
   const { data: lastZ } = await db
     .from('z_reports')
     .select('report_number')
-    .eq('business_id', BUSINESS_ID)
+    .eq('business_id', businessId)
     .order('report_number', { ascending: false })
     .limit(1)
     .maybeSingle()
 
-  const reportNumber = (lastZ?.report_number || 0) + 1
+  reportNumber = (lastZ?.report_number || 0) + 1
 
-  // 4. Ustvari Z-poročilo
-  const { data: zReport, error: zError } = await db
+  const vstavljen = await db
     .from('z_reports')
     .insert({
-      business_id: BUSINESS_ID,
+      business_id: businessId,
+      device_id: params.session.device_id ?? null,
       report_number: reportNumber,
       opened_at: params.session.opened_at,
       closed_at: new Date().toISOString(),
@@ -386,6 +467,10 @@ export async function closeSession(params: {
     })
     .select('id, report_number')
     .single()
+  zReport = vstavljen.data
+  zError = vstavljen.error
+  if (!zError || zError.code !== '23505') break // 23505 = unikatnost (trk stevilke)
+  }
 
   if (zError) {
     return { zReportNumber: null, difference, error: zError.message }
@@ -427,12 +512,16 @@ export function formatDifference(diff: number): string {
  * Vrne priporočeno začetno gotovino za novo izmeno
  * (= pričakovana gotovina zadnje zaprte izmene).
  */
-export async function getLastCarryOver(): Promise<number | null> {
-  const db = createClient()
-  const { data } = await db
+export async function getLastCarryOver(ctx?: IzmenaKontekst): Promise<number | null> {
+  const { db, businessId, poNapravi, deviceId } = await razresi(ctx)
+  // Trznice (17.10.2026): pri locenih izmenah prenos iz zadnjega Z-porocila
+  // TE naprave (vsak predal ima svojo gotovino).
+  let q = db
     .from('z_reports')
     .select('cash_carry_over')
-    .eq('business_id', BUSINESS_ID)
+    .eq('business_id', businessId)
+  if (poNapravi && deviceId) q = q.eq('device_id', deviceId)
+  const { data } = await q
     .order('report_number', { ascending: false })
     .limit(1)
     .maybeSingle()

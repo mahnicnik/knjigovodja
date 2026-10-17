@@ -8,7 +8,7 @@ koda:
   - apps/web/app/api/furs/register-premise/route.ts, apps/web/lib/furs.ts (prijava prostora, premični tip A/B)
   - apps/web/app/pos/page.tsx (FursSection – POS → Nastavitve → FURS & DDV; PremiseSelectScreen)
   - apps/web/app/api/furs/* (komunikacija s FURS – asistent jo samo opisuje)
-posodobljeno: 2026-10-16
+posodobljeno: 2026-10-17
 ---
 
 # FURS davčno potrjevanje (fiskalizacija)
@@ -26,7 +26,7 @@ Razdelek ima zavihke: **🔐 Certifikat**, **🏢 Poslovni prostori**, **🖨️
    - **Premični prostor – tip A**: premični objekt, npr. premična stojnica, ki jo voziš na različne tržnice, ali vozilo.
    - **Premični prostor – tip B**: objekt na stalni lokaciji, npr. stojnica na tržnici ali kiosk.
    Pri premičnem prostoru katastrskih podatkov ni, opis je neobvezen. → **Shrani** → pri prostoru klikni **📤 Prijavi pri FURS** (prijavi se ravno ta prostor). Vsak prostor mora biti prijavljen; kateri tip velja za tvojo stojnico, potrdi z računovodjo.
-4. **Naprava**: zavihek Naprave → **Nova naprava** → ID naprave (npr. RACUNK001), prostor in uporaba: »Oboje (POS in Stripe/PDF) – privzeto«, »Samo POS terminal« ali »Samo Stripe/PDF računi« (ločeno zaporedno številčenje). Za več telefonov hkrati (npr. 4 prodajalci na tržnici) dodaj **eno napravo na telefon** (npr. TEL1–TEL4) v isti ali v ločenih prostorih; na vsakem telefonu nato izberi njegovo napravo (Android: **Nastavitve → Davčna blagajna → Davčna naprava**).
+4. **Naprava**: zavihek Naprave → **Nova naprava** → ID naprave (npr. RACUNK001), prostor in uporaba: »Oboje (POS in Stripe/PDF) – privzeto«, »Samo POS terminal« ali »Samo Stripe/PDF računi« (ločeno zaporedno številčenje). Za več telefonov hkrati (npr. 4 prodajalci na tržnici) dodaj **eno napravo na telefon** (npr. TEL1–TEL4) v isti ali v ločenih prostorih; na vsakem telefonu nato izberi njegovo napravo (Android: **Nastavitve → Davčna blagajna → Davčna naprava**). Pod seznamom naprav je stikalo **»Vsaka naprava svoja izmena (svoj predal)«** – vsaka naprava ima potem svojo izmeno, gotovino in Z-poročilo.
 5. **Test povezave**: zavihek Test povezave pošlje testni račun – prikazati se morata **EOR** in **ZOI**.
 
 ### Test način ali produkcija

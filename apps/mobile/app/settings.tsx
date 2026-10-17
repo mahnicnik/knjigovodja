@@ -53,6 +53,7 @@ export default function SettingsScreen() {
     {
       title: 'Blagajna',
       items: [
+        { icon: '💰', label: 'Izmena (odpri / vmesno stanje / zaključi)', screen: '/izmena' },
         { icon: '🪑', label: 'Prostori & Mize', screen: '/floor' },
         { icon: '🏷️', label: 'Kategorije & Artikli', screen: '/catalog' },
         { icon: '🖨️', label: 'Bluetooth tiskalnik', screen: '/printer' },
@@ -106,7 +107,8 @@ export default function SettingsScreen() {
                   key={item.label}
                   style={[s.settingItem, idx < section.items.length - 1 && s.settingItemBorder]}
                   onPress={() => {
-                    if (item.screen === '/floor') router.push('/floor');
+                    if (item.screen === '/izmena') router.push('/izmena');
+                    else if (item.screen === '/floor') router.push('/floor');
                     else if (item.screen === '/catalog') router.push('/catalog');
                     else if (item.screen === '/printer') router.push('/printer');
                     else Alert.alert('Prihaja kmalu', item.label + ' bo kmalu na voljo.');

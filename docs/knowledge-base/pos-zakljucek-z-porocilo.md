@@ -6,7 +6,10 @@ poti: [/pos, /zakljucki]
 koda:
   - apps/web/app/pos/page.tsx (CloseCashModal, ZReportModal, VmesnoStanjeModal, ReportsScreen)
   - apps/web/app/zakljucki/page.tsx (Dnevni zaključki v portalu)
-posodobljeno: 2026-10-05
+  - apps/web/lib/cash-session.ts, apps/web/app/api/pos/izmena/route.ts (izmene po napravi)
+  - apps/mobile/app/izmena.tsx (Android: zaslon Izmena)
+  - apps/web/components/nastavitve/Blagajna.tsx (stikalo »Vsaka naprava svoja izmena«)
+posodobljeno: 2026-10-17
 ---
 
 # POS – zaključek izmene in Z-poročilo
@@ -22,6 +25,28 @@ Pravi zaključek izmene je gumb **🔒 Zaključi** v **glavi blagajne** (na tele
 5. Z-poročilo predlaga **priporočeno začetno gotovino** za naslednjo otvoritev.
 
 Z-poročilo vsebuje: stanje blagajne (gotovina ob odprtju in zaključku), plačila po metodah (gotovina, kartica, boni, ostalo), skupni promet, gotovinska in negotovinska vračila, neto promet, število računov, napitnine in **DDV po stopnjah** (osnova in DDV za 22 %, 9,5 %, 5 % in oproščeno 0 %).
+
+## Več prodajalcev hkrati: vsaka naprava svoja izmena
+
+Privzeto ima podjetje **eno skupno izmeno** – vse naprave prodajajo v isto blagajno in na koncu je eno Z-poročilo.
+
+Za več prodajnih mest hkrati (npr. 4 stojnice na tržnici, vsaka s svojim telefonom in svojim predalom gotovine) vklopi v brskalniku **Nastavitve → Davčna blagajna → 🖨️ Naprave → »Vsaka naprava svoja izmena (svoj predal)«**. Takrat:
+
+- vsaka davčna naprava **odpre, pregleda in zaključi svojo izmeno** z lastno začetno gotovino;
+- vmesno stanje in zaključek štejeta **samo račune in vračila te naprave**;
+- vsaka naprava dobi **svoje Z-poročilo** (številke Z-poročil tečejo zaporedno za celo podjetje);
+- predlog začetne gotovine je iz zadnjega Z-poročila **te naprave**;
+- izmeno lahko zaključi samo naprava, ki jo je odprla.
+
+Pogoj: vsak telefon/računalnik ima izbrano svojo davčno napravo (na Androidu **Nastavitve → Davčna blagajna → Davčna naprava**). Brez izbrane naprave izmene ni mogoče odpreti (»Izberi davčno napravo …«). Stikalo spreminjaj samo, ko so vse izmene zaprte.
+
+## Android: zaslon Izmena
+
+Na telefonu je izmena v **Nastavitve → 💰 Izmena (odpri / vmesno stanje / zaključi)**. Če izmena ni odprta, blagajna ob plačilu opozori »Izmena ni odprta« in ponudi **Odpri izmeno**.
+
+- **Odpri izmeno**: vpiši **Začetna gotovina v predalu (€)** (predlog iz zadnjega zaključka je izpisan pod poljem).
+- **Vmesno stanje**: promet po načinih plačila in pričakovana gotovina, brez zapiranja.
+- **Zaključi izmeno**: vpiši **Prešteta gotovina v predalu (€)** → **Zaključi in natisni Z-poročilo** → potrdi. Z-poročilo se shrani v Računko (vidno v **Blagajna → Dnevni zaključki**), promet se zapiše v KPO, natisne se, če je povezan Bluetooth tiskalnik. Zaključka ni mogoče preklicati.
 
 ## Gumb »Z-poročilo (samo obračun)« na zaslonu Poročila
 

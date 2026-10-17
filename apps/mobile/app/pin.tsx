@@ -6,6 +6,7 @@ import { router } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { AuthContext, usePodjetja } from '../lib/auth';
 import { colors } from '../lib/colors';
+import { nastaviOsebo } from '../lib/osebje';
 import { Zaslon } from '../lib/zaslon';
 
 interface StaffMember {
@@ -51,6 +52,7 @@ export default function PinScreen() {
     if (selectedStaff) {
       if (entered === selectedStaff.pin) {
         setPin('');
+        nastaviOsebo({ id: selectedStaff.id, name: selectedStaff.name });
         router.replace('/pos');
       } else if (entered.length >= selectedStaff.pin.length) {
         Alert.alert('Napacna PIN koda');
@@ -60,6 +62,7 @@ export default function PinScreen() {
       const match = staff.find(s => s.pin === entered);
       if (match) {
         setPin('');
+        nastaviOsebo({ id: match.id, name: match.name });
         router.replace('/pos');
       } else {
         const possible = staff.some(s => s.pin.startsWith(entered));
