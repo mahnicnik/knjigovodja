@@ -73,3 +73,10 @@ test('migracija: tip je obvezen za premicni prostor in prepovedan za nepremicnin
   expect(sql).toContain("(premise_type = 'static' and movable_type is null)")
   expect(sql).toContain("(premise_type = 'movable' and movable_type in ('A', 'B', 'C'))")
 })
+
+test('dobavitelj programske opreme je razvijalec Racunka, ne podjetje z blagajno', () => {
+  const route = readFileSync(join(KOREN, 'app', 'api', 'furs', 'register-premise', 'route.ts'), 'utf8')
+  expect(route).toContain("process.env.RACUNKO_DOBAVITELJ_DAVCNA || '91390419'")
+  expect(route.match(/softwareSupplierTaxNumber: DOBAVITELJ_DAVCNA,/g)?.length).toBe(2)
+  expect(route).not.toContain('softwareSupplierTaxNumber: cert.tax_number')
+})

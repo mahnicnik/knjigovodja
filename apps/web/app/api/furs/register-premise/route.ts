@@ -6,6 +6,18 @@ import { confirmBusinessPremiseWithFurs, extractFromP12, type FursConfig, type F
 import { getFursCertificate } from '@/lib/furs-cert'
 import { resolveActiveOrgId, resolveActiveOrg, getRequestedOrgId } from '@/lib/active-org-server'
 
+/**
+ * DOBAVITELJ PROGRAMSKE OPREME (17.10.2026)
+ *
+ * FURS ob prijavi poslovnega prostora zahteva davcno stevilko DOBAVITELJA
+ * programa za izdajo racunov - to je razvijalec Racunka (Nik Mahnic s.p.),
+ * ne podjetje, ki z blagajno izdaja racune. Prej se je poslala stevilka
+ * podjetja samega (npr. Peresuti). Davcna stevilka zavezanca na racunih
+ * ostaja stevilka podjetja (InvoiceRequest) - to je nespremenjeno.
+ * Spremenljivka okolja RACUNKO_DOBAVITELJ_DAVCNA omogoca spremembo brez kode.
+ */
+const DOBAVITELJ_DAVCNA = (process.env.RACUNKO_DOBAVITELJ_DAVCNA || '91390419').replace(/^SI/i, '').trim()
+
 async function getSupabase() {
   const cookieStore = await cookies()
   return createServerClient(
@@ -69,7 +81,7 @@ export async function POST(req: NextRequest) {
       businessPremiseId: premiseRow.premise_id,
       movableType,
       validityDate: body.validityDate || lokalniDatum(),
-      softwareSupplierTaxNumber: cert.tax_number || org?.tax_number || '',
+      softwareSupplierTaxNumber: DOBAVITELJ_DAVCNA,
     } : {
       businessPremiseId: premiseRow.premise_id,
       cadastralNumber: body.cadastralNumber,
@@ -85,7 +97,7 @@ export async function POST(req: NextRequest) {
             // POPRAVLJENO (17.8.2026): tu je bila kot rezervna vrednost TUJA DAVCNA
       // STEVILKA. Ce podjetje nima svoje, bi svoj racun prijavilo pri FURS
       // pod tujo. Bolje je zavrniti z razlago kot prijaviti napacno.
-      softwareSupplierTaxNumber: cert.tax_number || org?.tax_number || '', // POPRAVLJENO 29.7.2026
+      softwareSupplierTaxNumber: DOBAVITELJ_DAVCNA,
     }
 
     const p12Buffer = Buffer.from(cert.certificate_data, 'base64')
